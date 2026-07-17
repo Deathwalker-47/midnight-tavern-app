@@ -1,0 +1,17 @@
+{
+  "name": "midnight-tavern",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A local-first roleplay application with gated, deterministic game mechanics and persistent, evolving memory.",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

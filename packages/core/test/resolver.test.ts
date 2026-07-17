@@ -1,0 +1,224 @@
+/**
+ * Resolver suite — deterministic outcomes via a seeded RNG. Covers: gate-denied
+ * no-roll rulings, the four outcome branches, DC boundary, mastery modifier, opposed
+ * contests (win/tie/loss), item-prop scaling, cost payment, and mastery advancement.
+ */
+import { describe, it, expect } from "vitest";
+import { resolve } from "../src/index.js";
+import type { MechanicalIntent } from "../src/index.js";
+import { d20Sequence } from "../src/index.js";
+import { makeStory, makePlayer, makeEnemy, learned } from "./fixtures.js";
+
+const intent = (over: Partial<MechanicalIntent> = {}): MechanicalIntent => ({
+  actorId: "kestrel",
+  actionId: "attack_melee",
+  targetId: "wight",
+  itemId: "sword",
+  confidence: 1,
+  ...over,
+});
+
+describe("resolve — gate denial", () => {
+  it("returns a no-roll ruling with no effects and no mutations when denied", () => {
+    const r = resolve(makeStory(), makePlayer({ skills: [] }), makeEnemy(), intent(), d20Sequence([15]));
+    expect(r.ruling.gate.allowed).toBe(false);
+    expect(r.ruling.roll).toBeUndefined();
+    expect(r.ruling.effectsApplied).toBeNull();
+    expect(r.mutations).toHaveLength(0);
+  });
+});
+
+describe("resolve — outcome branches", () => {
+  it("crit_success on a natural 20 regardless of DC", () => {
+    const r = resolve(makeStory(), makePlayer(), makeEnemy(), intent(), d20Sequence([20]));
+    expect(r.ruling.roll?.outcome).toBe("crit_success");
+    expect(r.ruling.roll?.d20).toBe(20);
+  });
+
+  it("crit_failure on a natural 1 regardless of modifier", () => {
+    // Even a master (+7) crit-fails on a nat 1.
+    const p = makePlayer({ skills: [learned("blade", "master")] });
+    const r = resolve(makeStory(), p, makeEnemy(), intent(), d20Sequence([1]));
+    expect(r.ruling.roll?.outcome).toBe("crit_failure");
+  });
+
+  it("success when total meets the DC exactly", () => {
+    // novice blade = +1; DC 12 ⇒ need d20 >= 11.
+    const r = resolve(makeStory(), makePlayer(), makeEnemy(), intent(), d20Sequence([11]));
+    expect(r.ruling.roll?.total).toBe(12);
+    expect(r.ruling.roll?.outcome).toBe("success");
+  });
+
+  it("failure when total is one under the DC", () => {
+    const r = resolve(makeStory(), makePlayer(), makeEnemy(), intent(), d20Sequence([10]));
+    expect(r.ruling.roll?.total).toBe(11);
+    expect(r.ruling.roll?.outcome).toBe("failure");
+  });
+
+  it("applies the mastery modifier to the total", () => {
+    const p = makePlayer({ skills: [learned("blade", "expert")] }); // +5
+    const r = resolve(makeStory(), p, makeEnemy(), intent(), d20Sequence([7]));
+    expect(r.ruling.roll?.modifier).toBe(5);
+    expect(r.ruling.roll?.total).toBe(12);
+    expect(r.ruling.roll?.outcome).toBe("success");
+  });
+
+  it("uses a zero modifier for a skill-less action", () => {
+    const r = resolve(
+      makeStory(),
+      makePlayer(),
+      makeEnemy(),
+      intent({ actionId: "attack_wild", itemId: undefined }),
+      d20Sequence([15])
+    );
+    expect(r.ruling.roll?.modifier).toBe(0);
+    expect(r.ruling.roll?.outcome).toBe("success");
+  });
+});
+
+describe("resolve — effects & mutations", () => {
+  it("stages target damage scaled by the weapon's damage prop on success", () => {
+    // success base -4 hp, sword damage prop 6 ⇒ -10.
+    const r = resolve(makeStory(), makePlayer(), makeEnemy(), intent(), d20Sequence([11]));
+    const dmg = r.mutations.find((m) => m.kind === "resourceDelta" && m.characterId === "wight");
+    expect(dmg).toMatchObject({ resourceId: "hp", delta: -10 });
+  });
+
+  it("does not scale when no item prop applies (skill-less wild attack)", () => {
+    const r = resolve(
+      makeStory(),
+      makePlayer(),
+      makeEnemy(),
+      intent({ actionId: "attack_wild", itemId: undefined }),
+      d20Sequence([15])
+    );
+    const dmg = r.mutations.find((m) => m.kind === "resourceDelta" && m.characterId === "wight");
+    expect(dmg).toMatchObject({ resourceId: "hp", delta: -3 });
+  });
+
+  it("stages self-damage on a crit_failure", () => {
+    const r = resolve(makeStory(), makePlayer(), makeEnemy(), intent(), d20Sequence([1]));
+    const self = r.mutations.find(
+      (m) => m.kind === "resourceDelta" && m.characterId === "kestrel" && m.resourceId === "hp"
+    );
+    expect(self).toMatchObject({ delta: -2 });
+  });
+
+  it("pays the action cost on attempt, win or lose", () => {
+    const win = resolve(makeStory(), makePlayer(), makeEnemy(), intent(), d20Sequence([11]));
+    const lose = resolve(makeStory(), makePlayer(), makeEnemy(), intent(), d20Sequence([2]));
+    for (const r of [win, lose]) {
+      const cost = r.mutations.find((m) => m.kind === "resourceDelta" && m.resourceId === "stamina");
+      expect(cost).toMatchObject({ characterId: "kestrel", delta: -2 });
+    }
+    expect(win.ruling.costsPaid).toEqual({ resources: { stamina: 2 } });
+  });
+
+  it("stages grantItem on a crafting success and spends the ingredient", () => {
+    const p = makePlayer({
+      skills: [learned("alchemy", "novice"), learned("lockpicking", "novice")],
+      inventory: [{ itemId: "herb", qty: 2 }],
+    });
+    const r = resolve(
+      makeStory(),
+      p,
+      undefined,
+      intent({ actionId: "brew_potion", targetId: undefined, itemId: undefined }),
+      d20Sequence([12])
+    );
+    expect(r.ruling.roll?.outcome).toBe("success");
+    const grant = r.mutations.find((m) => m.kind === "grantItem");
+    expect(grant).toMatchObject({ itemId: "potion", qty: 1 });
+    const spend = r.mutations.find((m) => m.kind === "removeItem");
+    expect(spend).toMatchObject({ itemId: "herb", qty: 1 });
+  });
+
+  it("stages setFlag on a social success", () => {
+    const p = makePlayer({ skills: [learned("silver_tongue", "novice")] });
+    const r = resolve(
+      makeStory(),
+      p,
+      makeEnemy(),
+      intent({ actionId: "persuade", itemId: undefined }),
+      d20Sequence([13])
+    );
+    const flag = r.mutations.find((m) => m.kind === "setFlag");
+    expect(flag).toMatchObject({ flagId: "ally", value: true });
+  });
+
+  it("scales a positive target delta upward by the item prop (healing)", () => {
+    // mend_ally success base +3 hp, potion heal prop 10 ⇒ +13 (additive branch).
+    const p = makePlayer({ inventory: [{ itemId: "potion", qty: 1 }] });
+    const target = makeEnemy({ resources: { hp: { current: 1, max: 12 } } });
+    const r = resolve(
+      makeStory(),
+      p,
+      target,
+      intent({ actionId: "mend_ally", targetId: "wight", itemId: "potion" }),
+      d20Sequence([10])
+    );
+    const heal = r.mutations.find((m) => m.kind === "resourceDelta" && m.characterId === "wight");
+    expect(heal).toMatchObject({ resourceId: "hp", delta: 13 });
+  });
+});
+
+describe("resolve — opposed contests", () => {
+  it("attacker wins when total exceeds the defender's", () => {
+    // attacker novice +1 rolls 15 ⇒ 16; defender adept +3 rolls 10 ⇒ 13.
+    const r = resolve(makeStory(), makePlayer(), makeEnemy(), intent({ actionId: "duel" }), d20Sequence([15, 10]));
+    expect(r.ruling.roll?.outcome).toBe("success");
+    expect(r.ruling.roll?.opposedTotal).toBe(13);
+  });
+
+  it("defender wins ties (attacker must exceed)", () => {
+    // attacker +1 rolls 12 ⇒ 13; defender +3 rolls 10 ⇒ 13. Tie ⇒ failure.
+    const r = resolve(makeStory(), makePlayer(), makeEnemy(), intent({ actionId: "duel" }), d20Sequence([12, 10]));
+    expect(r.ruling.roll?.outcome).toBe("failure");
+  });
+
+  it("attacker loses when the defender's total is higher", () => {
+    const r = resolve(makeStory(), makePlayer(), makeEnemy(), intent({ actionId: "duel" }), d20Sequence([5, 18]));
+    expect(r.ruling.roll?.outcome).toBe("failure");
+  });
+
+  it("a natural 20 still crits even in an opposed action (no second roll needed)", () => {
+    const r = resolve(makeStory(), makePlayer(), makeEnemy(), intent({ actionId: "duel" }), d20Sequence([20]));
+    expect(r.ruling.roll?.outcome).toBe("crit_success");
+    expect(r.ruling.roll?.opposedTotal).toBeUndefined();
+  });
+});
+
+describe("resolve — mastery advancement", () => {
+  it("advances rank after the configured number of successes", () => {
+    // blade advances every 3 successes; start at successCount 2 ⇒ this success ⇒ adept.
+    const p = makePlayer({ skills: [learned("blade", "novice", 2)] });
+    const r = resolve(makeStory(), p, makeEnemy(), intent(), d20Sequence([11]));
+    expect(r.ruling.masteryAdvance).toMatchObject({ skillId: "blade", fromRank: "novice", toRank: "adept" });
+    const setSkill = r.mutations.find((m) => m.kind === "setSkill");
+    expect(setSkill).toMatchObject({ rank: "adept", successCount: 0 });
+  });
+
+  it("accumulates a success without ranking up when below the threshold", () => {
+    const p = makePlayer({ skills: [learned("blade", "novice", 0)] });
+    const r = resolve(makeStory(), p, makeEnemy(), intent(), d20Sequence([11]));
+    expect(r.ruling.masteryAdvance).toBeUndefined();
+    const setSkill = r.mutations.find((m) => m.kind === "setSkill");
+    expect(setSkill).toMatchObject({ rank: "novice", successCount: 1 });
+  });
+
+  it("does not advance on a failure", () => {
+    const p = makePlayer({ skills: [learned("blade", "novice", 2)] });
+    const r = resolve(makeStory(), p, makeEnemy(), intent(), d20Sequence([2]));
+    expect(r.ruling.masteryAdvance).toBeUndefined();
+    expect(r.mutations.some((m) => m.kind === "setSkill")).toBe(false);
+  });
+
+  it("does not advance a master past the top rank", () => {
+    const p = makePlayer({ skills: [learned("blade", "master", 2)] });
+    const r = resolve(makeStory(), p, makeEnemy(), intent(), d20Sequence([11]));
+    expect(r.ruling.masteryAdvance).toBeUndefined();
+    // still records the success count climbing
+    const setSkill = r.mutations.find((m) => m.kind === "setSkill");
+    expect(setSkill).toMatchObject({ rank: "master", successCount: 3 });
+  });
+});

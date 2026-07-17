@@ -1,0 +1,13 @@
+{
+  // Typecheck config for the test suites: extends the build config but relaxes
+  // rootDir/outDir (no emit) so `test/**` can import from `src/**`.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts"]
+}
