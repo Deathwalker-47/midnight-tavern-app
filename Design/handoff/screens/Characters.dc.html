@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:#14100C;color:#EADCBE;font-family:"IBM Plex Sans",sans-serif;-webkit-font-smoothing:antialiased}
+  ::selection{background:rgba(217,166,72,.25)}
+  a{color:#D9A648;text-decoration:none}a:hover{color:#F2C56B}
+  ::-webkit-scrollbar{width:11px}::-webkit-scrollbar-thumb{background:#382E21;border-radius:6px;border:3px solid #14100C}
+  @keyframes mt-fade{from{opacity:0}to{opacity:1}}
+  @media (prefers-reduced-motion: reduce){*{animation-duration:.001s!important}}
+</style>
+</helmet>
+<div style="display:flex;height:100vh;width:100vw;overflow:hidden;background:#14100C">
+
+  <nav style="width:72px;flex:0 0 72px;background:#1B1611;border-right:1px solid #382E21;display:flex;flex-direction:column;align-items:center;padding:14px 0;gap:4px">
+    <div style="width:40px;height:40px;border-radius:9px;background:linear-gradient(145deg,#2C241B,#1B1611);border:1px solid rgba(216,170,90,.25);display:flex;align-items:center;justify-content:center;font-family:'Cormorant Garamond',serif;font-weight:700;font-size:24px;color:#D9A648;margin-bottom:14px">M</div>
+    <sc-for list="{{ railItems }}" as="it" hint-placeholder-count="5">
+      <a href="{{ it.href }}" title="{{ it.label }}" style="{{ it.style }}"><span style="{{ it.iconStyle }}">{{ it.glyph }}</span><span style="font-size:9px">{{ it.label }}</span></a>
+    </sc-for>
+    <div style="flex:1"></div>
+    <div style="width:52px;display:flex;flex-direction:column;align-items:center;gap:9px;padding-top:8px;border-top:1px solid #382E21">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:4px"><span style="width:9px;height:9px;border-radius:50%;background:#8FB573;box-shadow:0 0 8px #8FB573"></span><span style="font-size:8px;color:#6E5F49">Sonnet</span></div>
+      <div style="font-size:8px;color:#6E5F49;text-align:center;border:1px solid #382E21;border-radius:5px;padding:3px 4px;line-height:1.15">Trial<br>9d</div>
+    </div>
+  </nav>
+
+  <div style="flex:1;display:flex;flex-direction:column;min-width:0">
+    <header style="flex:0 0 auto;background:#1B1611;border-bottom:1px solid #382E21;padding:12px 22px 0 22px">
+      <div style="display:flex;align-items:baseline;gap:12px">
+        <div style="font-family:'Cormorant Garamond',serif;font-size:22px;font-weight:600;color:#EADCBE">Embers of the Silent Vale</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#74B8AE;letter-spacing:.04em">CH 3 · UNDER THE OSSUARY</div>
+        <div style="flex:1"></div><div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#6E5F49">58 messages</div>
+      </div>
+      <div style="display:flex;gap:2px;margin-top:12px">
+        <a href="Play.dc.html" style="padding:9px 15px;font-size:13px;color:#A08D6C;border-bottom:2px solid transparent">Play</a>
+        <a href="Overview.dc.html" style="padding:9px 15px;font-size:13px;color:#A08D6C;border-bottom:2px solid transparent">Overview</a>
+        <a href="Characters.dc.html" style="padding:9px 15px;font-size:13px;font-weight:600;color:#EADCBE;border-bottom:2px solid #D9A648">Characters</a>
+        <a href="StorySettings.dc.html" style="padding:9px 15px;font-size:13px;color:#A08D6C;border-bottom:2px solid transparent">Story Settings</a>
+      </div>
+    </header>
+
+    <div style="flex:0 0 auto;display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:7px 22px;background:#14100C;border-bottom:1px solid #382E21">
+      <span style="font-size:10px;color:#6E5F49;font-family:'IBM Plex Mono',monospace;letter-spacing:.06em;text-transform:uppercase;margin-right:2px">Demo</span>
+      <sc-for list="{{ demoChips }}" as="c" hint-placeholder-count="3"><button onClick="{{ c.onClick }}" style="{{ c.style }}">{{ c.label }}</button></sc-for>
+    </div>
+
+    <div style="flex:1;overflow-y:auto;padding:26px 34px 60px">
+      <div style="max-width:1080px;margin:0 auto">
+
+        <sc-if value="{{ showEmpty }}" hint-placeholder-val="{{ false }}">
+          <div style="text-align:center;margin-top:12vh;animation:mt-fade .3s ease">
+            <div style="font-size:44px;color:#382E21">☙</div>
+            <div style="font-family:'Cormorant Garamond',serif;font-size:24px;color:#EADCBE;margin-top:4px">No one has entered the story yet</div>
+            <div style="font-size:14px;color:#A08D6C;margin-top:6px">Characters appear here the moment they’re named in play — with the traits and skills the story gives them.</div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ showGrid }}" hint-placeholder-val="{{ true }}">
+          <div>
+            <!-- section: party -->
+            <div style="font-size:11px;font-family:'IBM Plex Mono',monospace;letter-spacing:.14em;color:#74B8AE;margin-bottom:14px">THE PARTY</div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:18px">
+              <sc-for list="{{ party }}" as="c" hint-placeholder-count="3">
+                <div style="{{ c.cardStyle }}">
+                  <div style="{{ c.topStyle }}"></div>
+                  <div style="padding:18px 18px 16px">
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+                      <div>
+                        <div style="display:flex;align-items:center;gap:8px"><span style="font-family:'Cormorant Garamond',serif;font-size:23px;font-weight:600;color:{{ c.nameColor }}">{{ c.name }}</span><span style="{{ c.deadStyle }}">{{ c.deadLabel }}</span></div>
+                        <div style="font-size:12px;color:#A08D6C;margin-top:1px">{{ c.role }}</div>
+                      </div>
+                      <span style="{{ c.tagStyle }}">{{ c.tag }}</span>
+                    </div>
+
+                    <div style="display:flex;gap:10px;margin-top:14px">
+                      <div style="flex:1">
+                        <div style="display:flex;justify-content:space-between;font-size:10px;font-family:'IBM Plex Mono',monospace;color:#A08D6C;margin-bottom:3px"><span>HP</span><span style="{{ c.hpNumStyle }}">{{ c.hp }}</span></div>
+                        <div style="height:6px;background:#14100C;border-radius:4px;overflow:hidden"><div style="{{ c.hpBar }}"></div></div>
+                      </div>
+                      <sc-if value="{{ c.hasStam }}" hint-placeholder-val="{{ true }}">
+                        <div style="flex:1">
+                          <div style="display:flex;justify-content:space-between;font-size:10px;font-family:'IBM Plex Mono',monospace;color:#A08D6C;margin-bottom:3px"><span>STAMINA</span><span>{{ c.stam }}</span></div>
+                          <div style="height:6px;background:#14100C;border-radius:4px;overflow:hidden"><div style="{{ c.stamBar }}"></div></div>
+                        </div>
+                      </sc-if>
+                    </div>
+
+                    <div style="margin-top:14px">
+                      <div style="font-size:10px;font-family:'IBM Plex Mono',monospace;letter-spacing:.1em;color:#6E5F49;margin-bottom:7px">SKILLS</div>
+                      <sc-for list="{{ c.skills }}" as="sk" hint-placeholder-count="3">
+                        <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0">
+                          <div style="display:flex;align-items:center;gap:7px"><span style="font-size:13px;color:#D6C9AB">{{ sk.name }}</span><sc-if value="{{ sk.changed }}" hint-placeholder-val="{{ false }}"><span style="width:6px;height:6px;border-radius:50%;background:#F5CE6E;box-shadow:0 0 6px #F5CE6E"></span></sc-if></div>
+                          <div style="display:flex;align-items:center;gap:8px"><span style="font-size:9px;font-family:'IBM Plex Mono',monospace;color:#74B8AE;text-transform:uppercase">{{ sk.rank }}</span><span style="{{ sk.pipsStyle }}">{{ sk.pips }}</span></div>
+                        </div>
+                      </sc-for>
+                    </div>
+
+                    <div style="margin-top:13px">
+                      <div style="font-size:10px;font-family:'IBM Plex Mono',monospace;letter-spacing:.1em;color:#6E5F49;margin-bottom:7px">TRAITS</div>
+                      <div style="display:flex;flex-wrap:wrap;gap:6px"><sc-for list="{{ c.traits }}" as="t" hint-placeholder-count="3"><span style="font-size:11px;color:#A08D6C;background:#2C241B;border:1px solid #382E21;border-radius:5px;padding:3px 8px">{{ t }}</span></sc-for></div>
+                    </div>
+
+                    <sc-if value="{{ c.rel }}" hint-placeholder-val="{{ false }}">
+                      <div style="margin-top:13px;padding-top:11px;border-top:1px solid #382E21;font-size:11.5px;color:#A08D6C;line-height:1.6">{{ c.relNode }}</div>
+                    </sc-if>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+
+            <!-- section: antagonists -->
+            <div style="font-size:11px;font-family:'IBM Plex Mono',monospace;letter-spacing:.14em;color:#74B8AE;margin:30px 0 14px">ANTAGONISTS & FIGURES</div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px">
+              <sc-for list="{{ others }}" as="o" hint-placeholder-count="3">
+                <div style="background:#1B1611;border:1px solid #382E21;border-radius:10px;padding:15px 16px">
+                  <div style="display:flex;align-items:center;gap:8px"><span style="font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:600;color:#D6C9AB">{{ o.name }}</span><span style="{{ o.deadStyle }}">{{ o.deadLabel }}</span></div>
+                  <div style="font-size:11px;color:#A08D6C;margin-top:1px">{{ o.role }}</div>
+                  <div style="font-size:12.5px;color:#A08D6C;line-height:1.55;margin-top:9px">{{ o.note }}</div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state={ demo:'grid' };
+  pips(n,max){ return '●'.repeat(n)+'○'.repeat(max-n); }
+  renderVals(){
+    const s=this.state, self=this, R=React.createElement, P=this.pips;
+    const railItems=[
+      {label:'Library',glyph:'❏',href:'Library.dc.html',active:false},
+      {label:'Story',glyph:'✎',href:'Play.dc.html',active:true},
+      {label:'Personas',glyph:'☙',href:'Personas.dc.html',active:false},
+      {label:'Lore',glyph:'❦',href:'Lorebook.dc.html',active:false},
+      {label:'Settings',glyph:'⚙',href:'Settings.dc.html',active:false},
+    ].map(it=>({...it,style:`display:flex;flex-direction:column;align-items:center;gap:3px;width:56px;padding:8px 0;border-radius:8px;color:${it.active?'#EADCBE':'#6E5F49'};background:${it.active?'#2C241B':'transparent'};border:1px solid ${it.active?'rgba(216,170,90,.2)':'transparent'}`,iconStyle:`font-size:18px;color:${it.active?'#D9A648':'#8A7A5c'}`}));
+    const demoChips=[['grid','Cast'],['empty','Empty'],['death','A death']].map(([k,label])=>({label,onClick:()=>self.setState({demo:k}),style:`font-size:11px;padding:4px 9px;border-radius:5px;cursor:pointer;border:1px solid ${s.demo===k?'#4E827B':'#382E21'};background:${s.demo===k?'rgba(116,184,174,.12)':'transparent'};color:${s.demo===k?'#74B8AE':'#A08D6C'}`}));
+
+    const dead = s.demo==='death';
+    const teal="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:2px;color:#74B8AE";
+    const dim="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:2px;color:#4E827B";
+    const relK=R('span',{},[R('span',{key:1,style:{color:'#74B8AE',fontFamily:"'IBM Plex Mono',monospace"}},'→ Aldric '),'trust ',R('b',{key:2,style:{color:'#8FB573'}},'+0.2'),' · wary respect']);
+
+    const party=[
+      {name:'Kestrel Vane',role:'Sellsword courier',tag:'PLAYER',player:true,nameColor:'#EADCBE',hp:'19 / 24',hpPct:79,hasStam:true,stam:'10 / 14',stamPct:71,
+        skills:[{name:'Blade Adept',rank:'expert',changed:true,pips:P(5,5),c:'#F5CE6E'},{name:'Persuasion',rank:'adept',pips:P(3,5),c:'#74B8AE'},{name:'Arcane Sight',rank:'novice',pips:P(1,5),c:'#4E827B'}],
+        traits:['Steady hands','Reluctant hero','Debt to no one'],rel:null},
+      {name:'Wren Callow',role:'Scout · restless',tag:'ALLY',nameColor:'#EADCBE',hp:'14 / 16',hpPct:87,hasStam:true,stam:'9 / 12',stamPct:75,
+        skills:[{name:'Stealth',rank:'expert',pips:P(5,5),c:'#74B8AE'},{name:'Lockpicking',rank:'adept',pips:P(4,5),c:'#74B8AE'},{name:'Shortblade',rank:'novice',changed:true,pips:P(1,5),c:'#F5CE6E'}],
+        traits:['Sharp-eyed','Debt-haunted','Loyal in the clinch','Sweet tooth'],rel:relK},
+      {name:'Brother Aldric',role:'Warrior-priest of the Ember Choir',tag:dead?'':'ALLY',dead,nameColor:dead?'#8A8175':'#EADCBE',hp:dead?'0 / 30':'30 / 30',hpPct:dead?0:100,hasStam:false,
+        skills:[{name:'Warhammer',rank:'expert',pips:P(5,5),c:dead?'#8A8175':'#74B8AE'},{name:'Liturgy',rank:'adept',pips:P(3,5),c:dead?'#8A8175':'#74B8AE'},{name:'Shieldcraft',rank:'adept',pips:P(3,5),c:dead?'#8A8175':'#74B8AE'}],
+        traits:['Devout','Immovable','Grieving'],rel:null},
+    ].map(c=>{
+      const isDead=c.dead;
+      const hpColor=isDead?'#8A8175':(c.hpPct<40?'#C96F57':'#8FB573');
+      return {...c,
+        cardStyle:`position:relative;background:${isDead?'#181310':'linear-gradient(160deg,#231C15,#1B1611)'};border:1px solid ${c.player?'rgba(216,170,90,.2)':(isDead?'#2a241d':'#382E21')};border-radius:11px;overflow:hidden;${isDead?'opacity:.72':''}`,
+        topStyle:`height:3px;background:${isDead?'#8A8175':(c.player?'linear-gradient(90deg,#D9A648,transparent)':'linear-gradient(90deg,#74B8AE55,transparent)')}`,
+        deadLabel:isDead?'FALLEN':'', deadStyle:isDead?"font-size:9px;font-family:'IBM Plex Mono',monospace;color:#8A8175;border:1px solid #8A8175;border-radius:3px;padding:1px 5px":'display:none',
+        tagStyle:c.tag?`font-size:9px;font-family:'IBM Plex Mono',monospace;color:${c.player?'#74B8AE':'#A08D6C'};border:1px solid ${c.player?'#4E827B':'#382E21'};border-radius:4px;padding:2px 6px`:'display:none',
+        hpNumStyle:`font-family:'IBM Plex Mono',monospace;color:${hpColor}`,
+        hpBar:`height:100%;width:${c.hpPct}%;background:${hpColor};border-radius:4px`,
+        stamBar:`height:100%;width:${c.stamPct||0}%;background:#4E827B;border-radius:4px`,
+        skills:c.skills.map(sk=>({...sk,pipsStyle:`font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:2px;color:${sk.c}`})),
+        relNode:c.rel, 
+      };
+    });
+
+    const others=[
+      {name:'Prior Voss',role:'Leader · Hollow Flame',note:'Seen once, at a distance, unhurried. Wants what sleeps beneath the ossuary awake.'},
+      {name:'Grave-wights',role:'Ossuary dead',note:'Roused by the cult. Cold-clawed; they strike first and feel nothing.'},
+      {name:'The Reeve',role:'Hamlet elder',note:'Hired Kestrel to find the vanished pilgrims. Frightened, and hiding something.'},
+    ].map(o=>({...o,deadLabel:'',deadStyle:'display:none'}));
+
+    return { railItems, demoChips, showEmpty:s.demo==='empty', showGrid:s.demo!=='empty', party, others };
+  }
+}
+</script>
+</body>
+</html>
