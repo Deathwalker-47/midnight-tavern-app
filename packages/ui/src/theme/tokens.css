@@ -1,0 +1,158 @@
+/*
+ * Design system tokens — the single source of truth for color, type, spacing, radius, and
+ * motion (ported verbatim from Design/handoff/01-DESIGN-SYSTEM.md). Every component and screen
+ * inherits from these variables; never hard-code a hex value in a component.
+ *
+ * The whole look rests on the TWO REGISTERS (non-negotiable): STORY (serif, brass) vs SYSTEM
+ * (mono, teal). Helper classes `.register-story` / `.register-system` set family+accent together
+ * so the two voices never borrow each other's font or color.
+ */
+
+:root {
+  /* Grounds (dark → light) */
+  --bg0-ground: #14100c; /* app background */
+  --bg1-panel: #1b1611; /* rails, headers, panels */
+  --bg2-card: #231c15; /* cards, raised surfaces */
+  --bg3-raised: #2c241b; /* chips, hover, inset controls */
+  --hairline: #382e21; /* 1px borders */
+  --hairline-soft: rgba(216, 170, 90, 0.12);
+
+  /* Text */
+  --prose: #eadcbe; /* narrative body + headings on dark */
+  --ui-text: #d6c9ab; /* UI labels, secondary headings */
+  --secondary: #a08d6c; /* supporting copy */
+  --muted: #6e5f49; /* captions, disabled, meta */
+
+  /* STORY accent */
+  --brass: #d9a648; /* names, primary CTA, story highlights */
+  --brass-bright: #f2c56b; /* hover, emphasis */
+
+  /* SYSTEM accent */
+  --teal: #74b8ae; /* dice, DCs, verdicts, system labels */
+  --teal-dim: #4e827b; /* secondary system, borders */
+  --teal-tint: rgba(116, 184, 174, 0.08);
+
+  /* Verdict / status */
+  --success: #8fb573;
+  --failure: #c96f57; /* muted terracotta, not pure red */
+  --crit-gold: #f5ce6e; /* critical success, recently-advanced dot */
+  --crit-crimson: #b5442f; /* critical failure */
+  --dead: #8a8175; /* fallen characters, denied rulings */
+
+  /* Selection / focus */
+  --selection-bg: rgba(217, 166, 72, 0.25);
+  --focus-ring: #74b8ae;
+
+  /* Type families */
+  --font-display: "Cormorant Garamond", Georgia, serif;
+  --font-prose: "Source Serif 4", Georgia, serif;
+  --font-ui: "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+
+  /* Radii */
+  --radius-card: 10px;
+  --radius-chip: 6px;
+  --radius-stamp: 3px;
+
+  /* Elevation */
+  --elevation: 0 6px 20px rgba(0, 0, 0, 0.4);
+
+  /* Shell metrics */
+  --rail-width: 72px;
+  --header-height: 96px;
+
+  /* Motion durations (collapsed to ~0 under reduced-motion, below) */
+  --motion-fast: 160ms;
+  --motion-med: 300ms;
+  --motion-ruling-die: 350ms;
+  --motion-ruling-total: 900ms;
+  --ease-settle: cubic-bezier(0.2, 0.8, 0.3, 1.2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-fast: 0.001ms;
+    --motion-med: 0.001ms;
+    --motion-ruling-die: 0.001ms;
+    --motion-ruling-total: 0.001ms;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg0-ground);
+  color: var(--prose);
+  font-family: var(--font-ui);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--selection-bg);
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* The two registers — apply to any subtree to lock its voice. */
+.register-story {
+  font-family: var(--font-prose);
+  color: var(--prose);
+}
+.register-story .accent {
+  color: var(--brass);
+}
+.register-system {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--ui-text);
+}
+.register-system .accent {
+  color: var(--teal);
+}
+
+/* Display headings (screen titles, chapter/arc heads, wordmark, names on cards). */
+.display {
+  font-family: var(--font-display);
+  font-weight: 600;
+  color: var(--prose);
+}
+
+/* Narrative prose block (~66ch measure, 17px/1.75 per the design system). */
+.prose {
+  font-family: var(--font-prose);
+  font-size: 17px;
+  line-height: 1.75;
+  max-width: 66ch;
+  color: var(--prose);
+}
+
+/* Any live number (HP, roll, DC, balance) is mono + teal-leaning. */
+.mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Paper-grain texture cards may carry (very low alpha). */
+.paper-grain {
+  background-image: repeating-linear-gradient(
+    0deg,
+    rgba(216, 170, 90, 0.015),
+    rgba(216, 170, 90, 0.015) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+}
