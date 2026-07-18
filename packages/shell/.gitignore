@@ -6,6 +6,15 @@ src-tauri/target/
 src-tauri/icons/*.png
 src-tauri/icons/*.ico
 src-tauri/icons/*.icns
+# tauri icon also emits platform icon subdirs (Android/iOS) — regenerated, not source.
+src-tauri/icons/android/
+src-tauri/icons/ios/
+
+# Placeholder icon source used to smoke-test the bundle pipeline; supply real art instead.
+icon-source.png
+
+# `tauri build`/`tauri android|ios init` generated scaffolding + ACL schemas.
+src-tauri/gen/
 
 # Updater signing private key must never be committed.
 *.key
