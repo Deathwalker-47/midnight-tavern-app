@@ -1,0 +1,23 @@
+{
+  "version": "0.1.0",
+  "notes": "Example static update manifest. Replace signatures + urls per release. See ../RELEASE.md.",
+  "pub_date": "2026-07-18T00:00:00Z",
+  "platforms": {
+    "windows-x86_64": {
+      "signature": "PLACEHOLDER_MINISIGN_SIGNATURE_OF_THE_NSIS_ZIP",
+      "url": "https://updates.example.com/midnight-tavern/releases/0.1.0/Midnight.Tavern_0.1.0_x64-setup.nsis.zip"
+    },
+    "darwin-universal": {
+      "signature": "PLACEHOLDER_MINISIGN_SIGNATURE_OF_THE_MACOS_APP_TARGZ",
+      "url": "https://updates.example.com/midnight-tavern/releases/0.1.0/Midnight.Tavern_universal.app.tar.gz"
+    },
+    "darwin-x86_64": {
+      "signature": "PLACEHOLDER_MINISIGN_SIGNATURE_OF_THE_MACOS_APP_TARGZ",
+      "url": "https://updates.example.com/midnight-tavern/releases/0.1.0/Midnight.Tavern_universal.app.tar.gz"
+    },
+    "darwin-aarch64": {
+      "signature": "PLACEHOLDER_MINISIGN_SIGNATURE_OF_THE_MACOS_APP_TARGZ",
+      "url": "https://updates.example.com/midnight-tavern/releases/0.1.0/Midnight.Tavern_universal.app.tar.gz"
+    }
+  }
+}

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  macOS hardened-runtime entitlements for Midnight Tavern.
+  Referenced by tauri.conf.json > bundle.macOS.entitlements.
+
+  Minimal by design: the app is local-first. It needs to make outbound network
+  connections (LLM provider APIs + the updater manifest check) and to read files
+  the user explicitly picks via the import dialog. It does NOT need camera, mic,
+  location, or the ability to load unsigned/foreign code.
+
+  These entitlements are only enforced when the app is signed with a Developer ID
+  and hardenedRuntime is true (see RELEASE.md). In this environment we cannot sign.
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- Outbound connections: provider APIs + updater manifest host. -->
+  <key>com.apple.security.network.client</key>
+  <true/>
+  <!-- Read files the user selects in the import dialog. -->
+  <key>com.apple.security.files.user-selected.read-only</key>
+  <true/>
+</dict>
+</plist>

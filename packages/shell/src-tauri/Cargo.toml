@@ -1,0 +1,59 @@
+# Minimal Tauri v2 Rust crate for the Midnight Tavern desktop shell.
+#
+# The shell is a thin native host: it mounts the already-built UI (packages/ui/dist)
+# and provides the real SQLite + filesystem that packages/core expects. Versions are
+# pinned (no floating "^"/"~" ranges) so CI reproduces the same build every time.
+[package]
+name = "midnight-tavern"
+version = "0.1.0"
+description = "Midnight Tavern desktop shell (Tauri v2)"
+authors = ["Midnight Tavern"]
+edition = "2021"
+rust-version = "1.77"
+
+[lib]
+# Tauri v2 mobile-ready layout: the app is a lib with a desktop main.rs shim.
+name = "midnight_tavern_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.0.4", features = [] }
+
+[dependencies]
+tauri = { version = "2.1.1", features = [] }
+
+# Auto-update against a static manifest host (see tauri.conf.json plugins.updater).
+tauri-plugin-updater = "2.0.2"
+
+# SQLite via tauri-plugin-sql. See DECISION note below on why this over a
+# better-sqlite3 sidecar.
+tauri-plugin-sql = { version = "2.0.3", features = ["sqlite"] }
+
+# File import (dialog) + scoped filesystem access to the app data dir.
+tauri-plugin-dialog = "2.0.3"
+tauri-plugin-fs = "2.0.3"
+
+serde = { version = "1.0.210", features = ["derive"] }
+serde_json = "1.0.128"
+log = "0.4.22"
+
+[features]
+# This feature is used by the Tauri CLI to enable custom-protocol asset serving
+# in production builds. Do not remove it.
+custom-protocol = ["tauri/custom-protocol"]
+
+# DECISION (D10): tauri-plugin-sql vs a better-sqlite3 Tauri sidecar.
+#
+# packages/core is written against better-sqlite3 (a Node-native addon). Two ways to
+# give it a real database inside Tauri:
+#   (a) Ship Node as a sidecar process that runs core + better-sqlite3, and talk to it
+#       over IPC. Heavier: bundles a Node runtime, needs a second signed binary, and
+#       adds an IPC serialization seam.
+#   (b) Use tauri-plugin-sql (bundled rusqlite/SQLite) and have the UI façade route
+#       core's storage calls through the plugin.
+#
+# We pick (b) for the pure-Tauri path: no bundled Node runtime, one signed binary,
+# smaller footprint (matches the D10 rationale for choosing Tauri). The seam this
+# creates — core's better-sqlite3 API vs the plugin's async SQL — is documented in
+# RELEASE.md under "Storage seam". This crate does not import core directly; it only
+# exposes the SQL + fs capabilities the UI/core façade consumes.

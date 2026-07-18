@@ -1,0 +1,16 @@
+{
+  "name": "@midnight-tavern/shell",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Tauri v2 desktop shell for Midnight Tavern (M12). Hosts the built UI (packages/ui/dist) and provides native SQLite + filesystem. Packaging, code-signing, and auto-update config live here.",
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "build:mac-universal": "tauri build --target universal-apple-darwin --bundles dmg",
+    "build:windows": "tauri build --bundles msi nsis",
+    "tauri": "tauri"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.1.0"
+  }
+}

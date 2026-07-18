@@ -1,0 +1,11 @@
+# Rust / Tauri build output. The root .gitignore has a stale `app/shell/target/`
+# rule that predates this package's real path; this covers the actual location.
+src-tauri/target/
+
+# Generated icon binaries (see src-tauri/icons/README.md — regenerate with `tauri icon`).
+src-tauri/icons/*.png
+src-tauri/icons/*.ico
+src-tauri/icons/*.icns
+
+# Updater signing private key must never be committed.
+*.key
