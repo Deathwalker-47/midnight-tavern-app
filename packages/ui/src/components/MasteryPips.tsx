@@ -8,8 +8,20 @@
  */
 import type { CSSProperties } from "react";
 import type { MasteryRank } from "@midnight-tavern/core";
-import { MASTERY_MOD } from "@midnight-tavern/core";
 import { FONT, useReducedMotion } from "./_shared";
+
+/**
+ * d20 modifier per mastery rank — a synced copy of core's `MASTERY_MOD` (types/primitives.ts, D1).
+ * Inlined rather than imported as a value because a runtime import of core's barrel drags its
+ * SQLite store layer (better-sqlite3 → node:fs/path) into the browser bundle. The `MasteryRank`
+ * TYPE import above is erased, so it's safe; a value import is not. Keep these four in step with core.
+ */
+const MASTERY_MOD: Record<MasteryRank, number> = {
+  novice: 1,
+  adept: 3,
+  expert: 5,
+  master: 7,
+};
 
 export interface MasteryPipsProps {
   rank: MasteryRank;
