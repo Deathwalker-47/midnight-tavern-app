@@ -137,16 +137,16 @@ export function applyWorldOp(state: WorldSoftState, op: WorldOp): WorldSoftState
  * for those (falling back to the id). Reads-modify-writes each touched character's soft
  * state and the world soft state.
  */
-export function applySoftPatch(
+export async function applySoftPatch(
   store: Store,
   storyId: string,
   patch: SoftStatePatch,
   turnIdx: number,
   nameFor?: (characterId: string) => string | undefined
-): void {
-  store.transaction(() => {
+): Promise<void> {
+  await store.transaction(async () => {
     for (const entry of patch.characterOps) {
-      const existing = store.characters.get(entry.characterId);
+      const existing = await store.characters.get(entry.characterId);
       let soft: CharacterSoftState =
         existing?.soft ??
         newSoftState(entry.characterId, nameFor?.(entry.characterId) ?? entry.characterId);
@@ -155,11 +155,11 @@ export function applySoftPatch(
       if (existing) {
         // Known character (has hard state): update its soft column, preserving its tier
         // (default primary — it earned hard state) unless it already had one.
-        store.characters.updateSoft(entry.characterId, soft, existing.softTier ?? soft.tier);
+        await store.characters.updateSoft(entry.characterId, soft, existing.softTier ?? soft.tier);
       } else {
         // Unknown id: a purely-observed secondary character, no hard state. Persist a
         // minimal row carrying only the soft profile so getLivingCard can render it.
-        store.characters.insert({
+        await store.characters.insert({
           id: entry.characterId,
           storyId,
           name: soft.name,
@@ -180,9 +180,9 @@ export function applySoftPatch(
     }
 
     if (patch.worldOps.length > 0) {
-      let world = store.worldSoft.get(storyId) ?? newWorldSoftState();
+      let world = (await store.worldSoft.get(storyId)) ?? newWorldSoftState();
       for (const op of patch.worldOps) world = applyWorldOp(world, op);
-      store.worldSoft.set(storyId, world);
+      await store.worldSoft.set(storyId, world);
     }
   });
 }

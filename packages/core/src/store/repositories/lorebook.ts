@@ -30,52 +30,61 @@ function toRecord(row: Row): LorebookEntry {
 }
 
 export interface LorebookRepo {
-  insert(entry: LorebookEntry): void;
-  get(id: string): LorebookEntry | undefined;
-  listByStory(storyId: string): LorebookEntry[];
+  insert(entry: LorebookEntry): Promise<void>;
+  get(id: string): Promise<LorebookEntry | undefined>;
+  listByStory(storyId: string): Promise<LorebookEntry[]>;
   /** Only the enabled entries for a story (what context assembly considers). */
-  listEnabled(storyId: string): LorebookEntry[];
-  update(entry: LorebookEntry): void;
-  delete(id: string): void;
+  listEnabled(storyId: string): Promise<LorebookEntry[]>;
+  update(entry: LorebookEntry): Promise<void>;
+  delete(id: string): Promise<void>;
 }
 
 export function makeLorebookRepo(db: Db): LorebookRepo {
-  const sql = db.sqlite;
   return {
-    insert(entry) {
+    async insert(entry) {
       LorebookEntrySchema.parse(entry);
-      sql
-        .prepare("INSERT INTO lorebook (id, story_id, keys, content, enabled) VALUES (?, ?, ?, ?, ?)")
-        .run(entry.id, entry.storyId, JSON.stringify(entry.keys), entry.content, toInt(entry.enabled));
+      await db.run(
+        "INSERT INTO lorebook (id, story_id, keys, content, enabled) VALUES (?, ?, ?, ?, ?)",
+        entry.id,
+        entry.storyId,
+        JSON.stringify(entry.keys),
+        entry.content,
+        toInt(entry.enabled)
+      );
     },
 
-    get(id) {
-      const row = sql.prepare("SELECT * FROM lorebook WHERE id = ?").get(id) as Row | undefined;
+    async get(id) {
+      const row = await db.get<Row>("SELECT * FROM lorebook WHERE id = ?", id);
       return row ? toRecord(row) : undefined;
     },
 
-    listByStory(storyId) {
-      const rows = sql.prepare("SELECT * FROM lorebook WHERE story_id = ?").all(storyId) as Row[];
+    async listByStory(storyId) {
+      const rows = await db.all<Row>("SELECT * FROM lorebook WHERE story_id = ?", storyId);
       return rows.map(toRecord);
     },
 
-    listEnabled(storyId) {
-      const rows = sql
-        .prepare("SELECT * FROM lorebook WHERE story_id = ? AND enabled = 1")
-        .all(storyId) as Row[];
+    async listEnabled(storyId) {
+      const rows = await db.all<Row>(
+        "SELECT * FROM lorebook WHERE story_id = ? AND enabled = 1",
+        storyId
+      );
       return rows.map(toRecord);
     },
 
-    update(entry) {
+    async update(entry) {
       LorebookEntrySchema.parse(entry);
-      const info = sql
-        .prepare("UPDATE lorebook SET keys = ?, content = ?, enabled = ? WHERE id = ?")
-        .run(JSON.stringify(entry.keys), entry.content, toInt(entry.enabled), entry.id);
+      const info = await db.run(
+        "UPDATE lorebook SET keys = ?, content = ?, enabled = ? WHERE id = ?",
+        JSON.stringify(entry.keys),
+        entry.content,
+        toInt(entry.enabled),
+        entry.id
+      );
       if (info.changes === 0) throw new Error(`No lorebook entry with id "${entry.id}" to update.`);
     },
 
-    delete(id) {
-      sql.prepare("DELETE FROM lorebook WHERE id = ?").run(id);
+    async delete(id) {
+      await db.run("DELETE FROM lorebook WHERE id = ?", id);
     },
   };
 }

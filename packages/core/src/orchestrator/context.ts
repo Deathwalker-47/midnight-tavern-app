@@ -117,16 +117,17 @@ function renderHardSnapshot(record: CharacterRecord, schema: StorySchema): strin
 }
 
 /** Triggered lorebook entries: keyword match against recent text, newest-first, ≤ budget. */
-function triggeredLorebook(
+async function triggeredLorebook(
   store: Store,
   storyId: string,
   haystack: string,
   tokenBudget: number
-): string[] {
+): Promise<string[]> {
   const hay = haystack.toLowerCase();
-  const entries = store.lorebook
-    .listEnabled(storyId)
-    .filter((e) => e.keys.some((k) => k.trim() && hay.includes(k.toLowerCase())));
+  const enabled = await store.lorebook.listEnabled(storyId);
+  const entries = enabled.filter((e) =>
+    e.keys.some((k) => k.trim() && hay.includes(k.toLowerCase()))
+  );
 
   const out: string[] = [];
   let used = 0;
@@ -165,15 +166,21 @@ export interface AssembledContext {
  * running total would exceed budget we skip lower-priority blocks (memory, lorebook) and
  * truncate raw history, but never blocks 1–3.
  */
-export function assembleContext(store: Store, args: AssembleContextArgs): AssembledContext {
+export async function assembleContext(
+  store: Store,
+  args: AssembleContextArgs
+): Promise<AssembledContext> {
   const { storyId, schema, rulings, presentIds, playerText } = args;
   const budget =
-    store.settings.get("contextBudget", z.number().int().positive()) ?? DEFAULT_CONTEXT_BUDGET;
+    (await store.settings.get("contextBudget", z.number().int().positive())) ??
+    DEFAULT_CONTEXT_BUDGET;
 
-  const present = presentIds
-    .map((id) => store.characters.get(id))
-    .filter((r): r is CharacterRecord => r !== undefined);
-  const nameFor = (id: string) => store.characters.get(id)?.name ?? id;
+  const present = (await Promise.all(presentIds.map((id) => store.characters.get(id)))).filter(
+    (r): r is CharacterRecord => r !== undefined
+  );
+  // Name lookup stays synchronous for the render helpers; back it with the records already fetched.
+  const nameById = new Map(present.map((r) => [r.id, r.name]));
+  const nameFor = (id: string) => nameById.get(id) ?? id;
   const actionsById = new Map(schema.actions.map((a) => [a.id, a]));
 
   // Block 2: rulings (never dropped).
@@ -183,12 +190,12 @@ export function assembleContext(store: Store, args: AssembleContextArgs): Assemb
   const hardLines = present.map((r) => renderHardSnapshot(r, schema));
 
   // Blocks 5–6: memory (soft slices + arc + chapters).
-  const memory = buildMemoryBlock(store, storyId, presentIds);
+  const memory = await buildMemoryBlock(store, storyId, presentIds);
 
   // Block 7: triggered lorebook, matched against player text + recent narration.
-  const recent = store.messages.recent(storyId, 8);
+  const recent = await store.messages.recent(storyId, 8);
   const haystack = [playerText, ...recent.map((m) => m.content)].join("\n");
-  const lore = triggeredLorebook(store, storyId, haystack, LOREBOOK_BUDGET);
+  const lore = await triggeredLorebook(store, storyId, haystack, LOREBOOK_BUDGET);
 
   // Assemble top-down, tracking budget. Blocks 1–3 always included.
   const sections: string[] = [];

@@ -60,20 +60,20 @@ export interface MemoryBlock {
  * Build the memory block for a story given the ids of characters present this turn. The
  * assembler renders and budgets these; here we only gather and condense.
  */
-export function buildMemoryBlock(store: Store, storyId: string, presentIds: string[]): MemoryBlock {
-  const latestArc = store.arcs.latest(storyId);
+export async function buildMemoryBlock(store: Store, storyId: string, presentIds: string[]): Promise<MemoryBlock> {
+  const latestArc = await store.arcs.latest(storyId);
 
   // Chapters after the latest arc's coverage (all chapters when there's no arc yet).
   const sinceIdx = latestArc ? latestArc.chapterTo + 1 : 0;
-  const chapters = store.chapters
-    .listByStory(storyId)
+  const chapters = (await store.chapters
+    .listByStory(storyId))
     .filter((c) => c.idx >= sinceIdx)
     .sort((a, b) => a.idx - b.idx)
     .map((c) => `[${c.idx}] ${c.title}: ${c.summary}`);
 
   const softSlices: string[] = [];
   for (const id of presentIds) {
-    const soft = store.characters.get(id)?.soft;
+    const soft = (await store.characters.get(id))?.soft;
     if (soft) softSlices.push(condenseSoftSlice(soft));
   }
 

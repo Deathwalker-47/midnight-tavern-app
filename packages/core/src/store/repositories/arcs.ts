@@ -32,59 +32,55 @@ function toRecord(row: Row): ArcRecord {
 }
 
 export interface ArcRepo {
-  insert(record: ArcRecord): void;
-  get(id: string): ArcRecord | undefined;
-  listByStory(storyId: string): ArcRecord[];
+  insert(record: ArcRecord): Promise<void>;
+  get(id: string): Promise<ArcRecord | undefined>;
+  listByStory(storyId: string): Promise<ArcRecord[]>;
   /** The most recent arc for a story (highest idx), if any. */
-  latest(storyId: string): ArcRecord | undefined;
-  nextIdx(storyId: string): number;
+  latest(storyId: string): Promise<ArcRecord | undefined>;
+  nextIdx(storyId: string): Promise<number>;
 }
 
 export function makeArcRepo(db: Db): ArcRepo {
-  const sql = db.sqlite;
   return {
-    insert(record) {
+    async insert(record) {
       ArcRecordSchema.parse(record);
-      sql
-        .prepare(
-          `INSERT INTO arcs (id, story_id, idx, chapter_from, chapter_to, title, doc_json)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`
-        )
-        .run(
-          record.id,
-          record.storyId,
-          record.idx,
-          record.chapterFrom,
-          record.chapterTo,
-          record.title,
-          encodeJson(ArcDocSchema, record.doc)
-        );
+      await db.run(
+        `INSERT INTO arcs (id, story_id, idx, chapter_from, chapter_to, title, doc_json)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        record.id,
+        record.storyId,
+        record.idx,
+        record.chapterFrom,
+        record.chapterTo,
+        record.title,
+        encodeJson(ArcDocSchema, record.doc)
+      );
     },
 
-    get(id) {
-      const row = sql.prepare("SELECT * FROM arcs WHERE id = ?").get(id) as Row | undefined;
+    async get(id) {
+      const row = await db.get<Row>("SELECT * FROM arcs WHERE id = ?", id);
       return row ? toRecord(row) : undefined;
     },
 
-    listByStory(storyId) {
-      const rows = sql
-        .prepare("SELECT * FROM arcs WHERE story_id = ? ORDER BY idx")
-        .all(storyId) as Row[];
+    async listByStory(storyId) {
+      const rows = await db.all<Row>("SELECT * FROM arcs WHERE story_id = ? ORDER BY idx", storyId);
       return rows.map(toRecord);
     },
 
-    latest(storyId) {
-      const row = sql
-        .prepare("SELECT * FROM arcs WHERE story_id = ? ORDER BY idx DESC LIMIT 1")
-        .get(storyId) as Row | undefined;
+    async latest(storyId) {
+      const row = await db.get<Row>(
+        "SELECT * FROM arcs WHERE story_id = ? ORDER BY idx DESC LIMIT 1",
+        storyId
+      );
       return row ? toRecord(row) : undefined;
     },
 
-    nextIdx(storyId) {
-      const row = sql
-        .prepare("SELECT MAX(idx) AS maxIdx FROM arcs WHERE story_id = ?")
-        .get(storyId) as { maxIdx: number | null };
-      return row.maxIdx === null ? 0 : row.maxIdx + 1;
+    async nextIdx(storyId) {
+      const row = await db.get<{ maxIdx: number | null }>(
+        "SELECT MAX(idx) AS maxIdx FROM arcs WHERE story_id = ?",
+        storyId
+      );
+      return !row || row.maxIdx === null ? 0 : row.maxIdx + 1;
     },
   };
 }

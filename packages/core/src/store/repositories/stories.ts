@@ -34,59 +34,52 @@ function toRecord(row: Row): StoryRecord {
 }
 
 export interface StoryRepo {
-  insert(record: StoryRecord): void;
-  get(id: string): StoryRecord | undefined;
-  list(): StoryRecord[];
+  insert(record: StoryRecord): Promise<void>;
+  get(id: string): Promise<StoryRecord | undefined>;
+  list(): Promise<StoryRecord[]>;
   /** Replace an existing story's mutable fields (title, schema, locked). */
-  update(record: StoryRecord): void;
-  delete(id: string): void;
+  update(record: StoryRecord): Promise<void>;
+  delete(id: string): Promise<void>;
 }
 
 export function makeStoryRepo(db: Db): StoryRepo {
-  const sql = db.sqlite;
   return {
-    insert(record) {
+    async insert(record) {
       StoryRecordSchema.parse(record);
-      sql
-        .prepare(
-          "INSERT INTO stories (id, title, created_at, schema_json, locked) VALUES (?, ?, ?, ?, ?)"
-        )
-        .run(
-          record.id,
-          record.title,
-          record.createdAt,
-          encodeJson(StorySchemaSchema, record.schema),
-          toInt(record.locked)
-        );
+      await db.run(
+        "INSERT INTO stories (id, title, created_at, schema_json, locked) VALUES (?, ?, ?, ?, ?)",
+        record.id,
+        record.title,
+        record.createdAt,
+        encodeJson(StorySchemaSchema, record.schema),
+        toInt(record.locked)
+      );
     },
 
-    get(id) {
-      const row = sql.prepare("SELECT * FROM stories WHERE id = ?").get(id) as Row | undefined;
+    async get(id) {
+      const row = await db.get<Row>("SELECT * FROM stories WHERE id = ?", id);
       return row ? toRecord(row) : undefined;
     },
 
-    list() {
-      const rows = sql
-        .prepare("SELECT * FROM stories ORDER BY created_at DESC")
-        .all() as Row[];
+    async list() {
+      const rows = await db.all<Row>("SELECT * FROM stories ORDER BY created_at DESC");
       return rows.map(toRecord);
     },
 
-    update(record) {
+    async update(record) {
       StoryRecordSchema.parse(record);
-      const info = sql
-        .prepare("UPDATE stories SET title = ?, schema_json = ?, locked = ? WHERE id = ?")
-        .run(
-          record.title,
-          encodeJson(StorySchemaSchema, record.schema),
-          toInt(record.locked),
-          record.id
-        );
+      const info = await db.run(
+        "UPDATE stories SET title = ?, schema_json = ?, locked = ? WHERE id = ?",
+        record.title,
+        encodeJson(StorySchemaSchema, record.schema),
+        toInt(record.locked),
+        record.id
+      );
       if (info.changes === 0) throw new Error(`No story with id "${record.id}" to update.`);
     },
 
-    delete(id) {
-      sql.prepare("DELETE FROM stories WHERE id = ?").run(id);
+    async delete(id) {
+      await db.run("DELETE FROM stories WHERE id = ?", id);
     },
   };
 }

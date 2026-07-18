@@ -81,66 +81,68 @@ const arcDoc = () => ({
 });
 
 let store: Store;
-beforeEach(() => {
-  store = openStore(":memory:");
+beforeEach(async () => {
+  store = await openStore(":memory:");
 });
 
 describe("stories", () => {
-  it("round-trips a story record including its frozen schema", () => {
+  it("round-trips a story record including its frozen schema", async () => {
     const rec = storyRecord();
-    store.stories.insert(rec);
-    expect(store.stories.get("s1")).toEqual(rec);
+    await store.stories.insert(rec);
+    expect(await store.stories.get("s1")).toEqual(rec);
   });
 
-  it("lists newest first and updates mutable fields", () => {
-    store.stories.insert({ ...storyRecord("a"), createdAt: 1 });
-    store.stories.insert({ ...storyRecord("b"), createdAt: 2 });
-    expect(store.stories.list().map((s) => s.id)).toEqual(["b", "a"]);
+  it("lists newest first and updates mutable fields", async () => {
+    await store.stories.insert({ ...storyRecord("a"), createdAt: 1 });
+    await store.stories.insert({ ...storyRecord("b"), createdAt: 2 });
+    expect((await store.stories.list()).map((s) => s.id)).toEqual(["b", "a"]);
 
-    store.stories.update({ ...storyRecord("a"), createdAt: 1, title: "Renamed" });
-    expect(store.stories.get("a")?.title).toBe("Renamed");
+    await store.stories.update({ ...storyRecord("a"), createdAt: 1, title: "Renamed" });
+    expect((await store.stories.get("a"))?.title).toBe("Renamed");
   });
 
-  it("throws when updating a missing story", () => {
-    expect(() => store.stories.update(storyRecord("ghost"))).toThrow(/No story/);
+  it("throws when updating a missing story", async () => {
+    await expect(store.stories.update(storyRecord("ghost"))).rejects.toThrow(/No story/);
   });
 
-  it("deletes a story", () => {
-    store.stories.insert(storyRecord());
-    store.stories.delete("s1");
-    expect(store.stories.get("s1")).toBeUndefined();
+  it("deletes a story", async () => {
+    await store.stories.insert(storyRecord());
+    await store.stories.delete("s1");
+    expect(await store.stories.get("s1")).toBeUndefined();
   });
 
-  it("rejects a corrupt schema_json on read", () => {
-    store.stories.insert(storyRecord());
-    store.db.sqlite.prepare("UPDATE stories SET schema_json = ? WHERE id = ?").run("{}", "s1");
-    expect(() => store.stories.get("s1")).toThrow(z.ZodError);
+  it("rejects a corrupt schema_json on read", async () => {
+    await store.stories.insert(storyRecord());
+    await store.db.run("UPDATE stories SET schema_json = ? WHERE id = ?", "{}", "s1");
+    await expect(store.stories.get("s1")).rejects.toThrow(z.ZodError);
   });
 });
 
 describe("characters", () => {
-  beforeEach(() => store.stories.insert(storyRecord()));
+  beforeEach(async () => {
+    await store.stories.insert(storyRecord());
+  });
 
-  it("round-trips hard state, then attaches soft state", () => {
-    store.characters.insert({
+  it("round-trips hard state, then attaches soft state", async () => {
+    await store.characters.insert({
       id: "kestrel",
       storyId: "s1",
       name: "Kestrel",
       isPlayer: true,
       hard: makePlayer(),
     });
-    const got = store.characters.get("kestrel");
+    const got = await store.characters.get("kestrel");
     expect(got?.hard).toEqual(makePlayer());
     expect(got?.soft).toBeUndefined();
 
-    store.characters.updateSoft("kestrel", softState("kestrel"), "primary");
-    const withSoft = store.characters.get("kestrel");
+    await store.characters.updateSoft("kestrel", softState("kestrel"), "primary");
+    const withSoft = await store.characters.get("kestrel");
     expect(withSoft?.soft).toEqual(softState("kestrel"));
     expect(withSoft?.softTier).toBe("primary");
   });
 
-  it("updates hard state in place", () => {
-    store.characters.insert({
+  it("updates hard state in place", async () => {
+    await store.characters.insert({
       id: "kestrel",
       storyId: "s1",
       name: "Kestrel",
@@ -148,38 +150,40 @@ describe("characters", () => {
       hard: makePlayer(),
     });
     const hurt = makePlayer({ resources: { hp: { current: 3, max: 20 } } });
-    store.characters.updateHard("kestrel", hurt);
-    expect(store.characters.get("kestrel")?.hard.resources.hp?.current).toBe(3);
+    await store.characters.updateHard("kestrel", hurt);
+    expect((await store.characters.get("kestrel"))?.hard.resources.hp?.current).toBe(3);
   });
 
-  it("throws when updating a missing character", () => {
-    expect(() => store.characters.updateHard("ghost", makePlayer())).toThrow(/No character/);
-    expect(() => store.characters.updateSoft("ghost", softState("ghost"), "primary")).toThrow(
-      /No character/
-    );
+  it("throws when updating a missing character", async () => {
+    await expect(store.characters.updateHard("ghost", makePlayer())).rejects.toThrow(/No character/);
+    await expect(
+      store.characters.updateSoft("ghost", softState("ghost"), "primary")
+    ).rejects.toThrow(/No character/);
   });
 
-  it("lists a story's characters with players first", () => {
-    store.characters.insert({
+  it("lists a story's characters with players first", async () => {
+    await store.characters.insert({
       id: "wight",
       storyId: "s1",
       name: "Wight",
       isPlayer: false,
       hard: makePlayer({ characterId: "wight", isPlayer: false }),
     });
-    store.characters.insert({
+    await store.characters.insert({
       id: "kestrel",
       storyId: "s1",
       name: "Kestrel",
       isPlayer: true,
       hard: makePlayer(),
     });
-    expect(store.characters.listByStory("s1").map((c) => c.id)).toEqual(["kestrel", "wight"]);
+    expect((await store.characters.listByStory("s1")).map((c) => c.id)).toEqual(["kestrel", "wight"]);
   });
 });
 
 describe("messages", () => {
-  beforeEach(() => store.stories.insert(storyRecord()));
+  beforeEach(async () => {
+    await store.stories.insert(storyRecord());
+  });
 
   const msg = (idx: number, role: MessageRecord["role"] = "player"): MessageRecord => ({
     id: `m${idx}`,
@@ -190,30 +194,30 @@ describe("messages", () => {
     createdAt: idx,
   });
 
-  it("assigns monotonic indices and reads them back in order", () => {
-    expect(store.messages.nextIdx("s1")).toBe(0);
-    store.messages.insert(msg(0));
-    store.messages.insert(msg(1, "narrator"));
-    expect(store.messages.nextIdx("s1")).toBe(2);
-    expect(store.messages.listByStory("s1").map((m) => m.idx)).toEqual([0, 1]);
-    expect(store.messages.get("m1")?.role).toBe("narrator");
+  it("assigns monotonic indices and reads them back in order", async () => {
+    expect(await store.messages.nextIdx("s1")).toBe(0);
+    await store.messages.insert(msg(0));
+    await store.messages.insert(msg(1, "narrator"));
+    expect(await store.messages.nextIdx("s1")).toBe(2);
+    expect((await store.messages.listByStory("s1")).map((m) => m.idx)).toEqual([0, 1]);
+    expect((await store.messages.get("m1"))?.role).toBe("narrator");
   });
 
-  it("returns the most recent N in turn order", () => {
-    for (let i = 0; i < 5; i++) store.messages.insert(msg(i));
-    expect(store.messages.recent("s1", 2).map((m) => m.idx)).toEqual([3, 4]);
+  it("returns the most recent N in turn order", async () => {
+    for (let i = 0; i < 5; i++) await store.messages.insert(msg(i));
+    expect((await store.messages.recent("s1", 2)).map((m) => m.idx)).toEqual([3, 4]);
   });
 
-  it("enforces the per-story unique index", () => {
-    store.messages.insert(msg(0));
-    expect(() => store.messages.insert({ ...msg(0), id: "dupe" })).toThrow();
+  it("enforces the per-story unique index", async () => {
+    await store.messages.insert(msg(0));
+    await expect(store.messages.insert({ ...msg(0), id: "dupe" })).rejects.toThrow();
   });
 });
 
 describe("rulings", () => {
-  beforeEach(() => {
-    store.stories.insert(storyRecord());
-    store.messages.insert({
+  beforeEach(async () => {
+    await store.stories.insert(storyRecord());
+    await store.messages.insert({
       id: "m0",
       storyId: "s1",
       idx: 0,
@@ -223,26 +227,28 @@ describe("rulings", () => {
     });
   });
 
-  it("round-trips a ruling and finds it by message", () => {
-    store.rulings.insert({ id: "r1", storyId: "s1", messageId: "m0", ruling: ruling() });
-    expect(store.rulings.get("r1")?.ruling).toEqual(ruling());
-    expect(store.rulings.getByMessage("m0")?.id).toBe("r1");
-    expect(store.rulings.listByStory("s1")).toHaveLength(1);
+  it("round-trips a ruling and finds it by message", async () => {
+    await store.rulings.insert({ id: "r1", storyId: "s1", messageId: "m0", ruling: ruling() });
+    expect((await store.rulings.get("r1"))?.ruling).toEqual(ruling());
+    expect((await store.rulings.getByMessage("m0"))?.id).toBe("r1");
+    expect(await store.rulings.listByStory("s1")).toHaveLength(1);
   });
 
-  it("rejects a corrupt ruling_json on read", () => {
-    store.rulings.insert({ id: "r1", storyId: "s1", messageId: "m0", ruling: ruling() });
-    store.db.sqlite.prepare("UPDATE rulings SET ruling_json = ? WHERE id = ?").run("{}", "r1");
-    expect(() => store.rulings.get("r1")).toThrow(z.ZodError);
+  it("rejects a corrupt ruling_json on read", async () => {
+    await store.rulings.insert({ id: "r1", storyId: "s1", messageId: "m0", ruling: ruling() });
+    await store.db.run("UPDATE rulings SET ruling_json = ? WHERE id = ?", "{}", "r1");
+    await expect(store.rulings.get("r1")).rejects.toThrow(z.ZodError);
   });
 });
 
 describe("chapters & arcs", () => {
-  beforeEach(() => store.stories.insert(storyRecord()));
+  beforeEach(async () => {
+    await store.stories.insert(storyRecord());
+  });
 
-  it("round-trips chapters and queries by idx range", () => {
+  it("round-trips chapters and queries by idx range", async () => {
     for (let i = 0; i < 3; i++) {
-      store.chapters.insert({
+      await store.chapters.insert({
         id: `c${i}`,
         storyId: "s1",
         idx: i,
@@ -252,12 +258,12 @@ describe("chapters & arcs", () => {
         summary: `Summary ${i}`,
       });
     }
-    expect(store.chapters.nextIdx("s1")).toBe(3);
-    expect(store.chapters.listByIdxRange("s1", 1, 2).map((c) => c.idx)).toEqual([1, 2]);
+    expect(await store.chapters.nextIdx("s1")).toBe(3);
+    expect((await store.chapters.listByIdxRange("s1", 1, 2)).map((c) => c.idx)).toEqual([1, 2]);
   });
 
-  it("round-trips an arc doc and returns the latest arc", () => {
-    store.arcs.insert({
+  it("round-trips an arc doc and returns the latest arc", async () => {
+    await store.arcs.insert({
       id: "a0",
       storyId: "s1",
       idx: 0,
@@ -266,7 +272,7 @@ describe("chapters & arcs", () => {
       title: "Arc I",
       doc: arcDoc(),
     });
-    store.arcs.insert({
+    await store.arcs.insert({
       id: "a1",
       storyId: "s1",
       idx: 1,
@@ -275,13 +281,13 @@ describe("chapters & arcs", () => {
       title: "Arc II",
       doc: arcDoc(),
     });
-    expect(store.arcs.get("a0")?.doc).toEqual(arcDoc());
-    expect(store.arcs.latest("s1")?.id).toBe("a1");
-    expect(store.arcs.nextIdx("s1")).toBe(2);
+    expect((await store.arcs.get("a0"))?.doc).toEqual(arcDoc());
+    expect((await store.arcs.latest("s1"))?.id).toBe("a1");
+    expect(await store.arcs.nextIdx("s1")).toBe(2);
   });
 
-  it("rejects a corrupt doc_json on read", () => {
-    store.arcs.insert({
+  it("rejects a corrupt doc_json on read", async () => {
+    await store.arcs.insert({
       id: "a0",
       storyId: "s1",
       idx: 0,
@@ -290,27 +296,31 @@ describe("chapters & arcs", () => {
       title: "Arc I",
       doc: arcDoc(),
     });
-    store.db.sqlite.prepare("UPDATE arcs SET doc_json = ? WHERE id = ?").run("{}", "a0");
-    expect(() => store.arcs.get("a0")).toThrow(z.ZodError);
+    await store.db.run("UPDATE arcs SET doc_json = ? WHERE id = ?", "{}", "a0");
+    await expect(store.arcs.get("a0")).rejects.toThrow(z.ZodError);
   });
 });
 
 describe("world_soft", () => {
-  beforeEach(() => store.stories.insert(storyRecord()));
+  beforeEach(async () => {
+    await store.stories.insert(storyRecord());
+  });
 
-  it("upserts a single world document per story", () => {
-    expect(store.worldSoft.get("s1")).toBeUndefined();
-    store.worldSoft.set("s1", worldState());
-    expect(store.worldSoft.get("s1")).toEqual(worldState());
+  it("upserts a single world document per story", async () => {
+    expect(await store.worldSoft.get("s1")).toBeUndefined();
+    await store.worldSoft.set("s1", worldState());
+    expect(await store.worldSoft.get("s1")).toEqual(worldState());
 
     const updated = { ...worldState(), overview: "Now cleansed." };
-    store.worldSoft.set("s1", updated);
-    expect(store.worldSoft.get("s1")?.overview).toBe("Now cleansed.");
+    await store.worldSoft.set("s1", updated);
+    expect((await store.worldSoft.get("s1"))?.overview).toBe("Now cleansed.");
   });
 });
 
 describe("lorebook", () => {
-  beforeEach(() => store.stories.insert(storyRecord()));
+  beforeEach(async () => {
+    await store.stories.insert(storyRecord());
+  });
 
   const entry = (id: string, enabled: boolean): LorebookEntry => ({
     id,
@@ -320,25 +330,25 @@ describe("lorebook", () => {
     enabled,
   });
 
-  it("round-trips entries and filters enabled ones", () => {
-    store.lorebook.insert(entry("l1", true));
-    store.lorebook.insert(entry("l2", false));
-    expect(store.lorebook.get("l1")).toEqual(entry("l1", true));
-    expect(store.lorebook.listByStory("s1")).toHaveLength(2);
-    expect(store.lorebook.listEnabled("s1").map((e) => e.id)).toEqual(["l1"]);
+  it("round-trips entries and filters enabled ones", async () => {
+    await store.lorebook.insert(entry("l1", true));
+    await store.lorebook.insert(entry("l2", false));
+    expect(await store.lorebook.get("l1")).toEqual(entry("l1", true));
+    expect(await store.lorebook.listByStory("s1")).toHaveLength(2);
+    expect((await store.lorebook.listEnabled("s1")).map((e) => e.id)).toEqual(["l1"]);
   });
 
-  it("updates and deletes", () => {
-    store.lorebook.insert(entry("l1", true));
-    store.lorebook.update({ ...entry("l1", false), content: "changed" });
-    expect(store.lorebook.get("l1")?.enabled).toBe(false);
-    expect(store.lorebook.get("l1")?.content).toBe("changed");
-    store.lorebook.delete("l1");
-    expect(store.lorebook.get("l1")).toBeUndefined();
+  it("updates and deletes", async () => {
+    await store.lorebook.insert(entry("l1", true));
+    await store.lorebook.update({ ...entry("l1", false), content: "changed" });
+    expect((await store.lorebook.get("l1"))?.enabled).toBe(false);
+    expect((await store.lorebook.get("l1"))?.content).toBe("changed");
+    await store.lorebook.delete("l1");
+    expect(await store.lorebook.get("l1")).toBeUndefined();
   });
 
-  it("throws when updating a missing entry", () => {
-    expect(() => store.lorebook.update(entry("ghost", true))).toThrow(/No lorebook/);
+  it("throws when updating a missing entry", async () => {
+    await expect(store.lorebook.update(entry("ghost", true))).rejects.toThrow(/No lorebook/);
   });
 });
 
@@ -350,50 +360,52 @@ describe("personas", () => {
     isDefault,
   });
 
-  it("round-trips and enforces a single default", () => {
-    store.personas.insert(persona("p1", true));
-    store.personas.insert(persona("p2"));
-    expect(store.personas.getDefault()?.id).toBe("p1");
+  it("round-trips and enforces a single default", async () => {
+    await store.personas.insert(persona("p1", true));
+    await store.personas.insert(persona("p2"));
+    expect((await store.personas.getDefault())?.id).toBe("p1");
 
-    store.personas.setDefault("p2");
-    expect(store.personas.getDefault()?.id).toBe("p2");
-    expect(store.personas.get("p1")?.isDefault).toBe(false);
+    await store.personas.setDefault("p2");
+    expect((await store.personas.getDefault())?.id).toBe("p2");
+    expect((await store.personas.get("p1"))?.isDefault).toBe(false);
   });
 
-  it("throws when defaulting a missing persona", () => {
-    expect(() => store.personas.setDefault("ghost")).toThrow(/No persona/);
+  it("throws when defaulting a missing persona", async () => {
+    await expect(store.personas.setDefault("ghost")).rejects.toThrow(/No persona/);
   });
 });
 
 describe("settings", () => {
   const BudgetSchema = z.object({ maxTokens: z.number() });
 
-  it("validates value against a per-key schema on set and get", () => {
-    expect(store.settings.has("budget")).toBe(false);
-    store.settings.set("budget", BudgetSchema, { maxTokens: 8000 });
-    expect(store.settings.has("budget")).toBe(true);
-    expect(store.settings.get("budget", BudgetSchema)).toEqual({ maxTokens: 8000 });
+  it("validates value against a per-key schema on set and get", async () => {
+    expect(await store.settings.has("budget")).toBe(false);
+    await store.settings.set("budget", BudgetSchema, { maxTokens: 8000 });
+    expect(await store.settings.has("budget")).toBe(true);
+    expect(await store.settings.get("budget", BudgetSchema)).toEqual({ maxTokens: 8000 });
 
-    store.settings.set("budget", BudgetSchema, { maxTokens: 16000 });
-    expect(store.settings.get("budget", BudgetSchema)?.maxTokens).toBe(16000);
+    await store.settings.set("budget", BudgetSchema, { maxTokens: 16000 });
+    expect((await store.settings.get("budget", BudgetSchema))?.maxTokens).toBe(16000);
 
-    store.settings.delete("budget");
-    expect(store.settings.get("budget", BudgetSchema)).toBeUndefined();
+    await store.settings.delete("budget");
+    expect(await store.settings.get("budget", BudgetSchema)).toBeUndefined();
   });
 
-  it("rejects a stored value that no longer matches the schema", () => {
-    store.settings.set("budget", BudgetSchema, { maxTokens: 8000 });
-    store.db.sqlite.prepare("UPDATE settings SET value = ? WHERE key = ?").run('{"x":1}', "budget");
-    expect(() => store.settings.get("budget", BudgetSchema)).toThrow(z.ZodError);
+  it("rejects a stored value that no longer matches the schema", async () => {
+    await store.settings.set("budget", BudgetSchema, { maxTokens: 8000 });
+    await store.db.run("UPDATE settings SET value = ? WHERE key = ?", '{"x":1}', "budget");
+    await expect(store.settings.get("budget", BudgetSchema)).rejects.toThrow(z.ZodError);
   });
 });
 
 describe("transaction (§6 per-turn atomicity)", () => {
-  beforeEach(() => store.stories.insert(storyRecord()));
+  beforeEach(async () => {
+    await store.stories.insert(storyRecord());
+  });
 
-  it("commits message + ruling together", () => {
-    store.transaction(() => {
-      store.messages.insert({
+  it("commits message + ruling together", async () => {
+    await store.transaction(async () => {
+      await store.messages.insert({
         id: "m0",
         storyId: "s1",
         idx: 0,
@@ -401,16 +413,16 @@ describe("transaction (§6 per-turn atomicity)", () => {
         content: "You strike true.",
         createdAt: 0,
       });
-      store.rulings.insert({ id: "r0", storyId: "s1", messageId: "m0", ruling: ruling() });
+      await store.rulings.insert({ id: "r0", storyId: "s1", messageId: "m0", ruling: ruling() });
     });
-    expect(store.messages.get("m0")).toBeDefined();
-    expect(store.rulings.getByMessage("m0")).toBeDefined();
+    expect(await store.messages.get("m0")).toBeDefined();
+    expect(await store.rulings.getByMessage("m0")).toBeDefined();
   });
 
-  it("rolls back the whole turn if any write throws", () => {
-    expect(() =>
-      store.transaction(() => {
-        store.messages.insert({
+  it("rolls back the whole turn if any write throws", async () => {
+    await expect(
+      store.transaction(async () => {
+        await store.messages.insert({
           id: "m0",
           storyId: "s1",
           idx: 0,
@@ -419,10 +431,10 @@ describe("transaction (§6 per-turn atomicity)", () => {
           createdAt: 0,
         });
         // Second insert violates the FK (missing message) — must roll back the first.
-        store.rulings.insert({ id: "r0", storyId: "s1", messageId: "missing", ruling: ruling() });
+        await store.rulings.insert({ id: "r0", storyId: "s1", messageId: "missing", ruling: ruling() });
       })
-    ).toThrow();
-    expect(store.messages.get("m0")).toBeUndefined();
-    expect(store.rulings.get("r0")).toBeUndefined();
+    ).rejects.toThrow();
+    expect(await store.messages.get("m0")).toBeUndefined();
+    expect(await store.rulings.get("r0")).toBeUndefined();
   });
 });

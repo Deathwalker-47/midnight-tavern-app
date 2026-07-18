@@ -62,20 +62,20 @@ class ScriptedRouter implements Router {
 }
 
 /** Seed a store with the fixture story + player + a present enemy, and return it. */
-function seedStore(): { store: Store; storyId: string } {
-  const store = openStore(":memory:");
+async function seedStore(): Promise<{ store: Store; storyId: string }> {
+  const store = await openStore(":memory:");
   const schema = makeStory();
   const storyId = schema.storyId;
-  store.stories.insert({ id: storyId, title: schema.title, createdAt: 0, schema, locked: true });
+  await store.stories.insert({ id: storyId, title: schema.title, createdAt: 0, schema, locked: true });
   const player = makePlayer();
-  store.characters.insert({
+  await store.characters.insert({
     id: player.characterId,
     storyId,
     name: "Kestrel",
     isPlayer: true,
     hard: player,
   });
-  store.characters.insert({
+  await store.characters.insert({
     id: "wight",
     storyId,
     name: "Grave-wight",
@@ -97,8 +97,8 @@ function seedStore(): { store: Store; storyId: string } {
 describe("submitTurn — pipeline order & transaction", () => {
   let store: Store;
   let storyId: string;
-  beforeEach(() => {
-    ({ store, storyId } = seedStore());
+  beforeEach(async () => {
+    ({ store, storyId } = await seedStore());
   });
 
   it("persists both messages, resolves a ruling, and commits the ENGINE's effect (not the prose)", async () => {
@@ -127,7 +127,7 @@ describe("submitTurn — pipeline order & transaction", () => {
     await result.background;
 
     // Two messages persisted, in order.
-    const msgs = store.messages.listByStory(storyId);
+    const msgs = await store.messages.listByStory(storyId);
     expect(msgs.map((m) => m.role)).toEqual(["player", "narrator"]);
     expect(msgs[1]!.content).toContain("magic ring"); // prose stored verbatim
 
@@ -136,15 +136,15 @@ describe("submitTurn — pipeline order & transaction", () => {
     expect(result.rulings[0]!.roll?.outcome).toBe("success");
 
     // Ledger reflects the ENGINE (wight took 10 dmg → 2 hp), NOT the prose ("untouched").
-    const wight = store.characters.get("wight")!;
+    const wight = (await store.characters.get("wight"))!;
     expect(wight.hard.resources.hp!.current).toBe(2);
 
     // The "magic ring" the prose invented never entered the player's inventory.
-    const player = store.characters.get("kestrel")!;
+    const player = (await store.characters.get("kestrel"))!;
     expect(player.hard.inventory.find((i) => i.itemId === "ring")).toBeUndefined();
 
     // A ruling row was persisted, linked to the narrator message.
-    const rulingRow = store.rulings.getByMessage(msgs[1]!.id);
+    const rulingRow = await store.rulings.getByMessage(msgs[1]!.id);
     expect(rulingRow).toBeDefined();
     expect(rulingRow!.ruling.actionId).toBe("attack_melee");
 
@@ -158,15 +158,15 @@ describe("submitTurn — pipeline order & transaction", () => {
       narratorProse: "The tavern is quiet. Embers glow in the hearth.",
     });
 
-    const before = store.characters.get("wight")!.hard.resources.hp!.current;
+    const before = (await store.characters.get("wight"))!.hard.resources.hp!.current;
     const result = await submitTurn(router, store, storyId, "I look around", {
       rng: d20Sequence([20]),
     });
     await result.background;
 
     expect(result.rulings).toHaveLength(0);
-    expect(store.messages.listByStory(storyId).map((m) => m.role)).toEqual(["player", "narrator"]);
+    expect((await store.messages.listByStory(storyId)).map((m) => m.role)).toEqual(["player", "narrator"]);
     // No ruling ⇒ no state change.
-    expect(store.characters.get("wight")!.hard.resources.hp!.current).toBe(before);
+    expect((await store.characters.get("wight"))!.hard.resources.hp!.current).toBe(before);
   });
 });

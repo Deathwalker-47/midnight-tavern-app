@@ -45,15 +45,15 @@ function scriptedRouter(responses: string[]): { router: Router; seen: RolePrompt
   return { router, seen };
 }
 
-function seedStory(store: Store): void {
+async function seedStory(store: Store): Promise<void> {
   const schema = makeStory({ storyId: STORY_ID });
-  store.stories.insert({ id: STORY_ID, title: schema.title, createdAt: 0, schema, locked: true });
+  await store.stories.insert({ id: STORY_ID, title: schema.title, createdAt: 0, schema, locked: true });
 }
 
 /** Seed `n` messages (alternating player/narrator) starting at idx 0. */
-function seedMessages(store: Store, n: number): void {
+async function seedMessages(store: Store, n: number): Promise<void> {
   for (let i = 0; i < n; i++) {
-    store.messages.insert({
+    await store.messages.insert({
       id: `m${i}`,
       storyId: STORY_ID,
       idx: i,
@@ -87,26 +87,26 @@ function fullArcDoc(overrides: Partial<ArcDoc> = {}): ArcDoc {
 
 describe("maybeSummarizeChapter", () => {
   let store: Store;
-  beforeEach(() => {
-    store = openStore(":memory:");
-    seedStory(store);
-    store.settings.set(MESSAGES_PER_CHAPTER_KEY, z.number().int().positive(), 4);
+  beforeEach(async () => {
+    store = await openStore(":memory:");
+    await seedStory(store);
+    await store.settings.set(MESSAGES_PER_CHAPTER_KEY, z.number().int().positive(), 4);
   });
 
   it("does nothing below the threshold", async () => {
-    seedMessages(store, 3);
+    await seedMessages(store, 3);
     const { router } = scriptedRouter(['{"title":"T","summary":"S"}']);
     const chapter = await maybeSummarizeChapter(router, store, STORY_ID);
     expect(chapter).toBeUndefined();
-    expect(store.chapters.listByStory(STORY_ID)).toHaveLength(0);
+    expect(await store.chapters.listByStory(STORY_ID)).toHaveLength(0);
   });
 
   it("summarizes exactly one block of `threshold` messages at the threshold", async () => {
-    seedMessages(store, 4);
+    await seedMessages(store, 4);
     const { router, seen } = scriptedRouter(['{"title":"Arrival","summary":"They arrived."}']);
     const chapter = await maybeSummarizeChapter(router, store, STORY_ID);
     expect(chapter).toMatchObject({ idx: 0, msgFrom: 0, msgTo: 3, title: "Arrival" });
-    expect(store.chapters.listByStory(STORY_ID)).toHaveLength(1);
+    expect(await store.chapters.listByStory(STORY_ID)).toHaveLength(1);
     // The prompt saw exactly the first 4 lines.
     expect(seen[0]!.user).toContain("line 0");
     expect(seen[0]!.user).toContain("line 3");
@@ -114,7 +114,7 @@ describe("maybeSummarizeChapter", () => {
   });
 
   it("tiles successive blocks with no gaps or overlaps", async () => {
-    seedMessages(store, 8);
+    await seedMessages(store, 8);
     const { router } = scriptedRouter(['{"title":"A","summary":"a"}', '{"title":"B","summary":"b"}']);
     const c1 = await maybeSummarizeChapter(router, store, STORY_ID);
     const c2 = await maybeSummarizeChapter(router, store, STORY_ID);
@@ -125,7 +125,7 @@ describe("maybeSummarizeChapter", () => {
   });
 
   it("never throws on a model failure; reports via onError and persists nothing", async () => {
-    seedMessages(store, 4);
+    await seedMessages(store, 4);
     const { router } = scriptedRouter(["not json at all"]); // always invalid
     let captured: unknown;
     const chapter = await maybeSummarizeChapter(router, store, STORY_ID, {
@@ -133,22 +133,22 @@ describe("maybeSummarizeChapter", () => {
     });
     expect(chapter).toBeUndefined();
     expect(captured).toBeDefined();
-    expect(store.chapters.listByStory(STORY_ID)).toHaveLength(0);
+    expect(await store.chapters.listByStory(STORY_ID)).toHaveLength(0);
   });
 });
 
 describe("maybeSummarizeArc", () => {
   let store: Store;
-  beforeEach(() => {
-    store = openStore(":memory:");
-    seedStory(store);
-    store.settings.set(CHAPTERS_PER_ARC_KEY, z.number().int().positive(), 2);
+  beforeEach(async () => {
+    store = await openStore(":memory:");
+    await seedStory(store);
+    await store.settings.set(CHAPTERS_PER_ARC_KEY, z.number().int().positive(), 2);
   });
 
   /** Insert `n` chapters at indices [from, from+n). */
-  function seedChapters(from: number, n: number): void {
+  async function seedChapters(from: number, n: number): Promise<void> {
     for (let i = from; i < from + n; i++) {
-      store.chapters.insert({
+      await store.chapters.insert({
         id: `c${i}`,
         storyId: STORY_ID,
         idx: i,
@@ -161,14 +161,14 @@ describe("maybeSummarizeArc", () => {
   }
 
   it("does nothing below the chapter threshold", async () => {
-    seedChapters(0, 1);
+    await seedChapters(0, 1);
     const { router } = scriptedRouter([JSON.stringify(fullArcDoc())]);
     expect(await maybeSummarizeArc(router, store, STORY_ID)).toBeUndefined();
-    expect(store.arcs.listByStory(STORY_ID)).toHaveLength(0);
+    expect(await store.arcs.listByStory(STORY_ID)).toHaveLength(0);
   });
 
   it("produces an arc doc covering the oldest chapter block at threshold", async () => {
-    seedChapters(0, 2);
+    await seedChapters(0, 2);
     const { router, seen } = scriptedRouter([JSON.stringify(fullArcDoc())]);
     const arc = await maybeSummarizeArc(router, store, STORY_ID);
     expect(arc).toMatchObject({ idx: 0, chapterFrom: 0, chapterTo: 1 });
@@ -180,11 +180,11 @@ describe("maybeSummarizeArc", () => {
   });
 
   it("feeds the prior arc doc forward into the next arc's prompt", async () => {
-    seedChapters(0, 2);
+    await seedChapters(0, 2);
     const { router: r1 } = scriptedRouter([JSON.stringify(fullArcDoc({ plotSummary: "Arc one." }))]);
     await maybeSummarizeArc(r1, store, STORY_ID);
     // Two more chapters accrue beyond the first arc.
-    seedChapters(2, 2);
+    await seedChapters(2, 2);
     const { router: r2, seen } = scriptedRouter([JSON.stringify(fullArcDoc({ plotSummary: "Arc two." }))]);
     const arc2 = await maybeSummarizeArc(r2, store, STORY_ID);
     expect(arc2).toMatchObject({ idx: 1, chapterFrom: 2, chapterTo: 3 });
@@ -193,13 +193,13 @@ describe("maybeSummarizeArc", () => {
   });
 
   it("never throws on a model failure", async () => {
-    seedChapters(0, 2);
+    await seedChapters(0, 2);
     const { router } = scriptedRouter(["garbage"]);
     let captured: unknown;
     const arc = await maybeSummarizeArc(router, store, STORY_ID, { onError: (e) => (captured = e) });
     expect(arc).toBeUndefined();
     expect(captured).toBeDefined();
-    expect(store.arcs.listByStory(STORY_ID)).toHaveLength(0);
+    expect(await store.arcs.listByStory(STORY_ID)).toHaveLength(0);
   });
 });
 
@@ -242,12 +242,12 @@ describe("injector — condensing", () => {
 
 describe("buildMemoryBlock", () => {
   let store: Store;
-  beforeEach(() => {
-    store = openStore(":memory:");
-    seedStory(store);
+  beforeEach(async () => {
+    store = await openStore(":memory:");
+    await seedStory(store);
   });
 
-  it("returns chapters since the latest arc and the condensed arc doc", () => {
+  it("returns chapters since the latest arc and the condensed arc doc", async () => {
     // Arc covers chapters 0–1; chapter 2 is newer and should appear in the block.
     const arc: ArcRecord = {
       id: "a0",
@@ -258,9 +258,9 @@ describe("buildMemoryBlock", () => {
       title: "Arc",
       doc: fullArcDoc(),
     };
-    store.arcs.insert(arc);
+    await store.arcs.insert(arc);
     for (let i = 0; i <= 2; i++) {
-      store.chapters.insert({
+      await store.chapters.insert({
         id: `c${i}`,
         storyId: STORY_ID,
         idx: i,
@@ -270,14 +270,14 @@ describe("buildMemoryBlock", () => {
         summary: `Summary ${i}`,
       });
     }
-    const block = buildMemoryBlock(store, STORY_ID, []);
+    const block = await buildMemoryBlock(store, STORY_ID, []);
     expect(block.arc).toContain("Plot: The vale fell silent.");
     expect(block.chapters).toHaveLength(1); // only chapter 2 (after the arc)
     expect(block.chapters[0]).toContain("Chapter 2");
   });
 
-  it("includes soft slices only for present characters that have a soft profile", () => {
-    store.characters.insert({
+  it("includes soft slices only for present characters that have a soft profile", async () => {
+    await store.characters.insert({
       id: "mara",
       storyId: STORY_ID,
       name: "Mara",
@@ -286,13 +286,13 @@ describe("buildMemoryBlock", () => {
       soft: newSoftState("mara", "Mara"),
       softTier: "secondary",
     });
-    const block = buildMemoryBlock(store, STORY_ID, ["mara", "ghost"]); // ghost has no row
+    const block = await buildMemoryBlock(store, STORY_ID, ["mara", "ghost"]); // ghost has no row
     expect(block.softSlices).toHaveLength(1);
     expect(block.softSlices[0]).toContain("Mara");
   });
 
-  it("has no arc and empty lists for a fresh story", () => {
-    const block = buildMemoryBlock(store, STORY_ID, []);
+  it("has no arc and empty lists for a fresh story", async () => {
+    const block = await buildMemoryBlock(store, STORY_ID, []);
     expect(block.arc).toBeUndefined();
     expect(block.chapters).toEqual([]);
     expect(block.softSlices).toEqual([]);

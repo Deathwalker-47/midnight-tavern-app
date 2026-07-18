@@ -17,38 +17,37 @@ interface Row {
 
 export interface SettingsRepo {
   /** Read and validate the value for `key`, or `undefined` if unset. */
-  get<T>(key: string, schema: ZodType<T>): T | undefined;
+  get<T>(key: string, schema: ZodType<T>): Promise<T | undefined>;
   /** Validate and upsert the value for `key`. */
-  set<T>(key: string, schema: ZodType<T>, value: T): void;
+  set<T>(key: string, schema: ZodType<T>, value: T): Promise<void>;
   /** True if `key` has a stored value. */
-  has(key: string): boolean;
-  delete(key: string): void;
+  has(key: string): Promise<boolean>;
+  delete(key: string): Promise<void>;
 }
 
 export function makeSettingsRepo(db: Db): SettingsRepo {
-  const sql = db.sqlite;
   return {
-    get(key, schema) {
-      const row = sql.prepare("SELECT value FROM settings WHERE key = ?").get(key) as Row | undefined;
+    async get(key, schema) {
+      const row = await db.get<Row>("SELECT value FROM settings WHERE key = ?", key);
       return row ? decodeJson(schema, row.value) : undefined;
     },
 
-    set(key, schema, value) {
-      sql
-        .prepare(
-          `INSERT INTO settings (key, value) VALUES (?, ?)
-           ON CONFLICT(key) DO UPDATE SET value = excluded.value`
-        )
-        .run(key, encodeJson(schema, value));
+    async set(key, schema, value) {
+      await db.run(
+        `INSERT INTO settings (key, value) VALUES (?, ?)
+           ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+        key,
+        encodeJson(schema, value)
+      );
     },
 
-    has(key) {
-      const row = sql.prepare("SELECT 1 AS one FROM settings WHERE key = ?").get(key);
+    async has(key) {
+      const row = await db.get<{ one: number }>("SELECT 1 AS one FROM settings WHERE key = ?", key);
       return row !== undefined;
     },
 
-    delete(key) {
-      sql.prepare("DELETE FROM settings WHERE key = ?").run(key);
+    async delete(key) {
+      await db.run("DELETE FROM settings WHERE key = ?", key);
     },
   };
 }

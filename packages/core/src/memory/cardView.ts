@@ -120,13 +120,13 @@ function softSlice(soft: CharacterSoftState, recentObs: number): NonNullable<Liv
  * Build the living card for one character. Returns undefined only when the character id is
  * unknown to the store. `recentObservations` defaults to the 10 newest.
  */
-export function getLivingCard(
+export async function getLivingCard(
   store: Store,
   schema: StorySchema,
   characterId: string,
   recentObservations = 10
-): LivingCardView | undefined {
-  const record = store.characters.get(characterId);
+): Promise<LivingCardView | undefined> {
+  const record = await store.characters.get(characterId);
   if (!record) return undefined;
 
   const itemsById = new Map(schema.items.map((i) => [i.id, i]));

@@ -75,9 +75,9 @@ export async function bootstrapStory(
   const playerCharacterId = player.characterId ?? randomUUID();
   const hard = instantiatePlayer(schema, playerCharacterId);
 
-  store.transaction(() => {
-    store.stories.insert(story);
-    store.characters.insert({
+  await store.transaction(async () => {
+    await store.stories.insert(story);
+    await store.characters.insert({
       id: playerCharacterId,
       storyId: input.storyId,
       name: player.name,

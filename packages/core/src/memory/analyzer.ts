@@ -54,7 +54,7 @@ export async function runAnalyzer(router: Router, store: Store, args: RunAnalyze
 
     if (patch.characterOps.length === 0 && patch.worldOps.length === 0) return false;
 
-    applySoftPatch(store, args.storyId, patch, args.turnIdx, args.nameFor);
+    await applySoftPatch(store, args.storyId, patch, args.turnIdx, args.nameFor);
     return true;
   } catch (err) {
     args.onError?.(err);

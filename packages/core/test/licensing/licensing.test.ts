@@ -58,8 +58,8 @@ const INVALID_BODY = {
 
 describe("validateLicenseKey", () => {
   let store: Store;
-  beforeEach(() => {
-    store = openStore(":memory:");
+  beforeEach(async () => {
+    store = await openStore(":memory:");
   });
 
   it("accepts and caches an online-valid key", async () => {
@@ -69,7 +69,7 @@ describe("validateLicenseKey", () => {
       now: clock(T0),
     });
     expect(state).toMatchObject({ status: "valid", source: "online" });
-    expect(readLicenseCache(store)).toMatchObject({
+    expect(await readLicenseCache(store)).toMatchObject({
       key: "KEY-1",
       valid: true,
       lastCheckedAt: T0,
@@ -85,7 +85,7 @@ describe("validateLicenseKey", () => {
     });
     expect(state.status).toBe("invalid");
     if (state.status === "invalid") expect(state.reason).toMatch(/not found/);
-    expect(readLicenseCache(store)).toMatchObject({ valid: false });
+    expect(await readLicenseCache(store)).toMatchObject({ valid: false });
   });
 
   it("trims whitespace and treats an empty key as unlicensed", async () => {
@@ -139,57 +139,57 @@ describe("validateLicenseKey", () => {
 
 describe("evaluateCachedLicense", () => {
   let store: Store;
-  beforeEach(() => {
-    store = openStore(":memory:");
+  beforeEach(async () => {
+    store = await openStore(":memory:");
   });
 
-  it("reports unlicensed with no cache", () => {
-    expect(evaluateCachedLicense(store, clock(T0))).toEqual({ status: "unlicensed" });
+  it("reports unlicensed with no cache", async () => {
+    expect(await evaluateCachedLicense(store, clock(T0))).toEqual({ status: "unlicensed" });
   });
 
   it("is valid within grace and invalid past it, without any network", async () => {
     await validateLicenseKey("KEY-1", { store, fetchImpl: jsonFetch(VALID_BODY), now: clock(T0) });
-    expect(evaluateCachedLicense(store, clock(T0 + 86_400_000)).status).toBe("valid");
-    expect(evaluateCachedLicense(store, clock(T0 + OFFLINE_GRACE_MS + 1)).status).toBe("invalid");
+    expect((await evaluateCachedLicense(store, clock(T0 + 86_400_000))).status).toBe("valid");
+    expect((await evaluateCachedLicense(store, clock(T0 + OFFLINE_GRACE_MS + 1))).status).toBe("invalid");
   });
 
   it("clearLicense removes the cache", async () => {
     await validateLicenseKey("KEY-1", { store, fetchImpl: jsonFetch(VALID_BODY), now: clock(T0) });
-    clearLicense(store);
-    expect(readLicenseCache(store)).toBeUndefined();
+    await clearLicense(store);
+    expect(await readLicenseCache(store)).toBeUndefined();
   });
 });
 
 describe("trial", () => {
   let store: Store;
-  beforeEach(() => {
-    store = openStore(":memory:");
+  beforeEach(async () => {
+    store = await openStore(":memory:");
   });
 
-  it("starts on first call and is idempotent thereafter", () => {
-    const first = startOrGetTrial(store, clock(T0));
+  it("starts on first call and is idempotent thereafter", async () => {
+    const first = await startOrGetTrial(store, clock(T0));
     expect(first).toMatchObject({ startedAt: T0, active: true });
     // A later call must not reset the start.
-    const later = startOrGetTrial(store, clock(T0 + 5 * 86_400_000));
+    const later = await startOrGetTrial(store, clock(T0 + 5 * 86_400_000));
     expect(later.startedAt).toBe(T0);
   });
 
-  it("peekTrial has no side effect before the trial starts", () => {
-    expect(peekTrial(store, clock(T0))).toBeUndefined();
-    startOrGetTrial(store, clock(T0));
-    expect(peekTrial(store, clock(T0))).toMatchObject({ startedAt: T0 });
+  it("peekTrial has no side effect before the trial starts", async () => {
+    expect(await peekTrial(store, clock(T0))).toBeUndefined();
+    await startOrGetTrial(store, clock(T0));
+    expect(await peekTrial(store, clock(T0))).toMatchObject({ startedAt: T0 });
   });
 
-  it("reports daysRemaining and expires after 14 days", () => {
-    startOrGetTrial(store, clock(T0));
-    expect(startOrGetTrial(store, clock(T0)).daysRemaining).toBe(14);
-    const expired = startOrGetTrial(store, clock(T0 + TRIAL_DURATION_MS + 1));
+  it("reports daysRemaining and expires after 14 days", async () => {
+    await startOrGetTrial(store, clock(T0));
+    expect((await startOrGetTrial(store, clock(T0))).daysRemaining).toBe(14);
+    const expired = await startOrGetTrial(store, clock(T0 + TRIAL_DURATION_MS + 1));
     expect(expired.active).toBe(false);
     expect(expired.daysRemaining).toBe(0);
   });
 
-  it("resolveEntitlement: license valid grants creation regardless of trial", () => {
-    const ent = resolveEntitlement(
+  it("resolveEntitlement: license valid grants creation regardless of trial", async () => {
+    const ent = await resolveEntitlement(
       { status: "valid", source: "online", cache: { key: "k", valid: true, lastCheckedAt: T0 } },
       store,
       clock(T0 + TRIAL_DURATION_MS + 1) // trial would be expired
@@ -197,14 +197,14 @@ describe("trial", () => {
     expect(ent).toMatchObject({ canCreateStory: true, via: "license" });
   });
 
-  it("resolveEntitlement: active trial grants creation when unlicensed", () => {
-    const ent = resolveEntitlement({ status: "unlicensed" }, store, clock(T0));
+  it("resolveEntitlement: active trial grants creation when unlicensed", async () => {
+    const ent = await resolveEntitlement({ status: "unlicensed" }, store, clock(T0));
     expect(ent).toMatchObject({ canCreateStory: true, via: "trial" });
   });
 
-  it("resolveEntitlement: expired trial denies creation when unlicensed", () => {
-    startOrGetTrial(store, clock(T0));
-    const ent = resolveEntitlement(
+  it("resolveEntitlement: expired trial denies creation when unlicensed", async () => {
+    await startOrGetTrial(store, clock(T0));
+    const ent = await resolveEntitlement(
       { status: "unlicensed" },
       store,
       clock(T0 + TRIAL_DURATION_MS + 1)

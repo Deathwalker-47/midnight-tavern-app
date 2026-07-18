@@ -15,26 +15,23 @@ interface Row {
 
 export interface WorldSoftRepo {
   /** Insert or replace the world-soft document for a story. */
-  set(storyId: string, soft: WorldSoftState): void;
-  get(storyId: string): WorldSoftState | undefined;
+  set(storyId: string, soft: WorldSoftState): Promise<void>;
+  get(storyId: string): Promise<WorldSoftState | undefined>;
 }
 
 export function makeWorldSoftRepo(db: Db): WorldSoftRepo {
-  const sql = db.sqlite;
   return {
-    set(storyId, soft) {
-      sql
-        .prepare(
-          `INSERT INTO world_soft (story_id, soft_json) VALUES (?, ?)
-           ON CONFLICT(story_id) DO UPDATE SET soft_json = excluded.soft_json`
-        )
-        .run(storyId, encodeJson(WorldSoftStateSchema, soft));
+    async set(storyId, soft) {
+      await db.run(
+        `INSERT INTO world_soft (story_id, soft_json) VALUES (?, ?)
+           ON CONFLICT(story_id) DO UPDATE SET soft_json = excluded.soft_json`,
+        storyId,
+        encodeJson(WorldSoftStateSchema, soft)
+      );
     },
 
-    get(storyId) {
-      const row = sql
-        .prepare("SELECT * FROM world_soft WHERE story_id = ?")
-        .get(storyId) as Row | undefined;
+    async get(storyId) {
+      const row = await db.get<Row>("SELECT * FROM world_soft WHERE story_id = ?", storyId);
       return row ? decodeJson(WorldSoftStateSchema, row.soft_json) : undefined;
     },
   };

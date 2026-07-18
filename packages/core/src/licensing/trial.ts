@@ -47,11 +47,14 @@ function statusFrom(startedAt: number, nowMs: number): TrialStatus {
  * Return the trial status, STARTING the trial on first call (persisting the start timestamp).
  * Idempotent: subsequent calls read the stored start. This is what a first-launch hook calls.
  */
-export function startOrGetTrial(store: Store, now: () => number = Date.now): TrialStatus {
-  let startedAt = store.settings.get(TRIAL_START_KEY, z.number().int());
+export async function startOrGetTrial(
+  store: Store,
+  now: () => number = Date.now
+): Promise<TrialStatus> {
+  let startedAt = await store.settings.get(TRIAL_START_KEY, z.number().int());
   if (startedAt === undefined) {
     startedAt = now();
-    store.settings.set(TRIAL_START_KEY, z.number().int(), startedAt);
+    await store.settings.set(TRIAL_START_KEY, z.number().int(), startedAt);
   }
   return statusFrom(startedAt, now());
 }
@@ -61,8 +64,11 @@ export function startOrGetTrial(store: Store, now: () => number = Date.now): Tri
  * started. Use this for read-only checks that must not have the side effect of starting a
  * trial (e.g. rendering license status).
  */
-export function peekTrial(store: Store, now: () => number = Date.now): TrialStatus | undefined {
-  const startedAt = store.settings.get(TRIAL_START_KEY, z.number().int());
+export async function peekTrial(
+  store: Store,
+  now: () => number = Date.now
+): Promise<TrialStatus | undefined> {
+  const startedAt = await store.settings.get(TRIAL_START_KEY, z.number().int());
   return startedAt === undefined ? undefined : statusFrom(startedAt, now());
 }
 
@@ -76,15 +82,15 @@ export type Entitlement =
  * that, an active trial grants creation; an expired trial denies it. Existing stories are never
  * gated here — that is a UI decision keyed off `canCreateStory` for the *creation* action only.
  */
-export function resolveEntitlement(
+export async function resolveEntitlement(
   license: LicenseState,
   store: Store,
   now: () => number = Date.now
-): Entitlement {
+): Promise<Entitlement> {
   if (license.status === "valid") {
     return { canCreateStory: true, via: "license" };
   }
-  const trial = startOrGetTrial(store, now);
+  const trial = await startOrGetTrial(store, now);
   if (trial.active) return { canCreateStory: true, via: "trial", trial };
   return { canCreateStory: false, reason: "trial-expired", trial };
 }

@@ -42,16 +42,16 @@ export function buildChapterUser(block: MessageRecord[]): string {
 }
 
 /** Read the effective chapter threshold from settings, falling back to the default. */
-export function chapterThreshold(store: Store): number {
+export async function chapterThreshold(store: Store): Promise<number> {
   return (
-    store.settings.get(MESSAGES_PER_CHAPTER_KEY, z.number().int().positive()) ??
+    (await store.settings.get(MESSAGES_PER_CHAPTER_KEY, z.number().int().positive())) ??
     DEFAULT_MESSAGES_PER_CHAPTER
   );
 }
 
 /** The next unsummarized message index for a story (one past the last chapter's `msgTo`). */
-function nextUnsummarizedIdx(store: Store, storyId: string): number {
-  const chapters = store.chapters.listByStory(storyId);
+async function nextUnsummarizedIdx(store: Store, storyId: string): Promise<number> {
+  const chapters = await store.chapters.listByStory(storyId);
   if (chapters.length === 0) return 0;
   return Math.max(...chapters.map((c) => c.msgTo)) + 1;
 }
@@ -68,9 +68,9 @@ export async function maybeSummarizeChapter(
   opts: { signal?: AbortSignal; onError?: (err: unknown) => void } = {}
 ): Promise<ChapterRecord | undefined> {
   try {
-    const threshold = chapterThreshold(store);
-    const all = store.messages.listByStory(storyId);
-    const from = nextUnsummarizedIdx(store, storyId);
+    const threshold = await chapterThreshold(store);
+    const all = await store.messages.listByStory(storyId);
+    const from = await nextUnsummarizedIdx(store, storyId);
     const block = all.filter((m) => m.idx >= from).slice(0, threshold);
     if (block.length < threshold) return undefined;
 
@@ -85,13 +85,13 @@ export async function maybeSummarizeChapter(
     const record: ChapterRecord = {
       id: randomUUID(),
       storyId,
-      idx: store.chapters.nextIdx(storyId),
+      idx: await store.chapters.nextIdx(storyId),
       msgFrom: block[0]!.idx,
       msgTo: block[block.length - 1]!.idx,
       title: summary.title,
       summary: summary.summary,
     };
-    store.chapters.insert(record);
+    await store.chapters.insert(record);
     return record;
   } catch (err) {
     opts.onError?.(err);

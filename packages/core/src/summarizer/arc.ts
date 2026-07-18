@@ -39,15 +39,15 @@ export function buildArcUser(chapters: ChapterRecord[], priorArc: ArcDoc | undef
 }
 
 /** Read the effective arc threshold from settings, falling back to the default. */
-export function arcThreshold(store: Store): number {
+export async function arcThreshold(store: Store): Promise<number> {
   return (
-    store.settings.get(CHAPTERS_PER_ARC_KEY, z.number().int().positive()) ?? DEFAULT_CHAPTERS_PER_ARC
+    (await store.settings.get(CHAPTERS_PER_ARC_KEY, z.number().int().positive())) ?? DEFAULT_CHAPTERS_PER_ARC
   );
 }
 
 /** The next chapter index not yet covered by an arc (one past the last arc's `chapterTo`). */
-function nextUncoveredChapterIdx(store: Store, storyId: string): number {
-  const latest = store.arcs.latest(storyId);
+async function nextUncoveredChapterIdx(store: Store, storyId: string): Promise<number> {
+  const latest = await store.arcs.latest(storyId);
   return latest ? latest.chapterTo + 1 : 0;
 }
 
@@ -63,16 +63,16 @@ export async function maybeSummarizeArc(
   opts: { signal?: AbortSignal; onError?: (err: unknown) => void } = {}
 ): Promise<ArcRecord | undefined> {
   try {
-    const threshold = arcThreshold(store);
-    const from = nextUncoveredChapterIdx(store, storyId);
-    const block = store.chapters
-      .listByStory(storyId)
+    const threshold = await arcThreshold(store);
+    const from = await nextUncoveredChapterIdx(store, storyId);
+    const block = (await store.chapters
+      .listByStory(storyId))
       .filter((c) => c.idx >= from)
       .sort((a, b) => a.idx - b.idx)
       .slice(0, threshold);
     if (block.length < threshold) return undefined;
 
-    const priorArc = store.arcs.latest(storyId)?.doc;
+    const priorArc = (await store.arcs.latest(storyId))?.doc;
     const doc = await callStructured(
       router,
       "summarizer",
@@ -84,13 +84,13 @@ export async function maybeSummarizeArc(
     const record: ArcRecord = {
       id: randomUUID(),
       storyId,
-      idx: store.arcs.nextIdx(storyId),
+      idx: await store.arcs.nextIdx(storyId),
       chapterFrom: block[0]!.idx,
       chapterTo: block[block.length - 1]!.idx,
       title: block[0]!.title,
       doc,
     };
-    store.arcs.insert(record);
+    await store.arcs.insert(record);
     return record;
   } catch (err) {
     opts.onError?.(err);

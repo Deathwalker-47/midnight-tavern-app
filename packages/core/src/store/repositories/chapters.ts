@@ -30,59 +30,60 @@ function toRecord(row: Row): ChapterRecord {
 }
 
 export interface ChapterRepo {
-  insert(record: ChapterRecord): void;
-  get(id: string): ChapterRecord | undefined;
-  listByStory(storyId: string): ChapterRecord[];
+  insert(record: ChapterRecord): Promise<void>;
+  get(id: string): Promise<ChapterRecord | undefined>;
+  listByStory(storyId: string): Promise<ChapterRecord[]>;
   /** Chapters with idx in `[fromIdx, toIdx]` inclusive, in order (for arc assembly). */
-  listByIdxRange(storyId: string, fromIdx: number, toIdx: number): ChapterRecord[];
-  nextIdx(storyId: string): number;
+  listByIdxRange(storyId: string, fromIdx: number, toIdx: number): Promise<ChapterRecord[]>;
+  nextIdx(storyId: string): Promise<number>;
 }
 
 export function makeChapterRepo(db: Db): ChapterRepo {
-  const sql = db.sqlite;
   return {
-    insert(record) {
+    async insert(record) {
       ChapterRecordSchema.parse(record);
-      sql
-        .prepare(
-          `INSERT INTO chapters (id, story_id, idx, msg_from, msg_to, title, summary)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`
-        )
-        .run(
-          record.id,
-          record.storyId,
-          record.idx,
-          record.msgFrom,
-          record.msgTo,
-          record.title,
-          record.summary
-        );
+      await db.run(
+        `INSERT INTO chapters (id, story_id, idx, msg_from, msg_to, title, summary)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        record.id,
+        record.storyId,
+        record.idx,
+        record.msgFrom,
+        record.msgTo,
+        record.title,
+        record.summary
+      );
     },
 
-    get(id) {
-      const row = sql.prepare("SELECT * FROM chapters WHERE id = ?").get(id) as Row | undefined;
+    async get(id) {
+      const row = await db.get<Row>("SELECT * FROM chapters WHERE id = ?", id);
       return row ? toRecord(row) : undefined;
     },
 
-    listByStory(storyId) {
-      const rows = sql
-        .prepare("SELECT * FROM chapters WHERE story_id = ? ORDER BY idx")
-        .all(storyId) as Row[];
+    async listByStory(storyId) {
+      const rows = await db.all<Row>(
+        "SELECT * FROM chapters WHERE story_id = ? ORDER BY idx",
+        storyId
+      );
       return rows.map(toRecord);
     },
 
-    listByIdxRange(storyId, fromIdx, toIdx) {
-      const rows = sql
-        .prepare("SELECT * FROM chapters WHERE story_id = ? AND idx BETWEEN ? AND ? ORDER BY idx")
-        .all(storyId, fromIdx, toIdx) as Row[];
+    async listByIdxRange(storyId, fromIdx, toIdx) {
+      const rows = await db.all<Row>(
+        "SELECT * FROM chapters WHERE story_id = ? AND idx BETWEEN ? AND ? ORDER BY idx",
+        storyId,
+        fromIdx,
+        toIdx
+      );
       return rows.map(toRecord);
     },
 
-    nextIdx(storyId) {
-      const row = sql
-        .prepare("SELECT MAX(idx) AS maxIdx FROM chapters WHERE story_id = ?")
-        .get(storyId) as { maxIdx: number | null };
-      return row.maxIdx === null ? 0 : row.maxIdx + 1;
+    async nextIdx(storyId) {
+      const row = await db.get<{ maxIdx: number | null }>(
+        "SELECT MAX(idx) AS maxIdx FROM chapters WHERE story_id = ?",
+        storyId
+      );
+      return !row || row.maxIdx === null ? 0 : row.maxIdx + 1;
     },
   };
 }

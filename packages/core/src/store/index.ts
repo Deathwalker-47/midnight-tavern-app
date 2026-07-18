@@ -9,7 +9,7 @@
  * This barrel and the repositories are the only code that touches SQL; everything above
  * the store speaks in typed records.
  */
-import { openDb, type Db } from "./db.js";
+import { openDb, openDbWith, type Db, type SqlDriver } from "./db.js";
 import { makeStoryRepo, type StoryRepo } from "./repositories/stories.js";
 import { makeCharacterRepo, type CharacterRepo } from "./repositories/characters.js";
 import { makeMessageRepo, type MessageRepo } from "./repositories/messages.js";
@@ -21,7 +21,7 @@ import { makeLorebookRepo, type LorebookRepo } from "./repositories/lorebook.js"
 import { makePersonaRepo, type PersonaRepo } from "./repositories/personas.js";
 import { makeSettingsRepo, type SettingsRepo } from "./repositories/settings.js";
 
-export { openDb, type Db, type Sqlite } from "./db.js";
+export { openDb, openDbWith, type Db, type SqlDriver, type SqlParam } from "./db.js";
 export type { StoryRepo } from "./repositories/stories.js";
 export type { CharacterRepo, CharacterRecord } from "./repositories/characters.js";
 export type { MessageRepo } from "./repositories/messages.js";
@@ -47,16 +47,12 @@ export interface Store {
   readonly personas: PersonaRepo;
   readonly settings: SettingsRepo;
   /** Run `fn` across repositories atomically (commit on return, roll back on throw). */
-  transaction<T>(fn: () => T): T;
-  close(): void;
+  transaction<T>(fn: () => Promise<T>): Promise<T>;
+  close(): Promise<void>;
 }
 
-/**
- * Open the store at `path` (`:memory:` for tests). The database is fully migrated before
- * this returns.
- */
-export function openStore(path: string): Store {
-  const db = openDb(path);
+/** Assemble a {@link Store} over a migrated {@link Db} handle. */
+function makeStore(db: Db): Store {
   return {
     db,
     stories: makeStoryRepo(db),
@@ -69,7 +65,23 @@ export function openStore(path: string): Store {
     lorebook: makeLorebookRepo(db),
     personas: makePersonaRepo(db),
     settings: makeSettingsRepo(db),
-    transaction: db.transaction,
-    close: db.close,
+    transaction: (fn) => db.transaction(fn),
+    close: () => db.close(),
   };
+}
+
+/**
+ * Open the store at `path` (`:memory:` for tests) over the better-sqlite3 driver. The database is
+ * fully migrated before this resolves. Node + tests only — the packaged app uses {@link openStoreWith}.
+ */
+export async function openStore(path: string): Promise<Store> {
+  return makeStore(await openDb(path));
+}
+
+/**
+ * Open the store over an already-constructed driver (the seam the UI façade uses to inject the
+ * Tauri command driver). The database is fully migrated before this resolves.
+ */
+export async function openStoreWith(driver: SqlDriver): Promise<Store> {
+  return makeStore(await openDbWith(driver));
 }

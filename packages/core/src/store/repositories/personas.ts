@@ -26,60 +26,67 @@ function toRecord(row: Row): PersonaRecord {
 }
 
 export interface PersonaRepo {
-  insert(record: PersonaRecord): void;
-  get(id: string): PersonaRecord | undefined;
-  list(): PersonaRecord[];
+  insert(record: PersonaRecord): Promise<void>;
+  get(id: string): Promise<PersonaRecord | undefined>;
+  list(): Promise<PersonaRecord[]>;
   /** The default persona, if one is set. */
-  getDefault(): PersonaRecord | undefined;
-  update(record: PersonaRecord): void;
+  getDefault(): Promise<PersonaRecord | undefined>;
+  update(record: PersonaRecord): Promise<void>;
   /** Make `id` the sole default, clearing the flag on every other persona. */
-  setDefault(id: string): void;
-  delete(id: string): void;
+  setDefault(id: string): Promise<void>;
+  delete(id: string): Promise<void>;
 }
 
 export function makePersonaRepo(db: Db): PersonaRepo {
-  const sql = db.sqlite;
   return {
-    insert(record) {
+    async insert(record) {
       PersonaRecordSchema.parse(record);
-      sql
-        .prepare("INSERT INTO personas (id, name, description, is_default) VALUES (?, ?, ?, ?)")
-        .run(record.id, record.name, record.description, toInt(record.isDefault));
+      await db.run(
+        "INSERT INTO personas (id, name, description, is_default) VALUES (?, ?, ?, ?)",
+        record.id,
+        record.name,
+        record.description,
+        toInt(record.isDefault)
+      );
     },
 
-    get(id) {
-      const row = sql.prepare("SELECT * FROM personas WHERE id = ?").get(id) as Row | undefined;
+    async get(id) {
+      const row = await db.get<Row>("SELECT * FROM personas WHERE id = ?", id);
       return row ? toRecord(row) : undefined;
     },
 
-    list() {
-      const rows = sql.prepare("SELECT * FROM personas ORDER BY name").all() as Row[];
+    async list() {
+      const rows = await db.all<Row>("SELECT * FROM personas ORDER BY name");
       return rows.map(toRecord);
     },
 
-    getDefault() {
-      const row = sql.prepare("SELECT * FROM personas WHERE is_default = 1").get() as Row | undefined;
+    async getDefault() {
+      const row = await db.get<Row>("SELECT * FROM personas WHERE is_default = 1");
       return row ? toRecord(row) : undefined;
     },
 
-    update(record) {
+    async update(record) {
       PersonaRecordSchema.parse(record);
-      const info = sql
-        .prepare("UPDATE personas SET name = ?, description = ?, is_default = ? WHERE id = ?")
-        .run(record.name, record.description, toInt(record.isDefault), record.id);
+      const info = await db.run(
+        "UPDATE personas SET name = ?, description = ?, is_default = ? WHERE id = ?",
+        record.name,
+        record.description,
+        toInt(record.isDefault),
+        record.id
+      );
       if (info.changes === 0) throw new Error(`No persona with id "${record.id}" to update.`);
     },
 
-    setDefault(id) {
-      db.transaction(() => {
-        const info = sql.prepare("UPDATE personas SET is_default = 1 WHERE id = ?").run(id);
+    async setDefault(id) {
+      await db.transaction(async () => {
+        const info = await db.run("UPDATE personas SET is_default = 1 WHERE id = ?", id);
         if (info.changes === 0) throw new Error(`No persona with id "${id}" to set as default.`);
-        sql.prepare("UPDATE personas SET is_default = 0 WHERE id != ?").run(id);
+        await db.run("UPDATE personas SET is_default = 0 WHERE id != ?", id);
       });
     },
 
-    delete(id) {
-      sql.prepare("DELETE FROM personas WHERE id = ?").run(id);
+    async delete(id) {
+      await db.run("DELETE FROM personas WHERE id = ?", id);
     },
   };
 }

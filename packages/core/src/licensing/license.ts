@@ -67,21 +67,24 @@ const LemonValidateResponseSchema = z.object({
 });
 
 /** Read the cached validation result, if any. */
-export function readLicenseCache(store: Store): LicenseCache | undefined {
+export function readLicenseCache(store: Store): Promise<LicenseCache | undefined> {
   return store.settings.get(LICENSE_CACHE_KEY, LicenseCacheSchema);
 }
 
 /** Clear a stored license (used when the user removes their key). */
-export function clearLicense(store: Store): void {
-  store.settings.delete(LICENSE_CACHE_KEY);
+export function clearLicense(store: Store): Promise<void> {
+  return store.settings.delete(LICENSE_CACHE_KEY);
 }
 
 /**
  * Judge the currently-cached license WITHOUT contacting the network. This is the cheap
  * launch/offline path: valid if the cache says valid and we're inside the grace window.
  */
-export function evaluateCachedLicense(store: Store, now: () => number = Date.now): LicenseState {
-  const cache = readLicenseCache(store);
+export async function evaluateCachedLicense(
+  store: Store,
+  now: () => number = Date.now
+): Promise<LicenseState> {
+  const cache = await readLicenseCache(store);
   if (!cache) return { status: "unlicensed" };
   if (!cache.valid) {
     return { status: "invalid", reason: cache.status ?? "License is not valid.", cache };
@@ -98,8 +101,12 @@ export function evaluateCachedLicense(store: Store, now: () => number = Date.now
 }
 
 /** Offline path shared by every network-failure branch of {@link validateLicenseKey}. */
-function offlineFallback(store: Store, key: string, now: () => number): LicenseState {
-  const cached = readLicenseCache(store);
+async function offlineFallback(
+  store: Store,
+  key: string,
+  now: () => number
+): Promise<LicenseState> {
+  const cached = await readLicenseCache(store);
   // Only honor the cache if it belongs to the SAME key the user is presenting.
   if (cached && cached.key === key) return evaluateCachedLicense(store, now);
   return {
@@ -152,7 +159,7 @@ export async function validateLicenseKey(key: string, deps: LicenseDeps): Promis
     status: parsed.license_key?.status ?? undefined,
     ...(label ? { label } : {}),
   };
-  store.settings.set(LICENSE_CACHE_KEY, LicenseCacheSchema, cache);
+  await store.settings.set(LICENSE_CACHE_KEY, LicenseCacheSchema, cache);
 
   if (parsed.valid) return { status: "valid", source: "online", cache };
   return {

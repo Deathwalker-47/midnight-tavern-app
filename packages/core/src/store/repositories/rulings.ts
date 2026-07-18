@@ -34,37 +34,38 @@ function toRecord(row: Row): RulingRecord {
 }
 
 export interface RulingRepo {
-  insert(record: RulingRecord): void;
-  get(id: string): RulingRecord | undefined;
+  insert(record: RulingRecord): Promise<void>;
+  get(id: string): Promise<RulingRecord | undefined>;
   /** The ruling attached to a given message, if any. */
-  getByMessage(messageId: string): RulingRecord | undefined;
-  listByStory(storyId: string): RulingRecord[];
+  getByMessage(messageId: string): Promise<RulingRecord | undefined>;
+  listByStory(storyId: string): Promise<RulingRecord[]>;
 }
 
 export function makeRulingRepo(db: Db): RulingRepo {
-  const sql = db.sqlite;
   return {
-    insert(record) {
+    async insert(record) {
       RulingSchema.parse(record.ruling);
-      sql
-        .prepare("INSERT INTO rulings (id, story_id, message_id, ruling_json) VALUES (?, ?, ?, ?)")
-        .run(record.id, record.storyId, record.messageId, encodeJson(RulingSchema, record.ruling));
+      await db.run(
+        "INSERT INTO rulings (id, story_id, message_id, ruling_json) VALUES (?, ?, ?, ?)",
+        record.id,
+        record.storyId,
+        record.messageId,
+        encodeJson(RulingSchema, record.ruling)
+      );
     },
 
-    get(id) {
-      const row = sql.prepare("SELECT * FROM rulings WHERE id = ?").get(id) as Row | undefined;
+    async get(id) {
+      const row = await db.get<Row>("SELECT * FROM rulings WHERE id = ?", id);
       return row ? toRecord(row) : undefined;
     },
 
-    getByMessage(messageId) {
-      const row = sql
-        .prepare("SELECT * FROM rulings WHERE message_id = ?")
-        .get(messageId) as Row | undefined;
+    async getByMessage(messageId) {
+      const row = await db.get<Row>("SELECT * FROM rulings WHERE message_id = ?", messageId);
       return row ? toRecord(row) : undefined;
     },
 
-    listByStory(storyId) {
-      const rows = sql.prepare("SELECT * FROM rulings WHERE story_id = ?").all(storyId) as Row[];
+    async listByStory(storyId) {
+      const rows = await db.all<Row>("SELECT * FROM rulings WHERE story_id = ?", storyId);
       return rows.map(toRecord);
     },
   };

@@ -51,65 +51,67 @@ function toRecord(row: Row): CharacterRecord {
 }
 
 export interface CharacterRepo {
-  insert(record: CharacterRecord): void;
-  get(id: string): CharacterRecord | undefined;
-  listByStory(storyId: string): CharacterRecord[];
+  insert(record: CharacterRecord): Promise<void>;
+  get(id: string): Promise<CharacterRecord | undefined>;
+  listByStory(storyId: string): Promise<CharacterRecord[]>;
   /** Overwrite the engine-owned hard state for one character. */
-  updateHard(id: string, hard: CharacterHardState): void;
+  updateHard(id: string, hard: CharacterHardState): Promise<void>;
   /** Overwrite the analyzer-owned soft state (and tier) for one character. */
-  updateSoft(id: string, soft: CharacterSoftState, tier: SoftTier): void;
-  delete(id: string): void;
+  updateSoft(id: string, soft: CharacterSoftState, tier: SoftTier): Promise<void>;
+  delete(id: string): Promise<void>;
 }
 
 export function makeCharacterRepo(db: Db): CharacterRepo {
-  const sql = db.sqlite;
   return {
-    insert(record) {
+    async insert(record) {
       CharacterHardStateSchema.parse(record.hard);
-      sql
-        .prepare(
-          `INSERT INTO characters (id, story_id, name, is_player, hard_json, soft_json, soft_tier)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`
-        )
-        .run(
-          record.id,
-          record.storyId,
-          record.name,
-          toInt(record.isPlayer),
-          encodeJson(CharacterHardStateSchema, record.hard),
-          record.soft ? encodeJson(CharacterSoftStateSchema, record.soft) : null,
-          record.softTier ?? null
-        );
+      await db.run(
+        `INSERT INTO characters (id, story_id, name, is_player, hard_json, soft_json, soft_tier)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        record.id,
+        record.storyId,
+        record.name,
+        toInt(record.isPlayer),
+        encodeJson(CharacterHardStateSchema, record.hard),
+        record.soft ? encodeJson(CharacterSoftStateSchema, record.soft) : null,
+        record.softTier ?? null
+      );
     },
 
-    get(id) {
-      const row = sql.prepare("SELECT * FROM characters WHERE id = ?").get(id) as Row | undefined;
+    async get(id) {
+      const row = await db.get<Row>("SELECT * FROM characters WHERE id = ?", id);
       return row ? toRecord(row) : undefined;
     },
 
-    listByStory(storyId) {
-      const rows = sql
-        .prepare("SELECT * FROM characters WHERE story_id = ? ORDER BY is_player DESC, name")
-        .all(storyId) as Row[];
+    async listByStory(storyId) {
+      const rows = await db.all<Row>(
+        "SELECT * FROM characters WHERE story_id = ? ORDER BY is_player DESC, name",
+        storyId
+      );
       return rows.map(toRecord);
     },
 
-    updateHard(id, hard) {
-      const info = sql
-        .prepare("UPDATE characters SET hard_json = ? WHERE id = ?")
-        .run(encodeJson(CharacterHardStateSchema, hard), id);
+    async updateHard(id, hard) {
+      const info = await db.run(
+        "UPDATE characters SET hard_json = ? WHERE id = ?",
+        encodeJson(CharacterHardStateSchema, hard),
+        id
+      );
       if (info.changes === 0) throw new Error(`No character with id "${id}" to update.`);
     },
 
-    updateSoft(id, soft, tier) {
-      const info = sql
-        .prepare("UPDATE characters SET soft_json = ?, soft_tier = ? WHERE id = ?")
-        .run(encodeJson(CharacterSoftStateSchema, soft), SoftTierSchema.parse(tier), id);
+    async updateSoft(id, soft, tier) {
+      const info = await db.run(
+        "UPDATE characters SET soft_json = ?, soft_tier = ? WHERE id = ?",
+        encodeJson(CharacterSoftStateSchema, soft),
+        SoftTierSchema.parse(tier),
+        id
+      );
       if (info.changes === 0) throw new Error(`No character with id "${id}" to update.`);
     },
 
-    delete(id) {
-      sql.prepare("DELETE FROM characters WHERE id = ?").run(id);
+    async delete(id) {
+      await db.run("DELETE FROM characters WHERE id = ?", id);
     },
   };
 }

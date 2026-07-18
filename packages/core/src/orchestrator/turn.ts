@@ -59,8 +59,8 @@ export interface SubmitTurnResult {
 }
 
 /** Fetch the story or throw — every turn needs its frozen schema. */
-function requireStory(store: Store, storyId: string): StoryRecord {
-  const story = store.stories.get(storyId);
+async function requireStory(store: Store, storyId: string): Promise<StoryRecord> {
+  const story = await store.stories.get(storyId);
   if (!story) throw new Error(`submitTurn: unknown story ${storyId}`);
   return story;
 }
@@ -91,14 +91,14 @@ function pickTemplate(schema: StorySchema, hint?: string, name?: string) {
  * returned as-is. A soft-only or unknown id is instantiated from the best-matching template
  * (by `templateHint`/name) or a generic template, and persisted.
  */
-export function ensureHardState(
+export async function ensureHardState(
   store: Store,
   schema: StorySchema,
   storyId: string,
   characterId: string,
   templateHint?: string
-): CharacterHardState {
-  const existing = store.characters.get(characterId);
+): Promise<CharacterHardState> {
+  const existing = await store.characters.get(characterId);
   if (existing && (existing.isPlayer || hasHardState(existing.hard))) {
     return existing.hard;
   }
@@ -109,7 +109,7 @@ export function ensureHardState(
     : instantiateGeneric(schema, characterId);
 
   if (existing) {
-    store.characters.updateHard(characterId, hard);
+    await store.characters.updateHard(characterId, hard);
   } else {
     const record: CharacterRecord = {
       id: characterId,
@@ -118,7 +118,7 @@ export function ensureHardState(
       isPlayer: false,
       hard,
     };
-    store.characters.insert(record);
+    await store.characters.insert(record);
   }
   return hard;
 }
@@ -134,13 +134,13 @@ export async function submitTurn(
   playerText: string,
   opts: SubmitTurnOptions = {}
 ): Promise<SubmitTurnResult> {
-  const story = requireStory(store, storyId);
+  const story = await requireStory(store, storyId);
   const schema = story.schema;
   const rng = opts.rng ?? cryptoRng;
 
   // 1. Persist the player message at idx = n.
-  const playerIdx = store.messages.nextIdx(storyId);
-  store.messages.insert({
+  const playerIdx = await store.messages.nextIdx(storyId);
+  await store.messages.insert({
     id: randomUUID(),
     storyId,
     idx: playerIdx,
@@ -150,11 +150,11 @@ export async function submitTurn(
   });
 
   // Present roster: everyone with a row for this story (players + observed NPCs).
-  const roster = store.characters.listByStory(storyId);
+  const roster = await store.characters.listByStory(storyId);
   const presentCharacters = roster.map((c) => ({ id: c.id, name: c.name, isPlayer: c.isPlayer }));
 
   // 2. Classify (always). Recent narrator lines give the classifier scene context.
-  const recentMsgs = store.messages.recent(storyId, 6);
+  const recentMsgs = await store.messages.recent(storyId, 6);
   const recentNarration = recentMsgs.filter((m) => m.role === "narrator").map((m) => m.content);
   const classified = await classify(
     router,
@@ -174,7 +174,7 @@ export async function submitTurn(
   const nameById = new Map(roster.map((c) => [c.id, c.name]));
 
   for (const intent of intents) {
-    const actorHard = ensureHardState(
+    const actorHard = await ensureHardState(
       store,
       schema,
       storyId,
@@ -182,7 +182,7 @@ export async function submitTurn(
       nameById.get(intent.actorId)
     );
     const targetHard = intent.targetId
-      ? ensureHardState(store, schema, storyId, intent.targetId, nameById.get(intent.targetId))
+      ? await ensureHardState(store, schema, storyId, intent.targetId, nameById.get(intent.targetId))
       : undefined;
     const result = resolve(schema, actorHard, targetHard, intent, rng);
     rulings.push(result.ruling);
@@ -191,7 +191,7 @@ export async function submitTurn(
 
   // 4. Assemble the narrator context with the rulings inline as authoritative facts (§7.3).
   const presentIds = presentCharacters.map((c) => c.id);
-  const context = assembleContext(store, {
+  const context = await assembleContext(store, {
     storyId,
     schema,
     rulings,
@@ -212,8 +212,8 @@ export async function submitTurn(
   // 6. Persist prose and commit rulings in ONE transaction (all-or-nothing).
   const narratorIdx = playerIdx + 1;
   const narratorMsgId = randomUUID();
-  store.transaction(() => {
-    store.messages.insert({
+  await store.transaction(async () => {
+    await store.messages.insert({
       id: narratorMsgId,
       storyId,
       idx: narratorIdx,
@@ -228,21 +228,21 @@ export async function submitTurn(
       for (const s of staged) {
         for (const id of [s.ruling.actorId, s.ruling.targetId].filter(Boolean) as string[]) {
           if (!charsById.has(id)) {
-            const hard = store.characters.get(id)?.hard;
+            const hard = (await store.characters.get(id))?.hard;
             if (hard) charsById.set(id, structuredClone(hard));
           }
         }
       }
       for (const s of staged) {
         commit(schema, s.mutations, charsById);
-        store.rulings.insert({
+        await store.rulings.insert({
           id: randomUUID(),
           storyId,
           messageId: narratorMsgId,
           ruling: s.ruling,
         });
       }
-      for (const [id, hard] of charsById) store.characters.updateHard(id, hard);
+      for (const [id, hard] of charsById) await store.characters.updateHard(id, hard);
     }
   });
 
@@ -276,11 +276,14 @@ interface BackgroundArgs {
  */
 async function runBackground(router: Router, store: Store, args: BackgroundArgs): Promise<void> {
   const { storyId, onError } = args;
-  const nameFor = (id: string) => store.characters.get(id)?.name;
 
   try {
-    const presentSoft = store.characters
-      .listByStory(storyId)
+    // Fetch the roster once and derive both the soft-state slice and a synchronous name lookup
+    // from it — `nameFor` is consumed inside the analyzer's sync patch path, so it can't await.
+    const roster = await store.characters.listByStory(storyId);
+    const nameById = new Map(roster.map((c) => [c.id, c.name]));
+    const nameFor = (id: string) => nameById.get(id);
+    const presentSoft = roster
       .map((c) => c.soft)
       .filter((s): s is NonNullable<typeof s> => s !== undefined);
 

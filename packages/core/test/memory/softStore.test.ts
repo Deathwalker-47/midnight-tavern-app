@@ -114,22 +114,22 @@ describe("applyWorldOp — merge rules", () => {
 
 describe("applySoftPatch — store integration", () => {
   let store: Store;
-  beforeEach(() => {
-    store = openStore(":memory:");
+  beforeEach(async () => {
+    store = await openStore(":memory:");
     // Characters/worldSoft rows FK to a story; seed one with id "story-1".
     const schema = makeStory({ storyId: "story-1" });
-    store.stories.insert({ id: "story-1", title: schema.title, createdAt: 0, schema, locked: true });
+    await store.stories.insert({ id: "story-1", title: schema.title, createdAt: 0, schema, locked: true });
   });
 
-  it("auto-creates a SECONDARY profile for an unknown characterId (no hard state)", () => {
-    applySoftPatch(
+  it("auto-creates a SECONDARY profile for an unknown characterId (no hard state)", async () => {
+    await applySoftPatch(
       store,
       "story-1",
       { characterOps: [{ characterId: "ghost", ops: [{ op: "observe", text: "wailed" }] }], worldOps: [] },
       3,
       (id) => (id === "ghost" ? "The Ghost" : undefined)
     );
-    const row = store.characters.get("ghost");
+    const row = await store.characters.get("ghost");
     expect(row).toBeDefined();
     expect(row!.softTier).toBe("secondary");
     expect(row!.soft!.name).toBe("The Ghost");
@@ -139,8 +139,8 @@ describe("applySoftPatch — store integration", () => {
     expect(row!.hard.inventory).toEqual([]);
   });
 
-  it("updates an existing character's soft column without touching hard state", () => {
-    store.characters.insert({
+  it("updates an existing character's soft column without touching hard state", async () => {
+    await store.characters.insert({
       id: "kestrel",
       storyId: "story-1",
       name: "Kestrel",
@@ -155,27 +155,27 @@ describe("applySoftPatch — store integration", () => {
         alive: true,
       },
     });
-    applySoftPatch(
+    await applySoftPatch(
       store,
       "story-1",
       { characterOps: [{ characterId: "kestrel", ops: [{ op: "set", path: "goal", value: "avenge the vale" }] }], worldOps: [] },
       5
     );
-    const row = store.characters.get("kestrel")!;
+    const row = (await store.characters.get("kestrel"))!;
     expect(row.soft!.current.goal).toBe("avenge the vale");
     // Hard state untouched by the analyzer path.
     expect(row.hard.resources.hp!.current).toBe(20);
     expect(row.hard.inventory).toEqual([{ itemId: "sword", qty: 1 }]);
   });
 
-  it("applies world ops to the story's world soft state", () => {
-    applySoftPatch(
+  it("applies world ops to the story's world soft state", async () => {
+    await applySoftPatch(
       store,
       "story-1",
       { characterOps: [], worldOps: [{ op: "set_overview_hint", text: "the vale is cursed" }] },
       1
     );
-    expect(store.worldSoft.get("story-1")!.overview).toBe("the vale is cursed");
+    expect((await store.worldSoft.get("story-1"))!.overview).toBe("the vale is cursed");
   });
 });
 
