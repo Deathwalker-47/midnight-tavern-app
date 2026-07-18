@@ -17,3 +17,4 @@ export * from "./memory/index.js";
 export * from "./summarizer/index.js";
 export * from "./importer/index.js";
 export * from "./orchestrator/index.js";
+export * from "./licensing/index.js";
