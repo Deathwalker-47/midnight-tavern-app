@@ -20,6 +20,8 @@ use std::path::PathBuf;
 
 use tauri::Manager;
 
+mod db;
+
 /// Resolve the per-user app data directory and ensure a `logs/` folder exists
 /// inside it. Returns the path to the crash log file. Falls back to the OS temp
 /// dir if the app data dir can't be resolved, so logging never itself panics.
@@ -76,9 +78,37 @@ pub fn run() {
         .plugin(tauri_plugin_sql::Builder::new().build())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
+        // Storage driver commands (see src/db.rs). core reaches these through the UI's
+        // sqliteDriver, which satisfies core's async SqlDriver seam.
+        .invoke_handler(tauri::generate_handler![
+            db::db_exec,
+            db::db_select,
+            db::db_batch,
+            db::tx_begin,
+            db::tx_exec,
+            db::tx_select,
+            db::tx_batch,
+            db::tx_commit,
+            db::tx_rollback,
+        ])
         .setup(|app| {
             // Install the local-file crash logger as early as we have an AppHandle.
             install_local_crash_logger(app.handle());
+
+            // Open the SQLite database in the per-user app data dir and manage it as state,
+            // so the storage commands can reach one shared pool. Blocking here is fine: it
+            // runs once during setup, before the window loads the UI. A failure to open the
+            // DB is fatal — the app cannot function without storage.
+            let db_path = app
+                .path()
+                .app_data_dir()
+                .map_err(|e| format!("no app data dir: {e}"))?;
+            create_dir_all(&db_path).map_err(|e| format!("create app data dir: {e}"))?;
+            let db_file = db_path.join("midnight-tavern.db");
+            let state = tauri::async_runtime::block_on(db::DbState::open(&db_file))
+                .map_err(|e| format!("open database: {e}"))?;
+            app.manage(state);
+
             Ok(())
         })
         .run(tauri::generate_context!())

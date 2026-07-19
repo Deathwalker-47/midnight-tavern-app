@@ -29,6 +29,12 @@ tauri-plugin-updater = "2.0.2"
 # better-sqlite3 sidecar.
 tauri-plugin-sql = { version = "2.0.3", features = ["sqlite"] }
 
+# Direct sqlx dep for the storage driver in `db.rs`. We own a dedicated pool + held
+# transaction handles rather than routing through tauri-plugin-sql's pooled commands,
+# because core issues BEGIN…COMMIT as separate calls that must share one connection
+# (see the module header in src/db.rs). sqlx 0.8 is already in the tree via the plugin.
+sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite"] }
+
 # File import (dialog) + scoped filesystem access to the app data dir.
 tauri-plugin-dialog = "2.0.3"
 tauri-plugin-fs = "2.0.3"
