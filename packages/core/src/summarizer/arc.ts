@@ -9,7 +9,7 @@
  * The Arc Document schema (`ArcDocSchema`) lives in types/records.ts so the arcs table has a
  * validated payload from the start; this module fills it.
  */
-import { randomUUID } from "node:crypto";
+import { randomUUID } from "../util/uuid.js";
 import { z } from "zod";
 import { callStructured, type Router } from "../router/index.js";
 import type { Store } from "../store/index.js";

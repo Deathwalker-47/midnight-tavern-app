@@ -17,7 +17,7 @@
  * renders decided truth) but committed after (so a narrator crash never leaves state mutated
  * with no prose). Prose never feeds the ledger.
  */
-import { randomUUID } from "node:crypto";
+import { randomUUID } from "../util/uuid.js";
 import type { Router } from "../router/index.js";
 import type { Store, CharacterRecord } from "../store/index.js";
 import { classify } from "../classifier/index.js";

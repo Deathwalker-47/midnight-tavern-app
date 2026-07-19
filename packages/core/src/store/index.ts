@@ -21,7 +21,7 @@ import { makeLorebookRepo, type LorebookRepo } from "./repositories/lorebook.js"
 import { makePersonaRepo, type PersonaRepo } from "./repositories/personas.js";
 import { makeSettingsRepo, type SettingsRepo } from "./repositories/settings.js";
 
-export { openDb, openDbWith, type Db, type SqlDriver, type SqlParam } from "./db.js";
+export { openDb, openDbWith, type Db, type SqlDriver, type SqlParam, type RunResult } from "./db.js";
 export type { StoryRepo } from "./repositories/stories.js";
 export type { CharacterRepo, CharacterRecord } from "./repositories/characters.js";
 export type { MessageRepo } from "./repositories/messages.js";

@@ -10,7 +10,7 @@
  * freeze → persist the story row and the player's instantiated hard state together in one
  * transaction, so a story never exists on disk without its protagonist.
  */
-import { randomUUID } from "node:crypto";
+import { randomUUID } from "../util/uuid.js";
 import type { Router } from "../router/index.js";
 import type { Store } from "../store/index.js";
 import type { StorySchema, StoryRecord } from "../types/index.js";

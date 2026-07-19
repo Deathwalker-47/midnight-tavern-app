@@ -11,7 +11,7 @@
  * by message index with no gaps, so the next block always starts at `msgTo + 1`.
  */
 import { z } from "zod";
-import { randomUUID } from "node:crypto";
+import { randomUUID } from "../util/uuid.js";
 import { callStructured, type Router } from "../router/index.js";
 import type { Store } from "../store/index.js";
 import type { ChapterRecord, MessageRecord } from "../types/index.js";
