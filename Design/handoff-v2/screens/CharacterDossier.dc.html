@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:#14100C;color:#EADCBE;font-family:"IBM Plex Sans",sans-serif;-webkit-font-smoothing:antialiased}
+  ::selection{background:rgba(217,166,72,.25)}
+  a{color:#D9A648;text-decoration:none}a:hover{color:#F2C56B}
+  ::-webkit-scrollbar{width:11px}::-webkit-scrollbar-thumb{background:#382E21;border-radius:6px;border:3px solid #14100C}
+  @keyframes mt-fade{from{opacity:0}to{opacity:1}}
+  @keyframes mt-rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+  @media (prefers-reduced-motion: reduce){*{animation-duration:.001s!important}}
+</style>
+</helmet>
+<div style="display:flex;height:100vh;width:100vw;overflow:hidden;background:#14100C">
+
+  <nav style="width:72px;flex:0 0 72px;background:#1B1611;border-right:1px solid #382E21;display:flex;flex-direction:column;align-items:center;padding:14px 0;gap:4px">
+    <div style="width:40px;height:40px;border-radius:9px;background:linear-gradient(145deg,#2C241B,#1B1611);border:1px solid rgba(216,170,90,.25);display:flex;align-items:center;justify-content:center;font-family:'Cormorant Garamond',serif;font-weight:700;font-size:24px;color:#D9A648;margin-bottom:14px">M</div>
+    <sc-for list="{{ railItems }}" as="it" hint-placeholder-count="5">
+      <a href="{{ it.href }}" title="{{ it.label }}" style="{{ it.style }}"><span style="{{ it.iconStyle }}">{{ it.glyph }}</span><span style="font-size:9px">{{ it.label }}</span></a>
+    </sc-for>
+    <div style="flex:1"></div>
+    <div style="width:52px;display:flex;flex-direction:column;align-items:center;gap:9px;padding-top:8px;border-top:1px solid #382E21">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:4px"><span style="width:9px;height:9px;border-radius:50%;background:#8FB573;box-shadow:0 0 8px #8FB573"></span><span style="font-size:8px;color:#6E5F49">Sonnet</span></div>
+      <div style="font-size:8px;color:#6E5F49;text-align:center;border:1px solid #382E21;border-radius:5px;padding:3px 4px;line-height:1.15">Trial<br>9d</div>
+    </div>
+  </nav>
+
+  <div style="flex:1;display:flex;flex-direction:column;min-width:0">
+    <!-- header + story tabs -->
+    <header style="flex:0 0 auto;background:#1B1611;border-bottom:1px solid #382E21;padding:12px 22px 0 22px">
+      <div style="display:flex;align-items:baseline;gap:12px">
+        <div style="font-family:'Cormorant Garamond',serif;font-size:22px;font-weight:600;color:#EADCBE">Embers of the Silent Vale</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#74B8AE;letter-spacing:.04em">CH 3 · UNDER THE OSSUARY</div>
+        <div style="flex:1"></div><div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#6E5F49">58 messages</div>
+      </div>
+      <div style="display:flex;gap:2px;margin-top:12px">
+        <a href="Play.dc.html" style="padding:9px 15px;font-size:13px;color:#A08D6C;border-bottom:2px solid transparent">Play</a>
+        <a href="Overview.dc.html" style="padding:9px 15px;font-size:13px;color:#A08D6C;border-bottom:2px solid transparent">Overview</a>
+        <a href="Characters.dc.html" style="padding:9px 15px;font-size:13px;font-weight:600;color:#EADCBE;border-bottom:2px solid #D9A648">Characters</a>
+        <a href="StorySettings.dc.html" style="padding:9px 15px;font-size:13px;color:#A08D6C;border-bottom:2px solid transparent">Story Settings</a>
+      </div>
+    </header>
+
+    <div style="flex:0 0 auto;display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:7px 22px;background:#14100C;border-bottom:1px solid #382E21">
+      <span style="font-size:10px;color:#6E5F49;font-family:'IBM Plex Mono',monospace;letter-spacing:.06em;text-transform:uppercase;margin-right:2px">Demo</span>
+      <sc-for list="{{ demoChips }}" as="c" hint-placeholder-count="4"><button onClick="{{ c.onClick }}" style="{{ c.style }}">{{ c.label }}</button></sc-for>
+    </div>
+
+    <div style="flex:1;overflow-y:auto">
+      <div style="max-width:1080px;margin:0 auto;padding:22px 40px 70px">
+        <a href="Characters.dc.html" style="display:inline-block;font-size:12.5px;color:#A08D6C;margin-bottom:16px">← All characters</a>
+
+        <!-- HEADER / IDENTITY -->
+        <div style="display:flex;gap:22px;align-items:flex-start">
+          <div style="{{ portraitStyle }}">{{ initials }}</div>
+          <div style="flex:1;min-width:0;padding-top:4px">
+            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+              <h1 style="font-family:'Cormorant Garamond',serif;font-size:40px;font-weight:600;color:{{ nameColor }};margin:0;line-height:1.05;white-space:nowrap">{{ name }}</h1>
+              <span style="{{ tierStyle }}">{{ tier }}</span>
+              <sc-if value="{{ fallen }}" hint-placeholder-val="{{ false }}"><span style="font-size:10px;font-family:'IBM Plex Mono',monospace;color:#8A8175;border:1px solid #8A8175;border-radius:4px;padding:2px 7px;letter-spacing:.08em">FALLEN</span></sc-if>
+            </div>
+            <div style="font-family:'Source Serif 4',serif;font-size:17px;color:#A08D6C;margin-top:8px;font-style:italic">{{ oneLiner }}</div>
+            <div style="display:flex;gap:10px;margin-top:14px">
+              <a href="StoryBlueprint.dc.html" style="font-size:12px;color:#74B8AE;border:1px solid #4E827B;border-radius:7px;padding:7px 13px">✎ Edit in blueprint</a>
+              <span style="font-size:12px;color:#6E5F49;align-self:center">Identity is authored in the blueprint · everything below is what the story has learned</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- CURRENT STATE strip -->
+        <div style="display:flex;flex-wrap:wrap;gap:0;margin-top:24px;background:#1B1611;border:1px solid #382E21;border-radius:11px;overflow:hidden">
+          <sc-for list="{{ currentState }}" as="cs" hint-placeholder-count="3">
+            <div style="{{ cs.cellStyle }}"><div style="font-size:10px;font-family:'IBM Plex Mono',monospace;letter-spacing:.1em;color:#6E5F49">{{ cs.k }}</div><div style="font-size:15px;color:#D6C9AB;margin-top:4px;font-family:'Cormorant Garamond',serif;font-weight:600">{{ cs.v }}</div></div>
+          </sc-for>
+        </div>
+
+        <!-- TWO-COLUMN: story register (left) + system sheet (right) -->
+        <div style="{{ gridStyle }}">
+
+          <!-- STORY-REGISTER COLUMN -->
+          <div style="min-width:0;display:flex;flex-direction:column;gap:26px;margin-top:26px">
+
+            <!-- Mentality -->
+            <section>
+              <div style="display:flex;align-items:center;gap:9px;margin-bottom:13px"><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.14em;color:#D9A648">MENTALITY</span><div style="flex:1;height:1px;background:#382E21"></div></div>
+              <div style="font-size:10px;font-family:'IBM Plex Mono',monospace;letter-spacing:.1em;color:#6E5F49;margin-bottom:8px">TRAITS</div>
+              <div style="display:flex;flex-wrap:wrap;gap:7px;margin-bottom:16px"><sc-for list="{{ traits }}" as="t" hint-placeholder-count="4"><span style="font-size:12px;color:#D6C9AB;background:#2C241B;border:1px solid #382E21;border-radius:6px;padding:4px 10px">{{ t }}</span></sc-for></div>
+              <div style="font-size:10px;font-family:'IBM Plex Mono',monospace;letter-spacing:.1em;color:#6E5F49;margin-bottom:8px">BEHAVIORAL SIGNATURES</div>
+              <div style="display:flex;flex-direction:column;gap:9px">
+                <sc-for list="{{ signatures }}" as="sg" hint-placeholder-count="3"><div style="display:flex;gap:10px;font-family:'Source Serif 4',serif;font-size:15px;line-height:1.55;color:#D6C9AB"><span style="color:#D9A648;flex:0 0 auto">“</span><span>{{ sg }}</span></div></sc-for>
+              </div>
+              <div style="margin-top:15px;padding:12px 15px;background:#1B1611;border:1px solid #382E21;border-radius:9px;font-family:'Source Serif 4',serif;font-size:15px;line-height:1.6;color:#EADCBE"><span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.1em;color:#6E5F49;display:block;margin-bottom:5px">OUTLOOK</span>{{ outlook }}</div>
+            </section>
+
+            <!-- Past -->
+            <section>
+              <div style="display:flex;align-items:center;gap:9px;margin-bottom:13px"><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.14em;color:#D9A648">PAST</span><div style="flex:1;height:1px;background:#382E21"></div></div>
+              <p style="font-family:'Source Serif 4',serif;font-size:16px;line-height:1.75;color:#EADCBE;margin:0 0 20px;max-width:60ch">{{ backstory }}</p>
+              <div style="font-size:10px;font-family:'IBM Plex Mono',monospace;letter-spacing:.1em;color:#6E5F49;margin-bottom:12px">OBSERVATIONS · WHAT THE STORY HAS NOTICED</div>
+              <sc-if value="{{ hasObs }}" hint-placeholder-val="{{ true }}">
+                <div style="position:relative;padding-left:20px">
+                  <div style="position:absolute;left:5px;top:6px;bottom:6px;width:1px;background:#382E21"></div>
+                  <sc-for list="{{ observations }}" as="o" hint-placeholder-count="4">
+                    <div style="position:relative;margin-bottom:16px">
+                      <span style="position:absolute;left:-19px;top:5px;width:9px;height:9px;border-radius:50%;background:{{ o.dot }};border:2px solid #14100C"></span>
+                      <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#74B8AE;letter-spacing:.04em">{{ o.tag }}</div>
+                      <div style="font-family:'Source Serif 4',serif;font-size:15px;line-height:1.6;color:#D6C9AB;margin-top:2px">{{ o.text }}</div>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-if>
+              <sc-if value="{{ sparse }}" hint-placeholder-val="{{ false }}">
+                <div style="font-family:'Source Serif 4',serif;font-style:italic;font-size:14px;color:#6E5F49;padding:12px 0">Little is known yet. The story will fill this in as {{ shortName }} does more.</div>
+              </sc-if>
+            </section>
+
+            <!-- Relationships -->
+            <section>
+              <div style="display:flex;align-items:center;gap:9px;margin-bottom:13px"><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.14em;color:#D9A648">RELATIONSHIPS</span><div style="flex:1;height:1px;background:#382E21"></div></div>
+              <div style="display:flex;flex-direction:column;gap:10px">
+                <sc-for list="{{ relationships }}" as="r" hint-placeholder-count="3">
+                  <div style="{{ r.cardStyle }}">
+                    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+                      <div style="display:flex;align-items:center;gap:9px;min-width:0">
+                        <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#74B8AE">{{ r.dir }}</span>
+                        <span style="font-family:'Source Serif 4',serif;font-size:15px;color:#EADCBE;font-style:italic">“{{ r.feeling }}”</span>
+                      </div>
+                      <sc-if value="{{ r.isPlayer }}" hint-placeholder-val="{{ false }}"><span style="font-size:9px;font-family:'IBM Plex Mono',monospace;color:#D9A648;border:1px solid rgba(216,170,90,.4);border-radius:4px;padding:2px 6px;flex:0 0 auto">THE PLAYER</span></sc-if>
+                    </div>
+                    <div style="display:flex;gap:16px;margin-top:9px;flex-wrap:wrap">
+                      <div style="display:flex;align-items:center;gap:7px"><span style="font-size:10px;font-family:'IBM Plex Mono',monospace;color:#6E5F49">TRUST</span><div style="width:70px;height:5px;background:#14100C;border-radius:3px;overflow:hidden"><div style="{{ r.trustBar }}"></div></div><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:{{ r.trustColor }}">{{ r.trustVal }}</span></div>
+                      <div style="display:flex;align-items:center;gap:7px"><span style="font-size:10px;font-family:'IBM Plex Mono',monospace;color:#6E5F49">POWER</span><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#A08D6C">{{ r.power }}</span></div>
+                      <div style="display:flex;align-items:center;gap:7px"><span style="font-size:10px;font-family:'IBM Plex Mono',monospace;color:#6E5F49">TONE</span><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#A08D6C">{{ r.tone }}</span></div>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+            </section>
+
+            <!-- Involved threads -->
+            <section>
+              <div style="display:flex;align-items:center;gap:9px;margin-bottom:13px"><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.14em;color:#D9A648">INVOLVED THREADS</span><div style="flex:1;height:1px;background:#382E21"></div></div>
+              <sc-for list="{{ threads }}" as="th" hint-placeholder-count="2">
+                <div style="display:flex;gap:11px;align-items:flex-start;padding:11px 14px;background:#1B1611;border:1px solid #382E21;border-radius:9px;margin-bottom:9px">
+                  <span style="color:#C9A15a;font-size:13px;margin-top:1px">◆</span>
+                  <div><div style="font-family:'Source Serif 4',serif;font-size:15px;color:#D6C9AB;line-height:1.5">{{ th.text }}</div><div style="font-size:11px;color:#6E5F49;margin-top:2px">{{ th.meta }}</div></div>
+                </div>
+              </sc-for>
+            </section>
+          </div>
+
+          <!-- SYSTEM-REGISTER COLUMN (THE SHEET) — walled -->
+          <div style="{{ sheetColStyle }}">
+            <div style="position:sticky;top:0;background:#181410;border:1px solid #4E827B;border-radius:13px;overflow:hidden">
+              <div style="background:rgba(116,184,174,.08);border-bottom:1px solid #2f3f3c;padding:13px 17px;display:flex;align-items:center;justify-content:space-between">
+                <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.14em;color:#74B8AE">THE SHEET · HARD STATE</span>
+                <span style="{{ statusChipStyle }}">{{ statusLabel }}</span>
+              </div>
+              <div style="padding:17px">
+                <!-- resources -->
+                <sc-for list="{{ resources }}" as="rs" hint-placeholder-count="2">
+                  <div style="margin-bottom:13px">
+                    <div style="display:flex;justify-content:space-between;font-size:10px;font-family:'IBM Plex Mono',monospace;color:#A08D6C;margin-bottom:4px"><span>{{ rs.label }}</span><span style="color:{{ rs.color }}">{{ rs.val }}</span></div>
+                    <div style="height:7px;background:#14100C;border-radius:4px;overflow:hidden"><div style="{{ rs.bar }}"></div></div>
+                  </div>
+                </sc-for>
+
+                <!-- skills w/ progress -->
+                <div style="font-size:10px;font-family:'IBM Plex Mono',monospace;letter-spacing:.1em;color:#6E5F49;margin:16px 0 9px">SKILLS</div>
+                <sc-for list="{{ skills }}" as="sk" hint-placeholder-count="3">
+                  <div style="margin-bottom:12px">
+                    <div style="display:flex;align-items:center;justify-content:space-between">
+                      <div style="display:flex;align-items:center;gap:7px"><span style="font-size:13px;color:#D6C9AB">{{ sk.name }}</span><sc-if value="{{ sk.changed }}" hint-placeholder-val="{{ false }}"><span title="Recently advanced" style="width:6px;height:6px;border-radius:50%;background:#F5CE6E;box-shadow:0 0 6px #F5CE6E"></span></sc-if></div>
+                      <div style="display:flex;align-items:center;gap:8px"><span style="font-size:9px;font-family:'IBM Plex Mono',monospace;color:#74B8AE;text-transform:uppercase">{{ sk.rank }}</span><span style="{{ sk.pipsStyle }}">{{ sk.pips }}</span></div>
+                    </div>
+                    <sc-if value="{{ sk.showProgress }}" hint-placeholder-val="{{ false }}">
+                      <div style="display:flex;align-items:center;gap:8px;margin-top:5px"><div style="flex:1;height:4px;background:#14100C;border-radius:3px;overflow:hidden"><div style="{{ sk.progBar }}"></div></div><span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:#6E5F49">{{ sk.progLabel }}</span></div>
+                    </sc-if>
+                  </div>
+                </sc-for>
+
+                <!-- inventory -->
+                <div style="font-size:10px;font-family:'IBM Plex Mono',monospace;letter-spacing:.1em;color:#6E5F49;margin:16px 0 9px">INVENTORY</div>
+                <div style="display:flex;flex-direction:column;gap:6px">
+                  <sc-for list="{{ inventory }}" as="iv" hint-placeholder-count="4">
+                    <div style="display:flex;align-items:center;justify-content:space-between;font-family:'IBM Plex Mono',monospace;font-size:12px"><span style="color:#D6C9AB">{{ iv.name }}</span><span style="color:#6E5F49">×{{ iv.qty }}</span></div>
+                  </sc-for>
+                </div>
+                <div style="margin-top:15px;padding-top:12px;border-top:1px solid #2f3f3c;font-size:10.5px;color:#6E5F49;line-height:1.5">These values are set by dice and rules — they can’t be edited by hand.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state={ demo:'wren', narrow:false };
+  pip(n,max){ return '●'.repeat(n)+'○'.repeat(max-n); }
+  renderVals(){
+    const s=this.state, self=this;
+    const railItems=[
+      {label:'Library',glyph:'❏',href:'Library.dc.html',active:false},
+      {label:'Story',glyph:'✎',href:'Play.dc.html',active:true},
+      {label:'Personas',glyph:'☙',href:'Personas.dc.html',active:false},
+      {label:'Lore',glyph:'❦',href:'Lorebook.dc.html',active:false},
+      {label:'Settings',glyph:'⚙',href:'Settings.dc.html',active:false},
+    ].map(it=>({...it,style:`display:flex;flex-direction:column;align-items:center;gap:3px;width:56px;padding:8px 0;border-radius:8px;color:${it.active?'#EADCBE':'#6E5F49'};background:${it.active?'#2C241B':'transparent'};border:1px solid ${it.active?'rgba(216,170,90,.2)':'transparent'}`,iconStyle:`font-size:18px;color:${it.active?'#D9A648':'#8A7A5c'}`}));
+
+    const demoChips=[['wren','Living (Wren)'],['aldric','Fallen (Aldric)'],['sparse','Sparse (the Reeve)'],['narrow','Narrow window']].map(([k,label])=>({label,onClick:()=>{ if(k==='narrow'){ self.setState(st=>({narrow:!st.narrow})); } else { self.setState({demo:k,narrow:false}); } },
+      style:`font-size:11px;padding:4px 9px;border-radius:5px;cursor:pointer;border:1px solid ${(k==='narrow'?s.narrow:s.demo===k)?'#4E827B':'#382E21'};background:${(k==='narrow'?s.narrow:s.demo===k)?'rgba(116,184,174,.12)':'transparent'};color:${(k==='narrow'?s.narrow:s.demo===k)?'#74B8AE':'#A08D6C'}`}));
+
+    const trustBar=(v)=>{ const pct=Math.round((v+1)/2*100); const c=v>=0.3?'#8FB573':(v<0?'#C96F57':'#C9A15a'); return {bar:`height:100%;width:${pct}%;background:${c};border-radius:3px`, color:c, val:(v>=0?'+':'')+v.toFixed(1)}; };
+    const mkRel=(dir,feeling,trust,power,tone,isPlayer)=>{ const t=trustBar(trust); return {dir,feeling,power,tone,isPlayer,trustBar:t.bar,trustColor:t.color,trustVal:t.val,
+      cardStyle:`background:${isPlayer?'linear-gradient(160deg,#251d13,#1B1611)':'#1B1611'};border:1px solid ${isPlayer?'rgba(216,170,90,.3)':'#382E21'};border-radius:10px;padding:13px 15px`}; };
+
+    const data={
+      wren:{ name:'Wren Callow', short:'Wren', initials:'WC', accent:'#74B8AE', tier:'COMPANION', fallen:false, sparse:false,
+        oneLiner:'Scout and thief — sharp eyes, sharper debts.',
+        current:[['MOOD','Restless'],['LOCATION','Ossuary stair'],['GOAL','Get paid, get out']],
+        traits:['Sharp-eyed','Debt-haunted','Loyal in the clinch','Sweet tooth'],
+        signatures:['Cases every room for its exits before she sits down.','Deflects fear with a joke, especially when it’s warranted.','Never leaves a fair share on the table — hers or anyone’s.'],
+        outlook:'Guardedly hopeful since the cloister. She came for the purse; she’s staying, she tells herself, for the purse.',
+        backstory:'Wren grew up cutting purses on the wharves of Saltmarrow, apprenticed to no one and trusted by fewer. A job gone wrong left her owing the fence Coll more than she can pay, which is how a courier’s hazard-contract up the Vale Road started to look like salvation.',
+        observations:[
+          {tag:'CH1 · TURN 4',text:'Admitted she took the job to clear a debt to a fence named Coll.',recent:false},
+          {tag:'CH1 · TURN 12',text:'Picked the toll-house lock in under a minute — clearly expert hands.',recent:false},
+          {tag:'CH2 · TURN 7',text:'Stayed to fight at the cloister when she could have run with the purse.',recent:false},
+          {tag:'CH2 · TURN 18',text:'Warmed to Aldric after he shielded her from the censer-fall.',recent:false},
+          {tag:'CH3 · TURN 2',text:'Took up a shortblade from the ossuary dead — new to the weapon.',recent:true},
+        ],
+        relationships:[
+          mkRel('→ Kestrel','trusts her lead',0.6,'Kestrel leads','warm',true),
+          mkRel('→ Aldric','wary respect',0.2,'balanced','guarded',false),
+          mkRel('→ Coll','owes, and resents it',-0.4,'Coll holds it','bitter',false),
+        ],
+        threads:[{text:'Wren’s debt to the fence Coll is coming due.',meta:'unresolved · since chapter 1'},{text:'Who tipped the Hollow Flame to the party’s route?',meta:'unresolved · chapter 2'}],
+        status:'ALIVE', statusColor:'#8FB573',
+        resources:[['HEALTH',14,16],['STAMINA',9,12]],
+        skills:[
+          {name:'Stealth',rank:'expert',pips:this.pip(5,5),changed:false,prog:null},
+          {name:'Lockpicking',rank:'adept',pips:this.pip(4,5),changed:false,prog:[4,5,'4/5 successes to Expert']},
+          {name:'Shortblade',rank:'novice',pips:this.pip(1,5),changed:true,prog:[1,4,'1/4 to Adept']},
+        ],
+        inventory:[['Lockpicks',1],['Shortblade',1],['Waybread',2],['Smoke pellet',3],['Silver marks',12]],
+      },
+      aldric:{ name:'Brother Aldric', short:'Aldric', initials:'BA', accent:'#8A8175', tier:'COMPANION', fallen:true, sparse:false,
+        oneLiner:'Warrior-priest of the Ember Choir — immovable, until he wasn’t.',
+        current:[['STATE','Fallen'],['LOCATION','The cloister'],['LAST GOAL','Consecrate the ossuary']],
+        traits:['Devout','Immovable','Grieving'],
+        signatures:['Set himself between danger and anyone smaller.','Spoke the rite even when no one was left to hear it.'],
+        outlook:'Held the faith to the end. Believed the ossuary could still be saved.',
+        backstory:'The last living voice of the Ember Choir in the Vale, Aldric kept the cold-fire rites when the rest of his order scattered or died. He joined Kestrel’s road to consecrate what the Hollow Flame had defiled.',
+        observations:[
+          {tag:'CH2 · TURN 3',text:'Consecrated the toll-house dead so they would not rise.',recent:false},
+          {tag:'CH2 · TURN 18',text:'Shielded Wren from a falling censer, taking the burn himself.',recent:false},
+          {tag:'CH3 · TURN 6',text:'Fell holding the stair so the others could reach the gate.',recent:true},
+        ],
+        relationships:[
+          mkRel('→ Kestrel','a soldier’s trust',0.5,'Kestrel leads','steady',true),
+          mkRel('→ Wren','came to respect her',0.3,'balanced','fond',false),
+        ],
+        threads:[{text:'The ossuary he died to consecrate remains unhallowed.',meta:'unresolved · chapter 3'}],
+        status:'FALLEN', statusColor:'#8A8175',
+        resources:[['HEALTH',0,30],['STAMINA',0,16]],
+        skills:[
+          {name:'Warhammer',rank:'expert',pips:this.pip(5,5),changed:false,prog:null},
+          {name:'Liturgy',rank:'adept',pips:this.pip(3,5),changed:false,prog:null},
+          {name:'Shieldcraft',rank:'adept',pips:this.pip(3,5),changed:false,prog:null},
+        ],
+        inventory:[['Warhammer',1],['Choir censer',1],['Reliquary key',1]],
+      },
+      sparse:{ name:'The Reeve', short:'the Reeve', initials:'RV', accent:'#A08D6C', tier:'FIGURE', fallen:false, sparse:true,
+        oneLiner:'Hamlet elder who hired the party — frightened, and hiding something.',
+        current:[['MOOD','Anxious'],['LOCATION','The hamlet'],['GOAL','Unknown']],
+        traits:['Guarded'],
+        signatures:[],
+        outlook:'Barely met. First impressions only.',
+        backstory:'The reeve of the hamlet below Cindermoor engaged Kestrel to find the vanished pilgrims. Beyond that, the story has learned little.',
+        observations:[
+          {tag:'CH1 · TURN 1',text:'Hired the party to find the missing pilgrims — paid half up front.',recent:true},
+        ],
+        relationships:[ mkRel('→ Kestrel','an employer’s caution',0.1,'balanced','formal',true) ],
+        threads:[{text:'What is the reeve not saying about the vanishings?',meta:'unresolved · chapter 1'}],
+        status:'ALIVE', statusColor:'#8FB573',
+        resources:[['HEALTH',8,8]],
+        skills:[],
+        inventory:[['Ledger',1]],
+      },
+    };
+    const d=data[s.demo];
+
+    const currentState=d.current.map((c,i)=>({k:c[0],v:c[1],cellStyle:`flex:1;min-width:140px;padding:13px 17px;${i>0?'border-left:1px solid #382E21':''}`}));
+
+    const resources=d.resources.map(([label,cur,max])=>{ const pct=Math.max(0,Math.round(cur/max*100)); const c=d.fallen?'#8A8175':(pct<40?'#C96F57':(pct<70?'#F5CE6E':'#8FB573')); return {label,val:`${cur} / ${max}`,color:c,bar:`height:100%;width:${pct}%;background:${c};border-radius:4px`}; });
+
+    const skills=d.skills.map(sk=>({name:sk.name,rank:sk.rank,pips:sk.pips,changed:sk.changed,
+      pipsStyle:`font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:2px;color:${sk.changed?'#F5CE6E':(d.fallen?'#8A8175':'#74B8AE')}`,
+      showProgress:!!sk.prog, progLabel:sk.prog?sk.prog[2]:'', progBar: sk.prog?`height:100%;width:${Math.round(sk.prog[0]/sk.prog[1]*100)}%;background:#4E827B;border-radius:3px`:''}));
+
+    const inventory=d.inventory.map(([name,qty])=>({name,qty}));
+
+    const wide = !s.narrow;
+    return {
+      railItems, demoChips,
+      name:d.name, shortName:d.short, initials:d.initials, oneLiner:d.oneLiner, tier:d.tier, fallen:d.fallen, sparse:d.sparse,
+      nameColor:d.fallen?'#8A8175':'#EADCBE',
+      portraitStyle:`width:104px;height:104px;flex:0 0 104px;border-radius:16px;background:#2C241B;border:1px solid ${d.accent}66;display:flex;align-items:center;justify-content:center;font-family:'Cormorant Garamond',serif;font-weight:700;font-size:44px;color:${d.fallen?'#8A8175':d.accent}${d.fallen?';filter:grayscale(.4)':''}`,
+      tierStyle:`font-size:10px;font-family:'IBM Plex Mono',monospace;color:#74B8AE;border:1px solid #4E827B;border-radius:4px;padding:3px 8px;letter-spacing:.08em`,
+      currentState, traits:d.traits, signatures:d.signatures, outlook:d.outlook, backstory:d.backstory,
+      hasObs:d.observations.length>0 && !d.sparse, observations:d.observations.map(o=>({...o,dot:o.recent?'#F5CE6E':'#4E827B'})),
+      relationships:d.relationships, threads:d.threads,
+      statusLabel:d.status, statusChipStyle:`font-size:9px;font-family:'IBM Plex Mono',monospace;color:${d.statusColor};border:1px solid ${d.statusColor};border-radius:4px;padding:2px 7px;letter-spacing:.08em`,
+      resources, skills, inventory,
+      gridStyle: wide?'display:grid;grid-template-columns:1.55fr .95fr;gap:34px;align-items:start':'display:block',
+      sheetColStyle: wide?'margin-top:26px':'margin-top:26px;max-width:420px',
+    };
+  }
+}
+</script>
+</body>
+</html>

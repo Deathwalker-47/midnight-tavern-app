@@ -71,7 +71,13 @@ function buildBody(req: ChatRequest, spec: ProviderSpec, stream: boolean): Recor
   };
   if (req.temperature !== undefined) body["temperature"] = req.temperature;
   if (req.topP !== undefined) body["top_p"] = req.topP;
+  if (req.topK !== undefined) body["top_k"] = req.topK;
+  if (req.minP !== undefined) body["min_p"] = req.minP;
+  if (req.frequencyPenalty !== undefined) body["frequency_penalty"] = req.frequencyPenalty;
+  if (req.presencePenalty !== undefined) body["presence_penalty"] = req.presencePenalty;
+  if (req.repetitionPenalty !== undefined) body["repetition_penalty"] = req.repetitionPenalty;
   if (req.maxTokens !== undefined) body["max_tokens"] = req.maxTokens;
+  if (req.seed !== undefined) body["seed"] = req.seed;
   if (req.stop && req.stop.length > 0) body["stop"] = req.stop;
   if (req.jsonMode && spec.supportsJsonMode) body["response_format"] = { type: "json_object" };
   return body;

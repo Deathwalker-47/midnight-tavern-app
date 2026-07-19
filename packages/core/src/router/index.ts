@@ -20,16 +20,46 @@ export {
   ProviderIdSchema,
   SamplersSchema,
   RoleBindingSchema,
+  RoleBindingSourceSchema,
   RoleMapSchema,
   ROLE_MAP_SETTING_KEY,
+  ROLE_LABELS,
   KNOWN_MODELS,
   DEFAULT_ROLE_MAP,
   type Role,
   type Samplers,
   type RoleBinding,
+  type RoleBindingSource,
   type RoleMap,
   type KnownModel,
 } from "./roles.js";
+export {
+  SamplerProfileSchema,
+  SAMPLER_PRESETS,
+  DEFAULT_SAMPLER_PROFILES,
+  DEFAULT_PRESET_FOR_ROLE,
+  SUPPORTED_SAMPLERS,
+  providerSupportsSampler,
+  pruneUnsupported,
+  matchPreset,
+  type SamplerProfile,
+  type PresetName,
+} from "./samplers.js";
+export {
+  CatalogModelSchema,
+  MODEL_CATALOG,
+  allCatalogModels,
+  catalogModel,
+  catalogModelsForProvider,
+  isJsonRisk,
+  type CatalogModel,
+} from "./modelCatalog.js";
+export {
+  modelsForRole,
+  defaultAssignmentFor,
+  samplerProfileFor,
+  type RankedModel,
+} from "./recommend.js";
 export {
   makeRouter,
   MissingCredentialsError,

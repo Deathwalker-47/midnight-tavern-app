@@ -18,7 +18,15 @@ export interface ChatRequest {
   messages: ChatMessage[];
   temperature?: number;
   topP?: number;
+  /** Extended sampler surface (v2 §8). Provider-dependent; dropped at the wire when unsupported. */
+  topK?: number;
+  minP?: number;
+  frequencyPenalty?: number;
+  presencePenalty?: number;
+  repetitionPenalty?: number;
   maxTokens?: number;
+  /** Deterministic sampling seed, when the provider honors it. */
+  seed?: number;
   /** Ask the provider to emit strict JSON (only honored when `supportsJsonMode`). */
   jsonMode?: boolean;
   stop?: string[];

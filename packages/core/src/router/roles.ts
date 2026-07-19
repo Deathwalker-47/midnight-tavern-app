@@ -9,26 +9,48 @@
 import { z } from "zod";
 import { PROVIDER_IDS } from "./providers/registry.js";
 
-/** The five model-consuming roles (D9). */
+/** The five model-consuming roles (D9). "bootstrapper" is surfaced to users as "Story AI". */
 export const ROLES = ["narrator", "classifier", "analyzer", "summarizer", "bootstrapper"] as const;
 export type Role = (typeof ROLES)[number];
 
 export const RoleSchema = z.enum(ROLES);
 export const ProviderIdSchema = z.enum(PROVIDER_IDS);
 
-/** Sampler settings for one role binding. */
+/**
+ * Sampler settings for one role binding. Widened for v2 (§8): the full sampler surface, all
+ * fields optional so older 3-field bindings still validate. The canonical/complete profile shape
+ * lives in `samplers.ts` (`SamplerProfileSchema`); this permissive schema is what gets persisted
+ * on a binding, since some fields are provider-dependent and may be absent.
+ */
 export const SamplersSchema = z.object({
   temperature: z.number().min(0).max(2).optional(),
   topP: z.number().min(0).max(1).optional(),
+  topK: z.number().int().min(0).optional(),
+  minP: z.number().min(0).max(1).optional(),
+  frequencyPenalty: z.number().min(-2).max(2).optional(),
+  presencePenalty: z.number().min(-2).max(2).optional(),
+  repetitionPenalty: z.number().min(0).max(2).optional(),
   maxTokens: z.number().int().positive().optional(),
+  stop: z.array(z.string()).optional(),
+  seed: z.number().int().optional(),
 });
 export type Samplers = z.infer<typeof SamplersSchema>;
+
+/**
+ * Where a binding's samplers/model came from — drives the UI's "Recommended"/"Advanced" badge and
+ * the "reset to recommended" affordance. `samplersDirty` is set once the user hand-edits any
+ * sampler away from the preset/recommended value (shows the "● overridden" marker).
+ */
+export const RoleBindingSourceSchema = z.enum(["recommended", "custom"]);
+export type RoleBindingSource = z.infer<typeof RoleBindingSourceSchema>;
 
 /** One role's binding: which provider, which model, and how to sample. */
 export const RoleBindingSchema = z.object({
   provider: ProviderIdSchema,
   model: z.string().min(1),
   samplers: SamplersSchema.optional(),
+  source: RoleBindingSourceSchema.optional().default("recommended"),
+  samplersDirty: z.boolean().optional().default(false),
 });
 export type RoleBinding = z.infer<typeof RoleBindingSchema>;
 
@@ -78,26 +100,49 @@ export const DEFAULT_ROLE_MAP: RoleMap = {
   narrator: {
     provider: "openrouter",
     model: "anthropic/claude-sonnet-4",
-    samplers: { temperature: 0.8, maxTokens: 1200 },
+    samplers: { temperature: 0.8, topP: 0.95, presencePenalty: 0.3, frequencyPenalty: 0.3, maxTokens: 1200 },
+    source: "recommended",
+    samplersDirty: false,
   },
   classifier: {
     provider: "openrouter",
     model: "openai/gpt-4o-mini",
-    samplers: { temperature: 0, maxTokens: 800 },
+    samplers: { temperature: 0, topP: 1, maxTokens: 500 },
+    source: "recommended",
+    samplersDirty: false,
   },
   analyzer: {
     provider: "openrouter",
     model: "openai/gpt-4o-mini",
-    samplers: { temperature: 0.2, maxTokens: 1000 },
+    samplers: { temperature: 0.2, topP: 1, maxTokens: 800 },
+    source: "recommended",
+    samplersDirty: false,
   },
   summarizer: {
     provider: "openrouter",
     model: "openai/gpt-4o",
-    samplers: { temperature: 0.3, maxTokens: 1500 },
+    samplers: { temperature: 0.5, topP: 0.95, maxTokens: 1200 },
+    source: "recommended",
+    samplersDirty: false,
   },
   bootstrapper: {
     provider: "openrouter",
     model: "anthropic/claude-sonnet-4",
-    samplers: { temperature: 0.6, maxTokens: 4000 },
+    samplers: { temperature: 0.4, topP: 0.95, maxTokens: 3000 },
+    source: "recommended",
+    samplersDirty: false,
   },
+};
+
+/**
+ * User-facing role labels (low-level-plan-v2 §5). The internal id `bootstrapper` is shown as
+ * "Story AI" everywhere in the UI; the rest match their ids title-cased. Keep the internal enum
+ * unchanged so persisted role maps and the router need no migration.
+ */
+export const ROLE_LABELS: Record<Role, string> = {
+  narrator: "Narrator",
+  classifier: "Classifier",
+  analyzer: "Analyzer",
+  summarizer: "Summarizer",
+  bootstrapper: "Story AI",
 };

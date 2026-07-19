@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:#14100C;color:#EADCBE;font-family:"IBM Plex Sans",sans-serif;-webkit-font-smoothing:antialiased}
+  ::selection{background:rgba(217,166,72,.25)}
+  a{color:#D9A648;text-decoration:none}a:hover{color:#F2C56B}
+  ::-webkit-scrollbar{width:11px}::-webkit-scrollbar-thumb{background:#382E21;border-radius:6px;border:3px solid #14100C}
+  @keyframes mt-fade{from{opacity:0}to{opacity:1}}
+  @keyframes mt-rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+  @media (prefers-reduced-motion: reduce){*{animation-duration:.001s!important}}
+</style>
+</helmet>
+<div style="display:flex;height:100vh;width:100vw;overflow:hidden;background:#14100C">
+  <nav style="width:72px;flex:0 0 72px;background:#1B1611;border-right:1px solid #382E21;display:flex;flex-direction:column;align-items:center;padding:14px 0;gap:4px">
+    <div style="width:40px;height:40px;border-radius:9px;background:linear-gradient(145deg,#2C241B,#1B1611);border:1px solid rgba(216,170,90,.25);display:flex;align-items:center;justify-content:center;font-family:'Cormorant Garamond',serif;font-weight:700;font-size:24px;color:#D9A648;margin-bottom:14px">M</div>
+    <sc-for list="{{ railItems }}" as="it" hint-placeholder-count="5">
+      <a href="{{ it.href }}" title="{{ it.label }}" style="{{ it.style }}"><span style="{{ it.iconStyle }}">{{ it.glyph }}</span><span style="font-size:9px">{{ it.label }}</span></a>
+    </sc-for>
+    <div style="flex:1"></div>
+    <div style="width:52px;display:flex;flex-direction:column;align-items:center;gap:9px;padding-top:8px;border-top:1px solid #382E21">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:4px"><span style="width:9px;height:9px;border-radius:50%;background:#8FB573;box-shadow:0 0 8px #8FB573"></span><span style="font-size:8px;color:#6E5F49">Sonnet</span></div>
+      <div style="font-size:8px;color:#6E5F49;text-align:center;border:1px solid #382E21;border-radius:5px;padding:3px 4px;line-height:1.15">Trial<br>9d</div>
+    </div>
+  </nav>
+
+  <div style="flex:1;display:flex;flex-direction:column;min-width:0">
+
+    <!-- ============ LIBRARY VIEW ============ -->
+    <sc-if value="{{ isLibrary }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;flex-direction:column;height:100%;min-height:0">
+        <header style="flex:0 0 auto;padding:26px 40px 20px;display:flex;align-items:flex-end;justify-content:space-between;border-bottom:1px solid #382E21">
+          <div>
+            <div style="font-family:'Cormorant Garamond',serif;font-size:34px;font-weight:600;color:#EADCBE;line-height:1">Lorebooks</div>
+            <div style="font-size:13px;color:#A08D6C;margin-top:6px">Reusable sets of world facts. Attach a lorebook to any story; its entries are pulled in when their keywords appear in play.</div>
+          </div>
+          <button onClick="{{ createBook }}" style="background:#D9A648;color:#1B1611;border:0;border-radius:8px;padding:11px 18px;font-weight:600;font-size:14px;cursor:pointer">＋ New lorebook</button>
+        </header>
+
+        <div style="flex:1;overflow-y:auto;padding:26px 40px 60px">
+          <div style="max-width:1000px">
+            <sc-if value="{{ hasBooks }}" hint-placeholder-val="{{ true }}">
+              <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px">
+                <sc-for list="{{ books }}" as="b" hint-placeholder-count="4">
+                  <div style="background:linear-gradient(160deg,#231C15,#1B1611);border:1px solid #382E21;border-radius:12px;overflow:hidden;position:relative">
+                    <div style="{{ b.spineStyle }}"></div>
+                    <div onClick="{{ b.onOpen }}" style="padding:16px 17px 14px 21px;cursor:pointer">
+                      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
+                        <div style="font-family:'Cormorant Garamond',serif;font-size:21px;font-weight:600;color:#EADCBE;line-height:1.15">{{ b.name }}</div>
+                        <span style="{{ b.sourceStyle }}">{{ b.source }}</span>
+                      </div>
+                      <div style="display:flex;gap:14px;margin-top:10px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#74B8AE">
+                        <span>{{ b.count }} entries</span><span style="color:#6E5F49">·</span><span style="color:#A08D6C">{{ b.usedIn }}</span>
+                      </div>
+                    </div>
+                    <div style="display:flex;border-top:1px solid #2a241d">
+                      <button onClick="{{ b.onOpen }}" style="flex:1;background:transparent;border:0;border-right:1px solid #2a241d;color:#D6C9AB;font-size:12px;padding:9px;cursor:pointer">Open</button>
+                      <button onClick="{{ b.onDuplicate }}" title="Duplicate" style="flex:0 0 auto;background:transparent;border:0;border-right:1px solid #2a241d;color:#A08D6C;font-size:12px;padding:9px 13px;cursor:pointer">duplicate</button>
+                      <button onClick="{{ b.onRename }}" title="Rename" style="flex:0 0 auto;background:transparent;border:0;border-right:1px solid #2a241d;color:#A08D6C;font-size:12px;padding:9px 13px;cursor:pointer">rename</button>
+                      <button onClick="{{ b.onDelete }}" title="Delete" style="flex:0 0 auto;background:transparent;border:0;color:#6E5F49;font-size:13px;padding:9px 13px;cursor:pointer">🗑</button>
+                    </div>
+                  </div>
+                </sc-for>
+                <button onClick="{{ createBook }}" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:transparent;border:1px dashed #382E21;border-radius:12px;padding:30px;min-height:150px;color:#6E5F49;cursor:pointer"><span style="font-size:28px">＋</span><span style="font-size:13px">New lorebook</span></button>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ noBooks }}" hint-placeholder-val="{{ false }}">
+              <div style="text-align:center;margin-top:12vh;animation:mt-fade .3s ease">
+                <div style="font-size:44px;color:#382E21">❦</div>
+                <div style="font-family:'Cormorant Garamond',serif;font-size:24px;color:#EADCBE;margin-top:4px">No lorebooks yet</div>
+                <div style="font-size:14px;color:#A08D6C;margin-top:6px;max-width:440px;margin-left:auto;margin-right:auto;line-height:1.6">A lorebook keeps world facts — places, factions, terms — that the storyteller recalls on cue. Make one here, or import one with a character card.</div>
+                <button onClick="{{ createBook }}" style="margin-top:18px;background:#D9A648;color:#1B1611;border:0;border-radius:8px;padding:11px 20px;font-weight:600;font-size:14px;cursor:pointer">Create your first lorebook</button>
+              </div>
+            </sc-if>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- ============ ENTRY EDITOR VIEW ============ -->
+    <sc-if value="{{ isEntries }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;flex-direction:column;height:100%;min-height:0">
+        <header style="flex:0 0 auto;padding:20px 40px 18px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #382E21">
+          <div style="display:flex;align-items:center;gap:13px;min-width:0">
+            <button onClick="{{ backToLibrary }}" title="All lorebooks" style="background:transparent;border:0;color:#A08D6C;font-size:20px;cursor:pointer;flex:0 0 auto">←</button>
+            <div style="min-width:0">
+              <div style="display:flex;align-items:center;gap:11px"><div style="font-family:'Cormorant Garamond',serif;font-size:26px;font-weight:600;color:#EADCBE;line-height:1.1">{{ activeName }}</div><span style="{{ activeSourceStyle }}">{{ activeSource }}</span></div>
+              <div style="font-size:12px;color:#6E5F49;margin-top:2px">{{ activeUsedIn }} · entries pulled in on keyword</div>
+            </div>
+          </div>
+          <button onClick="{{ addEntry }}" style="background:#D9A648;color:#1B1611;border:0;border-radius:8px;padding:10px 16px;font-weight:600;font-size:13px;cursor:pointer">＋ New entry</button>
+        </header>
+
+        <div style="flex:1;display:flex;min-height:0">
+          <div style="flex:0 0 300px;border-right:1px solid #382E21;overflow-y:auto;background:#181410">
+            <div style="padding:14px 18px;display:flex;align-items:center;gap:8px;border-bottom:1px solid #382E21">
+              <span style="color:#6E5F49;font-size:13px">⌕</span><input placeholder="Search entries" style="flex:1;background:transparent;border:0;outline:none;color:#EADCBE;font-size:13px" />
+            </div>
+            <sc-for list="{{ entries }}" as="e" hint-placeholder-count="5">
+              <div onClick="{{ e.onSelect }}" style="{{ e.rowStyle }}">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+                  <span style="font-size:14px;color:#D6C9AB;font-weight:500">{{ e.title }}</span>
+                  <span style="display:flex;align-items:center;gap:6px;flex:0 0 auto"><span style="{{ e.priStyle }}">{{ e.priLabel }}</span><span style="{{ e.dotStyle }}"></span></span>
+                </div>
+                <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px"><sc-for list="{{ e.keys }}" as="k" hint-placeholder-count="2"><span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#74B8AE;background:rgba(116,184,174,.08);border-radius:3px;padding:1px 6px">{{ k }}</span></sc-for></div>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="flex:1;overflow-y:auto;padding:28px 34px 60px">
+            <div style="max-width:620px">
+              <div style="font-size:11px;font-family:'IBM Plex Mono',monospace;letter-spacing:.14em;color:#74B8AE;margin-bottom:14px">EDITING ENTRY</div>
+
+              <label style="display:block;font-size:12px;color:#A08D6C;margin-bottom:6px">Title</label>
+              <input value="{{ sel.title }}" style="width:100%;background:#1B1611;border:1px solid #382E21;border-radius:8px;padding:11px 13px;color:#EADCBE;font-family:'Cormorant Garamond',serif;font-size:20px;outline:none;margin-bottom:18px" />
+
+              <label style="display:block;font-size:12px;color:#A08D6C;margin-bottom:6px">Trigger keywords</label>
+              <div style="display:flex;flex-wrap:wrap;gap:7px;background:#1B1611;border:1px solid #382E21;border-radius:8px;padding:10px 12px;margin-bottom:6px">
+                <sc-for list="{{ sel.keys }}" as="k" hint-placeholder-count="3"><span style="display:flex;align-items:center;gap:6px;font-family:'IBM Plex Mono',monospace;font-size:12px;color:#74B8AE;background:rgba(116,184,174,.1);border:1px solid #4E827B;border-radius:5px;padding:3px 8px">{{ k }}<span style="color:#6E5F49;cursor:pointer">×</span></span></sc-for>
+                <input placeholder="add keyword…" style="flex:1;min-width:100px;background:transparent;border:0;outline:none;color:#EADCBE;font-family:'IBM Plex Mono',monospace;font-size:12px" />
+              </div>
+              <div style="font-size:11px;color:#6E5F49;margin-bottom:18px">When any keyword appears in recent play, this entry is quietly added to the storyteller’s context.</div>
+
+              <label style="display:block;font-size:12px;color:#A08D6C;margin-bottom:6px">Content</label>
+              <textarea onInput="{{ onContent }}" value="{{ sel.content }}" style="width:100%;height:150px;resize:vertical;background:#1B1611;border:1px solid #382E21;border-radius:8px;padding:13px 15px;color:#EADCBE;font-family:'Source Serif 4',serif;font-size:15px;line-height:1.65;outline:none;margin-bottom:6px"></textarea>
+              <div style="display:flex;justify-content:space-between;font-size:11px;color:#6E5F49;margin-bottom:22px"><span>Keep it under ~80 words so it doesn’t crowd the prompt.</span><span style="font-family:'IBM Plex Mono',monospace;{{ sel.countStyle }}">{{ sel.count }} words</span></div>
+
+              <!-- always-on + priority -->
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:#1B1611;border:1px solid #382E21;border-radius:9px;margin-bottom:12px">
+                <div><div style="font-size:13px;color:#D6C9AB">Always in context</div><div style="font-size:11px;color:#6E5F49">Inject every turn, regardless of keywords (use sparingly)</div></div>
+                <div onClick="{{ toggleAlways }}" style="{{ sel.toggleStyle }}"><span style="{{ sel.knobStyle }}"></span></div>
+              </div>
+              <div style="padding:14px 16px;background:#1B1611;border:1px solid #382E21;border-radius:9px;margin-bottom:22px">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:9px"><div><div style="font-size:13px;color:#D6C9AB">Priority</div><div style="font-size:11px;color:#6E5F49">When context is tight, higher-priority entries are kept first</div></div><span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#74B8AE">{{ sel.priName }}</span></div>
+                <div style="display:flex;gap:6px">
+                  <sc-for list="{{ sel.priOptions }}" as="p" hint-placeholder-count="3"><button onClick="{{ p.onClick }}" style="{{ p.style }}">{{ p.label }}</button></sc-for>
+                </div>
+              </div>
+
+              <div style="display:flex;justify-content:space-between;margin-top:4px">
+                <button style="font-size:12px;color:#C96F57;background:transparent;border:1px solid rgba(201,111,87,.3);border-radius:7px;padding:9px 14px;cursor:pointer">Delete entry</button>
+                <span style="font-size:11px;color:#8FB573;font-family:'IBM Plex Mono',monospace;align-self:center">✓ saved</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state={ view:'library', activeBook:0, selected:0, edits:{}, priEdits:{}, alwaysEdits:{} };
+
+  books(){return [
+    {name:'Embers of the Ashen Vale',source:'story',usedIn:'This story',accent:'#D9A648',entries:this.emberEntries()},
+    {name:'The Ember Choir codex',source:'user',usedIn:'Used in 2 stories',accent:'#74B8AE',entries:[]},
+    {name:'Tidewater Coast gazetteer',source:'card',usedIn:'Used in 1 story',accent:'#8FB573',entries:[]},
+    {name:'Common fantasy terms',source:'migrated',usedIn:'Not attached',accent:'#8A7A5c',entries:[]},
+  ];}
+  emberEntries(){return [
+    {title:'The Ember Choir',keys:['choir','censer','cold-fire','liturgy'],always:true,priority:2,content:'A monastic order that kept Cindermoor as a house of warmth. Their censers burn "cold-fire" — light without heat. Vows bind a priest to consecrate the dead. Brother Aldric is their last living voice in the Vale.'},
+    {title:'The Hollow Flame',keys:['cult','Voss','hollow flame'],always:false,priority:2,content:'A heresy that worships absence rather than fire. Led by Prior Voss. They believe the thing beneath the ossuary is a god of unmaking, and they are trying to wake it.'},
+    {title:'The grey lent',keys:['ash','ash-fall','grey lent'],always:false,priority:1,content:'The ceaseless ash-fall over the Vale. Not volcanic — the locals treat it as a season of penance. It buries roads and silences bells.'},
+    {title:'Cindermoor monastery',keys:['Cindermoor','ossuary','monastery'],always:false,priority:1,content:'A ruined mountain monastery above the Vale Road. Its ossuary holds centuries of Choir dead. The reliquary gate below the cloister has recently been forced.'},
+    {title:'Silver marks',keys:['coin','marks','silver'],always:false,priority:0,content:'The Vale’s currency. A day’s honest wage is one mark; a caravan crossing, thirty.'},
+  ];}
+  sourceMeta(s){return {
+    story:{label:'THIS STORY',color:'#D9A648'},
+    user:{label:'USER',color:'#74B8AE'},
+    card:{label:'FROM CARD',color:'#8FB573'},
+    migrated:{label:'MIGRATED',color:'#8A7A5c'},
+  }[s];}
+
+  renderVals(){
+    const s=this.state, self=this;
+    const railItems=[
+      {label:'Library',glyph:'❏',href:'Library.dc.html',active:false},
+      {label:'Story',glyph:'✎',href:'Play.dc.html',active:false},
+      {label:'Personas',glyph:'☙',href:'Personas.dc.html',active:false},
+      {label:'Lore',glyph:'❦',href:'Lorebook.dc.html',active:true},
+      {label:'Settings',glyph:'⚙',href:'Settings.dc.html',active:false},
+    ].map(it=>({...it,style:`display:flex;flex-direction:column;align-items:center;gap:3px;width:56px;padding:8px 0;border-radius:8px;color:${it.active?'#EADCBE':'#6E5F49'};background:${it.active?'#2C241B':'transparent'};border:1px solid ${it.active?'rgba(216,170,90,.2)':'transparent'}`,iconStyle:`font-size:18px;color:${it.active?'#D9A648':'#8A7A5c'}`}));
+
+    const allBooks=this.books();
+    const books=allBooks.map((b,i)=>{
+      const m=self.sourceMeta(b.source);
+      return {...b, count:b.entries.length, source:m.label,
+        spineStyle:`position:absolute;left:0;top:0;bottom:0;width:5px;background:${b.accent}`,
+        sourceStyle:`flex:0 0 auto;font-size:9px;font-family:'IBM Plex Mono',monospace;color:${m.color};border:1px solid ${m.color}66;border-radius:4px;padding:2px 6px`,
+        onOpen:()=>self.setState({view:'entries',activeBook:i,selected:0}),
+        onDuplicate:()=>{}, onRename:()=>{}, onDelete:()=>{}};
+    });
+
+    // active book entry editor
+    const book=allBooks[s.activeBook]||allBooks[0];
+    const bm=self.sourceMeta(book.source);
+    const data=book.entries.length?book.entries:self.emberEntries();
+    const priNames=['Low','Normal','High'];
+    const raw=data[s.selected]||data[0];
+    const ck=s.activeBook+':'+s.selected;
+    const contentVal = s.edits[ck]!=null ? s.edits[ck] : raw.content;
+    const priVal = s.priEdits[ck]!=null ? s.priEdits[ck] : raw.priority;
+    const alwaysVal = s.alwaysEdits[ck]!=null ? s.alwaysEdits[ck] : raw.always;
+    const wc = contentVal.trim()?contentVal.trim().split(/\s+/).length:0;
+    const priColors=['#6E5F49','#74B8AE','#F5CE6E'];
+
+    const entries=data.map((e,i)=>{
+      const eck=s.activeBook+':'+i;
+      const ePri = s.priEdits[eck]!=null ? s.priEdits[eck] : e.priority;
+      const eAlways = s.alwaysEdits[eck]!=null ? s.alwaysEdits[eck] : e.always;
+      return {...e, onSelect:()=>self.setState({selected:i}),
+        rowStyle:`padding:13px 18px;cursor:pointer;border-bottom:1px solid #2a241d;border-left:2px solid ${i===s.selected?'#D9A648':'transparent'};background:${i===s.selected?'#231C15':'transparent'}`,
+        priLabel:priNames[ePri], priStyle:`font-size:9px;font-family:'IBM Plex Mono',monospace;color:${priColors[ePri]}`,
+        dotStyle:eAlways?'width:7px;height:7px;border-radius:50%;background:#D9A648;box-shadow:0 0 6px #D9A648':'display:none'};
+    });
+
+    return { railItems,
+      isLibrary: s.view==='library', isEntries: s.view==='entries',
+      hasBooks: allBooks.length>0, noBooks: allBooks.length===0,
+      books, createBook:()=>self.setState({view:'entries',activeBook:0,selected:0}),
+      backToLibrary:()=>self.setState({view:'library'}),
+      activeName:book.name, activeSource:bm.label, activeUsedIn:book.usedIn,
+      activeSourceStyle:`font-size:9px;font-family:'IBM Plex Mono',monospace;color:${bm.color};border:1px solid ${bm.color}66;border-radius:4px;padding:2px 6px`,
+      addEntry:()=>self.setState({selected:0}),
+      entries,
+      onContent:(e)=>{ const v=e.target.value; self.setState(st=>({edits:{...st.edits,[st.activeBook+':'+st.selected]:v}})); },
+      toggleAlways:()=>self.setState(st=>({alwaysEdits:{...st.alwaysEdits,[ck]:!alwaysVal}})),
+      sel:{ title:raw.title, keys:raw.keys, content:contentVal, count:wc,
+        countStyle:wc>80?'color:#C96F57':'color:#6E5F49',
+        toggleStyle:`width:40px;height:22px;border-radius:12px;padding:2px;cursor:pointer;background:${alwaysVal?'#D9A648':'#382E21'};display:flex;justify-content:${alwaysVal?'flex-end':'flex-start'}`,
+        knobStyle:`width:18px;height:18px;border-radius:50%;background:${alwaysVal?'#1B1611':'#6E5F49'};display:block`,
+        priName:priNames[priVal],
+        priOptions:priNames.map((label,i)=>({label,onClick:()=>self.setState(st=>({priEdits:{...st.priEdits,[ck]:i}})),
+          style:`flex:1;font-size:12px;padding:7px;border-radius:6px;cursor:pointer;${priVal===i?'color:#74B8AE;background:rgba(116,184,174,.12);border:1px solid #4E827B':'color:#A08D6C;background:#231C15;border:1px solid #382E21'}`})),
+      } };
+  }
+}
+</script>
+</body>
+</html>

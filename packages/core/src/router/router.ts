@@ -11,9 +11,32 @@
  * structured-call layer and tests — can inject canned config without a live database.
  */
 import { z } from "zod";
-import type { ChatMessage, ChatResponse, FetchLike, ProviderConfig, StreamHandler } from "./providers/types.js";
+import type { ChatMessage, ChatRequest, ChatResponse, FetchLike, ProviderConfig, StreamHandler } from "./providers/types.js";
 import { makeProvider, PROVIDER_IDS, type ProviderId } from "./providers/registry.js";
 import { DEFAULT_ROLE_MAP, ProviderIdSchema, type Role, type RoleBinding, type RoleMap } from "./roles.js";
+import { providerSupportsSampler } from "./samplers.js";
+
+/**
+ * Build the sampler slice of a chat request from a binding, dropping any field the binding's
+ * provider does not honor (v2 §8). Keeps `undefined` out of the request so `buildBody` omits it.
+ */
+function samplerRequestFields(binding: RoleBinding): Partial<ChatRequest> {
+  const s = binding.samplers;
+  if (!s) return {};
+  const p = binding.provider;
+  const out: Partial<ChatRequest> = {};
+  if (s.temperature !== undefined && providerSupportsSampler(p, "temperature")) out.temperature = s.temperature;
+  if (s.topP !== undefined && providerSupportsSampler(p, "topP")) out.topP = s.topP;
+  if (s.topK !== undefined && providerSupportsSampler(p, "topK")) out.topK = s.topK;
+  if (s.minP !== undefined && providerSupportsSampler(p, "minP")) out.minP = s.minP;
+  if (s.frequencyPenalty !== undefined && providerSupportsSampler(p, "frequencyPenalty")) out.frequencyPenalty = s.frequencyPenalty;
+  if (s.presencePenalty !== undefined && providerSupportsSampler(p, "presencePenalty")) out.presencePenalty = s.presencePenalty;
+  if (s.repetitionPenalty !== undefined && providerSupportsSampler(p, "repetitionPenalty")) out.repetitionPenalty = s.repetitionPenalty;
+  if (s.maxTokens !== undefined && providerSupportsSampler(p, "maxTokens")) out.maxTokens = s.maxTokens;
+  if (s.seed !== undefined && providerSupportsSampler(p, "seed")) out.seed = s.seed;
+  if (s.stop && s.stop.length > 0 && providerSupportsSampler(p, "stop")) out.stop = s.stop;
+  return out;
+}
 
 /** Per-provider stored credentials, keyed by provider id. Persisted in settings. */
 export const ProviderConfigSchema = z.object({
@@ -100,9 +123,7 @@ export function makeRouter(deps: RouterDeps): Router {
         {
           model: binding.model,
           messages: toMessages(prompt),
-          temperature: binding.samplers?.temperature,
-          topP: binding.samplers?.topP,
-          maxTokens: binding.samplers?.maxTokens,
+          ...samplerRequestFields(binding),
           jsonMode: opts?.jsonMode ?? false,
           signal: opts?.signal,
         },
@@ -117,9 +138,7 @@ export function makeRouter(deps: RouterDeps): Router {
         {
           model: binding.model,
           messages: toMessages(prompt),
-          temperature: binding.samplers?.temperature,
-          topP: binding.samplers?.topP,
-          maxTokens: binding.samplers?.maxTokens,
+          ...samplerRequestFields(binding),
           signal: opts?.signal,
         },
         config,
