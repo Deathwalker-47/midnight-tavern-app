@@ -76,7 +76,12 @@ import type {
   LorebookEntry,
   MappedCard,
   CharacterCard,
+  Store,
 } from "@midnight-tavern/core";
+
+// Value import: the Tauri storage driver. Browser-safe — it only pulls `@tauri-apps/api/core`
+// (inert until `invoke` is called) and type-only core symbols, so it does NOT load core's runtime.
+import { makeSqliteDriver } from "./sqliteDriver.js";
 
 // ── Bridge-local contract types (the shared vocabulary screens/stores speak) ──────────────────
 
@@ -225,9 +230,10 @@ export interface CoreBridge {
 // SQLite sidecar exists. It does NOT import core at runtime.
 // ─────────────────────────────────────────────────────────────────────────────────────────────
 
-// TODO(shell): these three constants MIRROR core's `DEFAULT_ROLE_MAP`, `KNOWN_MODELS`, and
-// `PROVIDER_IDS`. The real (SQLite) backend reads the canonical values straight from core; the
-// browser stub can't value-import them (native module), so it carries a synced copy. Keep in step.
+// NOTE: these three constants MIRROR core's `DEFAULT_ROLE_MAP`, `KNOWN_MODELS`, and `PROVIDER_IDS`.
+// The real (SQLite) backend reads the canonical values straight from core (see sqliteBridge.ts);
+// this browser stub can't value-import them (would pull core's native graph), so it carries a
+// synced copy. Keep in step with core/src/router/roles.ts when those defaults change.
 const MEMORY_PROVIDER_IDS = ["openrouter", "openai", "anthropic"] as const;
 
 const MEMORY_DEFAULT_ROLE_MAP: RoleMap = {
@@ -579,32 +585,38 @@ function structuredCloneSafe<T>(value: T): T {
 // ─────────────────────────────────────────────────────────────────────────────────────────────
 
 /**
- * TODO(shell): real SQLite comes from the Tauri sidecar; browser dev uses an in-memory stub.
+ * Open the real SQLite-backed store for the packaged app.
  *
- * Load the real backend. This dynamically imports core (so it's inert until called on a host that
- * actually has the native module — the Tauri sidecar / node), opens the store, and builds a
- * `CoreBridge` whose methods delegate to core:
+ * Storage runs through the Tauri storage driver ({@link makeSqliteDriver}): core's async `SqlDriver`
+ * seam over the shell's Rust SQLite commands (packages/shell/src-tauri/src/db.rs). `openStoreWith`
+ * runs migrations and returns the migrated {@link Store}. This must only be called inside the Tauri
+ * shell, where `invoke` reaches those commands; in browser dev the in-memory backend is used instead.
  *
- *   const core = await import("@midnight-tavern/core");
- *   const store = core.openStore(path);                              // owns the singleton Store
- *   const router = core.makeRouter({                                 // built from stored configs
- *     providerConfigs: store.settings.get(core.PROVIDER_CONFIGS_SETTING_KEY, core.ProviderConfigsSchema) ?? {},
- *     roleMap: store.settings.get(core.ROLE_MAP_SETTING_KEY, core.RoleMapSchema) ?? core.DEFAULT_ROLE_MAP,
- *   });
- *   // stories → store.stories.*        · submitTurn → core.submitTurn(router, store, …)
- *   // createStory → core.bootstrapStory(router, store, …)
- *   // licensing → core.evaluateCachedLicense / validateLicenseKey / resolveEntitlement / peekTrial
- *   // living card → core.getLivingCard(store, schema, characterId)
- *   // importer → core.parsePngCard/parseJsonCard/importCardFromUrl + core.mapCardToImport
+ * Note: this replaced the originally-envisioned better-sqlite3 sidecar (rejected in the shell's
+ * Cargo.toml, D10). core is no longer synchronous — the store API is fully async.
+ */
+export async function openSqliteStore(): Promise<Store> {
+  const { openStoreWith } = await import("@midnight-tavern/core");
+  return openStoreWith(makeSqliteDriver());
+}
+
+/**
+ * Load the SQLite `CoreBridge`: the packaged app's real backend. Opens the migrated store over the
+ * Tauri storage driver, then builds the façade (see sqliteBridge.ts) whose methods delegate to core
+ * (stories → store.stories.*, submitTurn → core.submitTurn, createStory → core.bootstrapStory,
+ * licensing → core.evaluateCachedLicense/validateLicenseKey/…, living card → core.getLivingCard,
+ * importer → core.parse*Card/importCardFromUrl + mapCardToImport).
  *
- * Kept as an explicit throw until the sidecar exists so a mis-selected backend fails loudly rather
- * than silently loading a native module the browser can't provide.
+ * The single dynamic `import("@midnight-tavern/core")` lives here — core's runtime is loaded once
+ * and its namespace handed to `buildSqliteBridge`, so this whole graph stays out of the browser
+ * bundle (it's only ever reached inside the Tauri shell). `_path` is accepted for signature parity
+ * with the memory backend; the actual DB path is owned by the Rust side (app data dir).
  */
 export async function loadSqliteBridge(_path: string): Promise<CoreBridge> {
-  throw new Error(
-    "The SQLite backend is not available in this environment. " +
-      "TODO(shell): real SQLite comes from the Tauri sidecar; browser dev uses the in-memory stub."
-  );
+  const core = await import("@midnight-tavern/core");
+  const store = await core.openStoreWith(makeSqliteDriver());
+  const { buildSqliteBridge } = await import("./sqliteBridge.js");
+  return buildSqliteBridge(store, core);
 }
 
 // ── Singleton wiring ──────────────────────────────────────────────────────────────────────────
