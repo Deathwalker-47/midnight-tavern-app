@@ -11,6 +11,7 @@
  */
 import { z } from "zod";
 import { StorySchemaSchema } from "./schema.js";
+import { BlueprintSchema } from "./blueprint.js";
 
 /** A message's author role in the transcript. */
 export const MessageRoleSchema = z.enum(["player", "narrator", "system"]);
@@ -26,6 +27,11 @@ export const StoryRecordSchema = z.object({
   createdAt: z.number().int(), // epoch ms
   schema: StorySchemaSchema,
   locked: z.boolean(),
+  /**
+   * Author-facing Story Blueprint (low-level-plan-v2 §3): identity/style/premise. Optional — legacy
+   * and bootstrap-only stories omit it. Style-only; the mechanical `schema` above is the wall.
+   */
+  blueprint: BlueprintSchema.optional(),
 });
 export type StoryRecord = z.infer<typeof StoryRecordSchema>;
 
@@ -40,6 +46,13 @@ export const MessageRecordSchema = z.object({
   role: MessageRoleSchema,
   content: z.string(),
   createdAt: z.number().int(), // epoch ms
+  /**
+   * Narrator prose variants from swipe/regenerate (low-level-plan-v2 §6). Absent on player messages
+   * and on narrator messages never swiped. `content` always mirrors the active variant.
+   */
+  variants: z.array(z.string()).optional(),
+  /** Index into `variants` of the currently-shown prose (defaults to 0, the original). */
+  activeVariant: z.number().int().nonnegative().optional(),
 });
 export type MessageRecord = z.infer<typeof MessageRecordSchema>;
 
@@ -97,18 +110,48 @@ export const ArcRecordSchema = z.object({
 export type ArcRecord = z.infer<typeof ArcRecordSchema>;
 
 /**
- * A lorebook entry: keyword-triggered lore injected into context. `keys` are the
- * trigger phrases; `content` is the text injected when a key matches; `enabled`
- * toggles the entry without deleting it.
+ * A lorebook — a first-class, story-independent collection of lore entries (low-level-plan-v2 §2).
+ * Attached to zero or more stories via the `story_lorebooks` m2m link. `source` records provenance:
+ * "user" (authored in the app), "imported_card" (from a Chara Card's `character_book`), or
+ * "migrated" (legacy per-story lore, unused pre-release).
+ */
+export const LorebookSourceSchema = z.enum(["user", "imported_card", "migrated"]);
+export type LorebookSource = z.infer<typeof LorebookSourceSchema>;
+
+export const LorebookSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string(),
+  createdAt: z.number().int().nonnegative(),
+  source: LorebookSourceSchema,
+});
+export type Lorebook = z.infer<typeof LorebookSchema>;
+
+/**
+ * A lorebook entry: keyword-triggered lore injected into context. `keys` are the trigger phrases;
+ * `content` is injected when a key matches. `enabled` toggles the entry without deleting it;
+ * `alwaysOn` entries inject regardless of keyword match. `priority` then `insertionOrder` order
+ * entries under the token budget (§7.3). Belongs to a `lorebook`, not a story (v2 §2).
  */
 export const LorebookEntrySchema = z.object({
   id: z.string(),
-  storyId: z.string(),
+  lorebookId: z.string(),
   keys: z.array(z.string()),
   content: z.string(),
   enabled: z.boolean(),
+  alwaysOn: z.boolean(),
+  priority: z.number().int(),
+  insertionOrder: z.number().int(),
 });
 export type LorebookEntry = z.infer<typeof LorebookEntrySchema>;
+
+/** A story↔lorebook attachment. `enabled` is the link-level toggle (distinct from entry-level). */
+export const StoryLorebookLinkSchema = z.object({
+  storyId: z.string(),
+  lorebookId: z.string(),
+  enabled: z.boolean(),
+});
+export type StoryLorebookLink = z.infer<typeof StoryLorebookLinkSchema>;
 
 /** A user persona (an authored player identity), reusable across stories. */
 export const PersonaRecordSchema = z.object({

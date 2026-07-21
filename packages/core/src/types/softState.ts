@@ -46,6 +46,12 @@ export const SoftIdentitySchema = z.object({
   appearance: z.string().optional(),
   speechStyle: z.string().optional(),
   backstory: z.string().optional(),
+  /**
+   * A narrative disposition/outlook ("guardedly hopeful since the cloister"). Authoring/blueprint
+   * sourced like `backstory` — the analyzer has no set-path for it, so the wall is unaffected.
+   * Surfaced by the character dossier (low-level-plan-v2 §7).
+   */
+  outlook: z.string().optional(),
 });
 export type SoftIdentity = z.infer<typeof SoftIdentitySchema>;
 

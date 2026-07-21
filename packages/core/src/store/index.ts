@@ -19,6 +19,7 @@ import { makeArcRepo, type ArcRepo } from "./repositories/arcs.js";
 import { makeWorldSoftRepo, type WorldSoftRepo } from "./repositories/worldSoft.js";
 import { makeLorebookRepo, type LorebookRepo } from "./repositories/lorebook.js";
 import { makePersonaRepo, type PersonaRepo } from "./repositories/personas.js";
+import { makeCheckpointRepo, type CheckpointRepo } from "./repositories/checkpoints.js";
 import { makeSettingsRepo, type SettingsRepo } from "./repositories/settings.js";
 
 export { openDb, openDbWith, type Db, type SqlDriver, type SqlParam, type RunResult } from "./db.js";
@@ -29,8 +30,9 @@ export type { RulingRepo, RulingRecord } from "./repositories/rulings.js";
 export type { ChapterRepo } from "./repositories/chapters.js";
 export type { ArcRepo } from "./repositories/arcs.js";
 export type { WorldSoftRepo } from "./repositories/worldSoft.js";
-export type { LorebookRepo } from "./repositories/lorebook.js";
+export type { LorebookRepo, AttachedLorebook } from "./repositories/lorebook.js";
 export type { PersonaRepo } from "./repositories/personas.js";
+export type { CheckpointRepo, CheckpointRecord } from "./repositories/checkpoints.js";
 export type { SettingsRepo } from "./repositories/settings.js";
 
 /** The full persistence surface: one migrated DB plus a typed repository per table. */
@@ -45,6 +47,7 @@ export interface Store {
   readonly worldSoft: WorldSoftRepo;
   readonly lorebook: LorebookRepo;
   readonly personas: PersonaRepo;
+  readonly checkpoints: CheckpointRepo;
   readonly settings: SettingsRepo;
   /** Run `fn` across repositories atomically (commit on return, roll back on throw). */
   transaction<T>(fn: () => Promise<T>): Promise<T>;
@@ -64,6 +67,7 @@ function makeStore(db: Db): Store {
     worldSoft: makeWorldSoftRepo(db),
     lorebook: makeLorebookRepo(db),
     personas: makePersonaRepo(db),
+    checkpoints: makeCheckpointRepo(db),
     settings: makeSettingsRepo(db),
     transaction: (fn) => db.transaction(fn),
     close: () => db.close(),

@@ -176,6 +176,92 @@ CREATE TABLE settings (
 );
 `,
   },
+  {
+    version: 2,
+    name: "story_blueprint",
+    // Story Blueprint (low-level-plan-v2 §3): the author-facing identity/style/premise fields.
+    // Nullable — legacy stories and bootstrap-only stories have no blueprint. Style-only; NEVER
+    // carries mechanics (the schema_json wall is untouched). Validated in the stories repository.
+    sql: `
+ALTER TABLE stories ADD COLUMN blueprint_json TEXT;
+`,
+  },
+  {
+    version: 3,
+    name: "global_lorebooks",
+    // Global lorebooks (low-level-plan-v2 §2): lorebooks become first-class, story-independent
+    // entities with a many-to-many link to stories, replacing the v1 per-story `lorebook` table.
+    // DECISION (locked): fresh schema, NO data-copy — no shipped DBs exist pre-release, so we drop
+    // the old table and create the new ones cleanly. `enabled` lives at BOTH the link level
+    // (story_lorebooks.enabled) and the entry level (lorebook_entries.enabled); context assembly
+    // requires both. `always_on` entries inject regardless of keyword match.
+    sql: `
+DROP TABLE IF EXISTS lorebook;
+
+CREATE TABLE lorebooks (
+  id          TEXT PRIMARY KEY,
+  name        TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  created_at  INTEGER NOT NULL,
+  source      TEXT NOT NULL              -- "user" | "imported_card" | "migrated"
+);
+
+CREATE TABLE lorebook_entries (
+  id              TEXT PRIMARY KEY,
+  lorebook_id     TEXT NOT NULL REFERENCES lorebooks(id) ON DELETE CASCADE,
+  keys            TEXT NOT NULL,          -- JSON string[]
+  content         TEXT NOT NULL,
+  enabled         INTEGER NOT NULL,
+  always_on       INTEGER NOT NULL,
+  priority        INTEGER NOT NULL,
+  insertion_order INTEGER NOT NULL
+);
+CREATE INDEX idx_lorebook_entries_book ON lorebook_entries(lorebook_id);
+
+CREATE TABLE story_lorebooks (
+  story_id    TEXT NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
+  lorebook_id TEXT NOT NULL REFERENCES lorebooks(id) ON DELETE CASCADE,
+  enabled     INTEGER NOT NULL,
+  PRIMARY KEY (story_id, lorebook_id)
+);
+CREATE INDEX idx_story_lorebooks_story ON story_lorebooks(story_id);
+`,
+  },
+  {
+    version: 4,
+    name: "story_persona",
+    // Per-story active persona (low-level-plan-v2 §4). Personas are already global; this adds an
+    // optional per-story selection. NULL ⇒ fall back to the global default persona.
+    sql: `
+ALTER TABLE stories ADD COLUMN active_persona_id TEXT;
+`,
+  },
+  {
+    version: 5,
+    name: "checkpoints",
+    // Swipe / delete / rewind support (low-level-plan-v2 §6). turn_checkpoints stores the pre-image
+    // of ALL characters' hard + soft state and world soft BEFORE a turn's commits — because soft
+    // state is model-derived and cannot be replayed, we snapshot rather than invert deltas. Written
+    // at commit time inside the same per-turn transaction. messages gains a variants array (narrator
+    // prose regenerations) and the active variant index; active_variant defaults to 0 (the original).
+    sql: `
+CREATE TABLE turn_checkpoints (
+  id             TEXT PRIMARY KEY,
+  story_id       TEXT NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
+  message_id     TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+  turn_index     INTEGER NOT NULL,
+  hard_pre_json  TEXT NOT NULL,
+  soft_pre_json  TEXT NOT NULL,
+  world_pre_json TEXT,
+  created_at     INTEGER NOT NULL
+);
+CREATE INDEX idx_turn_checkpoints_story ON turn_checkpoints(story_id, turn_index);
+CREATE INDEX idx_turn_checkpoints_message ON turn_checkpoints(message_id);
+
+ALTER TABLE messages ADD COLUMN variants_json TEXT;
+ALTER TABLE messages ADD COLUMN active_variant INTEGER NOT NULL DEFAULT 0;
+`,
+  },
 ];
 
 /**
