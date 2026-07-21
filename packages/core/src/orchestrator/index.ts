@@ -14,9 +14,26 @@ export {
   assembleContext,
   renderRuling,
   approxTokens,
+  buildNarratorSystem,
+  NARRATOR_PREAMBLE,
+  AUTHORITY_CLAUSE,
   NARRATOR_SYSTEM,
   DEFAULT_CONTEXT_BUDGET,
   LOREBOOK_BUDGET,
   type AssembleContextArgs,
   type AssembledContext,
 } from "./context.js";
+export {
+  swipeLastTurn,
+  selectVariant,
+  deleteLastTurn,
+  rewindTo,
+  type SwipeOptions,
+  type SwipeResult,
+} from "./history.js";
+export {
+  capture,
+  restore,
+  decodeSnapshot,
+  type CheckpointSnapshot,
+} from "./checkpoint.js";

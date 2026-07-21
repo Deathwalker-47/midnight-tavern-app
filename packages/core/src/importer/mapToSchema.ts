@@ -14,7 +14,7 @@
  * and free of side effects.
  */
 import type { CharacterCard } from "./cardTypes.js";
-import type { SoftIdentity } from "../types/index.js";
+import type { SoftIdentity, Blueprint } from "../types/index.js";
 
 /** A lorebook row awaiting a story id + row id (the persistence-free part of LorebookEntry). */
 export interface LorebookSeed {
@@ -35,6 +35,12 @@ export interface MappedCard {
   openings: string[];
   /** Lorebook rows to persist for the story. */
   lorebook: LorebookSeed[];
+  /**
+   * Author-facing Story Blueprint (§3), mapped from the card's narrative/style fields. Persisted
+   * on the story so the blueprint editor and narrator style slots are populated from the import.
+   * Style-only — the card's `system_prompt` lands in `systemPrompt`, never in mechanics.
+   */
+  blueprint: Blueprint;
 }
 
 /** Split a personality blob into discrete traits (comma/newline separated, deduped). */
@@ -61,6 +67,33 @@ function buildPremise(card: CharacterCard): string {
   if (d.personality) parts.push(`Personality: ${d.personality}`);
   if (d.scenario) parts.push(`Scenario: ${d.scenario}`);
   return parts.join("\n\n");
+}
+
+/**
+ * Map the card's narrative/style fields to an internal Blueprint (§3). Only style/identity/premise
+ * fields cross over — `system_prompt` becomes the user style directive, `mes_example` the few-shot
+ * voice block. Nothing here can carry mechanics. Empty strings are dropped so the blueprint stays
+ * sparse (every field optional).
+ */
+function buildBlueprint(card: CharacterCard): Blueprint {
+  const d = card.data;
+  const bp: Blueprint = {};
+  const set = (v: string | undefined, k: keyof Blueprint) => {
+    const t = v?.trim();
+    if (t) (bp as Record<string, unknown>)[k] = t;
+  };
+  set(d.name, "name");
+  set(d.description, "description");
+  set(d.personality, "personality");
+  set(d.scenario, "scenario");
+  set(d.first_mes, "firstMessage");
+  set(d.mes_example, "exampleDialogue");
+  set(d.system_prompt, "systemPrompt");
+  set(d.creator_notes, "creatorNotes");
+  const greetings = d.alternate_greetings.map((s) => s.trim()).filter(Boolean);
+  if (greetings.length) bp.alternateGreetings = greetings;
+  if (d.tags.length) bp.tags = d.tags;
+  return bp;
 }
 
 /**
@@ -96,5 +129,6 @@ export function mapCardToImport(card: CharacterCard): MappedCard {
     identity,
     openings,
     lorebook,
+    blueprint: buildBlueprint(card),
   };
 }

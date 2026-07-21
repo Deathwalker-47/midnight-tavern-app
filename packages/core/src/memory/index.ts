@@ -22,3 +22,10 @@ export {
   type InventoryLine,
   type SkillLine,
 } from "./cardView.js";
+export {
+  getCharacterDossier,
+  type Dossier,
+  type DossierOutgoingEdge,
+  type DossierIncomingEdge,
+  type DossierSkill,
+} from "./dossier.js";

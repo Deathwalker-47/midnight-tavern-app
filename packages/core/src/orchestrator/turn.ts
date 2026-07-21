@@ -26,7 +26,9 @@ import { cryptoRng, type Rng } from "../engine/dice.js";
 import { runAnalyzer } from "../memory/index.js";
 import { maybeSummarizeChapter, maybeSummarizeArc } from "../summarizer/index.js";
 import { instantiateFromTemplate, instantiateGeneric } from "../bootstrap/instantiate.js";
+import { blueprintToStyleInputs } from "../types/index.js";
 import { assembleContext } from "./context.js";
+import { capture } from "./checkpoint.js";
 import type {
   CharacterHardState,
   MechanicalIntent,
@@ -58,10 +60,10 @@ export interface SubmitTurnResult {
   background: Promise<void>;
 }
 
-/** Fetch the story or throw — every turn needs its frozen schema. */
-async function requireStory(store: Store, storyId: string): Promise<StoryRecord> {
+/** Fetch the story or throw — every turn needs its frozen schema. Shared with history ops (§6). */
+export async function requireStory(store: Store, storyId: string): Promise<StoryRecord> {
   const story = await store.stories.get(storyId);
-  if (!story) throw new Error(`submitTurn: unknown story ${storyId}`);
+  if (!story) throw new Error(`requireStory: unknown story ${storyId}`);
   return story;
 }
 
@@ -190,13 +192,17 @@ export async function submitTurn(
   }
 
   // 4. Assemble the narrator context with the rulings inline as authoritative facts (§7.3).
+  //    Blueprint style inputs (§3) are composed into the system frame ABOVE the authority clause;
+  //    they are style-only and can never displace it.
   const presentIds = presentCharacters.map((c) => c.id);
+  const styleInputs = blueprintToStyleInputs(story.blueprint);
   const context = await assembleContext(store, {
     storyId,
     schema,
     rulings,
     presentIds,
     playerText,
+    styleInputs,
     ...(opts.personaBlock ? { personaBlock: opts.personaBlock } : {}),
   });
 
@@ -213,6 +219,11 @@ export async function submitTurn(
   const narratorIdx = playerIdx + 1;
   const narratorMsgId = randomUUID();
   await store.transaction(async () => {
+    // Snapshot the pre-turn state BEFORE any hard-state write, so swipe/delete/rewind can roll
+    // back to exactly what existed before this turn (low-level-plan-v2 §6). Bound to this turn's
+    // narrator message.
+    const checkpoint = await capture(store, storyId, narratorMsgId, narratorIdx);
+
     await store.messages.insert({
       id: narratorMsgId,
       storyId,
@@ -220,7 +231,10 @@ export async function submitTurn(
       role: "narrator",
       content: prose,
       createdAt: Date.now(),
+      variants: [prose],
+      activeVariant: 0,
     });
+    await store.checkpoints.insert(checkpoint);
 
     if (staged.length > 0) {
       // Commit mutates hard state in a map; write each touched character back.

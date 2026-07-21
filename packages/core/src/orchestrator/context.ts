@@ -13,19 +13,70 @@
  */
 import { z } from "zod";
 import type { Store, CharacterRecord } from "../store/index.js";
-import type { Ruling, StorySchema, ActionDef, Outcome } from "../types/index.js";
+import type { Ruling, StorySchema, ActionDef, Outcome, NarratorStyleInputs } from "../types/index.js";
+import { renderStyleSettings } from "../types/index.js";
 import { buildMemoryBlock } from "../summarizer/index.js";
 
-/** Narrator system frame — instructions + the verbatim authority clause (§8.1). */
-export const NARRATOR_SYSTEM = [
+/**
+ * Framework narrator instructions (§8, first block of the system frame). Style directives from a
+ * user's blueprint are composed AFTER this and BEFORE the authority clause — never replacing it.
+ */
+export const NARRATOR_PREAMBLE = [
   "You are the narrator of an interactive story. Write the next beat in the story's voice;",
   "you may voice multiple NPCs. Advance the scene from the player's action and the decided",
   "mechanical outcomes.",
-  "",
+].join("\n");
+
+/**
+ * The framework's mechanical-authority clause (verbatim, §8.1). Framework-owned, never editable,
+ * and always composed LAST in the system frame so it wins over any user-authored prompt text.
+ * This is the load-bearing guardrail behind the integrity USP (low-level-plan-v2 §3).
+ */
+export const AUTHORITY_CLAUSE = [
   "AUTHORITY: Mechanical outcomes below are already decided and final. You must narrate them",
   "exactly as stated. You may not grant items, skills, or successes beyond them. Anything you",
   "invent has no mechanical effect.",
 ].join("\n");
+
+/**
+ * Compose the narrator system frame in the fixed order the plan mandates (§3):
+ *   1. framework preamble
+ *   2. user systemPrompt / narratorStyleDirective   ← style only
+ *   3. story style settings (POV/tense/length) + speech-style hint
+ *   4. exampleDialogue few-shot
+ *   5. user postHistoryInstructions                 ← style only
+ *   6. FRAMEWORK AUTHORITY CLAUSE                    ← always present, always LAST
+ * Every user-supplied slot is optional; the preamble and authority clause are always present,
+ * and the authority clause is guaranteed to be the final block regardless of blueprint contents.
+ */
+export function buildNarratorSystem(style: NarratorStyleInputs = {}): string {
+  const blocks: string[] = [NARRATOR_PREAMBLE];
+
+  if (style.narratorStyleDirective) {
+    blocks.push(`Author's style directive (voice and tone only):\n${style.narratorStyleDirective}`);
+  }
+  const styleHint = [renderStyleSettings(style.styleSettings), style.speechStyle]
+    .filter((s): s is string => Boolean(s && s.trim()))
+    .join("; ");
+  if (styleHint) blocks.push(`Style: ${styleHint}.`);
+  if (style.exampleDialogue) {
+    blocks.push(`Example of the intended voice (style reference, not canon):\n${style.exampleDialogue}`);
+  }
+  if (style.postHistoryInstructions) {
+    blocks.push(`Author's reminder (voice and tone only):\n${style.postHistoryInstructions}`);
+  }
+
+  // The authority clause is always the final block — user text can never displace it.
+  blocks.push(AUTHORITY_CLAUSE);
+  return blocks.join("\n\n");
+}
+
+/**
+ * Back-compat default frame with no blueprint style inputs — the plain framework preamble +
+ * authority clause. Equivalent to `buildNarratorSystem()`. Retained so existing callers and tests
+ * that reference a static system string keep working.
+ */
+export const NARRATOR_SYSTEM = buildNarratorSystem();
 
 /** Default context budget in tokens (setting `contextBudget`). */
 export const DEFAULT_CONTEXT_BUDGET = 8192;
@@ -116,7 +167,14 @@ function renderHardSnapshot(record: CharacterRecord, schema: StorySchema): strin
   return bits.join(" | ");
 }
 
-/** Triggered lorebook entries: keyword match against recent text, newest-first, ≤ budget. */
+/**
+ * Triggered lorebook entries (low-level-plan-v2 §2 & §7.3). Draws from every lorebook attached
+ * AND link-enabled for the story (`listActiveEntries` already filters entry-level `enabled`), then:
+ *   • `alwaysOn` entries inject unconditionally;
+ *   • the rest inject only when a key matches the recent-text haystack.
+ * The repo returns entries pre-sorted by priority (desc) then insertion order, so we fill the token
+ * budget in that order and stop at the cap.
+ */
 async function triggeredLorebook(
   store: Store,
   storyId: string,
@@ -124,15 +182,15 @@ async function triggeredLorebook(
   tokenBudget: number
 ): Promise<string[]> {
   const hay = haystack.toLowerCase();
-  const enabled = await store.lorebook.listEnabled(storyId);
-  const entries = enabled.filter((e) =>
-    e.keys.some((k) => k.trim() && hay.includes(k.toLowerCase()))
+  const active = await store.lorebook.listActiveEntries(storyId);
+  const entries = active.filter(
+    (e) => e.alwaysOn || e.keys.some((k) => k.trim() && hay.includes(k.toLowerCase()))
   );
 
   const out: string[] = [];
   let used = 0;
-  // listEnabled returns insertion order; most-recent-first per §7.3.
-  for (const e of [...entries].reverse()) {
+  // Already ordered by priority then insertion order; honor that under the budget.
+  for (const e of entries) {
     const line = `${e.keys[0] ?? "lore"}: ${e.content}`;
     const cost = approxTokens(line);
     if (used + cost > tokenBudget) continue;
@@ -150,6 +208,11 @@ export interface AssembleContextArgs {
   playerText: string;
   /** Player persona + protagonist essentials (block 4), pre-rendered by the caller. */
   personaBlock?: string;
+  /**
+   * Blueprint-derived, style-only narrator inputs (§3). Composed into the system frame ABOVE the
+   * authority clause. Absent ⇒ the plain framework frame. Never carries mechanics.
+   */
+  styleInputs?: NarratorStyleInputs;
 }
 
 export interface AssembledContext {
@@ -171,6 +234,8 @@ export async function assembleContext(
   args: AssembleContextArgs
 ): Promise<AssembledContext> {
   const { storyId, schema, rulings, presentIds, playerText } = args;
+  // Framework preamble + optional user style text + authority clause (always last). §3 guardrail.
+  const systemFrame = buildNarratorSystem(args.styleInputs ?? {});
   const budget =
     (await store.settings.get("contextBudget", z.number().int().positive())) ??
     DEFAULT_CONTEXT_BUDGET;
@@ -199,7 +264,7 @@ export async function assembleContext(
 
   // Assemble top-down, tracking budget. Blocks 1–3 always included.
   const sections: string[] = [];
-  let used = approxTokens(NARRATOR_SYSTEM);
+  let used = approxTokens(systemFrame);
   let trimmed = false;
 
   const pushAlways = (title: string, body: string) => {
@@ -258,7 +323,7 @@ export async function assembleContext(
   used += approxTokens(playerBlock);
 
   return {
-    system: NARRATOR_SYSTEM,
+    system: systemFrame,
     user: sections.join("\n\n"),
     approxTokens: used,
     trimmed,
