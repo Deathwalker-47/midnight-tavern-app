@@ -23,6 +23,8 @@
 export type {
   StoryRecord,
   StorySchema,
+  Blueprint,
+  StoryStyleSettings,
   MessageRecord,
   MessageRole,
   Ruling,
@@ -44,6 +46,8 @@ export type {
   ResourceBar,
   InventoryLine,
   SkillLine,
+  Dossier,
+  DossierSkill,
   Role,
   RoleMap,
   RoleBinding,
@@ -62,6 +66,7 @@ export type {
 
 import type {
   StoryRecord,
+  Blueprint,
   MessageRecord,
   Ruling,
   RoleMap,
@@ -72,6 +77,7 @@ import type {
   Entitlement,
   TrialStatus,
   LivingCardView,
+  Dossier,
   PersonaRecord,
   LorebookEntry,
   MappedCard,
@@ -144,6 +150,24 @@ export interface SubmitTurnOutcome {
   narratorIdx: number;
 }
 
+/** Args for regenerating the last narrator turn's prose as a new variant (§6). */
+export interface SwipeArgs {
+  storyId: string;
+  /** Live narrator deltas for the regenerated prose. */
+  onDelta?: (delta: string) => void;
+  /** Player persona + protagonist essentials block (§7.3). */
+  personaBlock?: string;
+  signal?: AbortSignal;
+}
+
+/** The variant state after a swipe / variant-select (§6). */
+export interface SwipeOutcome {
+  /** The full variant list after the operation. */
+  variants: string[];
+  /** Index of the active variant. */
+  activeVariant: number;
+}
+
 /** One provider's stored credentials as the Settings/Wizard forms edit them. */
 export interface ProviderConfigInput {
   apiKey: string;
@@ -176,13 +200,33 @@ export interface CoreBridge {
   createStory(args: CreateStoryArgs): Promise<CreateStoryResult>;
   renameStory(id: string, title: string): Promise<void>;
   deleteStory(id: string): Promise<void>;
+  /** Read a story's author-facing Story Blueprint (§3), or undefined if it has none. */
+  getBlueprint(id: string): Promise<Blueprint | undefined>;
+  /** Save (or clear, with `undefined`) a story's Story Blueprint. Style/identity only — the frozen mechanical schema is untouched. */
+  saveBlueprint(id: string, blueprint: Blueprint | undefined): Promise<void>;
 
   // — Play —
   listMessages(storyId: string): Promise<MessageRecord[]>;
   submitTurn(args: SubmitTurnArgs): Promise<SubmitTurnOutcome>;
   listPresentCast(storyId: string): Promise<CastMember[]>;
   getLivingCard(storyId: string, characterId: string): Promise<LivingCardView | undefined>;
+  /** Deep read-only profile (v2 §7): full hard+soft join with reverse-resolved relationships. */
+  getCharacterDossier(storyId: string, characterId: string): Promise<Dossier | undefined>;
   listRulings(storyId: string): Promise<Ruling[]>;
+
+  // — Play: turn history (v2 §6) —
+  /**
+   * Regenerate the last narrator turn's prose as a new variant. The turn's committed rulings are
+   * re-used verbatim, so the mechanical outcome is stable across swipes — only the prose changes.
+   * Streams the new prose via `onDelta`; returns the full variant list and the new active index.
+   */
+  swipeLastTurn(args: SwipeArgs): Promise<SwipeOutcome>;
+  /** Switch which stored variant of a narrator message is shown. No model call. */
+  selectVariant(storyId: string, messageIdx: number, variantIndex: number): Promise<SwipeOutcome>;
+  /** Delete the last narrator turn and its player message, rolling state back to the turn's checkpoint. */
+  deleteLastTurn(storyId: string): Promise<void>;
+  /** Rewind to just before the message at `fromIdx`, truncating every message/ruling/checkpoint at idx ≥ fromIdx. */
+  rewindTo(storyId: string, fromIdx: number): Promise<void>;
 
   // — Settings: providers + role map —
   getProviderConfigs(): Promise<ProviderConfigs>;
@@ -215,8 +259,13 @@ export interface CoreBridge {
   listPersonas(): Promise<PersonaRecord[]>;
   savePersona(persona: PersonaRecord): Promise<void>;
   deletePersona(id: string): Promise<void>;
+  /**
+   * Entries of the story's default lorebook (v2 §2). Each story gets one auto-created, auto-attached
+   * lorebook; this screen edits it. The global multi-lorebook library is a separate surface.
+   */
   listLorebook(storyId: string): Promise<LorebookEntry[]>;
-  saveLorebookEntry(entry: LorebookEntry): Promise<void>;
+  /** Upsert an entry into the story's default lorebook. `entry.lorebookId` is resolved by the bridge. */
+  saveLorebookEntry(storyId: string, entry: LorebookEntry): Promise<void>;
   deleteLorebookEntry(id: string): Promise<void>;
 
   // — Importer —
@@ -237,11 +286,11 @@ export interface CoreBridge {
 const MEMORY_PROVIDER_IDS = ["openrouter", "openai", "anthropic"] as const;
 
 const MEMORY_DEFAULT_ROLE_MAP: RoleMap = {
-  narrator: { provider: "openrouter", model: "anthropic/claude-sonnet-4", samplers: { temperature: 0.8, maxTokens: 1200 } },
-  classifier: { provider: "openrouter", model: "openai/gpt-4o-mini", samplers: { temperature: 0, maxTokens: 800 } },
-  analyzer: { provider: "openrouter", model: "openai/gpt-4o-mini", samplers: { temperature: 0.2, maxTokens: 1000 } },
-  summarizer: { provider: "openrouter", model: "openai/gpt-4o", samplers: { temperature: 0.3, maxTokens: 1500 } },
-  bootstrapper: { provider: "openrouter", model: "anthropic/claude-sonnet-4", samplers: { temperature: 0.6, maxTokens: 4000 } },
+  narrator: { provider: "openrouter", model: "anthropic/claude-sonnet-4", source: "recommended", samplersDirty: false, samplers: { temperature: 0.8, maxTokens: 1200 } },
+  classifier: { provider: "openrouter", model: "openai/gpt-4o-mini", source: "recommended", samplersDirty: false, samplers: { temperature: 0, maxTokens: 800 } },
+  analyzer: { provider: "openrouter", model: "openai/gpt-4o-mini", source: "recommended", samplersDirty: false, samplers: { temperature: 0.2, maxTokens: 1000 } },
+  summarizer: { provider: "openrouter", model: "openai/gpt-4o", source: "recommended", samplersDirty: false, samplers: { temperature: 0.3, maxTokens: 1500 } },
+  bootstrapper: { provider: "openrouter", model: "anthropic/claude-sonnet-4", source: "recommended", samplersDirty: false, samplers: { temperature: 0.6, maxTokens: 4000 } },
 };
 
 const MEMORY_KNOWN_MODELS: KnownModel[] = [
@@ -409,6 +458,17 @@ export function makeMemoryBridge(): CoreBridge {
       stories.delete(id);
     },
 
+    async getBlueprint(id) {
+      return requireStory(id).record.blueprint;
+    },
+
+    async saveBlueprint(id, blueprint) {
+      const s = requireStory(id);
+      // Style/identity only; the frozen mechanical `schema` is never touched here.
+      if (blueprint) s.record.blueprint = blueprint;
+      else delete s.record.blueprint;
+    },
+
     async listMessages(storyId) {
       return [...requireStory(storyId).messages];
     },
@@ -446,12 +506,124 @@ export function makeMemoryBridge(): CoreBridge {
       return { prose, rulings, narratorIdx };
     },
 
+    async swipeLastTurn(args): Promise<SwipeOutcome> {
+      const story = requireStory(args.storyId);
+      const last = story.messages[story.messages.length - 1];
+      if (!last || last.role !== "narrator") {
+        throw new Error("swipeLastTurn: last message is not a narrator turn.");
+      }
+      // Canned alternate prose so swipe UX is exercisable; the real backend re-runs the narrator
+      // with the turn's committed rulings held fixed (only prose changes).
+      const variantProse =
+        "You try the words a different way, and the shadows answer differently — " +
+        "the same truth, wearing another face.";
+      await streamProse(variantProse, args.onDelta, args.signal);
+      const variants = [...(last.variants ?? [last.content]), variantProse];
+      const activeVariant = variants.length - 1;
+      last.variants = variants;
+      last.activeVariant = activeVariant;
+      last.content = variantProse;
+      return { variants, activeVariant };
+    },
+
+    async selectVariant(storyId, messageIdx, variantIndex): Promise<SwipeOutcome> {
+      const story = requireStory(storyId);
+      const msg = story.messages.find((m) => m.idx === messageIdx);
+      if (!msg || msg.role !== "narrator") throw new Error("selectVariant: not a narrator message.");
+      const variants = msg.variants ?? [msg.content];
+      const clamped = Math.max(0, Math.min(variantIndex, variants.length - 1));
+      msg.variants = variants;
+      msg.activeVariant = clamped;
+      msg.content = variants[clamped]!;
+      return { variants, activeVariant: clamped };
+    },
+
+    async deleteLastTurn(storyId) {
+      const story = requireStory(storyId);
+      const last = story.messages[story.messages.length - 1];
+      if (!last || last.role !== "narrator") return;
+      // Drop the narrator turn plus its opening player message (if present). The stub has no
+      // checkpoints, so hard/soft rollback is a no-op here (the SQLite backend restores state).
+      story.messages.pop();
+      const prev = story.messages[story.messages.length - 1];
+      if (prev?.role === "player") story.messages.pop();
+    },
+
+    async rewindTo(storyId, fromIdx) {
+      const story = requireStory(storyId);
+      story.messages = story.messages.filter((m) => m.idx < fromIdx);
+      story.rulings = [];
+    },
+
     async listPresentCast(storyId) {
       return [...requireStory(storyId).cast];
     },
 
     async getLivingCard(storyId, characterId) {
       return requireStory(storyId).cards.get(characterId);
+    },
+
+    async getCharacterDossier(storyId, characterId) {
+      // The in-memory bridge stores only the compact living card (no full soft state), so we
+      // synthesize a dossier from it. The SQLite bridge does the real hard+soft join via core.
+      const card = requireStory(storyId).cards.get(characterId);
+      if (!card) return undefined;
+      const soft = card.soft;
+      return {
+        characterId: card.characterId,
+        isPlayer: card.isPlayer,
+        identity: {
+          name: card.name,
+          whatTheyAre: soft?.appearance?.split(/[.;]/)[0]?.trim() ?? "",
+          ...(soft?.appearance !== undefined ? { appearance: soft.appearance } : {}),
+          ...(soft ? { tier: soft.tier } : {}),
+        },
+        mentality: {
+          traits: soft?.traits ?? [],
+          behavioralSignatures: [],
+          ...(soft?.mood !== undefined ? { mood: soft.mood } : {}),
+          ...(soft?.speechStyle !== undefined ? { speechStyle: soft.speechStyle } : {}),
+        },
+        currentState: {
+          ...(soft?.mood !== undefined ? { mood: soft.mood } : {}),
+          ...(soft?.location !== undefined ? { location: soft.location } : {}),
+          ...(soft?.goal !== undefined ? { goal: soft.goal } : {}),
+        },
+        past: { observations: (soft?.recentObservations ?? []).map((text, i) => ({ turnIdx: i, text })) },
+        relationships: {
+          outgoing: (soft?.relationships ?? []).map((r) => ({
+            toCharacterId: r.toCharacterId,
+            toName: requireStory(storyId).cards.get(r.toCharacterId)?.name ?? r.toCharacterId,
+            trust: r.trust,
+            power: r.power,
+            ...(r.feeling !== undefined ? { feeling: r.feeling } : {}),
+          })),
+          incoming: [],
+        },
+        sheet: {
+          resources: card.resources.map((b) => ({
+            id: b.id,
+            label: b.label,
+            current: b.current,
+            max: b.max,
+          })),
+          skills: card.skills.map((s) => ({
+            skillId: s.skillId,
+            name: s.name,
+            rank: s.rank,
+            successCount: 0,
+            toNext: null,
+          })),
+          inventory: card.inventory.map((e) => ({
+            itemId: e.itemId,
+            name: e.name,
+            qty: e.qty,
+            kind: "misc",
+          })),
+          alive: card.alive,
+        },
+        involvedThreads: [],
+      };
     },
 
     async listRulings(storyId) {
@@ -539,8 +711,8 @@ export function makeMemoryBridge(): CoreBridge {
     async listLorebook(storyId) {
       return [...requireStory(storyId).lorebook];
     },
-    async saveLorebookEntry(entry) {
-      const book = requireStory(entry.storyId).lorebook;
+    async saveLorebookEntry(storyId, entry) {
+      const book = requireStory(storyId).lorebook;
       const i = book.findIndex((e) => e.id === entry.id);
       if (i >= 0) book[i] = { ...entry };
       else book.push({ ...entry });

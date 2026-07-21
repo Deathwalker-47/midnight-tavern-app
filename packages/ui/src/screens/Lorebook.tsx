@@ -67,8 +67,18 @@ function titleFor(entry: LorebookEntry): string {
   return "Untitled entry";
 }
 
-function emptyEntry(storyId: string): LorebookEntry {
-  return { id: newId(), storyId, keys: [], content: "", enabled: false };
+function emptyEntry(): LorebookEntry {
+  // lorebookId is assigned by the bridge (resolves the story's default lorebook) on save.
+  return {
+    id: newId(),
+    lorebookId: "",
+    keys: [],
+    content: "",
+    enabled: false,
+    alwaysOn: false,
+    priority: 0,
+    insertionOrder: 0,
+  };
 }
 
 export function Lorebook(props: ScreenProps): JSX.Element {
@@ -116,7 +126,7 @@ export function Lorebook(props: ScreenProps): JSX.Element {
 
   const startNew = useCallback(() => {
     if (!storyId) return;
-    const draftEntry = emptyEntry(storyId);
+    const draftEntry = emptyEntry();
     setSelectedId(draftEntry.id);
     setDraft(draftEntry);
     setIsNew(true);
@@ -163,9 +173,9 @@ export function Lorebook(props: ScreenProps): JSX.Element {
   );
 
   const save = useCallback(async () => {
-    if (!draft) return;
+    if (!draft || !storyId) return;
     try {
-      await getBridge().saveLorebookEntry(draft);
+      await getBridge().saveLorebookEntry(storyId, draft);
       await load();
       // Re-select the saved entry so its list row stays highlighted.
       setSelectedId(draft.id);

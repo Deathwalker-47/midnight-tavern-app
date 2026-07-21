@@ -53,6 +53,29 @@ export function buildSqliteBridge(
     return record;
   }
 
+  // The per-story Lorebook screen edits ONE lorebook (v2 §2's global library is a separate surface).
+  // We adopt the first lorebook already attached to the story as its "default"; when the screen first
+  // saves an entry and none exists, we lazily create one (source "user") and attach it. `create=false`
+  // (reads) returns undefined rather than materializing an empty book.
+  async function defaultLorebookId(storyId: string, create: boolean): Promise<string>;
+  async function defaultLorebookId(storyId: string, create: false): Promise<string | undefined>;
+  async function defaultLorebookId(storyId: string, create: boolean): Promise<string | undefined> {
+    const attached = await store.lorebook.listAttached(storyId);
+    if (attached.length > 0) return attached[0]!.id;
+    if (!create) return undefined;
+    const story = await requireStory(storyId);
+    const id = crypto.randomUUID();
+    await store.lorebook.createLorebook({
+      id,
+      name: `${story.title} lore`,
+      description: "",
+      createdAt: Date.now(),
+      source: "user",
+    });
+    await store.lorebook.attach(storyId, id);
+    return id;
+  }
+
   return {
     // ── Stories ──────────────────────────────────────────────────────────────────────────────
     async listStories(): Promise<StorySummary[]> {
@@ -101,6 +124,16 @@ export function buildSqliteBridge(
 
     async deleteStory(id) {
       await store.stories.delete(id);
+    },
+
+    async getBlueprint(id) {
+      return (await requireStory(id)).blueprint;
+    },
+
+    async saveBlueprint(id, blueprint) {
+      // Dedicated blueprint write — style/identity only, never the frozen mechanical schema (§3).
+      await requireStory(id); // 404s a missing story before we touch the column
+      await store.stories.setBlueprint(id, blueprint);
     },
 
     // ── Play ─────────────────────────────────────────────────────────────────────────────────
@@ -152,6 +185,33 @@ export function buildSqliteBridge(
     async getLivingCard(storyId, characterId) {
       const story = await requireStory(storyId);
       return core.getLivingCard(store, story.schema, characterId);
+    },
+
+    async getCharacterDossier(storyId, characterId) {
+      const story = await requireStory(storyId);
+      return core.getCharacterDossier(store, story.schema, characterId);
+    },
+
+    // ── Play: turn history (v2 §6) ───────────────────────────────────────────────────────────────
+    async swipeLastTurn(args) {
+      const router = await currentRouter();
+      return core.swipeLastTurn(router, store, args.storyId, {
+        ...(args.onDelta ? { onDelta: args.onDelta } : {}),
+        ...(args.personaBlock ? { personaBlock: args.personaBlock } : {}),
+        ...(args.signal ? { signal: args.signal } : {}),
+      });
+    },
+
+    async selectVariant(storyId, messageIdx, variantIndex) {
+      return core.selectVariant(store, storyId, messageIdx, variantIndex);
+    },
+
+    async deleteLastTurn(storyId) {
+      await core.deleteLastTurn(store, storyId);
+    },
+
+    async rewindTo(storyId, fromIdx) {
+      await core.rewindTo(store, storyId, fromIdx);
     },
 
     async listRulings(storyId) {
@@ -264,17 +324,24 @@ export function buildSqliteBridge(
     },
 
     async listLorebook(storyId) {
-      return store.lorebook.listByStory(storyId);
+      const bookId = await defaultLorebookId(storyId, false);
+      if (!bookId) return [];
+      return store.lorebook.listEntries(bookId);
     },
 
-    async saveLorebookEntry(entry) {
-      const existing = await store.lorebook.get(entry.id);
-      if (existing) await store.lorebook.update(entry);
-      else await store.lorebook.insert(entry);
+    async saveLorebookEntry(storyId, entry) {
+      const bookId = await defaultLorebookId(storyId, true);
+      const record = { ...entry, lorebookId: bookId };
+      const existing = await store.lorebook.getEntry(record.id);
+      if (existing) await store.lorebook.updateEntry(record);
+      else {
+        record.insertionOrder = await store.lorebook.nextInsertionOrder(bookId);
+        await store.lorebook.insertEntry(record);
+      }
     },
 
     async deleteLorebookEntry(id) {
-      await store.lorebook.delete(id);
+      await store.lorebook.deleteEntry(id);
     },
 
     // ── Importer ───────────────────────────────────────────────────────────────────────────────
