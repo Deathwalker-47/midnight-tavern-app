@@ -34,12 +34,19 @@ import {
   RelationshipRow,
   ResourceBar,
   RoleMatrixRow,
+  SamplerPanel,
+  MessageActions,
+  LorebookLibraryCard,
+  AttachRow,
+  PersonaPickerRow,
+  BlueprintForm,
   RulingArtifact,
   StoryCard,
   ThinkingIndicator,
   Toast,
 } from "../components";
-import type { RulingArtifactVariant, RulingRoll } from "../components";
+import type { RulingArtifactVariant, RulingRoll, SamplerField } from "../components";
+import type { Blueprint } from "../bridge/core";
 
 interface ScreenProps {
   storyId?: string;
@@ -185,9 +192,30 @@ function sampleFallenCard(): CoreLivingCardView {
   };
 }
 
+/** Demo sampler profile for the SamplerPanel specimen — one field marked unsupported. */
+const DEMO_SAMPLER_FIELDS: SamplerField[] = [
+  { key: "temperature", label: "Temperature", value: 0.8, min: 0, max: 2, step: 0.05 },
+  { key: "topP", label: "Top-p", value: 0.95, min: 0, max: 1, step: 0.05 },
+  { key: "topK", label: "Top-k", value: 40, min: 0, max: 100, step: 1 },
+  { key: "presencePenalty", label: "Presence penalty", value: 0.3, min: -2, max: 2, step: 0.1 },
+  { key: "frequencyPenalty", label: "Frequency penalty", value: 0.3, min: -2, max: 2, step: 0.1 },
+  { key: "repetitionPenalty", label: "Repetition penalty", value: 1.0, min: 0, max: 2, step: 0.05, supported: false },
+  { key: "maxTokens", label: "Max tokens", value: 1200, min: 100, max: 4000, step: 100 },
+];
+
+/** Demo blueprint for the BlueprintForm specimen. */
+const DEMO_BLUEPRINT: Blueprint = {
+  name: "Kestrel Vane",
+  description: "A courier of the Vale Road with a soldier's bearing and a debtor's caution.",
+  personality: "Wary, dry-humored, fiercely loyal once won.",
+  scenario: "An ash-buried mountain road where pilgrims vanish near a ruined monastery.",
+  firstMessage: "The gate is cold enough to sting…",
+  alternateGreetings: ["Snow again, and the road gone white to the treeline."],
+  tags: ["dark fantasy", "survival"],
+};
+
 export function DesignSystem(_props: ScreenProps): JSX.Element {
-  const playerCard = useMemo(samplePlayerCard, []);
-  const fallenCard = useMemo(sampleFallenCard, []);
+  const playerCard = useMemo(samplePlayerCard, []);  const fallenCard = useMemo(sampleFallenCard, []);
 
   const modelOptions = [
     { value: "anthropic/claude-sonnet-4", label: "Claude Sonnet 4" },
@@ -421,6 +449,67 @@ export function DesignSystem(_props: ScreenProps): JSX.Element {
           <ModelStatusChip status="validating" label="Validating" animate={false} />
           <ModelStatusChip status="error" label="Rejected" animate={false} />
           <ModelStatusChip status="idle" label="Idle" animate={false} />
+        </div>
+      </Section>
+
+      {/* ── CONFIGURATION & AUTHORING (v2 §1/§2/§3/§6/§7/§8 specimens) ── */}
+      <Section id="authoring" title="Configuration &amp; authoring">
+        <p style={styles.sectionNote}>
+          The v2 model-config, lorebook-library, message-history, and blueprint surfaces: RoleMatrixRow states, the full
+          SamplerPanel, MessageActions (swipe counter · locked die · rewind menu), LorebookLibraryCard, the attach + persona
+          rows, and the BlueprintForm.
+        </p>
+
+        <div style={styles.miniLabel}>ROLE MATRIX ROW — STATES</div>
+        <div style={styles.panel}>
+          <RoleMatrixRow role="narrator" description="Recommended fit." options={modelOptions} value="anthropic/claude-sonnet-4" onChange={() => {}} fit="recommended" />
+          <RoleMatrixRow role="classifier" description="Advanced / json-mode risk." options={modelOptions} value="openai/gpt-4o-mini" onChange={() => {}} fit="advanced" />
+          <RoleMatrixRow role="bootstrapper" description="Story AI — the fifth role, renamed." options={modelOptions} value="anthropic/claude-sonnet-4" onChange={() => {}} fit="recommended" />
+        </div>
+
+        <div style={{ marginTop: 18 }}>
+          <div style={styles.miniLabel}>SAMPLER PANEL — PRESETS + DISABLED FIELD</div>
+          <SamplerPanel
+            fields={DEMO_SAMPLER_FIELDS}
+            activePreset="Creative"
+            dirty
+            onPreset={() => {}}
+            onFieldChange={() => {}}
+            onResetToRecommended={() => {}}
+          />
+        </div>
+
+        <div style={{ marginTop: 18 }}>
+          <div style={styles.miniLabel}>MESSAGE ACTIONS — LATEST (SWIPE + LOCKED DIE) · EARLIER (REWIND-ONLY)</div>
+          <div style={styles.panel}>
+            <MessageActions variantIndex={2} variantCount={3} isLatest rollLocked onPrevVariant={() => {}} onNextVariant={() => {}} onDeleteLastExchange={() => {}} onRewindToHere={() => {}} />
+            <div style={{ height: 12 }} />
+            <MessageActions variantIndex={1} variantCount={1} isLatest={false} onRewindToHere={() => {}} />
+          </div>
+        </div>
+
+        <div style={{ marginTop: 18 }}>
+          <div style={styles.miniLabel}>LOREBOOK LIBRARY CARD</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 14 }}>
+            <LorebookLibraryCard name="The Ember Choir" source="user" entryCount={12} attachmentCount={3} onOpen={() => {}} />
+            <LorebookLibraryCard name="Saltmarrow Wharves" source="imported_card" entryCount={5} attachmentCount={1} onOpen={() => {}} />
+            <LorebookLibraryCard name="Vale Road lore" source="migrated" entryCount={8} attachmentCount={0} onOpen={() => {}} />
+          </div>
+        </div>
+
+        <div style={{ marginTop: 18 }}>
+          <div style={styles.miniLabel}>ATTACH PANEL — LOREBOOK ROWS + PERSONA PICKER</div>
+          <div style={{ ...styles.panel, display: "flex", flexDirection: "column", gap: 8 }}>
+            <AttachRow name="The Ember Choir" source="user" enabled onToggle={() => {}} onDetach={() => {}} />
+            <AttachRow name="Saltmarrow Wharves" source="imported_card" enabled={false} onToggle={() => {}} onDetach={() => {}} />
+            <PersonaPickerRow label="Play as" personaName="Kestrel Vane" onChange={() => {}} />
+            <PersonaPickerRow label="Play as" onChange={() => {}} />
+          </div>
+        </div>
+
+        <div style={{ marginTop: 18 }}>
+          <div style={styles.miniLabel}>BLUEPRINT FORM</div>
+          <BlueprintForm value={DEMO_BLUEPRINT} onChange={() => {}} />
         </div>
       </Section>
 

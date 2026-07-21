@@ -1,6 +1,6 @@
 /**
- * Lorebook screen tests: the no-story empty state (no storyId → nothing to scope entries to) and
- * a load-error state driven through a stubbed bridge.
+ * Lorebook screen tests: the no-story branch (no storyId → the global lorebook library, v2 §2) and
+ * a per-story load-error state driven through a stubbed bridge.
  */
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { render, screen, waitFor, cleanup } from "@testing-library/react";
@@ -19,11 +19,13 @@ describe("Lorebook — no story", () => {
     setBridge(makeMemoryBridge());
   });
 
-  it("shows the open-a-story empty state when no storyId is provided", () => {
+  it("shows the global lorebook library when no storyId is provided", async () => {
     render(<Lorebook />);
     const root = screen.getByTestId("lorebook-screen");
     expect(root).toHaveAttribute("data-nostory", "true");
-    expect(screen.getByText("Open a story to tend its lore")).toBeInTheDocument();
+    // The library shelf offers a create affordance and settles into its empty state.
+    expect(screen.getByTestId("new-lorebook")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText("No lorebooks yet")).toBeInTheDocument());
   });
 });
 
