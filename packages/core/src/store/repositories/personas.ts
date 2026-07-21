@@ -35,6 +35,17 @@ export interface PersonaRepo {
   /** Make `id` the sole default, clearing the flag on every other persona. */
   setDefault(id: string): Promise<void>;
   delete(id: string): Promise<void>;
+
+  /**
+   * Attach a persona to a story (low-level-plan-v2 §4), or pass `null` to clear it (fall back to
+   * the global default). Writes `stories.active_persona_id`.
+   */
+  setActiveForStory(storyId: string, personaId: string | null): Promise<void>;
+  /**
+   * The persona active for a story: its `active_persona_id` if set and still present, else the
+   * global default, else undefined.
+   */
+  getActivePersona(storyId: string): Promise<PersonaRecord | undefined>;
 }
 
 export function makePersonaRepo(db: Db): PersonaRepo {
@@ -87,6 +98,32 @@ export function makePersonaRepo(db: Db): PersonaRepo {
 
     async delete(id) {
       await db.run("DELETE FROM personas WHERE id = ?", id);
+    },
+
+    async setActiveForStory(storyId, personaId) {
+      const info = await db.run(
+        "UPDATE stories SET active_persona_id = ? WHERE id = ?",
+        personaId,
+        storyId
+      );
+      if (info.changes === 0) throw new Error(`No story with id "${storyId}" to attach persona.`);
+    },
+
+    async getActivePersona(storyId) {
+      const row = await db.get<{ active_persona_id: string | null }>(
+        "SELECT active_persona_id FROM stories WHERE id = ?",
+        storyId
+      );
+      if (row?.active_persona_id) {
+        const active = await db.get<Row>(
+          "SELECT * FROM personas WHERE id = ?",
+          row.active_persona_id
+        );
+        if (active) return toRecord(active);
+      }
+      // No explicit pick (or it was deleted) → global default.
+      const def = await db.get<Row>("SELECT * FROM personas WHERE is_default = 1");
+      return def ? toRecord(def) : undefined;
     },
   };
 }

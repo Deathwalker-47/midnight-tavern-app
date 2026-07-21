@@ -6,7 +6,7 @@
  * value and validates on the way in and out — the store never hands back an unvalidated
  * setting.
  */
-import type { ZodType } from "zod";
+import type { ZodTypeAny, input as ZodInput, output as ZodOutput } from "zod";
 import type { Db } from "../db.js";
 import { decodeJson, encodeJson } from "./codec.js";
 
@@ -16,10 +16,13 @@ interface Row {
 }
 
 export interface SettingsRepo {
-  /** Read and validate the value for `key`, or `undefined` if unset. */
-  get<T>(key: string, schema: ZodType<T>): Promise<T | undefined>;
-  /** Validate and upsert the value for `key`. */
-  set<T>(key: string, schema: ZodType<T>, value: T): Promise<void>;
+  /**
+   * Read and validate the value for `key`, or `undefined` if unset. Returns the schema's OUTPUT
+   * type, so `.default()`ed fields (e.g. RoleMap's `source`/`samplersDirty`) are present, not optional.
+   */
+  get<S extends ZodTypeAny>(key: string, schema: S): Promise<ZodOutput<S> | undefined>;
+  /** Validate and upsert the value for `key`. Accepts the schema's INPUT type (defaults may be omitted). */
+  set<S extends ZodTypeAny>(key: string, schema: S, value: ZodInput<S>): Promise<void>;
   /** True if `key` has a stored value. */
   has(key: string): Promise<boolean>;
   delete(key: string): Promise<void>;

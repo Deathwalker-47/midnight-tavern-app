@@ -9,17 +9,19 @@ import type { Db } from "../db.js";
 import {
   StoryRecordSchema,
   StorySchemaSchema,
+  BlueprintSchema,
   type StoryRecord,
 } from "../../types/index.js";
 import { decodeJson, encodeJson, toBool, toInt } from "./codec.js";
 
-/** The raw `stories` row as SQLite returns it. */
+/** The raw `stories` row as SQLite returns it. `blueprint_json` is nullable (migration 002). */
 interface Row {
   id: string;
   title: string;
   created_at: number;
   schema_json: string;
   locked: number;
+  blueprint_json: string | null;
 }
 
 /** Map a raw row to a validated domain record. */
@@ -30,6 +32,9 @@ function toRecord(row: Row): StoryRecord {
     createdAt: row.created_at,
     schema: decodeJson(StorySchemaSchema, row.schema_json),
     locked: toBool(row.locked),
+    ...(row.blueprint_json != null
+      ? { blueprint: decodeJson(BlueprintSchema, row.blueprint_json) }
+      : {}),
   });
 }
 
@@ -37,8 +42,13 @@ export interface StoryRepo {
   insert(record: StoryRecord): Promise<void>;
   get(id: string): Promise<StoryRecord | undefined>;
   list(): Promise<StoryRecord[]>;
-  /** Replace an existing story's mutable fields (title, schema, locked). */
+  /** Replace an existing story's mutable fields (title, schema, locked, blueprint). */
   update(record: StoryRecord): Promise<void>;
+  /**
+   * Update only the Story Blueprint (§3). Editing style/identity never touches the frozen
+   * mechanical schema (consistent with M5.4). Pass `undefined` to clear it.
+   */
+  setBlueprint(id: string, blueprint: StoryRecord["blueprint"]): Promise<void>;
   delete(id: string): Promise<void>;
 }
 
@@ -47,12 +57,13 @@ export function makeStoryRepo(db: Db): StoryRepo {
     async insert(record) {
       StoryRecordSchema.parse(record);
       await db.run(
-        "INSERT INTO stories (id, title, created_at, schema_json, locked) VALUES (?, ?, ?, ?, ?)",
+        "INSERT INTO stories (id, title, created_at, schema_json, locked, blueprint_json) VALUES (?, ?, ?, ?, ?, ?)",
         record.id,
         record.title,
         record.createdAt,
         encodeJson(StorySchemaSchema, record.schema),
-        toInt(record.locked)
+        toInt(record.locked),
+        record.blueprint ? encodeJson(BlueprintSchema, record.blueprint) : null
       );
     },
 
@@ -69,13 +80,24 @@ export function makeStoryRepo(db: Db): StoryRepo {
     async update(record) {
       StoryRecordSchema.parse(record);
       const info = await db.run(
-        "UPDATE stories SET title = ?, schema_json = ?, locked = ? WHERE id = ?",
+        "UPDATE stories SET title = ?, schema_json = ?, locked = ?, blueprint_json = ? WHERE id = ?",
         record.title,
         encodeJson(StorySchemaSchema, record.schema),
         toInt(record.locked),
+        record.blueprint ? encodeJson(BlueprintSchema, record.blueprint) : null,
         record.id
       );
       if (info.changes === 0) throw new Error(`No story with id "${record.id}" to update.`);
+    },
+
+    async setBlueprint(id, blueprint) {
+      const parsed = blueprint ? BlueprintSchema.parse(blueprint) : null;
+      const info = await db.run(
+        "UPDATE stories SET blueprint_json = ? WHERE id = ?",
+        parsed ? encodeJson(BlueprintSchema, parsed) : null,
+        id
+      );
+      if (info.changes === 0) throw new Error(`No story with id "${id}" to update.`);
     },
 
     async delete(id) {

@@ -38,7 +38,13 @@ export interface RulingRepo {
   get(id: string): Promise<RulingRecord | undefined>;
   /** The ruling attached to a given message, if any. */
   getByMessage(messageId: string): Promise<RulingRecord | undefined>;
+  /** Every ruling attached to a given message (a turn can commit several). */
+  listByMessage(messageId: string): Promise<RulingRecord[]>;
   listByStory(storyId: string): Promise<RulingRecord[]>;
+  /** Delete all rulings attached to a message (delete/rewind, §6). */
+  deleteByMessage(messageId: string): Promise<void>;
+  /** Delete every ruling whose message is at story idx ≥ `idx` (rewind/truncate, §6). */
+  deleteFromIdx(storyId: string, idx: number): Promise<void>;
 }
 
 export function makeRulingRepo(db: Db): RulingRepo {
@@ -64,9 +70,27 @@ export function makeRulingRepo(db: Db): RulingRepo {
       return row ? toRecord(row) : undefined;
     },
 
+    async listByMessage(messageId) {
+      const rows = await db.all<Row>("SELECT * FROM rulings WHERE message_id = ?", messageId);
+      return rows.map(toRecord);
+    },
+
     async listByStory(storyId) {
       const rows = await db.all<Row>("SELECT * FROM rulings WHERE story_id = ?", storyId);
       return rows.map(toRecord);
+    },
+
+    async deleteByMessage(messageId) {
+      await db.run("DELETE FROM rulings WHERE message_id = ?", messageId);
+    },
+
+    async deleteFromIdx(storyId, idx) {
+      await db.run(
+        `DELETE FROM rulings
+           WHERE message_id IN (SELECT id FROM messages WHERE story_id = ? AND idx >= ?)`,
+        storyId,
+        idx
+      );
     },
   };
 }

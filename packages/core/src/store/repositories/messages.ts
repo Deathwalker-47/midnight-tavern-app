@@ -5,6 +5,7 @@
  * ordering and for chapter/arc range bookkeeping. `nextIdx` computes the next index so
  * callers don't race on it inside a turn transaction.
  */
+import { z } from "zod";
 import type { Db } from "../db.js";
 import { MessageRecordSchema, MessageRoleSchema, type MessageRecord } from "../../types/index.js";
 
@@ -15,7 +16,11 @@ interface Row {
   role: string;
   content: string;
   created_at: number;
+  variants_json: string | null;
+  active_variant: number | null;
 }
+
+const VariantsSchema = z.array(z.string());
 
 function toRecord(row: Row): MessageRecord {
   return MessageRecordSchema.parse({
@@ -25,6 +30,8 @@ function toRecord(row: Row): MessageRecord {
     role: MessageRoleSchema.parse(row.role),
     content: row.content,
     createdAt: row.created_at,
+    ...(row.variants_json != null ? { variants: VariantsSchema.parse(JSON.parse(row.variants_json)) } : {}),
+    ...(row.active_variant != null ? { activeVariant: row.active_variant } : {}),
   });
 }
 
@@ -37,6 +44,17 @@ export interface MessageRepo {
   recent(storyId: string, limit: number): Promise<MessageRecord[]>;
   /** The next unused per-story turn index (max(idx)+1, or 0 for a new story). */
   nextIdx(storyId: string): Promise<number>;
+  /** The single message at a given turn index in a story, if any. */
+  getByIndex(storyId: string, idx: number): Promise<MessageRecord | undefined>;
+  /**
+   * Replace a narrator message's prose variants + active pointer (swipe, §6). `content` mirrors the
+   * active variant so existing readers that ignore variants still render the shown prose.
+   */
+  setVariants(id: string, variants: string[], activeVariant: number): Promise<void>;
+  /** Delete a single message by id. */
+  delete(id: string): Promise<void>;
+  /** Delete every message at or after a turn index (rewind/truncate, §6). */
+  deleteFrom(storyId: string, idx: number): Promise<void>;
 }
 
 export function makeMessageRepo(db: Db): MessageRepo {
@@ -44,13 +62,16 @@ export function makeMessageRepo(db: Db): MessageRepo {
     async insert(record) {
       MessageRecordSchema.parse(record);
       await db.run(
-        "INSERT INTO messages (id, story_id, idx, role, content, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+        `INSERT INTO messages (id, story_id, idx, role, content, created_at, variants_json, active_variant)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         record.id,
         record.storyId,
         record.idx,
         record.role,
         record.content,
-        record.createdAt
+        record.createdAt,
+        record.variants ? JSON.stringify(record.variants) : null,
+        record.activeVariant ?? 0
       );
     },
 
@@ -79,6 +100,35 @@ export function makeMessageRepo(db: Db): MessageRepo {
         storyId
       );
       return !row || row.maxIdx === null ? 0 : row.maxIdx + 1;
+    },
+
+    async getByIndex(storyId, idx) {
+      const row = await db.get<Row>(
+        "SELECT * FROM messages WHERE story_id = ? AND idx = ?",
+        storyId,
+        idx
+      );
+      return row ? toRecord(row) : undefined;
+    },
+
+    async setVariants(id, variants, activeVariant) {
+      const shown = variants[activeVariant] ?? variants[variants.length - 1] ?? "";
+      const info = await db.run(
+        "UPDATE messages SET variants_json = ?, active_variant = ?, content = ? WHERE id = ?",
+        JSON.stringify(variants),
+        activeVariant,
+        shown,
+        id
+      );
+      if (info.changes === 0) throw new Error(`No message with id "${id}" to set variants.`);
+    },
+
+    async delete(id) {
+      await db.run("DELETE FROM messages WHERE id = ?", id);
+    },
+
+    async deleteFrom(storyId, idx) {
+      await db.run("DELETE FROM messages WHERE story_id = ? AND idx >= ?", storyId, idx);
     },
   };
 }
