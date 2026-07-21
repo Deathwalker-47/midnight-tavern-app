@@ -27,6 +27,8 @@ import {
   EmptyState,
   InlineNotice,
   Button,
+  MessageActions,
+  ConfirmDialog,
   fromCoreOutcome,
   type RulingRoll,
   type RulingArtifactVariant,
@@ -344,6 +346,10 @@ export function Play(props: PlayProps): JSX.Element {
   const load = usePlayStore((s) => s.load);
   const submit = usePlayStore((s) => s.submit);
   const clearError = usePlayStore((s) => s.clearError);
+  const swipeLast = usePlayStore((s) => s.swipeLast);
+  const selectVariant = usePlayStore((s) => s.selectVariant);
+  const deleteLast = usePlayStore((s) => s.deleteLast);
+  const rewind = usePlayStore((s) => s.rewind);
   const storeMessages = usePlayStore((s) => s.messages);
   const storeRulings = usePlayStore((s) => s.rulings);
   const storeCast = usePlayStore((s) => s.cast);
@@ -439,6 +445,43 @@ export function Play(props: PlayProps): JSX.Element {
   const busy = thinking || loading;
 
   const stream = useMemo(() => buildStream(messages, rulings), [messages, rulings]);
+
+  // ── Turn-history metadata (low-level-plan-v2 §6) ────────────────────────────────────────────
+  // The latest narrator message gets swipe + delete + rewind; earlier narrator messages get
+  // rewind-only. A message's turn is "roll locked" when a ruling with a die landed on it.
+  const latestNarratorIdx = useMemo(() => {
+    let idx = -1;
+    for (const m of messages) if (m.role === "narrator" && m.idx > idx) idx = m.idx;
+    return idx;
+  }, [messages]);
+
+  const rollLockedTurnIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const r of rulings) if (r.roll) ids.add(r.turnId);
+    return ids;
+  }, [rulings]);
+
+  // Rewind confirmation: the design's confirm dialog names exactly what's removed.
+  const [rewindTarget, setRewindTarget] = useState<number | undefined>(undefined);
+  const historyBusy = thinking || loading;
+
+  const onSwipe = useCallback((): void => {
+    if (historyBusy) return;
+    void swipeLast();
+  }, [historyBusy, swipeLast]);
+
+  const onSelectVariant = useCallback(
+    (messageIdx: number, variantIndex: number): void => {
+      void selectVariant(messageIdx, variantIndex);
+    },
+    [selectVariant]
+  );
+
+  const onConfirmRewind = useCallback((): void => {
+    const target = rewindTarget;
+    setRewindTarget(undefined);
+    if (target !== undefined) void rewind(target);
+  }, [rewindTarget, rewind]);
 
   // ── Composer ────────────────────────────────────────────────────────────────────────────────
   const [draft, setDraft] = useState<string>("");
@@ -582,13 +625,40 @@ export function Play(props: PlayProps): JSX.Element {
                 />
               ) : (
                 <div role="log" aria-live="polite" aria-relevant="additions text">
-                  {stream.map((item) =>
-                    item.kind === "msg" ? (
-                      <MessageBlock key={item.key} message={item.message} nameOf={nameOf} />
-                    ) : (
-                      <RulingBlock key={item.key} ruling={item.ruling} nameOf={nameOf} animate={!reduced} />
-                    )
-                  )}
+                  {stream.map((item) => {
+                    if (item.kind === "ruling") {
+                      return <RulingBlock key={item.key} ruling={item.ruling} nameOf={nameOf} animate={!reduced} />;
+                    }
+                    const m = item.message;
+                    if (m.role !== "narrator") {
+                      return <MessageBlock key={item.key} message={m} nameOf={nameOf} />;
+                    }
+                    // Narrator turn: prose + the swipe/delete/rewind action cluster (§6).
+                    const variants = m.variants ?? [];
+                    const variantCount = Math.max(1, variants.length);
+                    const variantIndex = (m.activeVariant ?? 0) + 1;
+                    const isLatest = m.idx === latestNarratorIdx;
+                    return (
+                      <div key={item.key}>
+                        <MessageBlock message={m} nameOf={nameOf} />
+                        <MessageActions
+                          variantIndex={variantIndex}
+                          variantCount={variantCount}
+                          isLatest={isLatest}
+                          rollLocked={rollLockedTurnIds.has(m.id)}
+                          busy={historyBusy}
+                          onPrevVariant={() => onSelectVariant(m.idx, (m.activeVariant ?? 0) - 1)}
+                          onNextVariant={() => {
+                            const active = m.activeVariant ?? 0;
+                            if (active < variants.length - 1) onSelectVariant(m.idx, active + 1);
+                            else if (isLatest) onSwipe();
+                          }}
+                          {...(isLatest ? { onDeleteLastExchange: () => void deleteLast() } : {})}
+                          onRewindToHere={() => setRewindTarget(m.idx)}
+                        />
+                      </div>
+                    );
+                  })}
 
                   {thinking && (
                     <div style={S.thinking} data-testid="play-thinking">
@@ -646,6 +716,23 @@ export function Play(props: PlayProps): JSX.Element {
           />
         )}
       </div>
+
+      <ConfirmDialog
+        open={rewindTarget !== undefined}
+        tone="danger"
+        title="Rewind to here?"
+        body={
+          <span>
+            This removes this message and everything after it — including its rulings and the state they set.
+            Any chapter or arc summaries built from the removed turns will be rebuilt at the next threshold.
+            <b style={{ color: "var(--ui-text)" }}> This can't be undone.</b>
+          </span>
+        }
+        confirmLabel="Rewind"
+        cancelLabel="Keep everything"
+        onConfirm={onConfirmRewind}
+        onCancel={() => setRewindTarget(undefined)}
+      />
     </div>
   );
 }

@@ -15,13 +15,15 @@
  * method exists, point the picker's onChange at it. Rename → `useStoriesStore.rename`; delete →
  * `useStoriesStore.remove`.
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { useStoriesStore } from "../state/storiesStore";
 import { useSettingsStore } from "../state/settingsStore";
 import { useRoute } from "../state/uiStore";
-import { Button, EmptyState, InlineNotice, ConfirmDialog, RoleMatrixRow } from "../components";
-import type { RoleModelOption } from "../components";
+import { getBridge } from "../bridge/core";
+import type { AttachedLorebook, LorebookLibraryEntry, PersonaRecord } from "../bridge/core";
+import { Button, EmptyState, InlineNotice, ConfirmDialog, RoleMatrixRow, AttachRow, PersonaPickerRow } from "../components";
+import type { RoleModelOption, AttachSourceTag } from "../components";
 import type { ScreenProps } from "./registry";
 
 export function StorySettings(props: ScreenProps): JSX.Element {
@@ -167,6 +169,9 @@ export function StorySettings(props: ScreenProps): JSX.Element {
           />
         </Section>
 
+        {/* PERSONA (v2 §4) + LOREBOOKS (v2 §2) + BLUEPRINT (v2 §3) — story-scoped attachments. */}
+        <StoryAttachments storyId={storyId} onEditBlueprint={() => navigate("blueprint", { storyId })} />
+
         {/* CORE — read-only frozen rulebook facts. */}
         <Section kicker="§ CORE" heading="System of play">
           <div style={styles.factGrid}>
@@ -249,6 +254,207 @@ export function StorySettings(props: ScreenProps): JSX.Element {
       <span hidden>{messageCount}</span>
     </div>
   );
+}
+
+// ── Story-scoped attachments: persona (v2 §4), lorebooks (v2 §2), blueprint link (v2 §3) ────────
+
+const ATTACH_SECTION: CSSProperties = { marginBottom: 34 };
+
+function StoryAttachments(props: { storyId: string; onEditBlueprint: () => void }): JSX.Element {
+  const { storyId, onEditBlueprint } = props;
+  const [attached, setAttached] = useState<AttachedLorebook[]>([]);
+  const [allBooks, setAllBooks] = useState<LorebookLibraryEntry[]>([]);
+  const [personas, setPersonas] = useState<PersonaRecord[]>([]);
+  const [activePersona, setActivePersona] = useState<PersonaRecord | undefined>(undefined);
+  const [error, setError] = useState<string | undefined>(undefined);
+  const [pickingPersona, setPickingPersona] = useState(false);
+
+  async function refresh(): Promise<void> {
+    const bridge = getBridge();
+    const [att, all, ps, active] = await Promise.all([
+      bridge.listAttachedLorebooks(storyId),
+      bridge.listLorebooks(),
+      bridge.listPersonas(),
+      bridge.getActivePersona(storyId),
+    ]);
+    setAttached(att);
+    setAllBooks(all);
+    setPersonas(ps);
+    setActivePersona(active);
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+    setError(undefined);
+    void (async () => {
+      try {
+        const bridge = getBridge();
+        const [att, all, ps, active] = await Promise.all([
+          bridge.listAttachedLorebooks(storyId),
+          bridge.listLorebooks(),
+          bridge.listPersonas(),
+          bridge.getActivePersona(storyId),
+        ]);
+        if (cancelled) return;
+        setAttached(att);
+        setAllBooks(all);
+        setPersonas(ps);
+        setActivePersona(active);
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Couldn't load story attachments.");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [storyId]);
+
+  const attachedIds = new Set(attached.map((b) => b.id));
+  const detachedBooks = allBooks.filter((b) => !attachedIds.has(b.id));
+
+  async function onToggle(lorebookId: string, enabled: boolean): Promise<void> {
+    await getBridge().setLorebookAttachedEnabled(storyId, lorebookId, enabled);
+    await refresh();
+  }
+  async function onDetach(lorebookId: string): Promise<void> {
+    await getBridge().detachLorebook(storyId, lorebookId);
+    await refresh();
+  }
+  async function onAttach(lorebookId: string): Promise<void> {
+    if (!lorebookId) return;
+    await getBridge().attachLorebook(storyId, lorebookId);
+    await refresh();
+  }
+  async function onPickPersona(personaId: string): Promise<void> {
+    await getBridge().setActivePersona(storyId, personaId === "" ? null : personaId);
+    setPickingPersona(false);
+    await refresh();
+  }
+
+  return (
+    <>
+      {/* PERSONA */}
+      <Section kicker="§ PERSONA" heading="Your persona in this story">
+        <div style={ATTACH_SECTION}>
+          {pickingPersona ? (
+            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+              <select
+                defaultValue={activePersona?.id ?? ""}
+                onChange={(e) => void onPickPersona(e.target.value)}
+                aria-label="Choose persona"
+                style={{
+                  flex: 1,
+                  fontFamily: "var(--font-ui)",
+                  fontSize: 13,
+                  color: "var(--ui-text)",
+                  background: "var(--bg2-card)",
+                  border: "1px solid var(--hairline)",
+                  borderRadius: "var(--radius-chip)",
+                  padding: "9px 11px",
+                }}
+              >
+                <option value="">Default persona</option>
+                {personas.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                    {p.isDefault ? " (default)" : ""}
+                  </option>
+                ))}
+              </select>
+              <Button variant="ghost" onClick={() => setPickingPersona(false)}>
+                Cancel
+              </Button>
+            </div>
+          ) : (
+            <PersonaPickerRow
+              label="Play as"
+              {...(activePersona ? { personaName: activePersona.name } : {})}
+              onChange={() => setPickingPersona(true)}
+            />
+          )}
+        </div>
+      </Section>
+
+      {/* LOREBOOKS */}
+      <Section kicker="§ LORE" heading="Lorebooks in this story" aside={`${attached.length} attached`}>
+        {error ? (
+          <InlineNotice severity="error" title="Couldn't load attachments" detail={error} />
+        ) : (
+          <div style={ATTACH_SECTION}>
+            <div style={{ fontSize: 12.5, color: "var(--secondary)", lineHeight: 1.5, marginBottom: 12 }}>
+              Lorebooks are shared assets you attach — enable or detach them per story. Manage the full library from the Lore screen.
+            </div>
+            {attached.length === 0 ? (
+              <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 12 }}>No lorebooks attached yet.</div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
+                {attached.map((b) => (
+                  <AttachRow
+                    key={b.id}
+                    name={b.name}
+                    {...(isAttachSource(b.source) ? { source: b.source } : {})}
+                    enabled={b.linkEnabled}
+                    onToggle={(en) => void onToggle(b.id, en)}
+                    onDetach={() => void onDetach(b.id)}
+                  />
+                ))}
+              </div>
+            )}
+            {detachedBooks.length > 0 ? (
+              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                <select
+                  defaultValue=""
+                  onChange={(e) => {
+                    void onAttach(e.target.value);
+                    e.currentTarget.value = "";
+                  }}
+                  aria-label="Attach a lorebook"
+                  style={{
+                    flex: 1,
+                    fontFamily: "var(--font-ui)",
+                    fontSize: 13,
+                    color: "var(--ui-text)",
+                    background: "var(--bg2-card)",
+                    border: "1px solid var(--hairline)",
+                    borderRadius: "var(--radius-chip)",
+                    padding: "9px 11px",
+                  }}
+                >
+                  <option value="" disabled>
+                    Attach a lorebook…
+                  </option>
+                  {detachedBooks.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name} · {b.entryCount} entries
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div style={{ fontSize: 12, color: "var(--muted)" }}>All lorebooks are attached.</div>
+            )}
+          </div>
+        )}
+      </Section>
+
+      {/* BLUEPRINT */}
+      <Section kicker="§ BLUEPRINT" heading="Story blueprint">
+        <div style={{ ...ATTACH_SECTION, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
+          <div style={{ fontSize: 12.5, color: "var(--secondary)", lineHeight: 1.5 }}>
+            Author the story's identity, opening, and narration voice. The world's rules and dice stay framework-owned.
+          </div>
+          <Button variant="secondary" onClick={onEditBlueprint} style={{ whiteSpace: "nowrap" }}>
+            ✎ Edit blueprint
+          </Button>
+        </div>
+      </Section>
+    </>
+  );
+}
+
+/** Narrow a lorebook's free-string source to the AttachRow tag union. */
+function isAttachSource(source: string | undefined): source is AttachSourceTag {
+  return source === "user" || source === "imported_card" || source === "migrated";
 }
 
 function statModeLabel(mode: string): string {

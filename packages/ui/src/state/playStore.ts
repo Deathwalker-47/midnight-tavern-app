@@ -37,6 +37,18 @@ interface PlayState {
   load: (storyId: string) => Promise<void>;
   /** Send the player's turn; streams deltas into `proseBuffer`, then commits. */
   submit: (playerText: string, opts?: { personaBlock?: string; signal?: AbortSignal }) => Promise<void>;
+  /**
+   * Regenerate the last narrator turn's prose as a new variant (low-level-plan-v2 §6). Streams into
+   * `proseBuffer` like a turn; the committed ruling is re-used verbatim so the mechanical outcome is
+   * stable — only the prose changes. Re-pulls authoritative state on completion.
+   */
+  swipeLast: (opts?: { personaBlock?: string; signal?: AbortSignal }) => Promise<void>;
+  /** Cycle to an already-generated variant of a narrator message (no model call). */
+  selectVariant: (messageIdx: number, variantIndex: number) => Promise<void>;
+  /** Delete the last narrator turn + its player message, rolling state back to the turn checkpoint. */
+  deleteLast: () => Promise<void>;
+  /** Rewind to just before the message at `fromIdx`, truncating everything at idx ≥ fromIdx. */
+  rewind: (fromIdx: number) => Promise<void>;
   clearError: () => void;
   reset: () => void;
 }
@@ -123,6 +135,64 @@ export const usePlayStore = create<PlayState>((set, get) => ({
   },
 
   clearError: () => set({ turnError: undefined }),
+
+  swipeLast: async (opts = {}) => {
+    const storyId = get().storyId;
+    if (!storyId) return;
+    set({ thinking: true, proseBuffer: "", turnError: undefined });
+    try {
+      await getBridge().swipeLastTurn({
+        storyId,
+        onDelta: (delta) => set((s) => ({ proseBuffer: s.proseBuffer + delta })),
+        ...(opts.personaBlock ? { personaBlock: opts.personaBlock } : {}),
+        ...(opts.signal ? { signal: opts.signal } : {}),
+      });
+      // The analyzer may re-derive soft state on the new prose; re-pull everything.
+      const bridge = getBridge();
+      const [messages, rulings, cast] = await Promise.all([
+        bridge.listMessages(storyId),
+        bridge.listRulings(storyId),
+        bridge.listPresentCast(storyId),
+      ]);
+      set({ messages, rulings, cast, thinking: false, proseBuffer: "" });
+    } catch (err) {
+      set({ thinking: false, proseBuffer: "", turnError: classifyError(err) });
+    }
+  },
+
+  selectVariant: async (messageIdx, variantIndex) => {
+    const storyId = get().storyId;
+    if (!storyId) return;
+    try {
+      await getBridge().selectVariant(storyId, messageIdx, variantIndex);
+      const messages = await getBridge().listMessages(storyId);
+      set({ messages });
+    } catch (err) {
+      set({ turnError: classifyError(err) });
+    }
+  },
+
+  deleteLast: async () => {
+    const storyId = get().storyId;
+    if (!storyId) return;
+    try {
+      await getBridge().deleteLastTurn(storyId);
+      await get().load(storyId);
+    } catch (err) {
+      set({ turnError: classifyError(err) });
+    }
+  },
+
+  rewind: async (fromIdx) => {
+    const storyId = get().storyId;
+    if (!storyId) return;
+    try {
+      await getBridge().rewindTo(storyId, fromIdx);
+      await get().load(storyId);
+    } catch (err) {
+      set({ turnError: classifyError(err) });
+    }
+  },
 
   reset: () =>
     set({
