@@ -344,6 +344,86 @@ export function buildSqliteBridge(
       await store.lorebook.deleteEntry(id);
     },
 
+    // ── Global lorebook library (v2 §2) ──────────────────────────────────────────────────────────
+    async listLorebooks() {
+      const books = await store.lorebook.listLorebooks();
+      return Promise.all(
+        books.map(async (book) => ({
+          ...book,
+          entryCount: (await store.lorebook.listEntries(book.id)).length,
+          attachmentCount: await store.lorebook.attachmentCount(book.id),
+        }))
+      );
+    },
+
+    async createLorebook(name, description) {
+      const book = {
+        id: crypto.randomUUID(),
+        name,
+        description: description ?? "",
+        createdAt: Date.now(),
+        source: "user" as const,
+      };
+      await store.lorebook.createLorebook(book);
+      return book;
+    },
+
+    async renameLorebook(id, name, description) {
+      await store.lorebook.renameLorebook(id, name, description);
+    },
+
+    async deleteLorebook(id) {
+      await store.lorebook.deleteLorebook(id);
+    },
+
+    async listLorebookEntries(lorebookId) {
+      return store.lorebook.listEntries(lorebookId);
+    },
+
+    async saveLorebookEntryIn(lorebookId, entry) {
+      const record = { ...entry, lorebookId };
+      const existing = await store.lorebook.getEntry(record.id);
+      if (existing) await store.lorebook.updateEntry(record);
+      else {
+        record.insertionOrder = await store.lorebook.nextInsertionOrder(lorebookId);
+        await store.lorebook.insertEntry(record);
+      }
+    },
+
+    async listAttachedLorebooks(storyId) {
+      return store.lorebook.listAttached(storyId);
+    },
+
+    async attachLorebook(storyId, lorebookId) {
+      await store.lorebook.attach(storyId, lorebookId);
+    },
+
+    async detachLorebook(storyId, lorebookId) {
+      await store.lorebook.detach(storyId, lorebookId);
+    },
+
+    async setLorebookAttachedEnabled(storyId, lorebookId, enabled) {
+      await store.lorebook.setAttachedEnabled(storyId, lorebookId, enabled);
+    },
+
+    // ── Persona attach (v2 §4) ───────────────────────────────────────────────────────────────────
+    async getActivePersona(storyId) {
+      return store.personas.getActivePersona(storyId);
+    },
+
+    async setActivePersona(storyId, personaId) {
+      await store.personas.setActiveForStory(storyId, personaId);
+    },
+
+    // ── Model recommendations (v2 §1/§5) ─────────────────────────────────────────────────────────
+    modelsForRole(role, provider) {
+      return core.modelsForRole(role, provider);
+    },
+
+    defaultAssignmentFor(role) {
+      return core.defaultAssignmentFor(role);
+    },
+
     // ── Importer ───────────────────────────────────────────────────────────────────────────────
     async importCardFromBytes(bytes): Promise<CardImportResult> {
       // PNG (embedded tEXt chunk) vs JSON: sniff the 8-byte PNG signature, else parse as JSON.

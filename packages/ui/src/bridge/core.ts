@@ -62,6 +62,9 @@ export type {
   CharacterCard,
   MappedCard,
   LorebookSeed,
+  Lorebook,
+  AttachedLorebook,
+  RankedModel,
 } from "@midnight-tavern/core";
 
 import type {
@@ -69,7 +72,9 @@ import type {
   Blueprint,
   MessageRecord,
   Ruling,
+  Role,
   RoleMap,
+  RoleBinding,
   KnownModel,
   ProviderId,
   ProviderConfigs,
@@ -80,6 +85,9 @@ import type {
   Dossier,
   PersonaRecord,
   LorebookEntry,
+  Lorebook,
+  AttachedLorebook,
+  RankedModel,
   MappedCard,
   CharacterCard,
   Store,
@@ -181,6 +189,14 @@ export type KeyValidation =
   | { state: "valid"; label?: string; balance?: string }
   | { state: "rejected"; reason: string };
 
+/** One row on the global lorebook library shelf (v2 §2): the book plus usage/count metadata. */
+export interface LorebookLibraryEntry extends Lorebook {
+  /** Number of entries in the book. */
+  entryCount: number;
+  /** Number of stories this book is attached to ("used in N stories"). */
+  attachmentCount: number;
+}
+
 /** Result of importing a character card (feeds the Library import-preview → new-story flow). */
 export interface CardImportResult {
   card: CharacterCard;
@@ -268,6 +284,34 @@ export interface CoreBridge {
   saveLorebookEntry(storyId: string, entry: LorebookEntry): Promise<void>;
   deleteLorebookEntry(id: string): Promise<void>;
 
+  // — Global lorebook library (v2 §2) —
+  /** Every lorebook in the app (the library shelf). */
+  listLorebooks(): Promise<LorebookLibraryEntry[]>;
+  createLorebook(name: string, description?: string): Promise<Lorebook>;
+  renameLorebook(id: string, name: string, description?: string): Promise<void>;
+  /** Delete a lorebook and its entries/attachments (cascade). */
+  deleteLorebook(id: string): Promise<void>;
+  listLorebookEntries(lorebookId: string): Promise<LorebookEntry[]>;
+  /** Upsert an entry into a specific lorebook (the library editor path). */
+  saveLorebookEntryIn(lorebookId: string, entry: LorebookEntry): Promise<void>;
+  /** Lorebooks attached to a story, each with its link-level enabled flag. */
+  listAttachedLorebooks(storyId: string): Promise<AttachedLorebook[]>;
+  attachLorebook(storyId: string, lorebookId: string): Promise<void>;
+  detachLorebook(storyId: string, lorebookId: string): Promise<void>;
+  setLorebookAttachedEnabled(storyId: string, lorebookId: string, enabled: boolean): Promise<void>;
+
+  // — Persona attach (v2 §4) —
+  /** The persona active for a story (its own pick, or the global default), or undefined if none. */
+  getActivePersona(storyId: string): Promise<PersonaRecord | undefined>;
+  /** Set (or clear, with null) a story's active persona. Null ⇒ fall back to the default. */
+  setActivePersona(storyId: string, personaId: string | null): Promise<void>;
+
+  // — Model recommendations (v2 §1/§5) —
+  /** Ranked models for a role on a provider — recommended-for-role first, then a free-text affordance in the UI. */
+  modelsForRole(role: Role, provider: ProviderId): RankedModel[];
+  /** The app's shipped recommended assignment for a role (wizard + "reset to recommended"). */
+  defaultAssignmentFor(role: Role): RoleBinding;
+
   // — Importer —
   importCardFromBytes(bytes: Uint8Array): Promise<CardImportResult>;
   importCardFromUrl(url: string, signal?: AbortSignal): Promise<CardImportResult>;
@@ -314,6 +358,16 @@ interface MemStory {
   cast: CastMember[];
   cards: Map<string, LivingCardView>;
   lorebook: LorebookEntry[];
+  /** Story's active persona pick (v2 §4); undefined ⇒ fall back to the global default. */
+  activePersonaId?: string;
+  /** Global lorebooks attached to this story, with link-level enabled flag (v2 §2). */
+  attachedLorebooks: { lorebookId: string; enabled: boolean }[];
+}
+
+/** One global lorebook in the stub library (v2 §2). */
+interface MemLorebook {
+  book: Lorebook;
+  entries: LorebookEntry[];
 }
 
 function uid(): string {
@@ -359,6 +413,7 @@ async function streamProse(prose: string, onDelta?: (d: string) => void, signal?
 
 export function makeMemoryBridge(): CoreBridge {
   const stories = new Map<string, MemStory>();
+  const lorebooks = new Map<string, MemLorebook>();
   const providerConfigs: ProviderConfigs = {};
   let roleMap: RoleMap = structuredCloneSafe(MEMORY_DEFAULT_ROLE_MAP);
   const personas: PersonaRecord[] = [];
@@ -446,6 +501,7 @@ export function makeMemoryBridge(): CoreBridge {
         ],
         cards: new Map([[playerCharacterId, card]]),
         lorebook: [],
+        attachedLorebooks: [],
       });
       return { story: record, playerCharacterId };
     },
@@ -725,6 +781,103 @@ export function makeMemoryBridge(): CoreBridge {
           return;
         }
       }
+      for (const b of lorebooks.values()) {
+        const i = b.entries.findIndex((e) => e.id === id);
+        if (i >= 0) {
+          b.entries.splice(i, 1);
+          return;
+        }
+      }
+    },
+
+    // — Global lorebook library (v2 §2) —
+    async listLorebooks() {
+      return [...lorebooks.values()].map((b) => ({
+        ...b.book,
+        entryCount: b.entries.length,
+        attachmentCount: [...stories.values()].filter((s) =>
+          s.attachedLorebooks.some((a) => a.lorebookId === b.book.id)
+        ).length,
+      }));
+    },
+    async createLorebook(name, description) {
+      const book: Lorebook = { id: uid(), name, description: description ?? "", createdAt: Date.now(), source: "user" };
+      lorebooks.set(book.id, { book, entries: [] });
+      return { ...book };
+    },
+    async renameLorebook(id, name, description) {
+      const b = lorebooks.get(id);
+      if (!b) throw new Error(`memory bridge: unknown lorebook ${id}`);
+      b.book.name = name;
+      if (description !== undefined) b.book.description = description;
+    },
+    async deleteLorebook(id) {
+      lorebooks.delete(id);
+      for (const s of stories.values()) {
+        s.attachedLorebooks = s.attachedLorebooks.filter((a) => a.lorebookId !== id);
+      }
+    },
+    async listLorebookEntries(lorebookId) {
+      return [...(lorebooks.get(lorebookId)?.entries ?? [])];
+    },
+    async saveLorebookEntryIn(lorebookId, entry) {
+      const b = lorebooks.get(lorebookId);
+      if (!b) throw new Error(`memory bridge: unknown lorebook ${lorebookId}`);
+      const record = { ...entry, lorebookId };
+      const i = b.entries.findIndex((e) => e.id === record.id);
+      if (i >= 0) b.entries[i] = record;
+      else b.entries.push(record);
+    },
+    async listAttachedLorebooks(storyId) {
+      const s = requireStory(storyId);
+      return s.attachedLorebooks
+        .map((a) => {
+          const b = lorebooks.get(a.lorebookId);
+          return b ? { ...b.book, linkEnabled: a.enabled } : undefined;
+        })
+        .filter((x): x is AttachedLorebook => x !== undefined);
+    },
+    async attachLorebook(storyId, lorebookId) {
+      const s = requireStory(storyId);
+      if (!s.attachedLorebooks.some((a) => a.lorebookId === lorebookId)) {
+        s.attachedLorebooks.push({ lorebookId, enabled: true });
+      }
+    },
+    async detachLorebook(storyId, lorebookId) {
+      const s = requireStory(storyId);
+      s.attachedLorebooks = s.attachedLorebooks.filter((a) => a.lorebookId !== lorebookId);
+    },
+    async setLorebookAttachedEnabled(storyId, lorebookId, enabled) {
+      const s = requireStory(storyId);
+      const link = s.attachedLorebooks.find((a) => a.lorebookId === lorebookId);
+      if (link) link.enabled = enabled;
+    },
+
+    // — Persona attach (v2 §4) —
+    async getActivePersona(storyId) {
+      const s = requireStory(storyId);
+      const pick = s.activePersonaId ? personas.find((p) => p.id === s.activePersonaId) : undefined;
+      return pick ? { ...pick } : personas.find((p) => p.isDefault) ? { ...personas.find((p) => p.isDefault)! } : undefined;
+    },
+    async setActivePersona(storyId, personaId) {
+      const s = requireStory(storyId);
+      if (personaId === null) delete s.activePersonaId;
+      else s.activePersonaId = personaId;
+    },
+
+    // — Model recommendations (v2 §1/§5) — stub ranks from the mirrored known-models list.
+    modelsForRole(_role, provider) {
+      return MEMORY_KNOWN_MODELS.filter((m) => m.provider === provider).map((m) => ({
+        id: m.model,
+        label: m.label,
+        provider: m.provider,
+        tier: m.tier,
+        recommendedForRole: m.tier === "recommended",
+        supportsJsonMode: true,
+      }));
+    },
+    defaultAssignmentFor(role) {
+      return structuredCloneSafe(MEMORY_DEFAULT_ROLE_MAP[role]);
     },
 
     async importCardFromBytes() {
