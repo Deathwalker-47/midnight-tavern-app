@@ -65,7 +65,7 @@ export function App() {
   useEffect(() => {
     const unbindHash = bindHashHistory();
     const unbindMotion = bindReducedMotion();
-    void getBridge(); // ensure the (in-memory) bridge singleton exists before stores call it
+    void getBridge(); // singleton already selected by main.tsx bootstrap (sqlite in Tauri, memory in dev)
     void refresh();
     void loadSettings();
     return () => {
