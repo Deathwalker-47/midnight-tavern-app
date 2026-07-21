@@ -16,11 +16,13 @@
  * gates creation. Nav via `useRoute().navigate`. Token variables only; honors reduced-motion
  * through the components' own hooks.
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import { useStoriesStore } from "../state/storiesStore";
 import { useSettingsStore } from "../state/settingsStore";
 import { useRoute } from "../state/uiStore";
+import { getBridge } from "../bridge/core";
+import type { PersonaRecord } from "../bridge/core";
 import { Button, PremiseInput, ForgingInterstitial, InlineNotice, Chip } from "../components";
 import type { ForgeStep, ForgeStepStatus } from "../components";
 import type { ScreenProps } from "./registry";
@@ -82,6 +84,24 @@ export function Wizard(_props: ScreenProps): JSX.Element {
   const [premise, setPremise] = useState("");
   const [phase, setPhase] = useState<ForgePhase | undefined>(undefined);
   const [error, setError] = useState<ForgeError | undefined>(undefined);
+  // Optional persona pick (v2 §4); "" ⇒ use the global default persona.
+  const [personas, setPersonas] = useState<PersonaRecord[]>([]);
+  const [personaId, setPersonaId] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    void getBridge()
+      .listPersonas()
+      .then((ps) => {
+        if (!cancelled) setPersonas(ps);
+      })
+      .catch(() => {
+        /* personas are optional; a load failure just leaves the picker empty */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Default to allowing creation while entitlement loads; only an expired trial blocks it.
   const canCreate = entitlement ? entitlement.canCreateStory : true;
@@ -99,6 +119,14 @@ export function Wizard(_props: ScreenProps): JSX.Element {
         playerName: playerName.trim() || "You",
         onProgress: (p) => setPhase(p),
       });
+      // Apply the optional persona pick to the freshly-created story (v2 §4).
+      if (personaId) {
+        try {
+          await getBridge().setActivePersona(result.story.id, personaId);
+        } catch {
+          /* non-fatal: the story still opens on the default persona */
+        }
+      }
       navigate("play", { storyId: result.story.id });
     } catch (err) {
       setError(classifyError(err));
@@ -172,6 +200,28 @@ export function Wizard(_props: ScreenProps): JSX.Element {
           />
         </div>
 
+        {personas.length > 0 ? (
+          <div style={styles.nameField}>
+            <label className="mono" style={styles.fieldLabel} htmlFor="wizard-persona">
+              PLAY AS
+            </label>
+            <select
+              id="wizard-persona"
+              value={personaId}
+              onChange={(e) => setPersonaId(e.target.value)}
+              style={{ ...styles.nameInput, fontFamily: "var(--font-ui)", fontSize: 14 }}
+            >
+              <option value="">Default persona</option>
+              {personas.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                  {p.isDefault ? " (default)" : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
+
         <PremiseInput
           value={premise}
           onChange={setPremise}
@@ -189,6 +239,15 @@ export function Wizard(_props: ScreenProps): JSX.Element {
               {sd.label}
             </Chip>
           ))}
+        </div>
+
+        <div style={styles.configRow}>
+          <span style={{ fontSize: 12, color: "var(--muted)" }}>
+            The storyteller uses your model role matrix.
+          </span>
+          <button type="button" onClick={() => navigate("rolematrix")} style={styles.configLink}>
+            Configure models →
+          </button>
         </div>
 
         <div style={styles.footer}>
@@ -296,6 +355,8 @@ const styles: Record<string, CSSProperties> = {
   },
   seeds: { display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", marginTop: 14 },
   seedsLabel: { fontSize: 11, color: "var(--muted)" },
+  configRow: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginTop: 16 },
+  configLink: { background: "transparent", border: "none", color: "var(--teal)", fontSize: 12.5, cursor: "pointer", padding: 0 },
   footer: {
     display: "flex",
     justifyContent: "space-between",

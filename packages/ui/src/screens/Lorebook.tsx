@@ -14,8 +14,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { CSSProperties, KeyboardEvent } from "react";
 import { getBridge } from "../bridge/core";
-import type { LorebookEntry } from "../bridge/core";
-import { Button, Chip, ConfirmDialog, EmptyState, InlineNotice, useReducedMotion } from "../components";
+import type { LorebookEntry, LorebookLibraryEntry } from "../bridge/core";
+import { Button, Chip, ConfirmDialog, EmptyState, InlineNotice, LorebookLibraryCard, useReducedMotion } from "../components";
+import type { LorebookSourceTag } from "../components";
 
 type LoadStatus = "loading" | "ready" | "error";
 type ErrorKind = "provider-auth" | "model-output" | "network";
@@ -217,19 +218,10 @@ export function Lorebook(props: ScreenProps): JSX.Element {
   const editing = draft !== null;
   const fadeIn: CSSProperties = reduced ? {} : { animation: "mt-fade var(--motion-med) both" };
 
-  // No open story → nothing to scope entries to.
+  // No open story → show the global lorebook library (v2 §2): every book across the app, with a
+  // create affordance and a drill-in entry editor bound to that specific book.
   if (!storyId) {
-    return (
-      <div style={styles.screen} data-testid="lorebook-screen" data-nostory="true">
-        <div style={styles.body}>
-          <EmptyState
-            glyph="❦"
-            title="Open a story to tend its lore"
-            body="Lorebook entries are world facts scoped to one story — keyword-triggered notes the storyteller quietly pulls into context. Open a story from the Library to add them."
-          />
-        </div>
-      </div>
-    );
+    return <GlobalLorebookLibrary />;
   }
 
   return (
@@ -647,5 +639,328 @@ const styles: Record<string, CSSProperties> = {
     opacity: 0.6,
   },
 };
+
+/** Narrow a lorebook's free-string source to the LorebookLibraryCard tag union. */
+function asSourceTag(source: string | undefined): LorebookSourceTag {
+  return source === "imported_card" || source === "migrated" ? source : "user";
+}
+
+/**
+ * GlobalLorebookLibrary — the top-level lorebook shelf shown when no story is open (v2 §2).
+ * Lists every lorebook (LorebookLibraryCard: name, entry count, "used in N stories", source), with
+ * a create affordance; drilling into a card opens a per-book entry editor bound to that lorebook via
+ * the `*In` bridge methods (listLorebookEntries / saveLorebookEntryIn / deleteLorebookEntry).
+ */
+function GlobalLorebookLibrary(): JSX.Element {
+  const [books, setBooks] = useState<LorebookLibraryEntry[]>([]);
+  const [status, setStatus] = useState<LoadStatus>("loading");
+  const [openBook, setOpenBook] = useState<LorebookLibraryEntry | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [newName, setNewName] = useState("");
+
+  const loadBooks = useCallback(async () => {
+    setStatus("loading");
+    try {
+      setBooks(await getBridge().listLorebooks());
+      setStatus("ready");
+    } catch {
+      setStatus("error");
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadBooks();
+  }, [loadBooks]);
+
+  async function onCreate(): Promise<void> {
+    const name = newName.trim();
+    if (!name) return;
+    await getBridge().createLorebook(name);
+    setNewName("");
+    setCreating(false);
+    await loadBooks();
+  }
+
+  if (openBook) {
+    return (
+      <BookEntryEditor
+        book={openBook}
+        onBack={() => {
+          setOpenBook(null);
+          void loadBooks();
+        }}
+      />
+    );
+  }
+
+  return (
+    <div style={styles.screen} data-testid="lorebook-screen" data-nostory="true">
+      <div style={styles.subHeader}>
+        <p style={styles.subtitle}>
+          Lorebooks are shared world-fact collections. Build them here, then attach them to any story from its Story Settings.
+        </p>
+        <Button variant="primary" onClick={() => setCreating(true)} data-testid="new-lorebook">
+          ＋ New lorebook
+        </Button>
+      </div>
+
+      <div style={styles.body}>
+        {creating ? (
+          <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 20, maxWidth: 480 }}>
+            <input
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void onCreate();
+                if (e.key === "Escape") setCreating(false);
+              }}
+              autoFocus
+              placeholder="Lorebook name…"
+              aria-label="New lorebook name"
+              style={styles.searchInput}
+            />
+            <Button variant="primary" onClick={() => void onCreate()} disabled={!newName.trim()}>
+              Create
+            </Button>
+            <Button variant="ghost" onClick={() => setCreating(false)}>
+              Cancel
+            </Button>
+          </div>
+        ) : null}
+
+        {status === "error" ? (
+          <InlineNotice severity="error" title="Couldn't load your lorebooks" detail="The lorebook store didn't respond." />
+        ) : status === "loading" ? (
+          <div>
+            {[0, 1, 2].map((i) => (
+              <div key={i} style={styles.skeletonRow} aria-hidden="true" />
+            ))}
+          </div>
+        ) : books.length === 0 ? (
+          <EmptyState
+            glyph="❦"
+            title="No lorebooks yet"
+            body="Create a lorebook — a faction, a region, a mythology — then attach it to the stories that should draw on it."
+            action={
+              <Button variant="primary" onClick={() => setCreating(true)}>
+                ＋ Create your first lorebook
+              </Button>
+            }
+          />
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 14 }}>
+            {books.map((b) => (
+              <LorebookLibraryCard
+                key={b.id}
+                name={b.name}
+                source={asSourceTag(b.source)}
+                entryCount={b.entryCount}
+                attachmentCount={b.attachmentCount}
+                onOpen={() => setOpenBook(b)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Per-book entry editor for the global library — mirrors the story editor but targets one book. */
+function BookEntryEditor(props: { book: LorebookLibraryEntry; onBack: () => void }): JSX.Element {
+  const { book, onBack } = props;
+  const [entries, setEntries] = useState<LorebookEntry[]>([]);
+  const [status, setStatus] = useState<LoadStatus>("loading");
+  const [draft, setDraft] = useState<LorebookEntry | null>(null);
+  const [isNew, setIsNew] = useState(false);
+  const [keywordInput, setKeywordInput] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const load = useCallback(async () => {
+    setStatus("loading");
+    try {
+      setEntries(await getBridge().listLorebookEntries(book.id));
+      setStatus("ready");
+    } catch {
+      setStatus("error");
+    }
+  }, [book.id]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const startNew = (): void => {
+    setDraft(emptyEntry());
+    setIsNew(true);
+    setKeywordInput("");
+  };
+  const save = async (): Promise<void> => {
+    if (!draft) return;
+    await getBridge().saveLorebookEntryIn(book.id, draft);
+    await load();
+    setDraft(null);
+    setIsNew(false);
+  };
+  const doDelete = async (): Promise<void> => {
+    if (!draft) return;
+    setConfirmDelete(false);
+    await getBridge().deleteLorebookEntry(draft.id);
+    await load();
+    setDraft(null);
+    setIsNew(false);
+  };
+  const addKeyword = (): void => {
+    const value = keywordInput.trim();
+    if (!value || !draft) return;
+    if (!draft.keys.some((k) => k.toLowerCase() === value.toLowerCase())) {
+      setDraft({ ...draft, keys: [...draft.keys, value] });
+    }
+    setKeywordInput("");
+  };
+
+  const wc = draft ? wordCount(draft.content) : 0;
+  const overLimit = wc > WORD_LIMIT;
+
+  return (
+    <div style={styles.screen} data-testid="lorebook-book-editor">
+      <div style={styles.subHeader}>
+        <div>
+          <button type="button" onClick={onBack} style={{ background: "none", border: "none", color: "var(--secondary)", cursor: "pointer", fontSize: 12.5, marginBottom: 4, padding: 0 }}>
+            ← All lorebooks
+          </button>
+          <p style={{ ...styles.subtitle, fontFamily: "var(--font-display)", fontSize: 20, color: "var(--prose)", margin: 0 }}>{book.name}</p>
+        </div>
+        <Button variant="primary" onClick={startNew}>
+          ＋ New entry
+        </Button>
+      </div>
+
+      <div style={styles.body}>
+        {status === "error" ? (
+          <InlineNotice severity="error" title="Couldn't load entries" detail="The lorebook store didn't respond." />
+        ) : draft ? (
+          <div style={{ maxWidth: 640 }}>
+            <div style={styles.editorLabel}>{isNew ? "NEW ENTRY" : "EDITING ENTRY"}</div>
+            <label style={styles.fieldLabel} htmlFor="book-content">Content</label>
+            <textarea
+              id="book-content"
+              value={draft.content}
+              onChange={(e) => setDraft({ ...draft, content: e.target.value })}
+              placeholder="A world fact, kept short."
+              style={styles.contentInput}
+            />
+            <div style={styles.contentMeta}>
+              <span>Keep it under ~{WORD_LIMIT} words.</span>
+              <span style={{ fontFamily: "var(--font-mono)", color: overLimit ? "var(--failure)" : "var(--muted)" }}>{wc} words</span>
+            </div>
+
+            <label style={styles.fieldLabel} htmlFor="book-keyword">Trigger keywords</label>
+            <div style={styles.chipField}>
+              {draft.keys.map((k) => (
+                <Chip key={k} tone="keyword" onClick={() => setDraft({ ...draft, keys: draft.keys.filter((x) => x !== k) })} title={`Remove “${k}”`}>
+                  {k}
+                  <span aria-hidden="true" style={{ marginLeft: 6, color: "var(--muted)" }}>×</span>
+                </Chip>
+              ))}
+              <input
+                id="book-keyword"
+                value={keywordInput}
+                onChange={(e) => setKeywordInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === ",") {
+                    e.preventDefault();
+                    addKeyword();
+                  }
+                }}
+                onBlur={addKeyword}
+                placeholder="add keyword…"
+                aria-label="Add trigger keyword"
+                style={styles.chipInput}
+              />
+            </div>
+
+            <div style={styles.toggleRow}>
+              <div>
+                <div style={styles.toggleTitle}>Always in context</div>
+                <div style={styles.toggleHint}>Inject regardless of keywords (use sparingly).</div>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={draft.alwaysOn}
+                aria-label="Always in context"
+                onClick={() => setDraft({ ...draft, alwaysOn: !draft.alwaysOn, enabled: true })}
+                style={{ ...styles.toggle, background: draft.alwaysOn ? "var(--brass)" : "var(--hairline)", justifyContent: draft.alwaysOn ? "flex-end" : "flex-start" }}
+              >
+                <span aria-hidden="true" style={{ ...styles.toggleKnob, background: draft.alwaysOn ? "var(--bg1-panel)" : "var(--muted)" }} />
+              </button>
+            </div>
+
+            <div style={styles.editorActions}>
+              {!isNew ? (
+                <Button variant="ghost" onClick={() => setConfirmDelete(true)} style={{ color: "var(--failure)", borderColor: "color-mix(in srgb, var(--failure) 30%, transparent)" }}>
+                  Delete entry
+                </Button>
+              ) : (
+                <span />
+              )}
+              <div style={{ display: "flex", gap: 9 }}>
+                <Button variant="ghost" onClick={() => { setDraft(null); setIsNew(false); }}>
+                  Cancel
+                </Button>
+                <Button variant="primary" onClick={() => void save()}>
+                  Save entry
+                </Button>
+              </div>
+            </div>
+          </div>
+        ) : status === "loading" ? (
+          <div>
+            {[0, 1, 2].map((i) => (
+              <div key={i} style={styles.skeletonRow} aria-hidden="true" />
+            ))}
+          </div>
+        ) : entries.length === 0 ? (
+          <EmptyState glyph="❦" title="No entries yet" body="Add a world fact and tag it with the keywords that should summon it." action={<Button variant="primary" onClick={startNew}>＋ Add entry</Button>} />
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, maxWidth: 640 }}>
+            {entries.map((e) => (
+              <button
+                key={e.id}
+                type="button"
+                onClick={() => { setDraft({ ...e, keys: [...e.keys] }); setIsNew(false); }}
+                style={{ ...styles.row, borderLeftColor: "transparent", background: "var(--bg1-panel)", borderRadius: 8, border: "1px solid var(--hairline)" }}
+              >
+                <div style={styles.rowTop}>
+                  <span style={styles.rowTitle}>{titleFor(e)}</span>
+                  {e.alwaysOn ? <span aria-label="Always in context" title="Always in context" style={styles.alwaysDot} /> : null}
+                </div>
+                {e.keys.length > 0 ? (
+                  <div style={styles.rowKeys}>
+                    {e.keys.slice(0, 4).map((k, i) => (
+                      <span key={i} style={styles.rowKey}>{k}</span>
+                    ))}
+                  </div>
+                ) : null}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <ConfirmDialog
+        open={confirmDelete}
+        tone="danger"
+        title="Delete this entry?"
+        body={draft ? <><b style={{ color: "var(--prose)" }}>{titleFor(draft)}</b> will be removed from this lorebook. This can’t be undone.</> : undefined}
+        confirmLabel="Delete"
+        cancelLabel="Keep"
+        onConfirm={() => void doDelete()}
+        onCancel={() => setConfirmDelete(false)}
+      />
+    </div>
+  );
+}
 
 export default Lorebook;
