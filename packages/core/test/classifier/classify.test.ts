@@ -28,7 +28,7 @@ const present = [
 function scripted(responses: string[]): Router {
   let i = 0;
   return {
-    bindingFor: () => ({ provider: "openrouter", model: "test" }),
+    bindingFor: () => ({ provider: "openrouter", model: "test", source: "recommended", samplersDirty: false }),
     async complete(_role, _prompt: RolePrompt) {
       const content = responses[Math.min(i, responses.length - 1)] ?? "";
       i++;

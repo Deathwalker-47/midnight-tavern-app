@@ -37,7 +37,7 @@ class ScriptedRouter implements Router {
   constructor(private script: Script) {}
 
   bindingFor(_role: Role): RoleBinding {
-    return { provider: "openrouter", model: "test" };
+    return { provider: "openrouter", model: "test", source: "recommended", samplersDirty: false };
   }
 
   async complete(role: Role, _prompt: RolePrompt): Promise<ChatResponse> {

@@ -117,7 +117,7 @@ const PHASE_B = {
 function phasedRouter(scripts: { a: string[]; b: string[] }): { router: Router; counts: { a: number; b: number } } {
   const counts = { a: 0, b: 0 };
   const router: Router = {
-    bindingFor: () => ({ provider: "openrouter", model: "test" }),
+    bindingFor: () => ({ provider: "openrouter", model: "test", source: "recommended", samplersDirty: false }),
     async complete(_role, prompt: RolePrompt): Promise<ChatResponse> {
       const key = prompt.system.includes("PHASE A") ? "a" : "b";
       const seq = scripts[key];

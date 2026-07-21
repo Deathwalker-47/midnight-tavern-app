@@ -16,7 +16,7 @@ function scriptedRouter(responses: string[]): { router: Router; seen: string[] }
   const seen: string[] = [];
   let i = 0;
   const router: Router = {
-    bindingFor: () => ({ provider: "openrouter", model: "test" }),
+    bindingFor: () => ({ provider: "openrouter", model: "test", source: "recommended", samplersDirty: false }),
     async complete(_role, prompt: RolePrompt) {
       seen.push(prompt.user);
       const content = responses[Math.min(i, responses.length - 1)] ?? "";
