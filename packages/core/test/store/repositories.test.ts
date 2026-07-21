@@ -10,6 +10,7 @@ import { z } from "zod";
 import { openStore, type Store } from "../../src/store/index.js";
 import type {
   CharacterSoftState,
+  Lorebook,
   LorebookEntry,
   MessageRecord,
   PersonaRecord,
@@ -317,38 +318,91 @@ describe("world_soft", () => {
   });
 });
 
-describe("lorebook", () => {
+describe("lorebook (v2: global books, m2m attach)", () => {
   beforeEach(async () => {
     await store.stories.insert(storyRecord());
   });
 
-  const entry = (id: string, enabled: boolean): LorebookEntry => ({
+  const book = (id: string): Lorebook => ({
     id,
-    storyId: "s1",
+    name: `Book ${id}`,
+    description: "A test lorebook.",
+    createdAt: 1000,
+    source: "user",
+  });
+
+  const entry = (
+    id: string,
+    lorebookId: string,
+    enabled: boolean,
+    over: Partial<LorebookEntry> = {}
+  ): LorebookEntry => ({
+    id,
+    lorebookId,
     keys: ["wight", "grave"],
     content: "The wight guards the barrow.",
     enabled,
+    alwaysOn: false,
+    priority: 0,
+    insertionOrder: 0,
+    ...over,
   });
 
-  it("round-trips entries and filters enabled ones", async () => {
-    await store.lorebook.insert(entry("l1", true));
-    await store.lorebook.insert(entry("l2", false));
-    expect(await store.lorebook.get("l1")).toEqual(entry("l1", true));
-    expect(await store.lorebook.listByStory("s1")).toHaveLength(2);
-    expect((await store.lorebook.listEnabled("s1")).map((e) => e.id)).toEqual(["l1"]);
+  it("round-trips lorebooks and their entries", async () => {
+    await store.lorebook.createLorebook(book("b1"));
+    await store.lorebook.insertEntry(entry("e1", "b1", true));
+    await store.lorebook.insertEntry(entry("e2", "b1", false));
+    expect(await store.lorebook.getLorebook("b1")).toEqual(book("b1"));
+    expect(await store.lorebook.getEntry("e1")).toEqual(entry("e1", "b1", true));
+    expect(await store.lorebook.listEntries("b1")).toHaveLength(2);
   });
 
-  it("updates and deletes", async () => {
-    await store.lorebook.insert(entry("l1", true));
-    await store.lorebook.update({ ...entry("l1", false), content: "changed" });
-    expect((await store.lorebook.get("l1"))?.enabled).toBe(false);
-    expect((await store.lorebook.get("l1"))?.content).toBe("changed");
-    await store.lorebook.delete("l1");
-    expect(await store.lorebook.get("l1")).toBeUndefined();
+  it("attaches to a story and lists active entries honoring both enabled flags", async () => {
+    await store.lorebook.createLorebook(book("b1"));
+    await store.lorebook.insertEntry(entry("e1", "b1", true));
+    await store.lorebook.insertEntry(entry("e2", "b1", false)); // entry-disabled
+
+    // Not attached yet → nothing active.
+    expect(await store.lorebook.listActiveEntries("s1")).toHaveLength(0);
+
+    await store.lorebook.attach("s1", "b1");
+    expect((await store.lorebook.listActiveEntries("s1")).map((e) => e.id)).toEqual(["e1"]);
+    const attached = await store.lorebook.listAttached("s1");
+    expect(attached).toHaveLength(1);
+    expect(attached[0]?.linkEnabled).toBe(true);
+
+    // Disabling the link hides all its entries even though the entry itself is enabled.
+    await store.lorebook.setAttachedEnabled("s1", "b1", false);
+    expect(await store.lorebook.listActiveEntries("s1")).toHaveLength(0);
+  });
+
+  it("orders active entries by priority desc then insertion order", async () => {
+    await store.lorebook.createLorebook(book("b1"));
+    await store.lorebook.insertEntry(entry("lo", "b1", true, { priority: 1, insertionOrder: 0 }));
+    await store.lorebook.insertEntry(entry("hi", "b1", true, { priority: 5, insertionOrder: 1 }));
+    await store.lorebook.insertEntry(entry("mid", "b1", true, { priority: 1, insertionOrder: 2 }));
+    await store.lorebook.attach("s1", "b1");
+    expect((await store.lorebook.listActiveEntries("s1")).map((e) => e.id)).toEqual([
+      "hi",
+      "lo",
+      "mid",
+    ]);
+  });
+
+  it("updates and deletes entries", async () => {
+    await store.lorebook.createLorebook(book("b1"));
+    await store.lorebook.insertEntry(entry("e1", "b1", true));
+    await store.lorebook.updateEntry({ ...entry("e1", "b1", false), content: "changed" });
+    expect((await store.lorebook.getEntry("e1"))?.enabled).toBe(false);
+    expect((await store.lorebook.getEntry("e1"))?.content).toBe("changed");
+    await store.lorebook.deleteEntry("e1");
+    expect(await store.lorebook.getEntry("e1")).toBeUndefined();
   });
 
   it("throws when updating a missing entry", async () => {
-    await expect(store.lorebook.update(entry("ghost", true))).rejects.toThrow(/No lorebook/);
+    await expect(store.lorebook.updateEntry(entry("ghost", "b1", true))).rejects.toThrow(
+      /No lorebook/
+    );
   });
 });
 

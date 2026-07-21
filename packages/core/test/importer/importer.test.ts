@@ -154,7 +154,7 @@ describe("mapCardToImport", () => {
     // The only path to mechanics is the premise string (→ bootstrapper). The mapped shape
     // carries no items/skills/resources/actions of its own.
     const keys = Object.keys(m);
-    expect(keys.sort()).toEqual(["identity", "lorebook", "name", "openings", "premise"]);
+    expect(keys.sort()).toEqual(["blueprint", "identity", "lorebook", "name", "openings", "premise"]);
     expect(m).not.toHaveProperty("items");
     expect(m).not.toHaveProperty("skills");
     expect(m).not.toHaveProperty("resources");
@@ -162,6 +162,11 @@ describe("mapCardToImport", () => {
     // identity is narrative-only: traits/likes/dislikes (+ optional appearance/backstory).
     expect(m.identity).not.toHaveProperty("skills");
     expect(m.identity).not.toHaveProperty("resources");
+    // The blueprint (§3) is style/identity/premise only — it can carry no mechanical channel either.
+    expect(m.blueprint).not.toHaveProperty("items");
+    expect(m.blueprint).not.toHaveProperty("skills");
+    expect(m.blueprint).not.toHaveProperty("resources");
+    expect(m.blueprint).not.toHaveProperty("actions");
   });
 
   it("falls back to a default name when the card has none", () => {

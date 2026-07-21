@@ -17,15 +17,21 @@ const EXPECTED_TABLES = [
   "arcs",
   "chapters",
   "characters",
-  "lorebook",
+  "lorebook_entries",
+  "lorebooks",
   "messages",
   "personas",
   "rulings",
   "schema_migrations",
   "settings",
   "stories",
+  "story_lorebooks",
+  "turn_checkpoints",
   "world_soft",
 ];
+
+/** Number of embedded migrations. Bump when adding one. */
+const MIGRATION_COUNT = 5;
 
 async function tableNames(db: Db): Promise<string[]> {
   const rows = await db.all<{ name: string }>(
@@ -43,8 +49,14 @@ describe("openDb / migrations", () => {
 
   it("records the applied migration exactly once", async () => {
     const db = await openDb(":memory:");
-    const rows = await db.all("SELECT version, name FROM schema_migrations");
-    expect(rows).toEqual([{ version: 1, name: "init" }]);
+    const rows = await db.all("SELECT version, name FROM schema_migrations ORDER BY version");
+    expect(rows).toEqual([
+      { version: 1, name: "init" },
+      { version: 2, name: "story_blueprint" },
+      { version: 3, name: "global_lorebooks" },
+      { version: 4, name: "story_persona" },
+      { version: 5, name: "checkpoints" },
+    ]);
     await db.close();
   });
 
@@ -58,10 +70,17 @@ describe("openDb / migrations", () => {
       const count = await second.get<{ n: number }>(
         "SELECT COUNT(*) AS n FROM schema_migrations"
       );
-      expect(count?.n).toBe(1);
+      // One row per migration; reopening applies nothing new. Track the full migration set.
+      expect(count?.n).toBe(MIGRATION_COUNT);
       await second.close();
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      // On Windows the DB file handle can linger a tick after close(); retry the unlink.
+      try {
+        rmSync(dir, { recursive: true, force: true });
+      } catch {
+        await new Promise((r) => setTimeout(r, 50));
+        rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 });
+      }
     }
   });
 
