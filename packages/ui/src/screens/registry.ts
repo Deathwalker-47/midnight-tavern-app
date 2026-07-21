@@ -23,10 +23,17 @@ const Library = lazy(() => import("./Library.js").then((m) => ({ default: m.Libr
 const Play = lazy(() => import("./Play.js").then((m) => ({ default: m.Play })));
 const Overview = lazy(() => import("./Overview.js").then((m) => ({ default: m.Overview })));
 const Characters = lazy(() => import("./Characters.js").then((m) => ({ default: m.Characters })));
+const CharacterDossier = lazy(() =>
+  import("./CharacterDossier.js").then((m) => ({ default: m.CharacterDossier }))
+);
 const StorySettings = lazy(() =>
   import("./StorySettings.js").then((m) => ({ default: m.StorySettings }))
 );
+const StoryBlueprint = lazy(() =>
+  import("./StoryBlueprint.js").then((m) => ({ default: m.StoryBlueprint }))
+);
 const Settings = lazy(() => import("./Settings.js").then((m) => ({ default: m.Settings })));
+const RoleMatrix = lazy(() => import("./RoleMatrix.js").then((m) => ({ default: m.RoleMatrix })));
 const Personas = lazy(() => import("./Personas.js").then((m) => ({ default: m.Personas })));
 const CardCreator = lazy(() => import("./CardCreator.js").then((m) => ({ default: m.CardCreator })));
 const Lorebook = lazy(() => import("./Lorebook.js").then((m) => ({ default: m.Lorebook })));
@@ -41,8 +48,11 @@ export const registry: Record<Route, ScreenComponent> = {
   play: Play,
   overview: Overview,
   characters: Characters,
+  dossier: CharacterDossier,
   storysettings: StorySettings,
+  blueprint: StoryBlueprint,
   settings: Settings,
+  rolematrix: RoleMatrix,
   personas: Personas,
   cardcreator: CardCreator,
   lorebook: Lorebook,

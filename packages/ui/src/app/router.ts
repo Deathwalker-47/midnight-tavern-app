@@ -8,14 +8,17 @@
  */
 import { create } from "zustand";
 
-/** The twelve routes, one per screen file. `story` is not a route — `play` is the story default. */
+/** The routes, one per screen file. `story` is not a route — `play` is the story default. */
 export const ROUTES = [
   "library",
   "play",
   "overview",
   "characters",
+  "dossier",
   "storysettings",
+  "blueprint",
   "settings",
+  "rolematrix",
   "personas",
   "cardcreator",
   "lorebook",
@@ -32,6 +35,8 @@ export interface RouteParams {
   personaId?: string;
   /** Lorebook may open a specific entry. */
   entryId?: string;
+  /** Character Dossier scopes to one character within the story. */
+  characterId?: string;
 }
 
 /** True for the four surfaces that require an open story (drive the header's sub-tabs). */
@@ -60,6 +65,7 @@ function parseHash(hash: string): { route: Route; params: RouteParams } {
     if (k === "storyId") params.storyId = value;
     else if (k === "personaId") params.personaId = value;
     else if (k === "entryId") params.entryId = value;
+    else if (k === "characterId") params.characterId = value;
   }
   return { route, params };
 }
