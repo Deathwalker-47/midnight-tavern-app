@@ -72,21 +72,96 @@ export function decodeSnapshot(record: CheckpointRecord): CheckpointSnapshot {
 
 /**
  * Restore a story's hard + soft + world state to a checkpoint's pre-image (low-level-plan-v2 §6).
- * Writes only characters present in the snapshot; a character created AFTER the checkpoint keeps
- * its row (the caller truncates messages/checkpoints separately — this only rolls back state).
- * Runs inside its own transaction so a partial restore never lands.
+ * Runs inside its own transaction so a partial restore never lands. For use inside a caller's
+ * existing transaction (atomic delete/rewind), call {@link applyRestore} directly.
  */
 export async function restore(store: Store, record: CheckpointRecord): Promise<void> {
+  await store.transaction(async () => {
+    await applyRestore(store, record);
+  });
+}
+
+/**
+ * The transaction-free body of {@link restore}. Restores every character present in the snapshot,
+ * restores (or clears) world soft, and — critically for exact pre-image fidelity (§6) — DELETES any
+ * character created AFTER the checkpoint and CLEARS soft/world that didn't exist in the pre-image.
+ * Must be called inside a `store.transaction`.
+ */
+export async function applyRestore(store: Store, record: CheckpointRecord): Promise<void> {
+  const snap = decodeSnapshot(record);
+
+  // Drop characters that did not exist at checkpoint time (their hard state has no pre-image to
+  // roll back to). A character is "in the pre-image" iff it appears in the hard snapshot.
+  const roster = await store.characters.listByStory(record.storyId);
+  for (const c of roster) {
+    if (!(c.id in snap.hard)) {
+      await store.characters.delete(c.id);
+    }
+  }
+
+  for (const [id, hard] of Object.entries(snap.hard)) {
+    const existing = await store.characters.get(id);
+    if (existing) await store.characters.updateHard(id, hard);
+  }
+  await restoreSoftForSnapshot(store, snap);
+
+  // World: restore the pre-image, or clear it if the checkpoint had no world doc (a world created
+  // after the checkpoint must not survive the rollback).
+  if (snap.world) await store.worldSoft.set(record.storyId, snap.world);
+  else await store.worldSoft.clear(record.storyId);
+}
+
+/** Restore each character's soft state from a snapshot; clear soft that wasn't in the pre-image. */
+async function restoreSoftForSnapshot(store: Store, snap: CheckpointSnapshot): Promise<void> {
+  for (const id of Object.keys(snap.hard)) {
+    const existing = await store.characters.get(id);
+    if (!existing) continue;
+    const soft = snap.soft[id];
+    if (soft) await store.characters.updateSoft(id, soft, soft.tier);
+    else await store.characters.clearSoft(id);
+  }
+}
+
+/**
+ * Snapshot the story's CURRENT soft + world state (no hard) into a checkpoint record shape — used by
+ * swipe to record the post-analyzer soft/world that matches a freshly-regenerated variant (§6 step
+ * 5). Hard blobs are retained so restore knows which characters existed; swipe never mutates hard.
+ */
+export async function snapshotSoftWorld(
+  store: Store,
+  storyId: string,
+  messageId: string,
+  turnIndex: number
+): Promise<CheckpointRecord> {
+  const roster = await store.characters.listByStory(storyId);
+  const hard: Record<string, CharacterHardState> = {};
+  const soft: Record<string, CharacterSoftState> = {};
+  for (const c of roster) {
+    hard[c.id] = c.hard;
+    if (c.soft) soft[c.id] = c.soft;
+  }
+  const world = await store.worldSoft.get(storyId);
+  return {
+    id: randomUUID(),
+    storyId,
+    messageId,
+    turnIndex,
+    hardPreJson: JSON.stringify(hard),
+    softPreJson: JSON.stringify(soft),
+    worldPreJson: world ? JSON.stringify(world) : null,
+    createdAt: Date.now(),
+  };
+}
+
+/**
+ * Restore ONLY soft + world state from a snapshot (leaving hard + rulings untouched) — swipe's
+ * undo of a variant's analyzer patch (§6 step 2/5). Runs inside its own transaction.
+ */
+export async function restoreSoftWorld(store: Store, record: CheckpointRecord): Promise<void> {
   const snap = decodeSnapshot(record);
   await store.transaction(async () => {
-    for (const [id, hard] of Object.entries(snap.hard)) {
-      const existing = await store.characters.get(id);
-      if (existing) await store.characters.updateHard(id, hard);
-    }
-    for (const [id, soft] of Object.entries(snap.soft)) {
-      const existing = await store.characters.get(id);
-      if (existing) await store.characters.updateSoft(id, soft, soft.tier);
-    }
+    await restoreSoftForSnapshot(store, snap);
     if (snap.world) await store.worldSoft.set(record.storyId, snap.world);
+    else await store.worldSoft.clear(record.storyId);
   });
 }

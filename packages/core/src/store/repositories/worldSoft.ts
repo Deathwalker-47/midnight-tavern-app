@@ -17,6 +17,8 @@ export interface WorldSoftRepo {
   /** Insert or replace the world-soft document for a story. */
   set(storyId: string, soft: WorldSoftState): Promise<void>;
   get(storyId: string): Promise<WorldSoftState | undefined>;
+  /** Delete a story's world-soft row (checkpoint rollback when the pre-image had no world). §6. */
+  clear(storyId: string): Promise<void>;
 }
 
 export function makeWorldSoftRepo(db: Db): WorldSoftRepo {
@@ -33,6 +35,10 @@ export function makeWorldSoftRepo(db: Db): WorldSoftRepo {
     async get(storyId) {
       const row = await db.get<Row>("SELECT * FROM world_soft WHERE story_id = ?", storyId);
       return row ? decodeJson(WorldSoftStateSchema, row.soft_json) : undefined;
+    },
+
+    async clear(storyId) {
+      await db.run("DELETE FROM world_soft WHERE story_id = ?", storyId);
     },
   };
 }

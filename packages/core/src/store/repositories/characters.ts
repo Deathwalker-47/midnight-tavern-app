@@ -58,6 +58,8 @@ export interface CharacterRepo {
   updateHard(id: string, hard: CharacterHardState): Promise<void>;
   /** Overwrite the analyzer-owned soft state (and tier) for one character. */
   updateSoft(id: string, soft: CharacterSoftState, tier: SoftTier): Promise<void>;
+  /** Null out a character's soft state + tier (checkpoint rollback when the pre-image had none). §6. */
+  clearSoft(id: string): Promise<void>;
   delete(id: string): Promise<void>;
 }
 
@@ -105,6 +107,14 @@ export function makeCharacterRepo(db: Db): CharacterRepo {
         "UPDATE characters SET soft_json = ?, soft_tier = ? WHERE id = ?",
         encodeJson(CharacterSoftStateSchema, soft),
         SoftTierSchema.parse(tier),
+        id
+      );
+      if (info.changes === 0) throw new Error(`No character with id "${id}" to update.`);
+    },
+
+    async clearSoft(id) {
+      const info = await db.run(
+        "UPDATE characters SET soft_json = NULL, soft_tier = NULL WHERE id = ?",
         id
       );
       if (info.changes === 0) throw new Error(`No character with id "${id}" to update.`);

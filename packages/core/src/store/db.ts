@@ -262,6 +262,19 @@ ALTER TABLE messages ADD COLUMN variants_json TEXT;
 ALTER TABLE messages ADD COLUMN active_variant INTEGER NOT NULL DEFAULT 0;
 `,
   },
+  {
+    version: 6,
+    name: "variant_soft_states",
+    // Swipe integrity (low-level-plan-v2 §6 steps 4-5). Each narrator variant produces its OWN
+    // analyzer patch, so the soft/world memory that matches variant K differs from variant J. We
+    // store, per variant, the post-analyzer soft+world snapshot (a JSON array parallel to
+    // variants_json). Regenerating a variant re-runs the analyzer and appends its snapshot; cycling
+    // ‹ › between existing variants just restores that variant's stored snapshot — no model call,
+    // and the shown prose can never disagree with the stored soft state.
+    sql: `
+ALTER TABLE messages ADD COLUMN variant_states_json TEXT;
+`,
+  },
 ];
 
 /**

@@ -37,6 +37,11 @@ export interface ArcRepo {
   listByStory(storyId: string): Promise<ArcRecord[]>;
   /** The most recent arc for a story (highest idx), if any. */
   latest(storyId: string): Promise<ArcRecord | undefined>;
+  /**
+   * Delete every arc that folds a chapter at or after `chapterIdx` (i.e. `chapter_to >= chapterIdx`)
+   * — cascaded from chapter invalidation on delete/rewind so no arc references a removed chapter (§6).
+   */
+  deleteFromChapterIdx(storyId: string, chapterIdx: number): Promise<void>;
   nextIdx(storyId: string): Promise<number>;
 }
 
@@ -81,6 +86,14 @@ export function makeArcRepo(db: Db): ArcRepo {
         storyId
       );
       return !row || row.maxIdx === null ? 0 : row.maxIdx + 1;
+    },
+
+    async deleteFromChapterIdx(storyId, chapterIdx) {
+      await db.run(
+        "DELETE FROM arcs WHERE story_id = ? AND chapter_to >= ?",
+        storyId,
+        chapterIdx
+      );
     },
   };
 }

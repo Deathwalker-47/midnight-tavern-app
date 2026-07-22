@@ -199,4 +199,115 @@ describe("history ops — swipe / delete / rewind (§6)", () => {
     expect(await store.checkpoints.listByStory(storyId)).toHaveLength(1);
     expect(await store.rulings.listByStory(storyId)).toHaveLength(1);
   });
+
+  // ── V2 §6 blocking tests: swipe re-runs analyzer + per-variant soft state; summary invalidation ──
+
+  it("swipe re-runs the analyzer per variant and cycling restores that variant's soft state", async () => {
+    // Analyzer writes the wight's mood = current narrator prose, so each variant yields distinct soft.
+    const moodRouter = new ScriptedRouter({ classified: strikeIntent, narratorProse: "First telling." });
+    moodRouter.complete = async (role: Role) => {
+      if (role === "classifier") return { content: JSON.stringify(strikeIntent) };
+      if (role === "analyzer") {
+        return {
+          content: JSON.stringify({
+            characterOps: [
+              { characterId: "wight", ops: [{ op: "set", path: "mood", value: moodRouter.script.narratorProse }] },
+            ],
+            worldOps: [],
+          }),
+        };
+      }
+      return { content: "" };
+    };
+
+    await strike(moodRouter, store, storyId, "I strike");
+    expect((await store.characters.get("wight"))!.soft?.current.mood).toBe("First telling.");
+    const hpAfterTurn = await wightHp(store);
+
+    moodRouter.script.narratorProse = "Second telling.";
+    await swipeLastTurn(moodRouter, store, storyId);
+    // Soft state followed the NEW prose; hard state is byte-identical (no re-roll).
+    expect((await store.characters.get("wight"))!.soft?.current.mood).toBe("Second telling.");
+    expect(await wightHp(store)).toBe(hpAfterTurn);
+
+    // Cycling back to variant 0 restores its stored soft snapshot — with NO model call.
+    const narratorIdx = (await store.messages.nextIdx(storyId)) - 1;
+    let analyzerCalls = 0;
+    moodRouter.complete = async (role: Role) => {
+      if (role === "analyzer") analyzerCalls++;
+      return { content: "{}" };
+    };
+    await selectVariant(store, storyId, narratorIdx, 0);
+    expect(analyzerCalls).toBe(0);
+    expect((await store.characters.get("wight"))!.soft?.current.mood).toBe("First telling.");
+  });
+
+  it("deleteLastTurn invalidates chapters/arcs built from the removed messages", async () => {
+    await strike(router, store, storyId, "I strike");
+    const narratorIdx = (await store.messages.nextIdx(storyId)) - 1;
+    // Seed a chapter + arc that summarize through the last message.
+    await store.chapters.insert({
+      id: "ch0",
+      storyId,
+      idx: 0,
+      msgFrom: 0,
+      msgTo: narratorIdx,
+      title: "Chapter One",
+      summary: "…",
+    });
+    await store.arcs.insert({
+      id: "arc0",
+      storyId,
+      idx: 0,
+      chapterFrom: 0,
+      chapterTo: 0,
+      title: "Arc One",
+      doc: {
+        plotSummary: "…",
+        characterDevelopment: [],
+        relationshipDynamics: [],
+        secretsRevealed: [],
+        keyDialogue: [],
+        promisesAndOaths: [],
+        antagonists: [],
+        worldLore: [],
+        unresolvedThreads: [],
+        stakes: [],
+        keyItems: [],
+        skillsAndPowers: [],
+        limitations: [],
+        timeline: [],
+      },
+    });
+
+    await deleteLastTurn(store, storyId);
+
+    expect(await store.chapters.listByStory(storyId)).toHaveLength(0);
+    expect(await store.arcs.listByStory(storyId)).toHaveLength(0);
+  });
+
+  it("restore drops characters and world created after the checkpoint", async () => {
+    await strike(router, store, storyId, "I strike");
+    // Simulate post-turn analyzer artifacts: a brand-new observed character + a world doc that did
+    // NOT exist at checkpoint time.
+    await store.characters.insert({
+      id: "ghost",
+      storyId,
+      name: "Pale ghost",
+      isPlayer: false,
+      hard: { characterId: "ghost", isPlayer: false, resources: {}, skills: [], inventory: [], flags: {}, alive: true },
+    });
+    await store.worldSoft.set(storyId, {
+      overview: "A world that appeared this turn.",
+      locations: [],
+      arcs: [],
+      unresolvedThreads: [],
+    });
+
+    await deleteLastTurn(store, storyId);
+
+    // The checkpoint pre-image had neither → both are gone after rollback.
+    expect(await store.characters.get("ghost")).toBeUndefined();
+    expect(await store.worldSoft.get(storyId)).toBeUndefined();
+  });
 });

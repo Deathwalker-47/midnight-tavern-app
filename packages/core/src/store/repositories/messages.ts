@@ -18,6 +18,7 @@ interface Row {
   created_at: number;
   variants_json: string | null;
   active_variant: number | null;
+  variant_states_json: string | null;
 }
 
 const VariantsSchema = z.array(z.string());
@@ -51,6 +52,13 @@ export interface MessageRepo {
    * active variant so existing readers that ignore variants still render the shown prose.
    */
   setVariants(id: string, variants: string[], activeVariant: number): Promise<void>;
+  /**
+   * Per-variant soft/world snapshot storage (swipe §6 step 5). Opaque JSON parallel to `variants` —
+   * element K is the post-analyzer soft+world state matching variant K, so cycling ‹ › restores the
+   * right memory with no model call. Kept off {@link MessageRecord} (UI-facing) as raw JSON.
+   */
+  getVariantStatesJson(id: string): Promise<string | null>;
+  setVariantStatesJson(id: string, json: string): Promise<void>;
   /** Delete a single message by id. */
   delete(id: string): Promise<void>;
   /** Delete every message at or after a turn index (rewind/truncate, §6). */
@@ -121,6 +129,23 @@ export function makeMessageRepo(db: Db): MessageRepo {
         id
       );
       if (info.changes === 0) throw new Error(`No message with id "${id}" to set variants.`);
+    },
+
+    async getVariantStatesJson(id) {
+      const row = await db.get<{ variant_states_json: string | null }>(
+        "SELECT variant_states_json FROM messages WHERE id = ?",
+        id
+      );
+      return row?.variant_states_json ?? null;
+    },
+
+    async setVariantStatesJson(id, json) {
+      const info = await db.run(
+        "UPDATE messages SET variant_states_json = ? WHERE id = ?",
+        json,
+        id
+      );
+      if (info.changes === 0) throw new Error(`No message with id "${id}" to set variant states.`);
     },
 
     async delete(id) {
