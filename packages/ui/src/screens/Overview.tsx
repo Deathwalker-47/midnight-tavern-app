@@ -8,13 +8,11 @@
  * precondition) · summarizing (skeleton) · no-arc-yet (empty). The narrow (~900px) layout drops
  * the timeline to a stacked column; skeleton motion collapses under reduced-motion.
  *
- * BRIDGE NOTE: the CoreBridge (SCREEN_CONTRACT) exposes no chapter/arc reads yet — no
- * `listChapters` / `listArcs`. Until those land, the timeline + arc are derived LOCALLY from the
- * open story (`useStoriesStore.current`) and its message count: chapters are inferred at ~20
- * msgs/chapter (the same heuristic the App header uses), the newest chapter is "in-progress", and
- * the ArcDoc is assembled from the frozen schema's premise + title. This is a documented stub;
- * when `bridge.listChapters(storyId)` / `bridge.listArcs(storyId)` exist, swap the derivation for
- * real reads.
+ * DATA: reads PERSISTED summaries via `bridge.listChapters` / `bridge.listArcs` (audit #6). When the
+ * summarizer has written chapters/arcs, the timeline + ArcDoc reader render those real records. Only
+ * the still-open (unsummarized) tail chapter is derived from the transcript length — it has no
+ * persisted row yet by definition. In the in-memory dev backend both lists are empty, so the screen
+ * shows the pre-summary states exactly as before.
  */
 import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
@@ -23,7 +21,7 @@ import { useUiStore } from "../state/uiStore";
 import { getBridge } from "../bridge/core";
 import { ChapterCard, ArcDoc, EmptyState, InlineNotice, Button } from "../components";
 import type { ArcDocSection, ChapterStatus } from "../components";
-import type { MessageRecord } from "../bridge/core";
+import type { MessageRecord, ChapterRecord, ArcRecord } from "../bridge/core";
 import type { ScreenProps } from "./registry";
 
 const MSGS_PER_CHAPTER = 20;
@@ -38,31 +36,64 @@ interface DerivedChapter {
   summary?: string;
 }
 
-/** Infer the chapter timeline from the transcript length (documented stub — see file header). */
-function deriveChapters(messageCount: number): DerivedChapter[] {
-  const total = Math.max(1, Math.ceil(messageCount / MSGS_PER_CHAPTER));
-  const chapters: DerivedChapter[] = [];
-  for (let i = 0; i < total; i++) {
-    const from = i * MSGS_PER_CHAPTER + 1;
-    const to = Math.min((i + 1) * MSGS_PER_CHAPTER, Math.max(messageCount, from));
-    const isLast = i === total - 1;
-    chapters.push({
-      index: i + 1,
-      title: isLast ? "The unfolding chapter" : `Chapter ${i + 1}`,
-      status: isLast ? "in-progress" : "summarized",
-      range: `msgs ${from}–${to}`,
-      summary: isLast
-        ? undefined
-        : "A closed chapter, summarized into the arc record the storyteller reads before every turn.",
+/**
+ * Build the timeline from PERSISTED chapters plus the still-open tail (audit #6). Each persisted
+ * chapter is "summarized"; the open tail (messages after the last chapter's `msgTo`) is derived and
+ * shown "in-progress". With no persisted chapters this reduces to the old transcript-length stub.
+ */
+function buildChapters(chapters: ChapterRecord[], messageCount: number): DerivedChapter[] {
+  const out: DerivedChapter[] = chapters.map((ch) => ({
+    index: ch.idx + 1,
+    title: ch.title,
+    status: "summarized" as ChapterStatus,
+    range: `msgs ${ch.msgFrom + 1}–${ch.msgTo + 1}`,
+    summary: ch.summary,
+  }));
+  const lastSummarizedMsg = chapters.length ? chapters[chapters.length - 1]!.msgTo + 1 : 0;
+  if (messageCount > lastSummarizedMsg) {
+    out.push({
+      index: out.length + 1,
+      title: "The unfolding chapter",
+      status: "in-progress",
+      range: `msgs ${lastSummarizedMsg + 1}–${messageCount}`,
     });
+  } else if (out.length === 0) {
+    // No messages and no chapters: show a single empty in-progress chapter for structure.
+    out.push({ index: 1, title: "The unfolding chapter", status: "in-progress", range: "msgs 1–1" });
   }
-  return chapters;
+  return out;
 }
 
-/** Messages elapsed in the current (last, in-progress) chapter. */
-function messagesInCurrentChapter(messageCount: number): number {
-  if (messageCount <= 0) return 0;
-  return ((messageCount - 1) % MSGS_PER_CHAPTER) + 1;
+/** Messages elapsed in the current (last, in-progress) chapter, measured past the last summary. */
+function messagesInCurrentChapter(chapters: ChapterRecord[], messageCount: number): number {
+  const lastSummarizedMsg = chapters.length ? chapters[chapters.length - 1]!.msgTo + 1 : 0;
+  return Math.max(0, messageCount - lastSummarizedMsg);
+}
+
+/** Render the persisted ArcDoc into reader sections, showing only the parts that carry content. */
+function arcDocToSections(arc: ArcRecord): ArcDocSection[] {
+  const doc = arc.doc;
+  const sections: ArcDocSection[] = [];
+  if (doc.plotSummary.trim()) sections.push({ heading: "Plot so far", body: doc.plotSummary });
+  const lists: [string, string[]][] = [
+    ["Character development", doc.characterDevelopment],
+    ["Relationships", doc.relationshipDynamics],
+    ["Secrets revealed", doc.secretsRevealed],
+    ["Promises & oaths", doc.promisesAndOaths],
+    ["Antagonists", doc.antagonists],
+    ["World & lore", doc.worldLore],
+    ["Unresolved threads", doc.unresolvedThreads],
+    ["Stakes", doc.stakes],
+    ["Key items", doc.keyItems],
+    ["Skills & powers", doc.skillsAndPowers],
+    ["Limitations", doc.limitations],
+    ["Timeline", doc.timeline],
+  ];
+  for (const [heading, items] of lists) {
+    const kept = items.filter((s) => s.trim());
+    if (kept.length) sections.push({ heading, body: kept.map((s) => `• ${s}`).join("\n") });
+  }
+  return sections;
 }
 
 export function Overview(props: ScreenProps): JSX.Element {
@@ -73,6 +104,8 @@ export function Overview(props: ScreenProps): JSX.Element {
   const reduced = useUiStore((s) => s.reducedMotion);
 
   const [messages, setMessages] = useState<MessageRecord[] | undefined>(undefined);
+  const [chapters, setChapters] = useState<ChapterRecord[]>([]);
+  const [arcs, setArcs] = useState<ArcRecord[]>([]);
   const [loadError, setLoadError] = useState(false);
 
   // Ensure the open-story record is loaded (deeplink / direct tab), then read the transcript
@@ -91,10 +124,17 @@ export function Overview(props: ScreenProps): JSX.Element {
     let cancelled = false;
     setLoadError(false);
     setMessages(undefined);
-    getBridge()
-      .listMessages(storyId)
-      .then((m) => {
-        if (!cancelled) setMessages(m);
+    const bridge = getBridge();
+    Promise.all([
+      bridge.listMessages(storyId),
+      bridge.listChapters(storyId),
+      bridge.listArcs(storyId),
+    ])
+      .then(([m, ch, ar]) => {
+        if (cancelled) return;
+        setMessages(m);
+        setChapters(ch);
+        setArcs(ar);
       })
       .catch(() => {
         if (!cancelled) setLoadError(true);
@@ -162,21 +202,25 @@ export function Overview(props: ScreenProps): JSX.Element {
   }
 
   const messageCount = messages.length;
-  const chapters = deriveChapters(messageCount);
-  const currentChapterMsgs = messagesInCurrentChapter(messageCount);
-  const hasClosedChapter = chapters.some((c) => c.status === "summarized");
+  const timelineChapters = buildChapters(chapters, messageCount);
+  const currentChapterMsgs = messagesInCurrentChapter(chapters, messageCount);
+  const hasClosedChapter = chapters.length > 0;
+  const latestArc = arcs.length ? arcs[arcs.length - 1] : undefined;
   const needMore = !hasClosedChapter && currentChapterMsgs < MIN_MSGS_TO_SUMMARIZE;
   const remaining = Math.max(0, MIN_MSGS_TO_SUMMARIZE - currentChapterMsgs);
 
-  const arcSections: ArcDocSection[] = current
-    ? [
-        { heading: "Premise", body: current.schema.premise || "The storyteller has not recorded a premise yet." },
-        {
-          heading: "How this record works",
-          body: "The storyteller writes an arc document when a chapter closes — a living record it reads before every turn. Closed chapters fold into it; the current chapter stays open below.",
-        },
-      ]
-    : [];
+  // Arc reader: prefer the persisted ArcDoc; fall back to the premise blurb before any arc exists.
+  const arcSections: ArcDocSection[] = latestArc
+    ? arcDocToSections(latestArc)
+    : current
+      ? [
+          { heading: "Premise", body: current.schema.premise || "The storyteller has not recorded a premise yet." },
+          {
+            heading: "How this record works",
+            body: "The storyteller writes an arc document when a chapter closes — a living record it reads before every turn. Closed chapters fold into it; the current chapter stays open below.",
+          },
+        ]
+      : [];
 
   return (
     <div style={styles.screen}>
@@ -187,7 +231,7 @@ export function Overview(props: ScreenProps): JSX.Element {
             CHAPTERS
           </div>
           <div>
-            {chapters.map((ch) => (
+            {timelineChapters.map((ch) => (
               <ChapterCard
                 key={ch.index}
                 index={ch.index}
@@ -219,9 +263,13 @@ export function Overview(props: ScreenProps): JSX.Element {
 
           {hasClosedChapter ? (
             <ArcDoc
-              title={current?.title ?? "This story"}
-              index={1}
-              range={`Chapters 1–${Math.max(1, chapters.length - 1)}`}
+              title={latestArc?.title ?? current?.title ?? "This story"}
+              index={(latestArc?.idx ?? 0) + 1}
+              range={
+                latestArc
+                  ? `Chapters ${latestArc.chapterFrom + 1}–${latestArc.chapterTo + 1}`
+                  : `Chapters 1–${Math.max(1, chapters.length)}`
+              }
               sections={arcSections}
             />
           ) : (

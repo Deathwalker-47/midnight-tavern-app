@@ -90,6 +90,8 @@ import type {
   RankedModel,
   MappedCard,
   CharacterCard,
+  ChapterRecord,
+  ArcRecord,
   Store,
 } from "@midnight-tavern/core";
 
@@ -229,6 +231,12 @@ export interface CoreBridge {
   /** Deep read-only profile (v2 §7): full hard+soft join with reverse-resolved relationships. */
   getCharacterDossier(storyId: string, characterId: string): Promise<Dossier | undefined>;
   listRulings(storyId: string): Promise<Ruling[]>;
+
+  // — Overview: persisted summaries (audit #6) —
+  /** Chapters the summarizer has written for a story, in turn order. */
+  listChapters(storyId: string): Promise<ChapterRecord[]>;
+  /** Arc documents the summarizer has folded, in order (latest last). */
+  listArcs(storyId: string): Promise<ArcRecord[]>;
 
   // — Play: turn history (v2 §6) —
   /**
@@ -684,6 +692,15 @@ export function makeMemoryBridge(): CoreBridge {
 
     async listRulings(storyId) {
       return [...requireStory(storyId).rulings];
+    },
+
+    // The in-memory backend runs no summarizer, so there are never persisted chapters/arcs to read.
+    // Overview treats an empty result as "no summaries yet" (the honest state for dev/design mode).
+    async listChapters(_storyId) {
+      return [];
+    },
+    async listArcs(_storyId) {
+      return [];
     },
 
     async getProviderConfigs() {

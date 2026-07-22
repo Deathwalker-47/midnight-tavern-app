@@ -219,6 +219,13 @@ export function buildSqliteBridge(
       return records.map((r) => r.ruling);
     },
 
+    async listChapters(storyId) {
+      return store.chapters.listByStory(storyId);
+    },
+    async listArcs(storyId) {
+      return store.arcs.listByStory(storyId);
+    },
+
     // ── Settings: providers + role map ─────────────────────────────────────────────────────────
     async getProviderConfigs() {
       return (await store.settings.get(core.PROVIDER_CONFIGS_SETTING_KEY, core.ProviderConfigsSchema)) ?? {};

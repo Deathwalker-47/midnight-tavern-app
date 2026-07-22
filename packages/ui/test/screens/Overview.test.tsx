@@ -38,8 +38,9 @@ describe("Overview", () => {
     expect(screen.getByRole("button", { name: /try again/i })).toBeInTheDocument();
   });
 
-  it("renders the chapter timeline and arc once messages load", async () => {
-    // A story with 40+ messages yields at least one closed chapter → the ArcDoc renders.
+  it("renders the persisted chapter timeline and arc document once summaries load", async () => {
+    // Overview now reads PERSISTED chapters/arcs (audit #6). Seed one closed chapter + one arc so
+    // the timeline shows a summarized node and the ArcDoc reader renders the persisted document.
     const bridge = makeMemoryBridge();
     const messages = Array.from({ length: 45 }, (_v, i) => ({
       id: `m${i}`,
@@ -50,13 +51,43 @@ describe("Overview", () => {
       createdAt: i,
     }));
     bridge.listMessages = async () => messages;
+    bridge.listChapters = async () => [
+      { id: "c0", storyId: "s1", idx: 0, msgFrom: 0, msgTo: 19, title: "The Ash Road", summary: "A courier sets out." },
+    ];
+    bridge.listArcs = async () => [
+      {
+        id: "a0",
+        storyId: "s1",
+        idx: 0,
+        chapterFrom: 0,
+        chapterTo: 0,
+        title: "Embers of the Silent Vale",
+        doc: {
+          plotSummary: "The courier crosses the ash-buried road under a silent sky.",
+          characterDevelopment: [],
+          relationshipDynamics: [],
+          secretsRevealed: [],
+          keyDialogue: [],
+          promisesAndOaths: [],
+          antagonists: [],
+          worldLore: [],
+          unresolvedThreads: [],
+          stakes: [],
+          keyItems: [],
+          skillsAndPowers: [],
+          limitations: [],
+          timeline: [],
+        },
+      },
+    ];
     setBridge(bridge);
     useStoriesStore.setState({ current: stubStory("s1"), currentStatus: "ready" });
 
     render(<Overview storyId="s1" />);
 
     await waitFor(() => expect(screen.getByText("CHAPTERS")).toBeInTheDocument());
-    // The arc document uses the story title as its heading.
+    // The persisted chapter + arc render: the chapter title and the arc heading are both present.
+    expect(screen.getByText("The Ash Road")).toBeInTheDocument();
     expect(screen.getByText("Embers of the Silent Vale")).toBeInTheDocument();
   });
 });
