@@ -2,9 +2,9 @@
  * Two-phase story bootstrapping (low-level-plan §M5.1, §8.5).
  *
  * A premise becomes a complete frozen StorySchema in two logical phases. Phase A defines
- * the world shape. Phase B uses one foundation call followed by concurrent, bounded action
- * batches so large catalogs remain below provider output ceilings without paying their
- * model latency serially.
+ * the world shape. Phase B runs the actor-foundation call and concurrent bounded action
+ * batches as one provider stage, so large catalogs remain below output ceilings without
+ * adding independent fragment latencies together.
  *
  * Each structured component has its own Zod schema and repair budget inside `callStructured`.
  * After assembly the whole thing goes through `validateStorySchema` (the cross-cutting
@@ -25,6 +25,8 @@ import {
   NpcTemplateSchema,
   StatModeSchema,
   StorySchemaSchema,
+  ConditionSchema,
+  ConditionWithReasonSchema,
   CATALOG_MIN_ACTIONS,
   type ActionDef,
   type ActionCategory,
@@ -84,6 +86,77 @@ function record(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/**
+ * @internal
+ * Repairs only condition fields whose conventional defaults are deterministic.
+ * Invalid identifiers, types, and other ambiguous predicates are rejected so callers
+ * can drop them from optional lists instead of regenerating an otherwise-valid fragment.
+ *
+ * @param value - Candidate deterministic condition returned by the bootstrap model.
+ * @returns The unchanged or safely defaulted condition, or `undefined` when ambiguous.
+ *
+ * @remarks
+ * Missing flag values mean `true`; missing resource minimums mean `1`; and missing
+ * attribute minimums mean `10`. Existing valid values are never overwritten.
+ */
+function normalizeCondition(value: unknown): unknown | undefined {
+  if (!record(value)) return undefined;
+  const identifier =
+    value.type === "skill"
+      ? value.skillId
+      : value.type === "resource"
+        ? value.resourceId
+        : value.type === "item"
+          ? value.itemId
+          : value.type === "flag"
+            ? value.flagId
+            : value.type === "attribute"
+              ? value.attributeId
+              : undefined;
+  if (typeof identifier !== "string" || identifier.trim().length === 0) {
+    return undefined;
+  }
+  let candidate = value;
+  if (
+    value.type === "flag" &&
+    typeof value.flagId === "string" &&
+    value.value === undefined
+  ) {
+    candidate = { ...value, value: true };
+  } else if (
+    value.type === "resource" &&
+    typeof value.resourceId === "string" &&
+    value.min === undefined
+  ) {
+    candidate = { ...value, min: 1 };
+  } else if (
+    value.type === "attribute" &&
+    typeof value.attributeId === "string" &&
+    value.min === undefined
+  ) {
+    candidate = { ...value, min: 10 };
+  }
+  return ConditionSchema.safeParse(candidate).success ? candidate : undefined;
+}
+
+function normalizeConditionList(value: unknown): unknown {
+  if (!Array.isArray(value)) return value;
+  return value.map(normalizeCondition).filter((condition) => condition !== undefined);
+}
+
+function normalizeOptionalConditionEntries(value: unknown): unknown {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) return undefined;
+  const entries = value.flatMap((entry) => {
+    if (!record(entry)) return [];
+    const condition = normalizeCondition(entry.condition);
+    if (!condition) return [];
+    const candidate = { ...entry, condition };
+    return ConditionWithReasonSchema.safeParse(candidate).success ? [candidate] : [];
+  }).slice(0, 2);
+  return entries.length > 0 ? entries : undefined;
+}
+
 function normalizePhaseA(value: unknown): unknown {
   if (!record(value) || !Array.isArray(value.skills)) return value;
   const resources = Array.isArray(value.resources) ? value.resources : [];
@@ -91,12 +164,16 @@ function normalizePhaseA(value: unknown): unknown {
     (resource) => record(resource) && typeof resource.id === "string" && MONEY_RESOURCE.test(resource.id)
   );
   const usableCurrencyId = record(currencyId) && typeof currencyId.id === "string" ? currencyId.id : undefined;
-  let changed = false;
   const skills = value.skills.map((skill) => {
-    if (!record(skill) || !Array.isArray(skill.unlockPaths)) return skill;
+    if (!record(skill)) return skill;
+    const prerequisites = Array.isArray(skill.prerequisites)
+      ? normalizeConditionList(skill.prerequisites)
+      : [];
+    if (!Array.isArray(skill.unlockPaths)) {
+      return { ...skill, prerequisites };
+    }
     const unlockPaths = skill.unlockPaths.map((path) => {
       if (record(path) && path.method === "manual") {
-        changed = true;
         return { method: "trainer", npcHint: "A suitable mentor", cost: {} };
       }
       if (
@@ -107,17 +184,16 @@ function normalizePhaseA(value: unknown): unknown {
       ) {
         return path;
       }
-      changed = true;
       const amount = Math.max(0, path.cost);
       return {
         ...path,
         cost: usableCurrencyId ? { resources: { [usableCurrencyId]: amount } } : {},
       };
     });
-    return { ...skill, unlockPaths };
+    return { ...skill, prerequisites, unlockPaths };
   });
   const normalized = { ...value, attributes: value.attributes ?? [], skills };
-  return changed || value.attributes === undefined ? normalized : value;
+  return normalized;
 }
 
 function normalizeQuantityEntry(value: unknown): unknown {
@@ -168,7 +244,13 @@ function normalizeAction(value: unknown): unknown {
         ])
       )
     : value.effects;
-  return { ...value, costs, effects };
+  return {
+    ...value,
+    costs,
+    effects,
+    advantageWhen: normalizeOptionalConditionEntries(value.advantageWhen),
+    disadvantageWhen: normalizeOptionalConditionEntries(value.disadvantageWhen),
+  };
 }
 
 function normalizePhaseB(value: unknown): unknown {
@@ -510,6 +592,10 @@ export interface BootstrapProgressEvent {
   attempt: number;
   maxAttempts: number;
   elapsedMs: number;
+  /** Wall time spent in this fragment attempt, when a fragment has completed or failed. */
+  durationMs?: number;
+  /** Bounded schema/validation detail suitable for forge progress diagnostics. */
+  validationSummary?: string;
   message: string;
   latestCompletedFragment?: BootstrapFragment;
 }
@@ -767,13 +853,19 @@ export async function generateStorySchema(
     ...(resolvedInput.persona ? { persona: resolvedInput.persona } : {}),
     ...(imported ? { importedMechanics: imported } : {}),
   };
+  const fragmentStartedAt: Partial<Record<BootstrapFragment, number>> = {};
+  const summarizeValidationError = (error: string): string => {
+    const compact = error.replace(/\s+/g, " ").trim();
+    return compact.length <= 600 ? compact : `${compact.slice(0, 597)}...`;
+  };
   const emit = (
     phase: BootstrapPhase,
     fragment: BootstrapFragment,
     status: BootstrapProgressEvent["status"],
     attempt: number,
     maxAttempts: number,
-    message: string
+    message: string,
+    detail: Pick<BootstrapProgressEvent, "durationMs" | "validationSummary"> = {}
   ): void => {
     options.onProgressDetail?.({
       phase,
@@ -783,6 +875,10 @@ export async function generateStorySchema(
       maxAttempts,
       elapsedMs: Math.max(0, Date.now() - startedAt),
       message,
+      ...(detail.durationMs !== undefined ? { durationMs: detail.durationMs } : {}),
+      ...(detail.validationSummary
+        ? { validationSummary: detail.validationSummary }
+        : {}),
       ...(latestCompletedFragment ? { latestCompletedFragment } : {}),
     });
   };
@@ -793,7 +889,13 @@ export async function generateStorySchema(
   ): void => {
     latestCompletedFragment = fragment;
     checkpoint = { ...checkpoint, latestCompletedFragment };
-    emit(phase, fragment, "completed", 1, 1, message);
+    const fragmentStart = fragmentStartedAt[fragment];
+    emit(phase, fragment, "completed", 1, 1, message, {
+      ...(fragmentStart !== undefined
+        ? { durationMs: Math.max(0, Date.now() - fragmentStart) }
+        : {}),
+    });
+    delete fragmentStartedAt[fragment];
     options.onCheckpoint?.(checkpoint);
   };
   const assertNotAborted = (phase: BootstrapPhase, fragment: BootstrapFragment): void => {
@@ -804,13 +906,15 @@ export async function generateStorySchema(
   const repairReporter = (fragment: BootstrapFragment) =>
     (attempt: number, total: number, error: string): void => {
       options.onProgress?.("repair");
+      const validationSummary = summarizeValidationError(error);
       emit(
         "repair",
         fragment,
         "retrying",
         attempt + 1,
         total + 1,
-        `Retry ${attempt}/${total}: ${error}`
+        `Retry ${attempt}/${total}: ${validationSummary}`,
+        { validationSummary }
       );
     };
   const runFragment = async <T>(
@@ -818,9 +922,11 @@ export async function generateStorySchema(
     fragment: BootstrapFragment,
     work: () => Promise<T>
   ): Promise<T> => {
+    fragmentStartedAt[fragment] = Date.now();
     try {
       return await work();
     } catch (error) {
+      const fragmentStart = fragmentStartedAt[fragment];
       emit(
         phase,
         fragment,
@@ -829,8 +935,14 @@ export async function generateStorySchema(
         1,
         options.signal?.aborted
           ? "Story forging was cancelled."
-          : `Fragment failed: ${(error as Error).message}`
+          : `Fragment failed: ${(error as Error).message}`,
+        {
+          ...(fragmentStart !== undefined
+            ? { durationMs: Math.max(0, Date.now() - fragmentStart) }
+            : {}),
+        }
       );
+      delete fragmentStartedAt[fragment];
       throw error;
     }
   };
@@ -946,12 +1058,18 @@ export async function generateStorySchema(
       );
     }
   }
-  foundation ??= await generateFoundation("", 1);
 
   let phaseBFeedback = "";
   let lastErrors: string[] = [];
   let retryFragments = new Set<BootstrapFragment>();
   for (let pass = 0; pass <= maxSchemaRepairs; pass++) {
+    /**
+     * The actor foundation and action catalogs depend only on the mechanics core.
+     * Starting this promise before the batch promises keeps Phase B to one provider stage.
+     */
+    const foundationPromise = foundation
+      ? Promise.resolve(foundation)
+      : generateFoundation(phaseBFeedback, pass + 1);
     const skillPartitions = partitionRequirements(
       mechanicsCore.skills.map((skill) => skill.id),
       ACTION_BATCHES.length
@@ -1006,7 +1124,6 @@ export async function generateStorySchema(
             user: buildPhaseBActionBatchUser(
               resolvedInput.premise,
               mechanicsCore,
-              foundation,
               categories,
               requiredSkillIds,
               requiredTrialFlags,
@@ -1038,7 +1155,17 @@ export async function generateStorySchema(
 
     // allSettled prevents a rejected batch from returning control while its sibling is
     // still writing truthful progress/checkpoint events in the background.
-    const settledBatches = await Promise.allSettled(batchPromises);
+    const [settledFoundation, ...settledBatches] = await Promise.allSettled([
+      foundationPromise,
+      ...batchPromises,
+    ]);
+    if (settledFoundation?.status === "rejected") {
+      throw settledFoundation.reason;
+    }
+    if (!settledFoundation) {
+      throw new Error("Actor foundation generation did not return a result.");
+    }
+    foundation = settledFoundation.value;
     const rejectedBatch = settledBatches.find(
       (result): result is PromiseRejectedResult => result.status === "rejected"
     );
@@ -1055,6 +1182,7 @@ export async function generateStorySchema(
 
     const candidate = assemble(resolvedInput, mechanicsCore, phaseB);
     options.onProgress?.("validate");
+    fragmentStartedAt["cross-validation"] = Date.now();
     emit(
       "validate",
       "cross-validation",
@@ -1094,7 +1222,9 @@ export async function generateStorySchema(
     );
     retryFragments = fragmentsForValidationErrors(lastErrors, phaseB.actions);
     if (foundationFailed && pass < maxSchemaRepairs) {
-      foundation = await generateFoundation(phaseBFeedback, pass + 2);
+      foundation = undefined;
+      const { foundation: _invalidFoundation, ...validCheckpoint } = checkpoint;
+      checkpoint = validCheckpoint;
     }
   }
 

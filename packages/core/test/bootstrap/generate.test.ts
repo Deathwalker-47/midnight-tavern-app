@@ -23,6 +23,7 @@ import {
   BootstrapMacroEvaluationError,
   PhaseASchema,
   PhaseBSchema,
+  type BootstrapProgressEvent,
   type BootstrapResumeState,
 } from "../../src/bootstrap/generate.js";
 import { parseCardObject } from "../../src/importer/index.js";
@@ -440,10 +441,14 @@ describe("generateStorySchema — repair loop", () => {
     expect(PHASE_B_ACTION_BATCH_SYSTEM).toMatch(/no other categories/i);
   });
 
-  it("runs independent action batches concurrently after the foundation", async () => {
-    let activeActionCalls = 0;
-    let maximumConcurrentActionCalls = 0;
-    let actionGate: Promise<void> | undefined;
+  it("runs the independent foundation and action batches in one concurrent Phase B stage", async () => {
+    let activePhaseBCalls = 0;
+    let maximumConcurrentPhaseBCalls = 0;
+    let releasePhaseB!: () => void;
+    const phaseBGate = new Promise<void>((resolve) => {
+      releasePhaseB = resolve;
+    });
+    const fallbackRelease = setTimeout(releasePhaseB, 250);
     const router: Router = {
       bindingFor: () => ({
         provider: "openrouter",
@@ -453,7 +458,23 @@ describe("generateStorySchema — repair loop", () => {
       }),
       async complete(_role, prompt): Promise<ChatResponse> {
         if (prompt.system.includes("PHASE A")) return { content: J(PHASE_A) };
-        if (prompt.system.includes("PHASE B FOUNDATION")) {
+        const foundationRequest = prompt.system.includes("PHASE B FOUNDATION");
+        const requested =
+          foundationRequest
+            ? []
+            : prompt.user
+                .match(/REQUESTED CATEGORIES: ([^\n]+)/)?.[1]
+                ?.split(",")
+                .map((category) => category.trim()) ?? [];
+        activePhaseBCalls++;
+        maximumConcurrentPhaseBCalls = Math.max(
+          maximumConcurrentPhaseBCalls,
+          activePhaseBCalls
+        );
+        if (activePhaseBCalls === 3) releasePhaseB();
+        await phaseBGate;
+        activePhaseBCalls--;
+        if (foundationRequest) {
           return {
             content: J({
               startingState: PHASE_B.startingState,
@@ -461,20 +482,6 @@ describe("generateStorySchema — repair loop", () => {
             }),
           };
         }
-
-        const requested =
-          prompt.user
-            .match(/REQUESTED CATEGORIES: ([^\n]+)/)?.[1]
-            ?.split(",")
-            .map((category) => category.trim()) ?? [];
-        activeActionCalls++;
-        maximumConcurrentActionCalls = Math.max(
-          maximumConcurrentActionCalls,
-          activeActionCalls
-        );
-        actionGate ??= new Promise((resolve) => setTimeout(resolve, 20));
-        await actionGate;
-        activeActionCalls--;
         return {
           content: J({
             actions: PHASE_B.actions.filter((action) =>
@@ -489,9 +496,10 @@ describe("generateStorySchema — repair loop", () => {
     };
 
     const out = await generateStorySchema(router, input);
+    clearTimeout(fallbackRelease);
 
     expect(validateStorySchema(out)).toEqual([]);
-    expect(maximumConcurrentActionCalls).toBe(2);
+    expect(maximumConcurrentPhaseBCalls).toBe(3);
   });
 
   it("gives models explicit skill-rank and on-demand-loot contracts", () => {
@@ -505,6 +513,13 @@ describe("generateStorySchema — repair loop", () => {
     expect(PHASE_B_ACTION_BATCH_SYSTEM).toMatch(/never invent an unreachable flag/i);
     expect(PHASE_B_ACTION_BATCH_SYSTEM).toMatch(
       /Do not emit item-id conditions.*generated on demand/is
+    );
+    expect(PHASE_A_SYSTEM).toContain('{"type":"flag","flagId":"flag_id","value":true}');
+    expect(PHASE_B_ACTION_BATCH_SYSTEM).toContain(
+      '{"type":"resource","resourceId":"resource_id","min":1}'
+    );
+    expect(PHASE_B_ACTION_BATCH_SYSTEM).toMatch(
+      /Never omit flag value or resource\/attribute min/i
     );
   });
 
@@ -549,6 +564,134 @@ describe("generateStorySchema — repair loop", () => {
       method: "trainer",
       npcHint: "A veteran",
       cost: {},
+    });
+  });
+
+  it("normalizes missing deterministic prerequisite fields and drops ambiguous predicates", () => {
+    const parsed = PhaseASchema.parse({
+      ...PHASE_A,
+      skills: PHASE_A.skills.map((skill, index) =>
+        index === 0
+          ? {
+              ...skill,
+              prerequisites: [
+                { type: "flag", flagId: "training_complete" },
+                { type: "resource", resourceId: "stamina" },
+                { type: "attribute", attributeId: "might" },
+                { type: "resource" },
+              ],
+            }
+          : skill
+      ),
+    });
+
+    expect(parsed.skills[0]?.prerequisites).toEqual([
+      { type: "flag", flagId: "training_complete", value: true },
+      { type: "resource", resourceId: "stamina", min: 1 },
+      { type: "attribute", attributeId: "might", min: 10 },
+    ]);
+  });
+
+  it("accepts missing prerequisite thresholds on the first Phase A response", async () => {
+    const nearValidPhaseA = {
+      ...PHASE_A,
+      skills: PHASE_A.skills.map((skill, index) =>
+        index === 0
+          ? {
+              ...skill,
+              prerequisites: [
+                { type: "resource", resourceId: "stamina" },
+                { type: "attribute", attributeId: "might" },
+              ],
+            }
+          : skill
+      ),
+    };
+    const { router, counts } = phasedRouter({
+      a: [J(nearValidPhaseA)],
+      b: [J(PHASE_B)],
+    });
+
+    const out = await generateStorySchema(router, input);
+
+    expect(validateStorySchema(out)).toEqual([]);
+    expect(counts).toEqual({ a: 1, b: 3 });
+    expect(out.skills[0]?.prerequisites).toEqual([
+      { type: "resource", resourceId: "stamina", min: 1 },
+      { type: "attribute", attributeId: "might", min: 10 },
+    ]);
+  });
+
+  it("normalizes the exact missing condition fields seen in forge diagnostics", () => {
+    const malformed = JSON.parse(J(PHASE_B)) as typeof PHASE_B;
+    malformed.actions[1]!.advantageWhen = [{
+      condition: { type: "flag", flagId: "prepared" } as never,
+      reason: "Prepared",
+    }];
+    malformed.actions[4]!.advantageWhen = [{
+      condition: { type: "flag", flagId: "prepared" } as never,
+      reason: "Prepared",
+    }];
+    malformed.actions[6]!.disadvantageWhen = [{
+      condition: { type: "resource", resourceId: "stamina" } as never,
+      reason: "Low stamina",
+    }];
+    malformed.actions[9]!.advantageWhen = [{
+      condition: { type: "flag", flagId: "prepared" } as never,
+      reason: "Prepared",
+    }];
+    malformed.actions[10]!.advantageWhen = [{
+      condition: { type: "flag", flagId: "prepared" } as never,
+      reason: "Prepared",
+    }];
+
+    const parsed = PhaseBSchema.parse(malformed);
+
+    expect(parsed.actions[1]?.advantageWhen?.[0]?.condition).toEqual({
+      type: "flag",
+      flagId: "prepared",
+      value: true,
+    });
+    expect(parsed.actions[6]?.disadvantageWhen?.[0]?.condition).toEqual({
+      type: "resource",
+      resourceId: "stamina",
+      min: 1,
+    });
+    expect(parsed.actions[10]?.advantageWhen?.[0]?.condition).toMatchObject({
+      value: true,
+    });
+  });
+
+  it("accepts a near-valid condition response on the first request without model repair", async () => {
+    const nearValid = JSON.parse(J(PHASE_B)) as typeof PHASE_B;
+    nearValid.actions[0]!.advantageWhen = [{
+      condition: { type: "flag", flagId: "prepared" } as never,
+      reason: "Prepared",
+    }];
+    nearValid.actions[0]!.disadvantageWhen = [{
+      condition: { type: "resource", resourceId: "stamina" } as never,
+      reason: "Low stamina",
+    }];
+    nearValid.actions[1]!.effects.success = {
+      ...nearValid.actions[1]!.effects.success,
+      setFlag: { flagId: "prepared", value: true },
+    };
+    const { router, counts } = phasedRouter({
+      a: [J(PHASE_A)],
+      b: [J(nearValid)],
+    });
+
+    const out = await generateStorySchema(router, input);
+
+    expect(validateStorySchema(out)).toEqual([]);
+    expect(counts).toEqual({ a: 1, b: 3 });
+    expect(out.actions[0]?.advantageWhen?.[0]?.condition).toMatchObject({
+      type: "flag",
+      value: true,
+    });
+    expect(out.actions[0]?.disadvantageWhen?.[0]?.condition).toMatchObject({
+      type: "resource",
+      min: 1,
     });
   });
 
@@ -603,11 +746,29 @@ describe("generateStorySchema — repair loop", () => {
   it("returns a cross-valid schema from all-valid first responses", async () => {
     const { router, counts } = phasedRouter({ a: [J(PHASE_A)], b: [J(PHASE_B)] });
     const phases: string[] = [];
-    const out = await generateStorySchema(router, input, { onProgress: (phase) => phases.push(phase) });
+    const details: BootstrapProgressEvent[] = [];
+    const out = await generateStorySchema(router, input, {
+      onProgress: (phase) => phases.push(phase),
+      onProgressDetail: (event) => details.push(event),
+    });
     expect(validateStorySchema(out)).toEqual([]);
     expect(out.locked).toBe(false); // generate leaves it unlocked; freeze locks it
     expect(counts).toEqual({ a: 1, b: 3 });
     expect(phases).toEqual(["phase-a", "phase-b", "validate"]);
+    const completedModelFragments = details.filter((event) =>
+      event.status === "completed" &&
+      [
+        "mechanics-core",
+        "actor-foundation",
+        "actions-combat-social",
+        "actions-exploration-crafting-utility",
+      ].includes(event.fragment)
+    );
+    expect(completedModelFragments).toHaveLength(4);
+    expect(
+      completedModelFragments
+        .every((event) => typeof event.durationMs === "number" && event.durationMs >= 0)
+    ).toBe(true);
   });
 
   it("emits a V2 rulebook with no pregenerated items or starting gear", async () => {
@@ -857,10 +1018,24 @@ describe("generateStorySchema — repair loop", () => {
       b: [J(PHASE_B)],
     });
     const phases: string[] = [];
-    const out = await generateStorySchema(router, input, { onProgress: (phase) => phases.push(phase) });
+    const details: BootstrapProgressEvent[] = [];
+    const out = await generateStorySchema(router, input, {
+      onProgress: (phase) => phases.push(phase),
+      onProgressDetail: (event) => details.push(event),
+    });
     expect(validateStorySchema(out)).toEqual([]);
     expect(counts.a).toBe(3); // two repairs consumed
     expect(phases).toEqual(["phase-a", "repair", "repair", "phase-b", "validate"]);
+    const repairDetails = details.filter((event) => event.status === "retrying");
+    expect(repairDetails).toHaveLength(2);
+    expect(
+      repairDetails
+        .every((event) =>
+          Boolean(event.validationSummary) &&
+          event.validationSummary!.length <= 600 &&
+          event.message.includes(event.validationSummary!)
+        )
+    ).toBe(true);
   });
 
   it("re-prompts Phase B when the assembled schema fails cross-validation, then succeeds", async () => {

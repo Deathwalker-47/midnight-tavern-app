@@ -165,6 +165,9 @@ export function buildSqliteBridge(
             ...(args.resume ? { resume: args.resume } : {}),
           }
         );
+        if (args.persona?.id) {
+          await store.personas.setActiveForStory(storyId, args.persona.id);
+        }
         if (args.blueprint) {
           await store.stories.setBlueprint(storyId, args.blueprint);
           result.story.blueprint = args.blueprint;

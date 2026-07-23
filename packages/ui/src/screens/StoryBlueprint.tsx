@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import type { ScreenProps } from "./registry.js";
 import { getBridge } from "../bridge/core.js";
-import type { Blueprint } from "../bridge/core.js";
+import type { Blueprint, PersonaRecord } from "../bridge/core.js";
 import { useRoute } from "../app/router.js";
 import { EMPTY_STORY_DRAFT, useStoriesStore } from "../state/storiesStore.js";
 import { setupSupportsStatMode, useSettingsStore } from "../state/settingsStore.js";
@@ -28,6 +28,14 @@ export function StoryBlueprint(props: ScreenProps): JSX.Element {
   const [statMode, setStatMode] = useState<"none" | "full" | undefined>(storedDraft?.statMode);
   const [blueprint, setBlueprint] = useState<Blueprint>(storedDraft?.blueprint ?? {});
   const [selectedOpening, setSelectedOpening] = useState(storedDraft?.selectedOpening ?? "");
+  const [personas, setPersonas] = useState<PersonaRecord[]>([]);
+  const [personaId, setPersonaId] = useState(storedDraft?.personaId ?? "");
+  const [continueWithoutPersona, setContinueWithoutPersona] = useState(
+    storedDraft?.continueWithoutPersona ?? false
+  );
+  const [personaLoadState, setPersonaLoadState] = useState<"loading" | "ready" | "error">(
+    creating ? "loading" : "ready"
+  );
   const [dirty, setDirty] = useState(creating);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -52,6 +60,31 @@ export function StoryBlueprint(props: ScreenProps): JSX.Element {
     if (!creating || storedDraft) return;
     setDraft({ ...EMPTY_STORY_DRAFT });
   }, [creating, storedDraft, setDraft]);
+
+  useEffect(() => {
+    if (!creating) return;
+    let cancelled = false;
+    void getBridge()
+      .listPersonas()
+      .then((available) => {
+        if (cancelled) return;
+        setPersonas(available);
+        setPersonaId((current) => {
+          if (current && available.some((persona) => persona.id === current)) return current;
+          const sensibleDefault =
+            available.find((persona) => persona.isDefault) ??
+            (available.length === 1 ? available[0] : undefined);
+          return sensibleDefault?.id ?? "";
+        });
+        setPersonaLoadState("ready");
+      })
+      .catch(() => {
+        if (!cancelled) setPersonaLoadState("error");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [creating]);
 
   useEffect(() => {
     if (!storyId) return;
@@ -80,16 +113,31 @@ export function StoryBlueprint(props: ScreenProps): JSX.Element {
       playerName,
       premise,
       ...(statMode ? { statMode } : {}),
+      ...(personaId ? { personaId } : {}),
+      ...(continueWithoutPersona ? { continueWithoutPersona: true } : {}),
       blueprint,
       ...(selectedOpening ? { selectedOpening } : {}),
       ...(storedDraft?.importedCard ? { importedCard: storedDraft.importedCard } : {}),
     });
-  }, [creating, title, playerName, premise, statMode, blueprint, selectedOpening, storedDraft?.importedCard, setDraft]);
+  }, [
+    blueprint,
+    continueWithoutPersona,
+    creating,
+    personaId,
+    playerName,
+    premise,
+    selectedOpening,
+    setDraft,
+    statMode,
+    storedDraft?.importedCard,
+    title,
+  ]);
 
   const openings = useMemo(
     () => [blueprint.firstMessage, ...(blueprint.alternateGreetings ?? [])].filter((value): value is string => Boolean(value?.trim())),
     [blueprint.firstMessage, blueprint.alternateGreetings]
   );
+  const selectedPersona = personas.find((persona) => persona.id === personaId);
 
   async function saveExisting(): Promise<void> {
     if (!storyId) return;
@@ -116,10 +164,16 @@ export function StoryBlueprint(props: ScreenProps): JSX.Element {
       return;
     }
     const finalTitle = title.trim() || blueprint.name?.trim() || "Untitled story";
-    const finalPlayer = playerName.trim();
+    const finalPlayer = playerName.trim() || selectedPersona?.name.trim() || "";
     const finalPremise = premise.trim() || blueprint.scenario?.trim() || blueprint.description?.trim() || "";
     if (!finalPlayer || !finalPremise || !statMode) {
       setSaveError("Add your name, a premise, and choose No Stats or Full Stats before creating the story.");
+      return;
+    }
+    if (!selectedPersona && !continueWithoutPersona) {
+      setSaveError(
+        "Select and review the correct persona, or explicitly acknowledge continuing without one."
+      );
       return;
     }
     setSaving(true);
@@ -134,9 +188,13 @@ export function StoryBlueprint(props: ScreenProps): JSX.Element {
         playerName: finalPlayer,
         premise: finalPremise,
         statMode,
+        ...(selectedPersona ? { persona: selectedPersona } : {}),
         blueprint,
         openingMessage: selectedOpening || blueprint.firstMessage,
         lorebookSeeds: storedDraft?.importedCard?.lorebook,
+        sourceCard: storedDraft?.importedCard?.sourceCard,
+        importedMechanics: storedDraft?.importedCard?.importedMechanics,
+        acceptImportedMechanics: Boolean(storedDraft?.importedCard?.importedMechanics),
         onProgress: (phase) => {
           setProgressPhase(phase);
           setProgress(PHASE_LABEL[phase]);
@@ -201,6 +259,61 @@ export function StoryBlueprint(props: ScreenProps): JSX.Element {
             <div style={SECTION_HEAD}>FOUNDATION</div>
             <label style={LABEL}>Story title<input aria-label="Story title" value={title} onChange={(event) => setTitle(event.target.value)} style={INPUT} /></label>
             <label style={LABEL}>Your name in the story<input aria-label="Your name in the story" value={playerName} onChange={(event) => setPlayerName(event.target.value)} style={INPUT} /></label>
+            <div style={{ marginBottom: 14 }}>
+              <label style={LABEL}>
+                Persona for story creation
+                {personas.length > 0 ? (
+                  <select
+                    aria-label="Persona for story creation"
+                    value={personaId}
+                    onChange={(event) => {
+                      setPersonaId(event.target.value);
+                      if (event.target.value) setContinueWithoutPersona(false);
+                    }}
+                    style={INPUT}
+                  >
+                    <option value="">No persona selected</option>
+                    {personas.map((persona) => (
+                      <option key={persona.id} value={persona.id}>
+                        {persona.name}{persona.isDefault ? " (default)" : ""}
+                      </option>
+                    ))}
+                  </select>
+                ) : null}
+              </label>
+              {selectedPersona ? (
+                <InlineNotice
+                  severity="success"
+                  title={`${selectedPersona.name} is attached`}
+                  detail={`${selectedPersona.description} Review this carefully: the exact persona shapes the player's identity, attributes, learned skills, and available abilities.`}
+                />
+              ) : personaLoadState === "loading" ? (
+                <InlineNotice
+                  severity="info"
+                  title="Loading personas"
+                  detail="Story creation will wait until the persona choice can be reviewed."
+                />
+              ) : (
+                <>
+                  <InlineNotice
+                    severity="warn"
+                    title={personaLoadState === "error" ? "Personas could not be loaded" : "No persona is attached"}
+                    detail="The player character depends heavily on this choice. Select the correct persona before forging, or explicitly accept the reduced context."
+                  />
+                  <label style={{ ...LABEL, display: "flex", flexDirection: "row", alignItems: "flex-start", gap: 8, marginTop: 9 }}>
+                    <input
+                      type="checkbox"
+                      checked={continueWithoutPersona}
+                      onChange={(event) => setContinueWithoutPersona(event.target.checked)}
+                    />
+                    I understand and want to continue without a persona.
+                  </label>
+                </>
+              )}
+              <Button variant="ghost" onClick={() => navigate("personas")}>
+                {personas.length > 0 ? "Manage personas" : "Create a persona"}
+              </Button>
+            </div>
             <label style={LABEL}>
               Premise
               <textarea aria-label="Premise" value={premise} onChange={(event) => setPremise(event.target.value)} style={{ ...INPUT, minHeight: 120, resize: "vertical" }} />
@@ -291,7 +404,20 @@ export function StoryBlueprint(props: ScreenProps): JSX.Element {
         ) : null}
 
         <div style={ACTIONS}>
-          <Button variant="primary" disabled={saving || (!creating && !dirty)} onClick={() => void (creating ? forgeStory() : saveExisting())}>
+          <Button
+            variant="primary"
+            disabled={
+              saving ||
+              (!creating && !dirty) ||
+              (creating && !selectedPersona && !continueWithoutPersona)
+            }
+            title={
+              creating && !selectedPersona && !continueWithoutPersona
+                ? "Select a persona or acknowledge continuing without one"
+                : undefined
+            }
+            onClick={() => void (creating ? forgeStory() : saveExisting())}
+          >
             {saving ? (progress ?? "Saving…") : creating ? "Forge this world →" : "Save blueprint"}
           </Button>
           {creating && saving ? <Button variant="ghost" onClick={cancelForge}>Cancel forge</Button> : null}

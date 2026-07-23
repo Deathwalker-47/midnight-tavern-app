@@ -21,6 +21,10 @@ export type NewStoryDraft = {
   playerName: string;
   premise: string;
   statMode?: "none" | "full";
+  /** Persona reviewed for this forge; retained across Blueprint/Wizard navigation. */
+  personaId?: string;
+  /** Explicit acknowledgement required when forging without a persona. */
+  continueWithoutPersona?: boolean;
   blueprint: Blueprint;
   selectedOpening?: string;
   importedCard?: MappedCard;

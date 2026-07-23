@@ -883,6 +883,7 @@ export function makeMemoryBridge(): CoreBridge {
           priority: 0,
           insertionOrder: index,
         })),
+        ...(args.persona?.id ? { activePersonaId: args.persona.id } : {}),
         attachedLorebooks: [],
       });
       return { story: record, playerCharacterId };

@@ -123,6 +123,7 @@ export function Wizard(_props: ScreenProps): JSX.Element {
   const create = useStoriesStore((s) => s.create);
   const forging = useStoriesStore((s) => s.forging);
   const storyDraft = useStoriesStore((s) => s.draft) ?? EMPTY_STORY_DRAFT;
+  const setDraft = useStoriesStore((s) => s.setDraft);
   const entitlement = useSettingsStore((s) => s.entitlement);
   const { navigate } = useRoute();
 
@@ -132,7 +133,9 @@ export function Wizard(_props: ScreenProps): JSX.Element {
   const [statMode, setStatMode] = useState<"none" | "full">(storyDraft.statMode ?? "full");
   const [difficulty, setDifficulty] = useState<DifficultyValue>(STANDARD_DIFFICULTY);
   const [actionBudget, setActionBudget] = useState(2);
-  const [continueWithoutPersona, setContinueWithoutPersona] = useState(false);
+  const [continueWithoutPersona, setContinueWithoutPersona] = useState(
+    storyDraft.continueWithoutPersona ?? false
+  );
   const [phase, setPhase] = useState<ForgePhase | undefined>(undefined);
   const [error, setError] = useState<ForgeError | undefined>(undefined);
   const [forgeState, setForgeState] = useState<ForgeOperationState>("running");
@@ -148,7 +151,10 @@ export function Wizard(_props: ScreenProps): JSX.Element {
   const forgeAbort = useRef<AbortController>();
   // Optional persona pick (v2 §4); "" ⇒ use the global default persona.
   const [personas, setPersonas] = useState<PersonaRecord[]>([]);
-  const [personaId, setPersonaId] = useState("");
+  const [personaId, setPersonaId] = useState(storyDraft.personaId ?? "");
+  const [personaLoadState, setPersonaLoadState] = useState<"loading" | "ready" | "error">(
+    "loading"
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -157,17 +163,38 @@ export function Wizard(_props: ScreenProps): JSX.Element {
       .then((ps) => {
         if (!cancelled) {
           setPersonas(ps);
-          const defaultPersona = ps.find((persona) => persona.isDefault);
-          if (defaultPersona) setPersonaId((current) => current || defaultPersona.id);
+          setPersonaId((current) => {
+            if (current && ps.some((persona) => persona.id === current)) return current;
+            const sensibleDefault =
+              ps.find((persona) => persona.isDefault) ?? (ps.length === 1 ? ps[0] : undefined);
+            return sensibleDefault?.id ?? "";
+          });
+          setPersonaLoadState("ready");
         }
       })
       .catch(() => {
-        /* personas are optional; a load failure just leaves the picker empty */
+        if (!cancelled) setPersonaLoadState("error");
       });
     return () => {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    const persistedPersonaId = personaId || undefined;
+    if (
+      storyDraft.personaId === persistedPersonaId &&
+      Boolean(storyDraft.continueWithoutPersona) === continueWithoutPersona
+    ) {
+      return;
+    }
+    const nextDraft = { ...storyDraft };
+    if (persistedPersonaId) nextDraft.personaId = persistedPersonaId;
+    else delete nextDraft.personaId;
+    if (continueWithoutPersona) nextDraft.continueWithoutPersona = true;
+    else delete nextDraft.continueWithoutPersona;
+    setDraft(nextDraft);
+  }, [continueWithoutPersona, personaId, setDraft, storyDraft]);
 
   useEffect(() => {
     if (!forging && !phase) return;
@@ -209,7 +236,7 @@ export function Wizard(_props: ScreenProps): JSX.Element {
         storyId: forgeStoryId.current,
         title: deriveTitle(trimmedPremise),
         premise: trimmedPremise,
-        playerName: playerName.trim() || "You",
+        playerName: playerName.trim() || selectedPersona?.name.trim() || "You",
         statMode,
         blueprint: storyDraft.blueprint,
         openingMessage: storyDraft.selectedOpening,
@@ -385,15 +412,18 @@ export function Wizard(_props: ScreenProps): JSX.Element {
           />
         </div>
 
-        {personas.length > 0 ? (
-          <div style={styles.nameField}>
-            <label className="mono" style={styles.fieldLabel} htmlFor="wizard-persona">
-              PLAY AS
-            </label>
+        <div style={styles.nameField}>
+          <label className="mono" style={styles.fieldLabel} htmlFor="wizard-persona">
+            PLAY AS - PERSONA
+          </label>
+          {personas.length > 0 ? (
             <select
               id="wizard-persona"
               value={personaId}
-              onChange={(e) => setPersonaId(e.target.value)}
+              onChange={(e) => {
+                setPersonaId(e.target.value);
+                if (e.target.value) setContinueWithoutPersona(false);
+              }}
               style={{ ...styles.nameInput, fontFamily: "var(--font-ui)", fontSize: 14 }}
             >
               <option value="">No persona selected</option>
@@ -404,8 +434,30 @@ export function Wizard(_props: ScreenProps): JSX.Element {
                 </option>
               ))}
             </select>
-          </div>
-        ) : null}
+          ) : null}
+          {selectedPersona ? (
+            <InlineNotice
+              severity="success"
+              title={`${selectedPersona.name} is attached`}
+              detail={`${selectedPersona.description} This exact persona will shape the player character's identity, attributes, learned skills, and available abilities.`}
+            />
+          ) : personaLoadState === "loading" ? (
+            <InlineNotice
+              severity="info"
+              title="Loading personas"
+              detail="The forge will wait for persona review before it can begin."
+            />
+          ) : (
+            <InlineNotice
+              severity="warn"
+              title={personaLoadState === "error" ? "Personas could not be loaded" : "Attach a persona before forging"}
+              detail="Your player character depends heavily on this choice. Create or select the correct persona, or explicitly acknowledge continuing without one on the review screen."
+            />
+          )}
+          <button type="button" onClick={() => navigate("personas")} style={styles.configLink}>
+            {personas.length > 0 ? "Manage personas" : "Create a persona"}
+          </button>
+        </div>
 
         <PremiseInput
           value={premise}

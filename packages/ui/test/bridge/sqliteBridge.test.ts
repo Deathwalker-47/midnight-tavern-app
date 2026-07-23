@@ -60,7 +60,15 @@ function fakeStore(parts: Record<string, unknown> = {}) {
     messages: { listByStory: vi.fn(async () => []) },
     characters: { listByStory: vi.fn(async () => []) },
     rulings: { listByStory: vi.fn(async () => []) },
-    personas: { list: vi.fn(async () => []), get: vi.fn(), insert: vi.fn(), update: vi.fn(), setDefault: vi.fn(), delete: vi.fn() },
+    personas: {
+      list: vi.fn(async () => []),
+      get: vi.fn(),
+      insert: vi.fn(),
+      update: vi.fn(),
+      setDefault: vi.fn(),
+      setActiveForStory: vi.fn(),
+      delete: vi.fn(),
+    },
     lorebook: { get: vi.fn(), insert: vi.fn(), update: vi.fn(), delete: vi.fn(), listByStory: vi.fn(async () => []) },
     ...parts,
   } as any;
@@ -116,6 +124,48 @@ describe("buildSqliteBridge", () => {
       { onProgress: expect.any(Function) }
     );
     expect(phases).toEqual(["phase-a", "phase-b", "validate", "freeze", "install"]);
+  });
+
+  it("persists the exact selected persona as the new story's active persona", async () => {
+    const bootstrapStory = vi.fn(async () => ({
+      story: { id: "s-persona", title: "Persona story" },
+      playerCharacterId: "pc-persona",
+    }));
+    const setActiveForStory = vi.fn();
+    const store = fakeStore({
+      personas: {
+        list: vi.fn(async () => []),
+        get: vi.fn(),
+        insert: vi.fn(),
+        update: vi.fn(),
+        setDefault: vi.fn(),
+        setActiveForStory,
+        delete: vi.fn(),
+      },
+    });
+    const bridge = buildSqliteBridge(store, fakeCore({ bootstrapStory }));
+    const persona = {
+      id: "persona-ari",
+      name: "Ari Vale",
+      description: "An observant infiltrator who avoids unnecessary violence.",
+    };
+
+    await bridge.createStory({
+      storyId: "s-persona",
+      title: "Persona story",
+      premise: "A monastery mystery.",
+      playerName: "Ari Vale",
+      persona,
+    });
+
+    expect(bootstrapStory).toHaveBeenCalledWith(
+      expect.anything(),
+      store,
+      expect.objectContaining({ storyId: "s-persona", persona }),
+      { name: "Ari Vale" },
+      expect.anything()
+    );
+    expect(setActiveForStory).toHaveBeenCalledWith("s-persona", "persona-ari");
   });
 
   it("rejects a role map that points at a provider without stored credentials", async () => {

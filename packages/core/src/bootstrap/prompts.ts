@@ -53,6 +53,12 @@ export const PHASE_A_SYSTEM = [
   "- skills: learnable abilities (id, name, description, tier, prerequisites[], unlockPaths[],",
   "  masteryAdvance{successesPerRank}). Every skill you define WILL need at least one action",
   "  that uses it in Phase B, so do not over-produce skills.",
+  "  Every prerequisites entry MUST use exactly one of these condition shapes:",
+  '  {"type":"skill","skillId":"skill_id","minRank":"novice"}',
+  '  {"type":"resource","resourceId":"resource_id","min":1}',
+  '  {"type":"flag","flagId":"flag_id","value":true}',
+  '  {"type":"attribute","attributeId":"attribute_id","min":10}',
+  "  Never omit flag value or resource/attribute min.",
   "  Every unlockPaths entry MUST use exactly one of these JSON shapes:",
   '  {"method":"trainer","npcHint":"who teaches it","cost":{"resources":{"resource_id":2}}}',
   '  {"method":"trial","flagId":"flag_id"}',
@@ -111,6 +117,12 @@ export const PHASE_B_ACTION_BATCH_SYSTEM = [
   "sparse, causable tactical conditions are better than conditions on every action.",
   "Each list has at most 2 deterministic ConditionWithReason entries. Every reason must be",
   "a non-empty player-visible phrase of 40 characters or fewer, not a rules explanation.",
+  "Every nested condition MUST use exactly one of these shapes:",
+  '{"type":"skill","skillId":"skill_id","minRank":"novice"}',
+  '{"type":"resource","resourceId":"resource_id","min":1}',
+  '{"type":"flag","flagId":"flag_id","value":true}',
+  '{"type":"attribute","attributeId":"attribute_id","min":10}',
+  "Never omit flag value or resource/attribute min.",
   "Condition skill/resource/attribute ids MUST come from Phase A. Every referenced flag",
   "MUST be set by at least one generated action effect; never invent an unreachable flag.",
   "Prefer conditions players can cause through actions, flags, or changing resources.",
@@ -159,7 +171,6 @@ export function buildPhaseBFoundationUser(
  *
  * @param premise - User-authored story premise.
  * @param phaseA - Validated world-shape output.
- * @param foundation - Validated item and actor foundation.
  * @param categories - Action categories assigned to this batch.
  * @param requiredSkillIds - Skills not yet covered by an earlier batch.
  * @param requiredTrialFlags - Trial flags not yet set by an earlier batch.
@@ -169,7 +180,6 @@ export function buildPhaseBFoundationUser(
 export function buildPhaseBActionBatchUser(
   premise: string,
   phaseA: PhaseA,
-  foundation: unknown,
   categories: readonly string[],
   requiredSkillIds: readonly string[],
   requiredTrialFlags: readonly string[],
@@ -182,9 +192,6 @@ export function buildPhaseBActionBatchUser(
     "",
     "PHASE A OUTPUT:",
     JSON.stringify(phaseA),
-    "",
-    "PHASE B FOUNDATION:",
-    JSON.stringify(foundation),
     "",
     `REQUESTED CATEGORIES: ${categories.join(", ")}`,
     `REQUIRED SKILL IDS: ${requiredSkillIds.join(", ") || "none"}`,
