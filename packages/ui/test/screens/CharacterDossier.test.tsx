@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { act, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { CharacterDossier } from "../../src/screens/CharacterDossier";
 import { setBridge, type CoreBridge, type Dossier } from "../../src/bridge/core";
 import { useRoute } from "../../src/app/router";
@@ -89,5 +89,11 @@ describe("CharacterDossier skill progression", () => {
     expect(screen.getByText("Defeated the grave-wight in a close duel.")).toBeInTheDocument();
     expect(screen.getByText("Turn 7")).toBeInTheDocument();
     expect(screen.queryByText(/99 \/ 279 XP/)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Open loadout →" }));
+    expect(useRoute.getState()).toMatchObject({
+      route: "loadout",
+      params: { storyId: "story", characterId: "kestrel" },
+    });
   });
 });

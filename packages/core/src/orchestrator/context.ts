@@ -13,10 +13,18 @@
  */
 import { z } from "zod";
 import type { Store, CharacterRecord } from "../store/index.js";
-import type { Ruling, StorySchema, ActionDef, Outcome, NarratorStyleInputs } from "../types/index.js";
+import type {
+  Ruling,
+  StorySchema,
+  StoryRecord,
+  ActionDef,
+  Outcome,
+  NarratorStyleInputs,
+} from "../types/index.js";
 import { renderStyleSettings } from "../types/index.js";
 import { buildMemoryBlock } from "../summarizer/index.js";
 import { scoreToMod } from "../engine/attributes.js";
+import { checkGate } from "../engine/gate.js";
 
 /**
  * Framework narrator instructions (§8, first block of the system frame). Style directives from a
@@ -174,7 +182,7 @@ function renderEffects(ruling: Ruling, nameFor: (id: string) => string): string[
 }
 
 /** Render a present character's hard-state snapshot (block 3 — never dropped). */
-function renderHardSnapshot(record: CharacterRecord, schema: StorySchema): string {
+export function renderHardSnapshot(record: CharacterRecord, schema: StorySchema): string {
   const hard = record.hard;
   const bits: string[] = [
     `${record.name}${record.isPlayer ? " (player)" : ""}: ${hard.alive ? "alive" : "DEAD"}`,
@@ -197,6 +205,191 @@ function renderHardSnapshot(record: CharacterRecord, schema: StorySchema): strin
   const inv = hard.inventory.filter((i) => i.qty > 0);
   if (inv.length) bits.push(`inventory: ${inv.map((i) => `${i.itemId}×${i.qty}`).join(", ")}`);
   return bits.join(" | ");
+}
+
+export interface PlayerSuggestionContext {
+  latestNarrator?: string;
+  recentScene: string[];
+  visibleCharacters: Array<{
+    id: string;
+    name: string;
+    isPlayer: boolean;
+    location?: string;
+    mood?: string;
+    goal?: string;
+  }>;
+  hardState: string[];
+  availableActions: Array<{
+    id: string;
+    label: string;
+    category: ActionDef["category"];
+    description?: string;
+    aliases?: string[];
+  }>;
+  sceneAnchors: string[];
+  worldContext?: string;
+}
+
+const SUGGESTION_STOP_WORDS = new Set([
+  "about", "after", "again", "against", "before", "being", "could", "does",
+  "every", "from", "have", "into", "itself", "might", "other", "should",
+  "their", "there", "these", "they", "this", "through", "under", "what",
+  "when", "where", "which", "while", "with", "would", "your", "around",
+  "carefully", "character", "immediate", "nearest", "observe", "pause",
+  "situation", "surroundings",
+]);
+
+const LATEST_NARRATOR_LIMIT = 3_600;
+const RECENT_MESSAGE_LIMIT = 1_400;
+const WORLD_CONTEXT_LIMIT = 1_200;
+
+function tailExcerpt(text: string, limit: number): string {
+  const clean = text.trim();
+  if (clean.length <= limit) return clean;
+  const tail = clean.slice(-limit);
+  const boundary = tail.search(/[\s\n]/);
+  return `…${boundary >= 0 ? tail.slice(boundary).trimStart() : tail}`;
+}
+
+function normalizedSuggestionText(text: string): string {
+  return text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+}
+
+function suggestionWords(text: string, excluded = new Set<string>()): string[] {
+  return text
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}_'-]+/gu, " ")
+    .split(/\s+/)
+    .map((word) => word.replace(/^['-]+|['-]+$/g, ""))
+    .filter(
+      (word) =>
+        word.length >= 4 &&
+        !SUGGESTION_STOP_WORDS.has(word) &&
+        !excluded.has(word)
+    );
+}
+
+function buildSceneAnchors(
+  latestNarrator: string,
+  visible: CharacterRecord[],
+  player: CharacterRecord | undefined
+): string[] {
+  const playerWords = new Set(
+    normalizedSuggestionText(player?.name ?? "").split(/\s+/).filter(Boolean)
+  );
+  const npcNames = visible
+    .filter((character) => !character.isPlayer)
+    .map((character) => normalizedSuggestionText(character.name))
+    .filter(Boolean);
+  const location = normalizedSuggestionText(player?.soft?.current.location ?? "");
+  const latestWords = suggestionWords(latestNarrator, playerWords);
+
+  // Reverse word order so a long opening favors the live scene at its end.
+  const newestFirst = [...latestWords].reverse();
+  return [...new Set([...npcNames, ...(location ? [location] : []), ...newestFirst])]
+    .slice(0, 40);
+}
+
+/**
+ * Assemble the bounded, live scene used by the optional "Possible moves" helper.
+ *
+ * Unlike the turn classifier, this deliberately bounds long openings and old transcript data.
+ * It includes only characters evidenced by the live tail/current location, the current hard
+ * state, and actions that pass the same deterministic gate used by real turns.
+ */
+export async function assemblePlayerSuggestionContext(
+  store: Store,
+  story: StoryRecord
+): Promise<PlayerSuggestionContext> {
+  const [messages, roster, world] = await Promise.all([
+    store.messages.recent(story.id, 8),
+    store.characters.listByStory(story.id),
+    store.worldSoft.get(story.id),
+  ]);
+  const latestNarrator = [...messages].reverse().find((message) => message.role === "narrator");
+  const player = roster.find((character) => character.isPlayer);
+  const narratorText = tailExcerpt(latestNarrator?.content ?? "", LATEST_NARRATOR_LIMIT);
+  const normalizedNarrator = normalizedSuggestionText(narratorText);
+  const playerLocation = player?.soft?.current.location?.trim().toLowerCase();
+  const visible = roster.filter((character) => {
+    if (character.isPlayer) return true;
+    const characterName = normalizedSuggestionText(character.name);
+    const namedInScene =
+      characterName.length > 0 && normalizedNarrator.includes(characterName);
+    const characterLocation = character.soft?.current.location?.trim().toLowerCase();
+    const sharesLocation =
+      Boolean(playerLocation) && Boolean(characterLocation) && playerLocation === characterLocation;
+    return namedInScene || sharesLocation;
+  }).slice(0, 12);
+
+  const matchingLocation = world?.locations.find(
+    (location) =>
+      playerLocation !== undefined && location.name.trim().toLowerCase() === playerLocation
+  );
+  const worldContext = matchingLocation
+    ? tailExcerpt(
+        `${matchingLocation.name}: ${matchingLocation.description}`,
+        WORLD_CONTEXT_LIMIT
+      )
+    : undefined;
+
+  let availableActions: PlayerSuggestionContext["availableActions"] = [];
+  if (story.schema.statMode === "full" && player) {
+    const [definitions, instances, assignments] = await Promise.all([
+      store.runtimeItems.listDefinitions(story.id),
+      store.runtimeItems.listInventory(player.id),
+      store.runtimeItems.listLoadout(player.id),
+    ]);
+    const actor = structuredClone(player.hard);
+    actor.equipment = assignments;
+    const equipment = definitions.length > 0 ? { definitions, instances } : undefined;
+    availableActions = story.schema.actions
+      .map((action) => ({
+        action,
+        gate: checkGate(
+          story.schema,
+          actor,
+          { actorId: player.id, actionId: action.id, confidence: 1 },
+          equipment ? { equipment } : undefined
+        ),
+      }))
+      .filter((candidate) => candidate.gate.allowed)
+      .slice(0, 20)
+      .map(({ action }) => ({
+        id: action.id,
+        label: action.label,
+        category: action.category,
+        ...(action.description
+          ? { description: tailExcerpt(action.description, 320) }
+          : {}),
+        ...(action.aliases?.length ? { aliases: action.aliases } : {}),
+      }));
+  }
+
+  return {
+    ...(latestNarrator ? { latestNarrator: narratorText } : {}),
+    recentScene: messages.slice(-6).map(
+      (message) =>
+        `${message.role.toUpperCase()}: ${tailExcerpt(
+          message.content,
+          message.id === latestNarrator?.id ? LATEST_NARRATOR_LIMIT : RECENT_MESSAGE_LIMIT
+        )}`
+    ),
+    visibleCharacters: visible.map((character) => ({
+      id: character.id,
+      name: character.name,
+      isPlayer: character.isPlayer,
+      ...(character.soft?.current.location
+        ? { location: character.soft.current.location }
+        : {}),
+      ...(character.soft?.current.mood ? { mood: character.soft.current.mood } : {}),
+      ...(character.soft?.current.goal ? { goal: character.soft.current.goal } : {}),
+    })),
+    hardState: visible.map((character) => renderHardSnapshot(character, story.schema)),
+    availableActions,
+    sceneAnchors: buildSceneAnchors(narratorText, visible, player),
+    ...(worldContext ? { worldContext } : {}),
+  };
 }
 
 /**

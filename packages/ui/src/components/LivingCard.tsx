@@ -30,6 +30,10 @@ export interface LivingCardProps {
   animate?: boolean;
   className?: string;
   style?: CSSProperties;
+  /** Drill into the character's complete story and mechanical profile. */
+  onOpenProfile?: () => void;
+  /** Open the seven-slot equipment surface when the story uses Full Stats. */
+  onOpenLoadout?: () => void;
 }
 
 const KNOWN_RANKS: MasteryRank[] = ["novice", "adept", "expert", "master"];
@@ -88,6 +92,60 @@ function CardHeader(props: { card: CoreLivingCardView; accent: string; fallen: b
         <span style={{ fontSize: 12, color: "var(--secondary)", fontStyle: "italic" }}>{card.soft.mood}</span>
       ) : null}
     </header>
+  );
+}
+
+function CardActions(props: Pick<LivingCardProps, "onOpenProfile" | "onOpenLoadout">): JSX.Element | null {
+  if (!props.onOpenProfile && !props.onOpenLoadout) return null;
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 10,
+        flexWrap: "wrap",
+        marginTop: 14,
+        paddingTop: 12,
+        borderTop: "1px solid var(--hairline)",
+      }}
+    >
+      {props.onOpenProfile ? (
+        <button
+          type="button"
+          onClick={props.onOpenProfile}
+          style={{
+            background: "transparent",
+            border: 0,
+            color: "var(--brass)",
+            cursor: "pointer",
+            font: "inherit",
+            fontSize: 12,
+            fontWeight: 600,
+            padding: 0,
+          }}
+        >
+          Open full profile →
+        </button>
+      ) : <span />}
+      {props.onOpenLoadout ? (
+        <button
+          type="button"
+          onClick={props.onOpenLoadout}
+          style={{
+            background: "transparent",
+            border: 0,
+            color: "var(--teal)",
+            cursor: "pointer",
+            font: "inherit",
+            fontSize: 11.5,
+            padding: 0,
+          }}
+        >
+          Equipment &amp; loadout
+        </button>
+      ) : null}
+    </div>
   );
 }
 
@@ -221,6 +279,7 @@ export function LivingCard(props: LivingCardProps): JSX.Element {
         </div>
       ) : null}
       <TraitChips traits={traits.slice(0, 4)} />
+      <CardActions onOpenProfile={props.onOpenProfile} onOpenLoadout={props.onOpenLoadout} />
     </CardShell>
   );
 }
@@ -329,6 +388,7 @@ export function LivingCardView(props: LivingCardProps): JSX.Element {
           </ul>
         </>
       ) : null}
+      <CardActions onOpenProfile={props.onOpenProfile} onOpenLoadout={props.onOpenLoadout} />
     </CardShell>
   );
 }

@@ -194,6 +194,10 @@ export function buildPhaseBActionBatchUser(
     JSON.stringify(phaseA),
     "",
     `REQUESTED CATEGORIES: ${categories.join(", ")}`,
+    `CONDITIONAL ACTION TARGET: exactly ${Math.ceil(
+      categories.length * (CATALOG_MIN_ACTIONS / 5) * 0.25
+    )} actions in this batch may define advantageWhen or disadvantageWhen.`,
+    "Every flag referenced by this batch MUST be set by an action effect in this same batch.",
     `REQUIRED SKILL IDS: ${requiredSkillIds.join(", ") || "none"}`,
     `REQUIRED TRIAL FLAGS: ${requiredTrialFlags.join(", ") || "none"}`,
     "VERSIONED UNIVERSAL ACTION REGISTRY (specialize these families; it is not a story-specific item catalog):",

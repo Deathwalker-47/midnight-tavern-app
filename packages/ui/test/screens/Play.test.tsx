@@ -12,6 +12,7 @@ import { Play } from "../../src/screens/Play";
 import { setBridge, getBridge, type CoreBridge } from "../../src/bridge/core";
 import { usePlayStore } from "../../src/state/playStore";
 import { useUiStore } from "../../src/state/uiStore";
+import { useRoute } from "../../src/app/router";
 
 /** The default bridge, captured so tests that swap it in can restore it afterward. */
 const defaultBridge = getBridge();
@@ -36,6 +37,7 @@ beforeEach(() => {
 afterEach(() => {
   // Restore the shared singleton so a swapped-in stub can't leak into other suites.
   setBridge(defaultBridge);
+  useRoute.setState({ route: "library", params: {} });
 });
 
 describe("Play — empty state", () => {
@@ -131,6 +133,47 @@ describe("Play — stream + composer", () => {
   });
 });
 
+describe("Play — possible moves", () => {
+  it("shows a retryable provider error without replacing the player's draft", async () => {
+    const suggestActions = vi.fn(async () => {
+      throw new Error("Classifier returned invalid scene-grounded suggestions");
+    });
+    setBridge({ ...emptyBridge(), suggestActions });
+    render(<Play storyId="s1" />);
+
+    const composer = await screen.findByTestId("play-composer") as HTMLTextAreaElement;
+    fireEvent.change(composer, { target: { value: "I keep my hand near the door." } });
+    fireEvent.click(screen.getByRole("button", { name: /Possible moves/i }));
+
+    expect(await screen.findByText("Suggestions are unavailable")).toBeInTheDocument();
+    expect(screen.getByText(/five scene-grounded moves/i)).toBeInTheDocument();
+    expect(composer.value).toBe("I keep my hand near the door.");
+
+    fireEvent.click(screen.getByRole("button", { name: /Try suggestions again/i }));
+    await waitFor(() => expect(suggestActions).toHaveBeenCalledTimes(2));
+  });
+
+  it("aborts an in-flight request when the suggestions panel closes", async () => {
+    let capturedSignal: AbortSignal | undefined;
+    const suggestActions = vi.fn((_storyId: string, signal?: AbortSignal) => {
+      capturedSignal = signal;
+      return new Promise<never>((_resolve, reject) => {
+        signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")));
+      });
+    });
+    setBridge({ ...emptyBridge(), suggestActions });
+    render(<Play storyId="s1" />);
+
+    await screen.findByTestId("play-composer");
+    fireEvent.click(screen.getByRole("button", { name: /Possible moves/i }));
+    await waitFor(() => expect(suggestActions).toHaveBeenCalledOnce());
+    fireEvent.click(screen.getByRole("button", { name: /Close suggestions/i }));
+
+    expect(capturedSignal?.aborted).toBe(true);
+    expect(screen.getByRole("button", { name: /Possible moves/i })).toBeInTheDocument();
+  });
+});
+
 describe("Play — drawer", () => {
   it("opens a character's living card when a party member is selected", async () => {
     render(<Play storyId="s1" debugState="normal" />);
@@ -142,5 +185,11 @@ describe("Play — drawer", () => {
 
     await waitFor(() => expect(screen.getByTestId("play-drawer")).toBeInTheDocument());
     expect(screen.getByLabelText(/Close living cards/i)).toBeInTheDocument();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Open full profile →" }));
+    expect(useRoute.getState()).toMatchObject({
+      route: "dossier",
+      params: { storyId: "s1", characterId: "kestrel" },
+    });
   });
 });

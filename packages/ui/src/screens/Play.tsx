@@ -417,6 +417,40 @@ function errorCopy(kind: TurnErrorKind, role: string): ErrorCopy {
   }
 }
 
+function suggestionErrorDetail(reason: unknown): string {
+  const messages: string[] = [];
+  let current: unknown = reason;
+  const seen = new Set<unknown>();
+  for (let depth = 0; depth < 4 && current !== undefined && !seen.has(current); depth += 1) {
+    seen.add(current);
+    if (current instanceof Error) {
+      messages.push(`${current.name} ${current.message}`);
+      current = (current as Error & { cause?: unknown }).cause;
+    } else {
+      messages.push(String(current));
+      break;
+    }
+  }
+  const detail = messages.join(" ").toLowerCase();
+  if (
+    detail.includes("api key") ||
+    detail.includes("credential") ||
+    detail.includes("401") ||
+    detail.includes("unauthor")
+  ) {
+    return "The Classifier provider rejected its credentials. Check Settings, then try again.";
+  }
+  if (
+    detail.includes("timeout") ||
+    detail.includes("network") ||
+    detail.includes("fetch") ||
+    detail.includes("reach")
+  ) {
+    return "The Classifier provider could not be reached. Your draft is untouched; check the connection and try again.";
+  }
+  return "The Classifier did not return five scene-grounded moves after repair attempts. Your draft is untouched; try again or choose a recommended model.";
+}
+
 // ── Screen ──────────────────────────────────────────────────────────────────────────────────
 
 export function Play(props: PlayProps): JSX.Element {
@@ -456,8 +490,11 @@ export function Play(props: PlayProps): JSX.Element {
   const [storyRecord, setStoryRecord] = useState<StoryRecord>();
   const [suggestionsState, setSuggestionsState] = useState<SuggestionsState>("closed");
   const [suggestions, setSuggestions] = useState<ActionSuggestion[]>([]);
+  const [suggestionsError, setSuggestionsError] = useState<string>();
   const [feedbackState, setFeedbackState] = useState<"idle" | "generating" | "completed" | "validation-error" | "provider-error">("idle");
   const turnAbort = useRef<AbortController>();
+  const suggestionsAbort = useRef<AbortController>();
+  const suggestionsGeneration = useRef(0);
 
   // Load the story's transcript when the id changes (mount + route/tab switch).
   useEffect(() => {
@@ -478,6 +515,18 @@ export function Play(props: PlayProps): JSX.Element {
       });
     });
     return () => { cancelled = true; };
+  }, [storyId]);
+
+  useEffect(() => {
+    suggestionsAbort.current?.abort();
+    suggestionsGeneration.current += 1;
+    setSuggestionsState("closed");
+    setSuggestions([]);
+    setSuggestionsError(undefined);
+    return () => {
+      suggestionsAbort.current?.abort();
+      suggestionsGeneration.current += 1;
+    };
   }, [storyId]);
 
   // ── Resolve effective render inputs (store, then debug override) ────────────────────────────
@@ -747,15 +796,41 @@ export function Play(props: PlayProps): JSX.Element {
 
   const requestSuggestions = useCallback(async (): Promise<void> => {
     if (!storyId) return;
+    suggestionsAbort.current?.abort();
+    const controller = new AbortController();
+    const generation = suggestionsGeneration.current + 1;
+    suggestionsGeneration.current = generation;
+    suggestionsAbort.current = controller;
+    setSuggestionsError(undefined);
     setSuggestionsState("loading");
     try {
-      const rows = await getBridge().suggestActions(storyId);
+      const rows = await getBridge().suggestActions(storyId, controller.signal);
+      if (controller.signal.aborted || suggestionsGeneration.current !== generation) return;
       setSuggestions(rows.slice(0, 6));
       setSuggestionsState(rows.length ? "ready" : "empty");
-    } catch {
+    } catch (reason) {
+      if (controller.signal.aborted || suggestionsGeneration.current !== generation) return;
+      setSuggestionsError(suggestionErrorDetail(reason));
       setSuggestionsState("error");
+    } finally {
+      if (suggestionsGeneration.current === generation) {
+        suggestionsAbort.current = undefined;
+      }
     }
-  }, [storyId, draft]);
+  }, [storyId]);
+
+  const closeSuggestions = useCallback((): void => {
+    suggestionsAbort.current?.abort();
+    suggestionsGeneration.current += 1;
+    suggestionsAbort.current = undefined;
+    setSuggestionsError(undefined);
+    setSuggestionsState("closed");
+  }, []);
+
+  const insertSuggestion = useCallback((text: string): void => {
+    setDraft((current) => current.trim() ? `${current.trim()} ${text}` : text);
+    closeSuggestions();
+  }, [closeSuggestions]);
 
   const regenerateWithFeedback = useCallback(async (feedback: string): Promise<void> => {
     if (!storyId || historyBusy) return;
@@ -993,13 +1068,11 @@ export function Play(props: PlayProps): JSX.Element {
             actionBudget={storyMeta.statMode === "full" ? storyMeta.actionBudget : undefined}
             suggestionsState={suggestionsState}
             suggestions={suggestions}
+            suggestionsError={suggestionsError}
             onOpenSuggestions={() => void requestSuggestions()}
-            onCloseSuggestions={() => setSuggestionsState("closed")}
+            onCloseSuggestions={closeSuggestions}
             onRegenerateSuggestions={() => void requestSuggestions()}
-            onInsertSuggestion={(text) => {
-              setDraft((current) => current.trim() ? `${current.trim()} ${text}` : text);
-              setSuggestionsState("closed");
-            }}
+            onInsertSuggestion={insertSuggestion}
           />
         </section>
 
@@ -1011,6 +1084,22 @@ export function Play(props: PlayProps): JSX.Element {
             reduced={reduced}
             onClose={closeDrawer}
             closeRef={closeBtnRef}
+            onOpenProfile={
+              storyId && drawerCharacterId
+                ? () => {
+                    closeDrawer();
+                    navigate("dossier", { storyId, characterId: drawerCharacterId });
+                  }
+                : undefined
+            }
+            onOpenLoadout={
+              storyMeta.statMode === "full" && storyId && drawerCharacterId
+                ? () => {
+                    closeDrawer();
+                    navigate("loadout", { storyId, characterId: drawerCharacterId });
+                  }
+                : undefined
+            }
           />
         )}
       </div>
@@ -1335,6 +1424,7 @@ function Composer(props: {
   actionBudget?: number;
   suggestionsState: SuggestionsState;
   suggestions: ActionSuggestion[];
+  suggestionsError?: string;
   onOpenSuggestions: () => void;
   onCloseSuggestions: () => void;
   onRegenerateSuggestions: () => void;
@@ -1350,6 +1440,7 @@ function Composer(props: {
           state={props.suggestionsState}
           suggestions={props.suggestions}
           actionBudget={props.actionBudget}
+          errorDetail={props.suggestionsError}
           onOpen={props.onOpenSuggestions}
           onClose={props.onCloseSuggestions}
           onRegenerate={props.onRegenerateSuggestions}
@@ -1405,8 +1496,10 @@ function Drawer(props: {
   reduced: boolean;
   onClose: () => void;
   closeRef: React.RefObject<HTMLButtonElement>;
+  onOpenProfile?: () => void;
+  onOpenLoadout?: () => void;
 }): JSX.Element {
-  const { narrow, card, loading, reduced, onClose, closeRef } = props;
+  const { narrow, card, loading, reduced, onClose, closeRef, onOpenProfile, onOpenLoadout } = props;
   return (
     <>
       {narrow && <div style={S.scrim} onClick={onClose} aria-hidden="true" data-testid="play-scrim" />}
@@ -1426,7 +1519,12 @@ function Drawer(props: {
           {loading ? (
             <div style={{ color: "var(--muted)", fontSize: 13, fontFamily: "var(--font-mono)" }}>Loading card…</div>
           ) : card ? (
-            <LivingCard card={card} animate={!reduced} />
+            <LivingCard
+              card={card}
+              animate={!reduced}
+              onOpenProfile={onOpenProfile}
+              onOpenLoadout={onOpenLoadout}
+            />
           ) : (
             <div style={{ color: "var(--muted)", fontSize: 13, lineHeight: 1.5 }}>
               No living card yet for this character.

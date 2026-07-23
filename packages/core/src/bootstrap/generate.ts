@@ -30,6 +30,7 @@ import {
   CATALOG_MIN_ACTIONS,
   type ActionDef,
   type ActionCategory,
+  type ConditionWithReason,
   type StorySchema,
   type StatMode,
 } from "../types/index.js";
@@ -460,6 +461,116 @@ function ensureActionCoverage(
   }
 
   return repaired;
+}
+
+function actionHasConditions(action: ActionDef): boolean {
+  return (
+    (action.advantageWhen?.length ?? 0) > 0 ||
+    (action.disadvantageWhen?.length ?? 0) > 0
+  );
+}
+
+function actionConditionCount(action: ActionDef): number {
+  return (
+    (action.advantageWhen?.length ?? 0) +
+    (action.disadvantageWhen?.length ?? 0)
+  );
+}
+
+function actionFlagValues(actions: readonly ActionDef[]): Map<string, Set<boolean>> {
+  const values = new Map<string, Set<boolean>>();
+  for (const action of actions) {
+    for (const effect of Object.values(action.effects)) {
+      if (!effect.setFlag) continue;
+      const flagValues = values.get(effect.setFlag.flagId) ?? new Set<boolean>();
+      flagValues.add(effect.setFlag.value);
+      values.set(effect.setFlag.flagId, flagValues);
+    }
+  }
+  return values;
+}
+
+function conditionHasLiveFlag(
+  entry: ConditionWithReason,
+  flags: ReadonlyMap<string, ReadonlySet<boolean>>
+): boolean {
+  if (entry.condition.type !== "flag") return true;
+  const values = flags.get(entry.condition.flagId);
+  return Boolean(values && (!entry.condition.value || values.has(true)));
+}
+
+function pruneDeadFlagConditions(
+  action: ActionDef,
+  flags: ReadonlyMap<string, ReadonlySet<boolean>>
+): ActionDef {
+  const advantageWhen = action.advantageWhen?.filter((entry) =>
+    conditionHasLiveFlag(entry, flags)
+  );
+  const disadvantageWhen = action.disadvantageWhen?.filter((entry) =>
+    conditionHasLiveFlag(entry, flags)
+  );
+  return {
+    ...action,
+    advantageWhen: advantageWhen?.length ? advantageWhen : undefined,
+    disadvantageWhen: disadvantageWhen?.length ? disadvantageWhen : undefined,
+  };
+}
+
+/**
+ * @internal
+ * Makes structurally valid model-authored action conditions cross-reference safe without
+ * consuming another provider repair attempt.
+ *
+ * @param actions - Complete action catalog assembled from all bounded batches.
+ * @returns A copied catalog with live optional predicates and bounded conditional coverage.
+ *
+ * @remarks
+ * Dead flag conditions are removed. When coverage exceeds 33%, whole condition lists are
+ * removed from excess actions while retaining category spread and richer actions first.
+ * Effects are never invented or changed; sparse valid conditions remain playable because
+ * the 25% target is generation guidance rather than a freeze-safety invariant.
+ */
+function stabilizeActionConditions(actions: readonly ActionDef[]): ActionDef[] {
+  const maximumConditionalActions = Math.floor(actions.length * 0.33);
+  const flags = actionFlagValues(actions);
+  const pruned = actions.map((action) => pruneDeadFlagConditions(action, flags));
+  const conditionalCount = pruned.filter(actionHasConditions).length;
+
+  if (conditionalCount <= maximumConditionalActions) return pruned;
+
+  const conditionedIndexes = [...pruned.keys()].filter((index) =>
+    actionHasConditions(pruned[index]!)
+  );
+  const rankedIndexes = [...conditionedIndexes].sort(
+    (left, right) =>
+      actionConditionCount(pruned[right]!) -
+        actionConditionCount(pruned[left]!) ||
+      left - right
+  );
+  const keep = new Set<number>();
+  for (const category of ACTION_BATCHES.flat()) {
+    const index = rankedIndexes.find(
+      (candidate) =>
+        !keep.has(candidate) && pruned[candidate]!.category === category
+    );
+    if (index !== undefined && keep.size < maximumConditionalActions) {
+      keep.add(index);
+    }
+  }
+  for (const index of rankedIndexes) {
+    if (keep.size >= maximumConditionalActions) break;
+    keep.add(index);
+  }
+
+  return pruned.map((action, index) =>
+    actionHasConditions(action) && !keep.has(index)
+      ? {
+          ...action,
+          advantageWhen: undefined,
+          disadvantageWhen: undefined,
+        }
+      : action
+  );
 }
 
 function phaseBActionBatchSchema(
@@ -1177,7 +1288,9 @@ export async function generateStorySchema(
     const phaseB = PhaseBSchema.parse({
       ...foundation,
       items: [],
-      actions: applyImportedActionDetails(actions, imported),
+      actions: stabilizeActionConditions(
+        applyImportedActionDetails(actions, imported)
+      ),
     });
 
     const candidate = assemble(resolvedInput, mechanicsCore, phaseB);

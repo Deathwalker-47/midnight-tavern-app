@@ -19,6 +19,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
 import type { ScreenProps } from "./registry.js";
+import { useRoute } from "../app/router.js";
 import { getBridge } from "../bridge/core.js";
 import type { CastMember, LivingCardView as CoreLivingCardView } from "../bridge/core.js";
 import { useReducedMotion, EmptyState, InlineNotice, LivingCardView } from "../components/index.js";
@@ -28,6 +29,8 @@ interface LoadedCast {
   members: CastMember[];
   /** Full projection per character id (missing ids fall back to a card built from the cast row). */
   cards: Map<string, CoreLivingCardView>;
+  /** Full Stats stories expose the equipment/loadout drill-in. */
+  statMode: "none" | "full";
 }
 
 type LoadState =
@@ -73,7 +76,10 @@ export function Characters(props: ScreenProps): JSX.Element {
     setState({ phase: "loading" });
     const bridge = getBridge();
     (async () => {
-      const members = await bridge.listPresentCast(storyId);
+      const [members, story] = await Promise.all([
+        bridge.listPresentCast(storyId),
+        bridge.getStory(storyId),
+      ]);
       const cards = new Map<string, CoreLivingCardView>();
       await Promise.all(
         members.map(async (m) => {
@@ -81,7 +87,16 @@ export function Characters(props: ScreenProps): JSX.Element {
           cards.set(m.characterId, card ?? cardFromCastMember(m));
         })
       );
-      if (!cancelled) setState({ phase: "ready", cast: { members, cards } });
+      if (!cancelled) {
+        setState({
+          phase: "ready",
+          cast: {
+            members,
+            cards,
+            statMode: story?.schema.statMode === "full" ? "full" : "none",
+          },
+        });
+      }
     })().catch((err: unknown) => {
       if (!cancelled) setState({ phase: "error", message: err instanceof Error ? err.message : "Couldn't reach the story's cast." });
     });
@@ -143,7 +158,7 @@ export function Characters(props: ScreenProps): JSX.Element {
     );
   }
 
-  const { members, cards } = state.cast;
+  const { members, cards, statMode } = state.cast;
 
   if (members.length === 0) {
     return (
@@ -172,6 +187,21 @@ export function Characters(props: ScreenProps): JSX.Element {
         resolveName={resolveName}
         animate={!reduced}
         className={reduced ? undefined : "mt-fade"}
+        onOpenProfile={() =>
+          useRoute.getState().navigate("dossier", {
+            storyId,
+            characterId: m.characterId,
+          })
+        }
+        onOpenLoadout={
+          statMode === "full"
+            ? () =>
+                useRoute.getState().navigate("loadout", {
+                  storyId,
+                  characterId: m.characterId,
+                })
+            : undefined
+        }
       />
     );
   };

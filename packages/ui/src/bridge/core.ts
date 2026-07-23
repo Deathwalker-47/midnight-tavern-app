@@ -850,6 +850,18 @@ export function makeMemoryBridge(): CoreBridge {
         inventory: [],
         skills: [],
       };
+      const storyLorebookEntries: LorebookEntry[] = (args.lorebookSeeds ?? []).map(
+        (seed, index) => ({
+          id: uid(),
+          lorebookId: storyId,
+          keys: seed.keys,
+          content: seed.content,
+          enabled: seed.enabled,
+          alwaysOn: false,
+          priority: 0,
+          insertionOrder: index,
+        })
+      );
       stories.set(storyId, {
         record,
         messages: args.openingMessage?.trim()
@@ -873,18 +885,19 @@ export function makeMemoryBridge(): CoreBridge {
           },
         ],
         cards: new Map([[playerCharacterId, card]]),
-        lorebook: (args.lorebookSeeds ?? []).map((seed, index) => ({
-          id: uid(),
-          lorebookId: storyId,
-          keys: seed.keys,
-          content: seed.content,
-          enabled: seed.enabled,
-          alwaysOn: false,
-          priority: 0,
-          insertionOrder: index,
-        })),
+        lorebook: storyLorebookEntries,
         ...(args.persona?.id ? { activePersonaId: args.persona.id } : {}),
-        attachedLorebooks: [],
+        attachedLorebooks: [{ lorebookId: storyId, enabled: true }],
+      });
+      lorebooks.set(storyId, {
+        book: {
+          id: storyId,
+          name: `${args.title} lore`,
+          description: "Story-specific lore",
+          createdAt: record.createdAt,
+          source: "user",
+        },
+        entries: storyLorebookEntries,
       });
       return { story: record, playerCharacterId };
     },

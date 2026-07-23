@@ -13,6 +13,7 @@ export interface ActionSuggestion {
 
 export function ActionSuggestions(props: {
   state: SuggestionsState; suggestions: ActionSuggestion[]; actionBudget?: number;
+  errorDetail?: string;
   onOpen: () => void; onClose: () => void; onRegenerate: () => void; onInsert: (text: string) => void;
 }): JSX.Element {
   const firstRef = useRef<HTMLButtonElement>(null);
@@ -34,7 +35,18 @@ export function ActionSuggestions(props: {
       </header>
       {props.state === "loading" ? <div style={status}>Reading the scene…</div> : null}
       {props.state === "empty" ? <div style={status}>No useful suggestions were returned.<Button variant="ghost" onClick={props.onRegenerate} style={{ marginLeft: 8 }}>Try again</Button></div> : null}
-      {props.state === "error" ? <div style={{ marginTop: 10 }}><InlineNotice severity="warn" title="Suggestions are unavailable" detail="Your draft is untouched. You can keep writing or try again." /></div> : null}
+      {props.state === "error" ? (
+        <div style={{ display: "grid", gap: 8, marginTop: 10 }}>
+          <InlineNotice
+            severity="warn"
+            title="Suggestions are unavailable"
+            detail={props.errorDetail ?? "Your draft is untouched. You can keep writing or try again."}
+          />
+          <Button variant="ghost" onClick={props.onRegenerate} style={{ justifySelf: "start" }}>
+            Try suggestions again
+          </Button>
+        </div>
+      ) : null}
       {props.state === "ready" ? (
         <div style={{ display: "grid", gap: 7, marginTop: 11 }}>
           {props.suggestions.slice(0, 6).map((suggestion, index) => (

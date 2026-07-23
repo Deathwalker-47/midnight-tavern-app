@@ -13,6 +13,8 @@ export interface LorebookLibraryCardProps {
   entryCount: number;
   /** Number of stories this book is attached to. */
   attachmentCount: number;
+  /** Story-scoped status shown when browsing the library from an open story. */
+  contextLabel?: string;
   onOpen?: () => void;
   className?: string;
   style?: CSSProperties;
@@ -25,7 +27,7 @@ const SOURCE_LABEL: Record<LorebookSourceTag, string> = {
 };
 
 export function LorebookLibraryCard(props: LorebookLibraryCardProps): JSX.Element {
-  const { name, source, entryCount, attachmentCount, onOpen, className, style } = props;
+  const { name, source, entryCount, attachmentCount, contextLabel, onOpen, className, style } = props;
   return (
     <button
       type="button"
@@ -46,18 +48,35 @@ export function LorebookLibraryCard(props: LorebookLibraryCardProps): JSX.Elemen
     >
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
         <span style={{ fontFamily: "var(--font-display)", fontSize: 19, fontWeight: 600, color: "var(--ui-text)" }}>{name}</span>
-        <span
-          style={{
-            fontSize: 9,
-            fontFamily: "var(--font-mono)",
-            color: "var(--teal)",
-            border: "1px solid var(--teal-dim)",
-            borderRadius: 3,
-            padding: "1px 6px",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {SOURCE_LABEL[source]}
+        <span style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap", justifyContent: "flex-end" }}>
+          {contextLabel ? (
+            <span
+              style={{
+                fontSize: 9,
+                fontFamily: "var(--font-mono)",
+                color: "var(--brass)",
+                border: "1px solid var(--brass-dim)",
+                borderRadius: 3,
+                padding: "1px 6px",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {contextLabel}
+            </span>
+          ) : null}
+          <span
+            style={{
+              fontSize: 9,
+              fontFamily: "var(--font-mono)",
+              color: "var(--teal)",
+              border: "1px solid var(--teal-dim)",
+              borderRadius: 3,
+              padding: "1px 6px",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {SOURCE_LABEL[source]}
+          </span>
         </span>
       </div>
       <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--teal)", marginTop: 8 }}>

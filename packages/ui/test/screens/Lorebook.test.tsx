@@ -2,11 +2,11 @@
  * Lorebook screen tests: the no-story branch (no storyId → the global lorebook library, v2 §2) and
  * a per-story load-error state driven through a stubbed bridge.
  */
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { render, screen, waitFor, cleanup } from "@testing-library/react";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { render, screen, waitFor, cleanup, fireEvent } from "@testing-library/react";
 import { Lorebook, parseLorebookJson } from "../../src/screens/Lorebook";
 import { setBridge, makeMemoryBridge } from "../../src/bridge/core";
-import type { CoreBridge, LorebookEntry } from "../../src/bridge/core";
+import type { CoreBridge, LorebookEntry, LorebookLibraryEntry } from "../../src/bridge/core";
 
 function stubBridge(overrides: Partial<CoreBridge>): CoreBridge {
   return Object.assign(makeMemoryBridge(), overrides);
@@ -26,6 +26,66 @@ describe("Lorebook — no story", () => {
     // The library shelf offers a create affordance and settles into its empty state.
     expect(screen.getByTestId("new-lorebook")).toBeInTheDocument();
     await waitFor(() => expect(screen.getByText("No lorebooks yet")).toBeInTheDocument());
+  });
+});
+
+describe("Lorebook — book hierarchy", () => {
+  const counts = [15, 17, 71, 21, 76, 1];
+  const books: LorebookLibraryEntry[] = counts.map((entryCount, index) => ({
+    id: `book-${index + 1}`,
+    name: index === 1 ? "NEN Archive" : `Lorebook ${index + 1}`,
+    description: "",
+    createdAt: index + 1,
+    source: "user",
+    entryCount,
+    attachmentCount: index < 2 ? 1 : 0,
+  }));
+
+  it("lists all lorebooks first and fetches only the selected book's entries", async () => {
+    const listStoryEntries = vi.fn(async (): Promise<LorebookEntry[]> => []);
+    const listEntries = vi.fn(async (lorebookId: string): Promise<LorebookEntry[]> => [
+      {
+        id: "entry-nen",
+        lorebookId,
+        keys: ["NEN"],
+        content: "NEN detail is scoped to this book.",
+        enabled: true,
+        alwaysOn: false,
+        priority: 0,
+        insertionOrder: 0,
+      },
+    ]);
+    setBridge(
+      stubBridge({
+        listLorebooks: vi.fn(async () => books),
+        listAttachedLorebooks: vi.fn(async () => [
+          { ...books[0]!, linkEnabled: true },
+          { ...books[1]!, linkEnabled: true },
+        ]),
+        listLorebook: listStoryEntries,
+        listLorebookEntries: listEntries,
+      })
+    );
+
+    render(<Lorebook storyId="story-1" />);
+
+    await waitFor(() => expect(screen.getByText("Lorebook 6")).toBeInTheDocument());
+    for (const book of books) {
+      expect(screen.getByText(book.name)).toBeInTheDocument();
+    }
+    expect(screen.getByText("NEN Archive")).toBeInTheDocument();
+    expect(screen.getByText("17 entries")).toBeInTheDocument();
+    expect(screen.getAllByText("ATTACHED")).toHaveLength(2);
+    expect(listStoryEntries).not.toHaveBeenCalled();
+    expect(listEntries).not.toHaveBeenCalled();
+    expect(screen.queryByText("NEN detail is scoped to this book.")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /NEN Archive/i }));
+
+    await waitFor(() => expect(listEntries).toHaveBeenCalledTimes(1));
+    expect(listEntries).toHaveBeenCalledWith("book-2");
+    expect(await screen.findByText("NEN")).toBeInTheDocument();
+    expect(screen.getByTestId("lorebook-book-editor")).toBeInTheDocument();
   });
 });
 
@@ -53,17 +113,17 @@ describe("Lorebook — load error state", () => {
   beforeEach(() => {
     setBridge(
       stubBridge({
-        listLorebook: async (): Promise<LorebookEntry[]> => {
+        listLorebooks: async (): Promise<LorebookLibraryEntry[]> => {
           throw new Error("network unreachable");
         },
+        listAttachedLorebooks: async () => [],
       })
     );
   });
 
-  it("shows an error notice with retry when a story's lorebook fails to load", async () => {
+  it("shows an error notice when the lorebook shelf fails to load", async () => {
     render(<Lorebook storyId="story-1" />);
     await waitFor(() => expect(screen.getByTestId("lorebook-screen")).toHaveAttribute("data-status", "error"));
-    expect(screen.getByText("Couldn't load this story's lorebook")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Try again/i })).toBeInTheDocument();
+    expect(screen.getByText("Couldn't load your lorebooks")).toBeInTheDocument();
   });
 });

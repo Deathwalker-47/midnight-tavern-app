@@ -135,7 +135,19 @@ export function parseLorebookJson(text: string, fallbackName: string): ImportedL
   return { name, entries };
 }
 
+/**
+ * Lore always opens on the lorebook shelf. Entries are intentionally fetched only after a user
+ * selects one book, preserving the book → entries hierarchy for both story and global browsing.
+ */
 export function Lorebook(props: ScreenProps): JSX.Element {
+  return <GlobalLorebookLibrary storyId={props.storyId} />;
+}
+
+/**
+ * Retained entry editor for the story-default bridge contract. The routed screen now reaches entry
+ * editing through BookEntryEditor, which is bound to the exact selected lorebook id.
+ */
+function StoryLorebookEntryEditor(props: ScreenProps): JSX.Element {
   const { storyId } = props;
   const reduced = useReducedMotion();
   const narrow = useMediaQuery(NARROW_QUERY);
@@ -704,8 +716,10 @@ function asSourceTag(source: string | undefined): LorebookSourceTag {
  * a create affordance; drilling into a card opens a per-book entry editor bound to that lorebook via
  * the `*In` bridge methods (listLorebookEntries / saveLorebookEntryIn / deleteLorebookEntry).
  */
-function GlobalLorebookLibrary(): JSX.Element {
+function GlobalLorebookLibrary(props: { storyId?: string }): JSX.Element {
+  const { storyId } = props;
   const [books, setBooks] = useState<LorebookLibraryEntry[]>([]);
+  const [attachedIds, setAttachedIds] = useState<Set<string>>(new Set());
   const [status, setStatus] = useState<LoadStatus>("loading");
   const [openBook, setOpenBook] = useState<LorebookLibraryEntry | null>(null);
   const [creating, setCreating] = useState(false);
@@ -717,12 +731,18 @@ function GlobalLorebookLibrary(): JSX.Element {
   const loadBooks = useCallback(async () => {
     setStatus("loading");
     try {
-      setBooks(await getBridge().listLorebooks());
+      const bridge = getBridge();
+      const [library, attached] = await Promise.all([
+        bridge.listLorebooks(),
+        storyId ? bridge.listAttachedLorebooks(storyId) : Promise.resolve([]),
+      ]);
+      setBooks(library);
+      setAttachedIds(new Set(attached.map((book) => book.id)));
       setStatus("ready");
     } catch {
       setStatus("error");
     }
-  }, []);
+  }, [storyId]);
 
   useEffect(() => {
     void loadBooks();
@@ -731,7 +751,9 @@ function GlobalLorebookLibrary(): JSX.Element {
   async function onCreate(): Promise<void> {
     const name = newName.trim();
     if (!name) return;
-    await getBridge().createLorebook(name);
+    const bridge = getBridge();
+    const book = await bridge.createLorebook(name);
+    if (storyId) await bridge.attachLorebook(storyId, book.id);
     setNewName("");
     setCreating(false);
     await loadBooks();
@@ -743,10 +765,12 @@ function GlobalLorebookLibrary(): JSX.Element {
     try {
       const fallbackName = file.name.replace(/\.json$/i, "") || "Imported lorebook";
       const imported = parseLorebookJson(await file.text(), fallbackName);
-      const book = await getBridge().createLorebook(imported.name, `Imported from ${file.name}`);
+      const bridge = getBridge();
+      const book = await bridge.createLorebook(imported.name, `Imported from ${file.name}`);
       await Promise.all(imported.entries.map((entry) =>
-        getBridge().saveLorebookEntryIn(book.id, { ...entry, lorebookId: book.id })
+        bridge.saveLorebookEntryIn(book.id, { ...entry, lorebookId: book.id })
       ));
+      if (storyId) await bridge.attachLorebook(storyId, book.id);
       await loadBooks();
     } catch (err) {
       setImportError(err instanceof Error ? err.message : "Couldn't import that lorebook.");
@@ -769,7 +793,13 @@ function GlobalLorebookLibrary(): JSX.Element {
   }
 
   return (
-    <div style={styles.screen} data-testid="lorebook-screen" data-nostory="true">
+    <div
+      style={styles.screen}
+      data-testid="lorebook-screen"
+      data-nostory={!storyId || undefined}
+      data-story-scoped={Boolean(storyId) || undefined}
+      data-status={status}
+    >
       <input
         ref={importInput}
         type="file"
@@ -782,7 +812,9 @@ function GlobalLorebookLibrary(): JSX.Element {
       />
       <div style={styles.subHeader}>
         <p style={styles.subtitle}>
-          Lorebooks are shared world-fact collections. Build them here, then attach them to any story from its Story Settings.
+          {storyId
+            ? "Choose a lorebook to browse its entries. Books marked Attached can feed this story; the rest remain in your reusable global library."
+            : "Lorebooks are shared world-fact collections. Build them here, then attach them to any story from its Story Settings."}
         </p>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
           <Button variant="secondary" onClick={() => importInput.current?.click()} disabled={importing} data-testid="import-lorebook">
@@ -851,7 +883,9 @@ function GlobalLorebookLibrary(): JSX.Element {
                 source={asSourceTag(b.source)}
                 entryCount={b.entryCount}
                 attachmentCount={b.attachmentCount}
+                contextLabel={storyId && attachedIds.has(b.id) ? "ATTACHED" : undefined}
                 onOpen={() => setOpenBook(b)}
+                style={storyId && attachedIds.has(b.id) ? { borderColor: "var(--brass-dim)" } : undefined}
               />
             ))}
           </div>

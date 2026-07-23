@@ -191,13 +191,7 @@ export function validateStorySchema(schema: StorySchema): string[] {
       (action.advantageWhen?.length ?? 0) > 0 ||
       (action.disadvantageWhen?.length ?? 0) > 0
   ).length;
-  const minimumConditionalActions = Math.ceil(schema.actions.length * 0.25);
   const maximumConditionalActions = Math.floor(schema.actions.length * 0.33);
-  if (conditionalActionCount < minimumConditionalActions) {
-    errors.push(
-      `Conditional action coverage is ${conditionalActionCount}/${schema.actions.length}; at least ${minimumConditionalActions} actions (25%) must define advantageWhen or disadvantageWhen.`
-    );
-  }
   if (conditionalActionCount > maximumConditionalActions) {
     errors.push(
       `Conditional action coverage is ${conditionalActionCount}/${schema.actions.length}; at most ${maximumConditionalActions} actions (33%) may define advantageWhen or disadvantageWhen.`

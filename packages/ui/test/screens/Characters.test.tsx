@@ -4,9 +4,10 @@
  * We assert through the rendered LivingCardView (names, FALLEN marker, section grouping).
  */
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { Characters } from "../../src/screens/Characters";
 import { setBridge, type CoreBridge, type CastMember, type LivingCardView } from "../../src/bridge/core";
+import { useRoute } from "../../src/app/router";
 
 function card(over: Partial<LivingCardView> & Pick<LivingCardView, "characterId" | "name">): LivingCardView {
   return {
@@ -21,7 +22,11 @@ function card(over: Partial<LivingCardView> & Pick<LivingCardView, "characterId"
 }
 
 /** A bridge with just the methods Characters uses; the rest throw if ever touched. */
-function fakeBridge(members: CastMember[], cards: Map<string, LivingCardView>): CoreBridge {
+function fakeBridge(
+  members: CastMember[],
+  cards: Map<string, LivingCardView>,
+  statMode: "none" | "full" = "full"
+): CoreBridge {
   return {
     async listPresentCast() {
       return members;
@@ -29,11 +34,17 @@ function fakeBridge(members: CastMember[], cards: Map<string, LivingCardView>): 
     async getLivingCard(_storyId: string, characterId: string) {
       return cards.get(characterId);
     },
+    async getStory() {
+      return { schema: { statMode } };
+    },
   } as unknown as CoreBridge;
 }
 
-afterEach(() => {
+afterEach(async () => {
   vi.restoreAllMocks();
+  await act(async () => {
+    useRoute.setState({ route: "library", params: {} });
+  });
 });
 
 describe("Characters screen", () => {
@@ -126,6 +137,50 @@ describe("Characters screen", () => {
     expect(screen.queryByText(/99 successes/)).not.toBeInTheDocument();
   });
 
+  it("drills from a roster card into the dossier and Full Stats loadout", async () => {
+    const kestrel = card({ characterId: "p1", name: "Kestrel Vane", isPlayer: true });
+    setBridge(
+      fakeBridge(
+        [{ characterId: "p1", name: "Kestrel Vane", isPlayer: true, alive: true }],
+        new Map([["p1", kestrel]])
+      )
+    );
+    useRoute.setState({ route: "characters", params: { storyId: "s1" } });
+
+    render(<Characters storyId="s1" />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Open full profile →" }));
+    expect(useRoute.getState()).toMatchObject({
+      route: "dossier",
+      params: { storyId: "s1", characterId: "p1" },
+    });
+
+    await act(async () => {
+      useRoute.setState({ route: "characters", params: { storyId: "s1" } });
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Equipment & loadout" }));
+    expect(useRoute.getState()).toMatchObject({
+      route: "loadout",
+      params: { storyId: "s1", characterId: "p1" },
+    });
+  });
+
+  it("keeps equipment navigation hidden for No Stats stories", async () => {
+    const kestrel = card({ characterId: "p1", name: "Kestrel Vane", isPlayer: true });
+    setBridge(
+      fakeBridge(
+        [{ characterId: "p1", name: "Kestrel Vane", isPlayer: true, alive: true }],
+        new Map([["p1", kestrel]]),
+        "none"
+      )
+    );
+
+    render(<Characters storyId="s-prose" />);
+
+    expect(await screen.findByRole("button", { name: "Open full profile →" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Equipment & loadout" })).not.toBeInTheDocument();
+  });
+
   it("surfaces a load failure as an error notice", async () => {
     const bridge = {
       async listPresentCast() {
@@ -133,6 +188,9 @@ describe("Characters screen", () => {
       },
       async getLivingCard() {
         return undefined;
+      },
+      async getStory() {
+        return { schema: { statMode: "full" } };
       },
     } as unknown as CoreBridge;
     setBridge(bridge);
