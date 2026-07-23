@@ -101,6 +101,7 @@ export function App() {
 
   const Screen = registry[route];
   const activeStoryId = params.storyId ?? current?.id;
+  const screenStoryId = route === "blueprint" ? params.storyId : activeStoryId;
   const storyOpen = STORY_ROUTES.includes(route) && !!activeStoryId;
 
   return (
@@ -116,7 +117,7 @@ export function App() {
         {!setupComplete && route !== "setup" ? <SetupBanner navigate={navigate} /> : null}
         <main style={styles.main}>
           <Suspense fallback={<ScreenFallback />}>
-            <Screen storyId={activeStoryId} />
+            <Screen storyId={screenStoryId} />
           </Suspense>
         </main>
       </div>

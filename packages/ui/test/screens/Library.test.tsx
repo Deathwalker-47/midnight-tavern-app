@@ -9,11 +9,13 @@ import { Library } from "../../src/screens/Library";
 import { useStoriesStore } from "../../src/state/storiesStore";
 import { useSettingsStore } from "../../src/state/settingsStore";
 import { makeMemoryBridge, setBridge, type TrialStatus } from "../../src/bridge/core";
+import { useRoute } from "../../src/app/router";
 
 const expiredTrial: TrialStatus = { startedAt: 0, expiresAt: 1, active: false, daysRemaining: 0 };
 
 beforeEach(() => {
   setBridge(makeMemoryBridge());
+  useRoute.setState({ route: "library", params: {} });
   useStoriesStore.setState({ stories: [], status: "ready", error: undefined });
   useSettingsStore.setState({ entitlement: { canCreateStory: true, via: "trial" } });
 });
@@ -87,5 +89,6 @@ describe("Library", () => {
     expect(screen.getByText(/1 opening/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /use this card/i }));
     await waitFor(() => expect(useStoriesStore.getState().draft?.importedCard?.name).toBe("Mara Voss"));
+    expect(useRoute.getState()).toMatchObject({ route: "blueprint", params: {} });
   });
 });
