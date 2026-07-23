@@ -26,12 +26,14 @@ export interface RulingRoll {
   outcome: RollOutcome;
   d20: number;
   modifier: number;
+  /** Named modifier terms, so players can see where the total came from. */
+  modifierTerms?: Array<{ label: string; value: number }>;
   total: number;
   dc: number;
   /** Override the default stamp text (SUCCESS / FAILURE / CRITICAL / CRIT FAIL). */
   stamp?: string;
   /** For opposed contests: label each side instead of the flat `d20 X + mod` line. */
-  opposed?: { attacker: string; defender: string };
+  opposed?: { attacker: string; defender: string; attackerFormula?: string; defenderFormula?: string };
 }
 
 export type RulingArtifactVariant =
@@ -152,6 +154,9 @@ function MathBlock(props: {
   const { roll, color, animate, reduced } = props;
   const play = animate && !reduced;
   const total = useCountUp(roll.total, { enabled: play });
+  const termText = roll.modifierTerms
+    ?.map((term) => `${term.label} ${term.value >= 0 ? "+" : "−"}${Math.abs(term.value)}`)
+    .join(" · ");
   const style: CSSProperties = {
     flex: 1,
     minWidth: 0,
@@ -164,9 +169,14 @@ function MathBlock(props: {
       ) : null}
       <div style={{ fontFamily: FONT.mono, fontSize: 13.5, color: "var(--ui-text)" }} data-testid="ruling-math">
         {roll.opposed ? (
-          <span>
-            {roll.opposed.attacker} vs {roll.opposed.defender}
-          </span>
+          <>
+            <span>{roll.opposed.attacker} vs {roll.opposed.defender}</span>
+            {roll.opposed.attackerFormula || roll.opposed.defenderFormula ? (
+              <div style={{ color: "var(--muted)", fontSize: 11.5, marginTop: 3 }} data-testid="ruling-breakdown">
+                {roll.opposed.attackerFormula ?? "—"} · {roll.opposed.defenderFormula ?? "—"}
+              </div>
+            ) : null}
+          </>
         ) : (
           <>
             <span>d20 </span>
@@ -176,6 +186,11 @@ function MathBlock(props: {
               {total}
             </b>
             <span style={{ color: "var(--muted)" }}>{`  vs DC ${roll.dc}`}</span>
+            {termText ? (
+              <div style={{ color: "var(--muted)", fontSize: 11.5, marginTop: 3 }} data-testid="ruling-breakdown">
+                {termText}
+              </div>
+            ) : null}
           </>
         )}
       </div>

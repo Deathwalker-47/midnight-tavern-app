@@ -147,6 +147,7 @@ function samplePlayerCard(): CoreLivingCardView {
     name: "Kestrel Vane",
     isPlayer: true,
     alive: true,
+    attributes: [],
     resources: [
       { id: "hp", label: "Health", current: 19, max: 24, playerVisible: true },
       { id: "stamina", label: "Stamina", current: 10, max: 14, playerVisible: true },
@@ -178,6 +179,7 @@ function sampleFallenCard(): CoreLivingCardView {
     name: "Brother Aldric",
     isPlayer: false,
     alive: false,
+    attributes: [],
     resources: [{ id: "hp", label: "Health", current: 0, max: 18, playerVisible: true }],
     inventory: [],
     skills: [{ skillId: "liturgy", name: "Liturgy", rank: "expert" }],

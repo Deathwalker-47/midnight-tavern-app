@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:#14100C;color:#EADCBE;font-family:"IBM Plex Sans",sans-serif;-webkit-font-smoothing:antialiased}
+  ::selection{background:rgba(217,166,72,.25)}
+  a{color:#D9A648;text-decoration:none}
+  ::-webkit-scrollbar{width:10px}::-webkit-scrollbar-thumb{background:#382E21;border-radius:6px;border:3px solid #14100C}
+  @keyframes mt-spin{to{transform:rotate(360deg)}}
+  @keyframes mt-fade{from{opacity:0}to{opacity:1}}
+  @keyframes mt-rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+  @media (prefers-reduced-motion: reduce){*{animation-duration:.001s!important}}
+</style>
+</helmet>
+<div style="min-height:100vh;width:100vw;background:#14100C;display:flex;flex-direction:column">
+
+  <!-- demo switcher -->
+  <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:9px 20px;background:#181410;border-bottom:1px solid #382E21">
+    <span style="font-size:10px;color:#6E5F49;font-family:'IBM Plex Mono',monospace;letter-spacing:.06em;text-transform:uppercase;margin-right:2px">Import stage</span>
+    <sc-for list="{{ demoChips }}" as="c" hint-placeholder-count="7"><button onClick="{{ c.onClick }}" style="{{ c.style }}">{{ c.label }}</button></sc-for>
+    <div style="flex:1"></div>
+    <a href="Lorebook.dc.html" style="font-size:12px;color:#74B8AE">← Lorebook Library</a>
+  </div>
+
+  <div style="flex:1;display:flex;align-items:flex-start;justify-content:center;padding:34px 20px 60px;overflow-y:auto">
+    <div style="width:600px;max-width:100%;background:#1B1611;border:1px solid rgba(216,170,90,.22);border-radius:14px;box-shadow:0 24px 70px rgba(0,0,0,.5);overflow:hidden;animation:mt-fade .25s ease">
+
+      <div style="padding:22px 26px 0">
+        <div style="font-size:11px;font-family:'IBM Plex Mono',monospace;letter-spacing:.16em;color:#74B8AE">IMPORT LOREBOOK</div>
+        <div style="font-family:'Cormorant Garamond',serif;font-size:25px;font-weight:600;color:#EADCBE;margin-top:5px">{{ heading }}</div>
+        <div style="font-size:13px;color:#A08D6C;line-height:1.55;margin-top:5px">{{ subhead }}</div>
+      </div>
+
+      <!-- CHOOSE -->
+      <sc-if value="{{ isChoose }}" hint-placeholder-val="{{ true }}">
+        <div style="padding:18px 26px 24px">
+          <div onClick="{{ pick }}" style="border:2px dashed #382E21;border-radius:11px;padding:30px;text-align:center;cursor:pointer;background:#181410">
+            <div style="font-size:28px;color:#6E5F49">⇪</div>
+            <div style="font-size:14px;color:#D6C9AB;margin-top:8px">Drop a lorebook here, or <span style="color:#D9A648">browse files</span></div>
+            <div style="font-size:11px;color:#6E5F49;margin-top:3px">.json · SillyTavern World Info, Agnai, or Midnight Tavern</div>
+          </div>
+          <div style="font-size:11.5px;color:#6E5F49;line-height:1.55;margin-top:12px">Imported lorebooks join your global library and can be attached to any story. Nothing is sent anywhere — parsing happens on this machine.</div>
+        </div>
+      </sc-if>
+
+      <!-- PARSING -->
+      <sc-if value="{{ isParsing }}" hint-placeholder-val="{{ false }}">
+        <div style="padding:40px 26px;text-align:center">
+          <div style="{{ spinnerStyle }}"></div>
+          <div style="font-size:13.5px;color:#A08D6C;margin-top:14px">Reading lorebook…</div>
+          <sc-if value="{{ parseSlow }}" hint-placeholder-val="{{ false }}"><div style="font-size:12px;color:#6E5F49;margin-top:5px">Still reading — large file.</div></sc-if>
+        </div>
+      </sc-if>
+
+      <!-- PREVIEW -->
+      <sc-if value="{{ isPreview }}" hint-placeholder-val="{{ false }}">
+        <div style="padding:16px 26px 22px;animation:mt-fade .2s ease">
+          <div style="background:#181410;border:1px solid #382E21;border-radius:11px;overflow:hidden">
+            <sc-for list="{{ previewRows }}" as="r" hint-placeholder-count="5">
+              <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:11px 15px;border-bottom:1px solid #2a241d">
+                <span style="font-size:11px;font-family:'IBM Plex Mono',monospace;letter-spacing:.06em;color:#74B8AE;flex:0 0 116px">{{ r.k }}</span>
+                <span style="flex:1;font-size:13px;color:#D6C9AB;text-align:right;line-height:1.5">{{ r.v }}</span>
+              </div>
+            </sc-for>
+          </div>
+
+          <!-- trigger keys sample -->
+          <div style="margin-top:12px">
+            <div style="font-size:11px;font-family:'IBM Plex Mono',monospace;letter-spacing:.06em;color:#6E5F49;margin-bottom:6px">TRIGGER KEYS</div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px"><sc-for list="{{ keys }}" as="k" hint-placeholder-count="5"><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#74B8AE;background:rgba(116,184,174,.08);border-radius:4px;padding:2px 7px">{{ k }}</span></sc-for><span style="font-size:11px;color:#6E5F49;align-self:center">+18 more</span></div>
+          </div>
+
+          <!-- lossy fields -->
+          <sc-if value="{{ hasLossy }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:14px;background:rgba(201,161,90,.06);border:1px solid #6E5F49;border-radius:9px;padding:12px 14px">
+              <div style="font-size:12.5px;color:#C9A15a;font-weight:600">Some fields don’t map to Midnight Tavern and will be dropped:</div>
+              <ul style="margin:7px 0 0;padding-left:18px;font-size:12px;color:#A08D6C;line-height:1.6"><sc-for list="{{ lossy }}" as="l" hint-placeholder-count="2"><li>{{ l }}</li></sc-for></ul>
+            </div>
+          </sc-if>
+
+          <!-- conflict handling -->
+          <sc-if value="{{ hasConflict }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:14px">
+              <div style="font-size:12.5px;color:#D6C9AB;font-weight:600;margin-bottom:2px">A lorebook named “The Ember Choir” already exists</div>
+              <div style="font-size:11.5px;color:#6E5F49;margin-bottom:9px">Choose how to bring this one in.</div>
+              <sc-for list="{{ conflictOpts }}" as="o" hint-placeholder-count="4">
+                <div onClick="{{ o.onClick }}" style="{{ o.style }}"><span style="{{ o.dotStyle }}"></span><div style="flex:1"><div style="font-size:13px;color:#D6C9AB">{{ o.label }}</div><div style="font-size:11.5px;color:#6E5F49">{{ o.desc }}</div></div></div>
+              </sc-for>
+            </div>
+          </sc-if>
+        </div>
+      </sc-if>
+
+      <!-- VALIDATION FAILURE -->
+      <sc-if value="{{ isFail }}" hint-placeholder-val="{{ false }}">
+        <div style="padding:18px 26px 22px;animation:mt-fade .2s ease">
+          <div style="background:rgba(181,68,47,.08);border:1px solid rgba(201,111,87,.4);border-radius:11px;padding:15px 17px">
+            <div style="display:flex;gap:11px;align-items:flex-start">
+              <span style="color:#C96F57;font-size:17px">✕</span>
+              <div><div style="font-weight:600;font-size:14px;color:#C96F57">This file isn’t a lorebook we can read.</div><div style="font-size:13px;color:#A08D6C;line-height:1.55;margin-top:3px">Expected an object with an <span style="font-family:'IBM Plex Mono',monospace;color:#D6C9AB">entries</span> map; this file’s top level is an array.</div></div>
+            </div>
+            <details style="margin-top:11px"><summary style="cursor:pointer;font-size:12px;color:#74B8AE;list-style:none">Show technical detail</summary><div style="margin-top:8px;background:#14100C;border:1px solid #382E21;border-radius:7px;padding:10px 12px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#A08D6C;line-height:1.6">SyntaxError: expected object at byte 0<br>root type: array (len 42)<br>hint: SillyTavern books wrap entries in {"entries":{…}}</div></details>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- SUCCESS / PARTIAL -->
+      <sc-if value="{{ isDone }}" hint-placeholder-val="{{ false }}">
+        <div style="padding:18px 26px 22px;animation:mt-rise .25s ease">
+          <div style="display:flex;gap:11px;align-items:flex-start">
+            <span style="color:{{ doneColor }};font-size:18px">{{ doneIcon }}</span>
+            <div><div style="font-weight:600;font-size:15px;color:{{ doneColor }}">{{ doneTitle }}</div><div style="font-size:13px;color:#A08D6C;line-height:1.55;margin-top:2px">{{ doneBody }}</div></div>
+          </div>
+          <sc-if value="{{ isPartial }}" hint-placeholder-val="{{ false }}">
+            <details style="margin-top:12px"><summary style="cursor:pointer;font-size:12.5px;color:#74B8AE;list-style:none">Show skipped entries</summary>
+              <div style="margin-top:8px;background:#181410;border:1px solid #382E21;border-radius:8px;overflow:hidden"><sc-for list="{{ skipped }}" as="sk" hint-placeholder-count="2"><div style="display:flex;justify-content:space-between;gap:12px;padding:9px 13px;border-bottom:1px solid #2a241d;font-size:12px"><span style="color:#D6C9AB">{{ sk.name }}</span><span style="color:#C9A15a;font-family:'IBM Plex Mono',monospace;font-size:11px">{{ sk.reason }}</span></div></sc-for></div>
+            </details>
+          </sc-if>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:14px;font-size:11.5px;color:#74B8AE"><span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:#74B8AE;border:1px solid #4E827B;border-radius:3px;padding:1px 6px">IMPORTED</span><span style="color:#6E5F49">This lorebook is tagged as imported in your library.</span></div>
+        </div>
+      </sc-if>
+
+      <!-- footer -->
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:15px 26px;border-top:1px solid #382E21;background:#14100C">
+        <button onClick="{{ cancel }}" style="background:transparent;border:0;color:#A08D6C;font-size:13px;cursor:pointer">{{ cancelLabel }}</button>
+        <div style="display:flex;gap:9px">
+          <sc-for list="{{ footerActions }}" as="a" hint-placeholder-count="3"><button onClick="{{ a.onClick }}" style="{{ a.style }}">{{ a.label }}</button></sc-for>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state={ stage:'choose', conflict:0, hasConflictScenario:true, hasStory:true, parseSlow:false };
+  timers=[]; componentWillUnmount(){ this.timers.forEach(clearTimeout); }
+  after(ms,fn){const id=setTimeout(fn,ms);this.timers.push(id);return id;}
+  go(stage,extra){ this.setState({stage, ...(extra||{})}); }
+  pick(){ this.go('parsing'); this.after(1200,()=>this.go('preview')); }
+  renderVals(){
+    const s=this.state, self=this;
+    const stages=[['choose','Choose'],['parsing','Parsing'],['preview','Preview'],['fail','Validation fail'],['partial','Partial'],['success','Success']];
+    const demoChips=stages.map(([k,label])=>({label,onClick:()=>{
+      if(k==='parsing'){ self.go('parsing'); self.after(1000,()=>self.go('preview')); }
+      else self.go(k, k==='preview'?{hasConflictScenario:true}:{});
+    },style:`font-size:11px;padding:4px 9px;border-radius:5px;cursor:pointer;border:1px solid ${s.stage===k?'#4E827B':'#382E21'};background:transparent;color:#A08D6C`}));
+
+    const isChoose=s.stage==='choose', isParsing=s.stage==='parsing', isPreview=s.stage==='preview',
+          isFail=s.stage==='fail', isPartial=s.stage==='partial', isSuccess=s.stage==='success', isDone=isPartial||isSuccess;
+
+    const previewRows=[
+      {k:'FORMAT',v:'SillyTavern World Info v2'},
+      {k:'NAME',v:'The Ember Choir'},
+      {k:'ENTRIES',v:'42 entries · 38 enabled · 4 disabled'},
+      {k:'ALWAYS-ON',v:'3 always-in-context'},
+    ];
+    const conflictDefs=[
+      ['Create a new lorebook','Keep this separate; nothing existing changes.'],
+      ['Merge into “The Ember Choir”','Add new entries into the existing lorebook.'],
+      ['Replace duplicate entries','Overwrite entries whose keys match.'],
+      ['Keep both','Import as “The Ember Choir (2)”.'],
+    ];
+    const conflictOpts=conflictDefs.map(([label,desc],i)=>({label,desc,onClick:()=>self.setState({conflict:i}),
+      style:`display:flex;align-items:flex-start;gap:11px;padding:10px 12px;border-radius:8px;cursor:pointer;margin-bottom:6px;border:1px solid ${s.conflict===i?'#4E827B':'#382E21'};background:${s.conflict===i?'rgba(116,184,174,.08)':'#181410'}`,
+      dotStyle:`width:14px;height:14px;flex:0 0 14px;margin-top:2px;border-radius:50%;border:1px solid ${s.conflict===i?'#74B8AE':'#4a3d2c'};background:${s.conflict===i?'radial-gradient(circle,#74B8AE 40%,transparent 45%)':'transparent'}`}));
+
+    const skipped=[
+      {name:'“Warding rite (regex)”',reason:'unsupported regex trigger'},
+      {name:'“(empty entry)”',reason:'empty keys'},
+      {name:'“Char-position note”',reason:'unsupported position'},
+      {name:'“Legacy macro”',reason:'unsupported macro'},
+    ];
+
+    // footer actions per stage
+    let footerActions=[], cancelLabel='Cancel';
+    if(isChoose) footerActions=[{label:'Browse files',onClick:()=>self.pick(),style:'background:#D9A648;color:#1B1611;border:0;border-radius:8px;padding:9px 16px;font-weight:600;font-size:13px;cursor:pointer'}];
+    if(isParsing) footerActions=[];
+    if(isPreview) footerActions=[{label:'Import lorebook',onClick:()=>self.go('success'),style:'background:#D9A648;color:#1B1611;border:0;border-radius:8px;padding:9px 16px;font-weight:600;font-size:13px;cursor:pointer'}];
+    if(isFail) footerActions=[{label:'Choose another file',onClick:()=>self.go('choose'),style:'background:#2C241B;color:#D9A648;border:1px solid rgba(216,170,90,.3);border-radius:8px;padding:9px 16px;font-weight:600;font-size:13px;cursor:pointer'}];
+    if(isDone){ cancelLabel='Done'; footerActions=[
+      {label:'Open lorebook',onClick:()=>{},style:'background:transparent;color:#74B8AE;border:1px solid #4E827B;border-radius:8px;padding:9px 15px;font-size:13px;cursor:pointer'},
+      ...(s.hasStory?[{label:'Attach to current story',onClick:()=>{},style:'background:#D9A648;color:#1B1611;border:0;border-radius:8px;padding:9px 15px;font-weight:600;font-size:13px;cursor:pointer'}]:[]),
+    ]; }
+
+    return {
+      demoChips,
+      heading: isChoose?'Bring a lorebook into your library':(isParsing?'Reading…':(isPreview?'Import preview':(isFail?'Couldn’t read this file':'Lorebook imported'))),
+      subhead: isChoose?'Choose a lorebook JSON file — SillyTavern, Agnai, or Midnight Tavern format.':(isPreview?'Review what will be imported, then confirm.':(isFail?'Nothing was imported.':' ')),
+      isChoose,isParsing,isPreview,isFail,isDone,isPartial,isSuccess,
+      pick:()=>self.pick(),
+      spinnerStyle:'width:38px;height:38px;margin:0 auto;border:2px solid #382E21;border-top-color:#74B8AE;border-radius:50%;animation:mt-spin .8s linear infinite',
+      parseSlow:s.parseSlow,
+      previewRows, keys:['choir','censer','cold-fire','liturgy','Aldric'], 
+      hasLossy:true, lossy:['Char-relative insertion position (dropped)','Selective logic “AND_ANY” (approximated)'],
+      hasConflict:s.hasConflictScenario, conflictOpts,
+      doneIcon:isPartial?'⚠':'✓', doneColor:isPartial?'#C9A15a':'#8FB573',
+      doneTitle:isPartial?'Imported 38 of 42 entries':'Lorebook imported.',
+      doneBody:isPartial?'4 entries were skipped because they use features Midnight Tavern doesn’t support yet.':'“The Ember Choir” is now in your library with all 42 entries.',
+      skipped,
+      footerActions, cancel:()=>self.go('choose'), cancelLabel,
+    };
+  }
+}
+</script>
+</body>
+</html>

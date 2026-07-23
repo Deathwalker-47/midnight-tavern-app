@@ -25,6 +25,7 @@ export interface MessageActionsProps {
   /** Next variant, or — at the end — generate a new telling. */
   onNextVariant?: () => void;
   onDeleteLastExchange?: () => void;
+  onDeleteFromHere?: () => void;
   onRewindToHere?: () => void;
   /** Disable interactive controls while a swipe/generation is streaming. */
   busy?: boolean;
@@ -40,7 +41,7 @@ export function MessageActions(props: MessageActionsProps): JSX.Element {
     rollLocked = false,
     onPrevVariant,
     onNextVariant,
-    onDeleteLastExchange,
+    onDeleteFromHere,
     onRewindToHere,
     busy = false,
     className,
@@ -142,19 +143,6 @@ export function MessageActions(props: MessageActionsProps): JSX.Element {
                 padding: 6,
               }}
             >
-              {isLatest && (
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={() => {
-                    setMenuOpen(false);
-                    onDeleteLastExchange?.();
-                  }}
-                  style={{ display: "block", width: "100%", textAlign: "left", color: "var(--ui-text)", fontSize: 12.5, padding: "8px 10px", background: "transparent", border: 0, cursor: "pointer" }}
-                >
-                  ↩ Delete last exchange
-                </button>
-              )}
               <button
                 type="button"
                 role="menuitem"
@@ -165,6 +153,17 @@ export function MessageActions(props: MessageActionsProps): JSX.Element {
                 style={{ display: "block", width: "100%", textAlign: "left", color: "var(--crit-crimson)", fontSize: 12.5, padding: "8px 10px", background: "transparent", border: 0, cursor: "pointer" }}
               >
                 ⟲ Rewind to here
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onDeleteFromHere?.();
+                }}
+                style={{ display: "block", width: "100%", textAlign: "left", color: "var(--crit-crimson)", fontSize: 12.5, padding: "8px 10px", background: "transparent", border: 0, cursor: "pointer" }}
+              >
+                ✕ Delete from this exchange
               </button>
             </div>
           )}

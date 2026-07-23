@@ -22,8 +22,8 @@ import { useSettingsStore } from "../state/settingsStore";
 import { useRoute } from "../state/uiStore";
 import { getBridge } from "../bridge/core";
 import type { AttachedLorebook, LorebookLibraryEntry, PersonaRecord } from "../bridge/core";
-import { Button, EmptyState, InlineNotice, ConfirmDialog, RoleMatrixRow, AttachRow, PersonaPickerRow } from "../components";
-import type { RoleModelOption, AttachSourceTag } from "../components";
+import { Button, EmptyState, InlineNotice, ConfirmDialog, AttachRow, PersonaPickerRow } from "../components";
+import type { AttachSourceTag } from "../components";
 import type { ScreenProps } from "./registry";
 
 export function StorySettings(props: ScreenProps): JSX.Element {
@@ -35,18 +35,21 @@ export function StorySettings(props: ScreenProps): JSX.Element {
   const remove = useStoriesStore((s) => s.remove);
 
   const roleMap = useSettingsStore((s) => s.roleMap);
-  const knownModels = useSettingsStore((s) => s.knownModels);
+  const setupState = useSettingsStore((s) => s.setupState);
   const { navigate } = useRoute();
 
   const loaded = current?.id === storyId && currentStatus === "ready";
 
   const [title, setTitle] = useState<string | undefined>(undefined);
-  const [narratorModel, setNarratorModel] = useState<string | undefined>(undefined);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [pendingMode, setPendingMode] = useState<"none" | "full">();
+  const [switchingMode, setSwitchingMode] = useState(false);
+  const [switchProgress, setSwitchProgress] = useState<string>();
+  const [switchError, setSwitchError] = useState<string>();
 
   // Sync the local title once the story record loads (deeplink / tab-switch).
   const effectiveTitle = title ?? current?.title ?? "";
-  const effectiveNarrator = narratorModel ?? roleMap?.narrator.model ?? "";
+  const effectiveNarrator = roleMap?.narrator.model ?? "Not configured";
 
   // ── No story open ────────────────────────────────────────────────────────
   if (!storyId) {
@@ -99,8 +102,6 @@ export function StorySettings(props: ScreenProps): JSX.Element {
   const story = current;
   const schema = story.schema;
   const messageCount = 0; // transcript length isn't on the record; the locked banner keys off `locked`.
-  const modelOptions: RoleModelOption[] = knownModels.map((m) => ({ value: m.model, label: m.label }));
-  const narratorFit = knownModels.find((m) => m.model === effectiveNarrator)?.tier ?? "advanced";
 
   const commitRename = async (): Promise<void> => {
     const next = effectiveTitle.trim();
@@ -110,6 +111,37 @@ export function StorySettings(props: ScreenProps): JSX.Element {
     setConfirmingDelete(false);
     await remove(storyId);
     navigate("library");
+  };
+  const commitModeChange = async (): Promise<void> => {
+    const target = pendingMode;
+    if (!target) return;
+    if (target === "full" && !setupState.rolesConfirmed) {
+      setPendingMode(undefined);
+      navigate("setup", { returnTo: "storysettings", storyId, setupReason: "full-stats-upgrade" });
+      return;
+    }
+    setPendingMode(undefined);
+    setSwitchingMode(true);
+    setSwitchError(undefined);
+    try {
+      await getBridge().changeStoryStatMode({
+        storyId,
+        target,
+        onProgress: (phase) => setSwitchProgress(
+          phase === "phase-a" ? "Drafting attributes, skills, and rules…"
+            : phase === "phase-b" ? "Creating actions and starting state…"
+              : phase === "validate" ? "Validating the upgraded rulebook…"
+                : phase === "freeze" ? "Sealing the catalog…"
+                  : "Installing the stat-system boundary…"
+        ),
+      });
+      await openStory(storyId);
+    } catch (err) {
+      setSwitchError(err instanceof Error ? err.message : "Couldn't change the stat system.");
+    } finally {
+      setSwitchingMode(false);
+      setSwitchProgress(undefined);
+    }
   };
 
   return (
@@ -156,21 +188,42 @@ export function StorySettings(props: ScreenProps): JSX.Element {
         {/* MODEL OVERRIDE (baseline from the global role map — see file header note). */}
         <Section kicker="§ MODEL" heading="Storyteller model">
           <div style={styles.sectionNote}>
-            This story uses your global role map by default. Override the narrator model just for
-            &ldquo;{current.title}&rdquo; below.
+            Every story uses the same global Narrator. This avoids a second, conflicting model
+            assignment inside individual story settings.
           </div>
-          <RoleMatrixRow
-            role="narrator"
-            description="Writes the prose for this story. Wants your strongest model."
-            options={modelOptions.length > 0 ? modelOptions : [{ value: effectiveNarrator, label: effectiveNarrator || "—" }]}
-            value={effectiveNarrator}
-            onChange={setNarratorModel}
-            fit={narratorFit}
-          />
+          <div style={{ ...styles.renameRow, marginTop: 12 }}>
+            <div>
+              <div style={styles.rowName}>Narrator</div>
+              <div className="mono" style={styles.rowMeta}>{effectiveNarrator}</div>
+            </div>
+            <Button variant="secondary" onClick={() => navigate("rolematrix")}>Configure global Narrator →</Button>
+          </div>
         </Section>
 
         {/* PERSONA (v2 §4) + LOREBOOKS (v2 §2) + BLUEPRINT (v2 §3) — story-scoped attachments. */}
         <StoryAttachments storyId={storyId} onEditBlueprint={() => navigate("blueprint", { storyId })} />
+
+        <Section kicker="§ STAT SYSTEM" heading="Future play mode">
+          {schema.migrationPending ? (
+            <InlineNotice
+              severity="warn"
+              title="Choose a destination for this legacy Light Rules story"
+              detail="Earlier exchanges will not change. Continue as No Stats to pause mechanics, or choose Full Stats to retain the sealed rulebook."
+            />
+          ) : null}
+          <div style={{ ...styles.factGrid, marginTop: 12 }}>
+            <button type="button" style={{ ...styles.modeChoice, ...(schema.statMode === "none" && !schema.migrationPending ? styles.modeChoiceActive : {}) }} onClick={() => setPendingMode("none")} disabled={switchingMode}>
+              <strong>No Stats</strong>
+              <span>Only the Narrator runs. Mechanical state is preserved but dormant.</span>
+            </button>
+            <button type="button" style={{ ...styles.modeChoice, ...(schema.statMode === "full" && !schema.migrationPending ? styles.modeChoiceActive : {}) }} onClick={() => setPendingMode("full")} disabled={switchingMode}>
+              <strong>Full Stats</strong>
+              <span>Attributes, skills, rulings, progression, and the full role pipeline.</span>
+            </button>
+          </div>
+          {switchProgress ? <div style={{ marginTop: 12 }}><InlineNotice severity="info" title="Changing stat system" detail={switchProgress} /></div> : null}
+          {switchError ? <div style={{ marginTop: 12 }}><InlineNotice severity="error" title="Couldn't change stat system" detail={switchError} /></div> : null}
+        </Section>
 
         {/* CORE — read-only frozen rulebook facts. */}
         <Section kicker="§ CORE" heading="System of play">
@@ -182,6 +235,29 @@ export function StorySettings(props: ScreenProps): JSX.Element {
           </div>
         </Section>
 
+        {schema.statMode === "full" ? (
+          <Section kicker="§ ATTRIBUTES" heading="Attribute catalog" aside={`${schema.attributes?.length ?? 0} attributes`}>
+            {(schema.attributes?.length ?? 0) === 0 ? <div style={styles.sectionNote}>No attributes were generated.</div> : (
+              <div style={styles.list}>
+                {(schema.attributes ?? []).map((attribute) => (
+                  <div key={attribute.id} style={styles.listRow}>
+                    <div style={{ flex: "0 0 160px" }}>
+                      <div style={styles.rowName}>{attribute.name} <span className="mono">({attribute.abbrev})</span></div>
+                      <div className="mono" style={styles.rowMeta}>default {attribute.defaultScore}</div>
+                    </div>
+                    <div style={styles.rowDesc}>{attribute.description}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Section>
+        ) : (
+          <Section kicker="§ DORMANT" heading="Mechanics are paused">
+            <div style={styles.sectionNote}>No checks, rulings, progression, analysis, or summaries run in this story. Any previously sealed catalog remains preserved for a future Full Stats resume.</div>
+          </Section>
+        )}
+
+        {schema.statMode === "full" ? <>
         {/* SKILLS — read-only catalog from the frozen schema. */}
         <Section kicker="§ SKILLS" heading="Skill catalog" aside={`${schema.skills.length} skills`}>
           {schema.skills.length === 0 ? (
@@ -209,19 +285,28 @@ export function StorySettings(props: ScreenProps): JSX.Element {
             <div style={styles.sectionNote}>This story defines no catalog actions.</div>
           ) : (
             <div style={styles.list}>
-              {schema.actions.map((a) => (
-                <div key={a.id} style={styles.actionRow}>
-                  <div style={styles.rowName}>{a.label}</div>
-                  <div style={styles.rowCat}>{a.category}</div>
-                  <div className="mono" style={styles.rowDc}>
-                    DC {a.dc}
+              {schema.actions.map((a) => {
+                const attribute = a.governingAttribute
+                  ? schema.attributes?.find((candidate) => candidate.id === a.governingAttribute)
+                  : undefined;
+                const terms = [
+                  attribute ? `${attribute.abbrev} (${attribute.name})` : undefined,
+                  a.requiresSkill ? `skill: ${a.requiresSkill}` : undefined,
+                ].filter(Boolean);
+                return (
+                  <div key={a.id} style={styles.actionRow}>
+                    <div style={styles.rowName}>{a.label}</div>
+                    <div style={styles.rowCat}>{a.category}</div>
+                    <div className="mono" style={styles.rowDc}>{a.opposed ? "OPPOSED" : `DC ${a.dc}`}</div>
+                    <div style={styles.rowReq}>{terms.length ? terms.join(" · ") : "—"}</div>
                   </div>
-                  <div style={styles.rowReq}>{a.requiresSkill ? `requires: ${a.requiresSkill}` : "—"}</div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </Section>
+
+        </> : null}
 
         {/* DANGER ZONE */}
         <Section kicker="§ DANGER" heading="Danger zone" danger>
@@ -248,6 +333,19 @@ export function StorySettings(props: ScreenProps): JSX.Element {
         cancelLabel="Keep it"
         onConfirm={() => void confirmDelete()}
         onCancel={() => setConfirmingDelete(false)}
+      />
+      <ConfirmDialog
+        open={pendingMode !== undefined}
+        title={pendingMode === "none" ? "Switch future play to No Stats?" : "Enable Full Stats for future play?"}
+        body={pendingMode === "none"
+          ? "Earlier exchanges and current mechanical state stay unchanged. Classifier, analyzer, summarizer, bootstrapper, checks, and rulings will become dormant after a permanent timeline boundary."
+          : schema.actions.length > 0
+            ? "The preserved sealed rulebook will resume after a permanent timeline boundary. Earlier exchanges will not be reinterpreted."
+            : "A provider-backed forge will create and validate a sealed rulebook before Full Stats is enabled. If it fails or is cancelled, this story remains No Stats."}
+        confirmLabel={pendingMode === "none" ? "Switch to No Stats" : "Enable Full Stats"}
+        cancelLabel="Keep current mode"
+        onConfirm={() => void commitModeChange()}
+        onCancel={() => setPendingMode(undefined)}
       />
 
       {/* messageCount reserved for a future "N messages exist" refinement of the locked copy. */}
@@ -549,6 +647,21 @@ const styles: Record<string, CSSProperties> = {
     outline: "none",
   },
   factGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 12 },
+  modeChoice: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: 6,
+    padding: "13px 14px",
+    color: "var(--secondary)",
+    background: "var(--bg1-panel)",
+    border: "1px solid var(--hairline)",
+    borderRadius: "var(--radius-chip)",
+    cursor: "pointer",
+    textAlign: "left",
+    fontFamily: "var(--font-ui)",
+  },
+  modeChoiceActive: { borderColor: "var(--teal)", background: "var(--teal-tint)", color: "var(--ui-text)" },
   fact: {
     background: "var(--bg1-panel)",
     border: "1px solid var(--hairline)",

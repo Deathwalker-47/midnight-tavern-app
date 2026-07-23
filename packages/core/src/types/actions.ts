@@ -29,6 +29,8 @@ export type Outcome = z.infer<typeof OutcomeSchema>;
 export const EffectSpecSchema = z.object({
   resourceDeltaSelf: z.record(z.string(), z.number()).optional(), // applied to actor
   resourceDeltaTarget: z.record(z.string(), z.number()).optional(), // applied to target
+  attributeDeltaSelf: z.record(z.string(), z.number()).optional(),
+  attributeDeltaTarget: z.record(z.string(), z.number()).optional(),
   scaleByItemProp: z.string().optional(), // e.g. "damage" — scale target delta by item prop
   grantItem: z.object({ itemId: z.string(), qty: z.number().int() }).optional(),
   setFlag: z.object({ flagId: z.string(), value: z.boolean() }).optional(),
@@ -50,6 +52,7 @@ export const ActionDefSchema = z.object({
   id: z.string(), // "attack_melee", "persuade", "pick_lock", "craft_item", ...
   category: ActionCategorySchema,
   label: z.string(),
+  governingAttribute: z.string().optional(),
   requiresSkill: z.string().optional(), // gate: must be learned
   minRank: MasteryRankSchema.optional(), // gate: advanced-use threshold
   requiresItemKind: ItemKindSchema.optional(), // e.g. attack_melee needs a weapon

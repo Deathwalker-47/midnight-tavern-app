@@ -13,6 +13,7 @@
  */
 import { describe, expect, it, vi } from "vitest";
 import { buildSqliteBridge } from "../../src/bridge/sqliteBridge.js";
+import { diagnosticsLogger } from "../../src/observability/logger.js";
 
 // A permissive fake core namespace. Individual tests override the members they exercise; the rest
 // are present so `buildSqliteBridge` can close over them without throwing on unrelated paths.
@@ -23,6 +24,8 @@ function fakeCore(overrides: Record<string, unknown> = {}) {
     ProviderConfigsSchema: {},
     RoleMapSchema: {},
     DEFAULT_ROLE_MAP: { narrator: { provider: "openrouter", model: "m" } },
+    ROLES: [],
+    MissingCredentialsError: class MissingCredentialsError extends Error {},
     KNOWN_MODELS: [{ provider: "openrouter", model: "openrouter/x", label: "X", tier: "recommended" }],
     PROVIDER_IDS: ["openrouter", "openai", "anthropic"],
     makeRouter: vi.fn(() => ({ router: true })),
@@ -66,8 +69,8 @@ describe("buildSqliteBridge", () => {
     const store = fakeStore({
       stories: {
         list: vi.fn(async () => [
-          { id: "a", title: "A", createdAt: 100, locked: true },
-          { id: "b", title: "B", createdAt: 300, locked: false },
+          { id: "a", title: "A", createdAt: 100, locked: true, schema: { statMode: "none" } },
+          { id: "b", title: "B", createdAt: 300, locked: false, schema: { statMode: "full" } },
         ]),
       },
       messages: {
@@ -82,10 +85,15 @@ describe("buildSqliteBridge", () => {
   });
 
   it("createStory delegates to bootstrapStory with mapped args and fires progress phases", async () => {
-    const bootstrapStory = vi.fn(async () => ({
-      story: { id: "s1", title: "T" },
-      playerCharacterId: "pc1",
-    }));
+    const bootstrapStory = vi.fn(async (_router, _store, _input, _player, options) => {
+      for (const phase of ["phase-a", "phase-b", "validate", "freeze", "install"] as const) {
+        options.onProgress?.(phase);
+      }
+      return {
+        story: { id: "s1", title: "T" },
+        playerCharacterId: "pc1",
+      };
+    });
     const store = fakeStore();
     const bridge = buildSqliteBridge(store, fakeCore({ bootstrapStory }));
     const phases: string[] = [];
@@ -101,22 +109,47 @@ describe("buildSqliteBridge", () => {
     expect(bootstrapStory).toHaveBeenCalledWith(
       expect.anything(),
       store,
-      { storyId: "s1", title: "T", premise: "P" },
+      { storyId: "s1", title: "T", premise: "P", statMode: "full" },
       { name: "Hero" },
-      {}
+      { onProgress: expect.any(Function) }
     );
     expect(phases).toEqual(["phase-a", "phase-b", "validate", "freeze", "install"]);
   });
 
+  it("rejects a role map that points at a provider without stored credentials", async () => {
+    const bootstrapStory = vi.fn();
+    const roleMap = { bootstrapper: { provider: "openrouter", model: "m" } };
+    const store = fakeStore({
+      settings: {
+        get: vi.fn(async (key: string) => key === "roleMap" ? roleMap : {}),
+      },
+    });
+    const bridge = buildSqliteBridge(store, fakeCore({
+      ROLES: ["bootstrapper"],
+      DEFAULT_ROLE_MAP: roleMap,
+      bootstrapStory,
+    }));
+
+    await expect(bridge.createStory({
+      storyId: "s1",
+      title: "T",
+      premise: "P",
+      playerName: "Hero",
+    })).rejects.toThrow();
+    expect(bootstrapStory).not.toHaveBeenCalled();
+  });
+
   it("submitTurn returns the outcome and swallows a rejected background promise", async () => {
-    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const errSpy = vi.spyOn(diagnosticsLogger, "error").mockImplementation(() => {});
     const background = Promise.reject(new Error("analyzer boom"));
     const submitTurn = vi.fn(async () => ({ prose: "text", rulings: [], narratorIdx: 5, background }));
-    const bridge = buildSqliteBridge(fakeStore(), fakeCore({ submitTurn }));
+    const bridge = buildSqliteBridge(fakeStore({
+      stories: { get: vi.fn(async () => ({ id: "s1", schema: { statMode: "full" } })) },
+    }), fakeCore({ submitTurn }));
     const out = await bridge.submitTurn({ storyId: "s1", playerText: "hi" });
     expect(out).toEqual({ prose: "text", rulings: [], narratorIdx: 5 });
     await new Promise((r) => setTimeout(r, 0)); // let the .catch run
-    expect(errSpy).toHaveBeenCalled();
+    expect(errSpy).toHaveBeenCalledWith("turn.background.failed", expect.objectContaining({ operationId: "s1" }));
     errSpy.mockRestore();
   });
 

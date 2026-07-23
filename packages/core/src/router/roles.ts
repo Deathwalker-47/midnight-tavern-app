@@ -73,6 +73,8 @@ export interface KnownModel {
   model: string;
   label: string;
   tier: "recommended" | "advanced";
+  /** Whether the model reliably honors JSON/structured output. Structured roles warn when false. */
+  supportsJsonMode: boolean;
 }
 
 /**
@@ -81,14 +83,14 @@ export interface KnownModel {
  * users who know what they want. Model ids are the OpenRouter-style slugs.
  */
 export const KNOWN_MODELS: KnownModel[] = [
-  { provider: "openrouter", model: "anthropic/claude-sonnet-4", label: "Claude Sonnet 4", tier: "recommended" },
-  { provider: "openrouter", model: "openai/gpt-4o", label: "GPT-4o", tier: "recommended" },
-  { provider: "openrouter", model: "google/gemini-2.0-flash-001", label: "Gemini 2.0 Flash", tier: "recommended" },
-  { provider: "openrouter", model: "openai/gpt-4o-mini", label: "GPT-4o mini", tier: "recommended" },
-  { provider: "openrouter", model: "deepseek/deepseek-chat", label: "DeepSeek V3", tier: "advanced" },
-  { provider: "openrouter", model: "meta-llama/llama-3.3-70b-instruct", label: "Llama 3.3 70B", tier: "advanced" },
-  { provider: "openai", model: "gpt-4o", label: "GPT-4o (direct)", tier: "advanced" },
-  { provider: "anthropic", model: "claude-sonnet-4-20250514", label: "Claude Sonnet 4 (direct)", tier: "advanced" },
+  { provider: "openrouter", model: "anthropic/claude-sonnet-4", label: "Claude Sonnet 4", tier: "recommended", supportsJsonMode: true },
+  { provider: "openrouter", model: "openai/gpt-4o", label: "GPT-4o", tier: "recommended", supportsJsonMode: true },
+  { provider: "openrouter", model: "google/gemini-2.0-flash-001", label: "Gemini 2.0 Flash", tier: "recommended", supportsJsonMode: true },
+  { provider: "openrouter", model: "openai/gpt-4o-mini", label: "GPT-4o mini", tier: "recommended", supportsJsonMode: true },
+  { provider: "openrouter", model: "deepseek/deepseek-chat", label: "DeepSeek V3", tier: "advanced", supportsJsonMode: true },
+  { provider: "openrouter", model: "meta-llama/llama-3.3-70b-instruct", label: "Llama 3.3 70B", tier: "advanced", supportsJsonMode: true },
+  { provider: "openai", model: "gpt-4o", label: "GPT-4o (direct)", tier: "advanced", supportsJsonMode: true },
+  { provider: "anthropic", model: "claude-sonnet-4-20250514", label: "Claude Sonnet 4 (direct)", tier: "advanced", supportsJsonMode: false },
 ];
 
 /**
@@ -128,7 +130,7 @@ export const DEFAULT_ROLE_MAP: RoleMap = {
   bootstrapper: {
     provider: "openrouter",
     model: "anthropic/claude-sonnet-4",
-    samplers: { temperature: 0.4, topP: 0.95, maxTokens: 3000 },
+    samplers: { temperature: 0.4, topP: 0.95, maxTokens: 8000 },
     source: "recommended",
     samplersDirty: false,
   },

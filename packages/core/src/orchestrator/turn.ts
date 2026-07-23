@@ -138,6 +138,9 @@ export async function submitTurn(
 ): Promise<SubmitTurnResult> {
   const story = await requireStory(store, storyId);
   const schema = story.schema;
+  if (schema.migrationPending) {
+    throw new Error("This legacy Light Rules story needs a one-time stat-system choice before play can continue.");
+  }
   const rng = opts.rng ?? cryptoRng;
 
   // 1. Persist the player message at idx = n.
@@ -155,6 +158,10 @@ export async function submitTurn(
   const roster = await store.characters.listByStory(storyId);
   const presentCharacters = roster.map((c) => ({ id: c.id, name: c.name, isPlayer: c.isPlayer }));
 
+  const rulings: Ruling[] = [];
+  const staged: { ruling: Ruling; mutations: ReturnType<typeof resolve>["mutations"] }[] = [];
+  if (schema.statMode === "full") {
+
   // 2. Classify (always). Recent narrator lines give the classifier scene context.
   const recentMsgs = await store.messages.recent(storyId, 6);
   const recentNarration = recentMsgs.filter((m) => m.role === "narrator").map((m) => m.content);
@@ -167,8 +174,6 @@ export async function submitTurn(
 
   // 3. Resolve every intent into a staged ruling. Nothing is committed yet; we collect the
   //    ledger mutations alongside so step 6 can commit atomically.
-  const rulings: Ruling[] = [];
-  const staged: { ruling: Ruling; mutations: ReturnType<typeof resolve>["mutations"] }[] = [];
   const intents: MechanicalIntent[] = [...classified.playerIntents, ...classified.npcIntents];
 
   // Template hint for a to-be-instantiated NPC is its roster display name (§5 step 3); the
@@ -189,6 +194,7 @@ export async function submitTurn(
     const result = resolve(schema, actorHard, targetHard, intent, rng);
     rulings.push(result.ruling);
     staged.push({ ruling: result.ruling, mutations: result.mutations });
+  }
   }
 
   // 4. Assemble the narrator context with the rulings inline as authoritative facts (§7.3).
@@ -248,7 +254,9 @@ export async function submitTurn(
         }
       }
       for (const s of staged) {
-        commit(schema, s.mutations, charsById);
+        const died = commit(schema, s.mutations, charsById);
+        s.ruling.messageId = narratorMsgId;
+        if (died.length) s.ruling.causedDeathOf = died;
         await store.rulings.insert({
           id: randomUUID(),
           storyId,
@@ -262,13 +270,15 @@ export async function submitTurn(
 
   // 7. Fire-and-forget: analyzer patch, then chapter/arc summaries. Never blocks the return
   //    and never throws into the caller.
-  const background = runBackground(router, store, {
-    storyId,
-    turnIdx: narratorIdx,
-    playerText,
-    narratorText: prose,
-    ...(opts.onBackgroundError ? { onError: opts.onBackgroundError } : {}),
-  });
+  const background = schema.statMode === "full"
+    ? runBackground(router, store, {
+        storyId,
+        turnIdx: narratorIdx,
+        playerText,
+        narratorText: prose,
+        ...(opts.onBackgroundError ? { onError: opts.onBackgroundError } : {}),
+      })
+    : Promise.resolve();
 
   // 8. Hand prose + rulings back for rendering (dice toasts).
   return { prose, rulings, narratorIdx, background };

@@ -23,6 +23,7 @@ export const ConditionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("resource"), resourceId: z.string(), min: z.number() }),
   z.object({ type: z.literal("item"), itemId: z.string() }),
   z.object({ type: z.literal("flag"), flagId: z.string(), value: z.boolean() }),
+  z.object({ type: z.literal("attribute"), attributeId: z.string(), min: z.number() }),
 ]);
 export type Condition = z.infer<typeof ConditionSchema>;
 
@@ -53,6 +54,16 @@ export const ResourceDefSchema = z.object({
   lethal: z.boolean().optional(),
 });
 export type ResourceDef = z.infer<typeof ResourceDefSchema>;
+
+/** A genre-specific raw capability generated with a Full Stats rulebook. */
+export const AttributeDefSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  abbrev: z.string(),
+  description: z.string(),
+  defaultScore: z.number().int().min(1).max(30),
+});
+export type AttributeDef = z.infer<typeof AttributeDefSchema>;
 
 /** A learnable skill. Unlock is binary (the gate); a rank rides on top (D1). */
 export const SkillDefSchema = z.object({
@@ -91,6 +102,7 @@ export type TierDef = z.infer<typeof TierDefSchema>;
 
 /** What the player begins with. */
 export const StartingStateSchema = z.object({
+  attributes: z.record(z.string(), z.number().int().min(1).max(30)).default({}),
   resources: z.record(z.string(), z.number()),
   skills: z.array(z.object({ skillId: z.string(), rank: MasteryRankSchema })),
   inventory: z.array(z.object({ itemId: z.string(), qty: z.number().int() })),
@@ -101,6 +113,7 @@ export type StartingState = z.infer<typeof StartingStateSchema>;
 export const NpcTemplateSchema = z.object({
   templateId: z.string(),
   name: z.string(),
+  attributes: z.record(z.string(), z.number().int().min(1).max(30)).default({}),
   resources: z.record(z.string(), z.number()), // e.g. { hp: 40 }
   skills: z.array(z.object({ skillId: z.string(), rank: MasteryRankSchema })),
   inventory: z.array(z.object({ itemId: z.string(), qty: z.number().int() })),
@@ -108,12 +121,13 @@ export const NpcTemplateSchema = z.object({
 export type NpcTemplate = z.infer<typeof NpcTemplateSchema>;
 
 /** The complete frozen story schema (persisted as `stories.schema_json`). */
-export const StorySchemaSchema = z.object({
+const StorySchemaObjectSchema = z.object({
   schemaVersion: z.literal(1),
   storyId: z.string(),
   title: z.string(),
   premise: z.string(), // the user's input, preserved
   statMode: StatModeSchema,
+  attributes: z.array(AttributeDefSchema).default([]), // [] for No Stats
   resources: z.array(ResourceDefSchema), // [] when statMode === "none"
   skills: z.array(SkillDefSchema),
   items: z.array(ItemDefSchema),
@@ -122,5 +136,26 @@ export const StorySchemaSchema = z.object({
   startingState: StartingStateSchema,
   npcTemplates: z.array(NpcTemplateSchema),
   locked: z.boolean(), // set true at freeze; the gate refuses unlocked schemas
+  /** Set only while a pre-v5 `light` story awaits the one-time destination choice. */
+  legacyStatMode: z.literal("light").optional(),
+  migrationPending: z.boolean().optional(),
 });
+
+function normalizeLegacyStorySchema(value: unknown): unknown {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return value;
+  const input = value as Record<string, unknown>;
+  const normalized: Record<string, unknown> = {
+    ...input,
+    attributes: input.attributes ?? [],
+  };
+  if (input.statMode === "light") {
+    normalized.statMode = "full";
+    normalized.legacyStatMode = "light";
+    normalized.migrationPending = true;
+  }
+  return normalized;
+}
+
+/** Final live schema, with a compatibility preprocessor for legacy `light` rows. */
+export const StorySchemaSchema = z.preprocess(normalizeLegacyStorySchema, StorySchemaObjectSchema);
 export type StorySchema = z.infer<typeof StorySchemaSchema>;

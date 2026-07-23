@@ -1,7 +1,7 @@
 /**
  * Known-provider registry (low-level-plan §M3.1, D9).
  *
- * All nine providers speak OpenAI-compatible chat, so each is just a `ProviderSpec`
+ * All eleven providers speak OpenAI-compatible chat, so each is just a `ProviderSpec`
  * (base URL, auth style, JSON-mode support). `openrouter` is the recommended default
  * aggregator; `custom` requires the user to supply a base URL.
  */
@@ -11,6 +11,8 @@ import { makeOpenAiCompatProvider, type ProviderSpec } from "./openaiCompat.js";
 /** The provider ids the router understands. */
 export const PROVIDER_IDS = [
   "openrouter",
+  "electronhub",
+  "nanogpt",
   "openai",
   "anthropic",
   "google",
@@ -28,6 +30,19 @@ export const PROVIDER_SPECS: Record<ProviderId, ProviderSpec> = {
   openrouter: {
     id: "openrouter",
     defaultBaseUrl: "https://openrouter.ai/api/v1",
+    supportsJsonMode: true,
+    auth: "bearer",
+    credentialProbePath: "/key",
+  },
+  electronhub: {
+    id: "electronhub",
+    defaultBaseUrl: "https://api.electronhub.ai/v1",
+    supportsJsonMode: true,
+    auth: "bearer",
+  },
+  nanogpt: {
+    id: "nanogpt",
+    defaultBaseUrl: "https://nano-gpt.com/api/v1",
     supportsJsonMode: true,
     auth: "bearer",
   },

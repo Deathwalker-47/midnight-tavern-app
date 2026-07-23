@@ -37,7 +37,15 @@ beforeEach(() => {
   useStoriesStore.setState({ current: undefined, currentStatus: "idle" });
   useSettingsStore.setState({
     roleMap,
-    knownModels: [{ provider: "openrouter", model: "anthropic/claude-sonnet-4", label: "Claude Sonnet 4", tier: "recommended" }],
+    knownModels: [
+      {
+        provider: "openrouter",
+        model: "anthropic/claude-sonnet-4",
+        label: "Claude Sonnet 4",
+        tier: "recommended",
+        supportsJsonMode: true,
+      },
+    ],
   });
 });
 

@@ -148,6 +148,7 @@ describe("applySoftPatch — store integration", () => {
       hard: {
         characterId: "kestrel",
         isPlayer: true,
+        attributes: {},
         resources: { hp: { current: 20, max: 20 } },
         skills: [{ skillId: "blade", rank: "novice", successCount: 0 }],
         inventory: [{ itemId: "sword", qty: 1 }],

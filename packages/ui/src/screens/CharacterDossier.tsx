@@ -38,7 +38,7 @@ type LoadState =
   | { phase: "no-target" }
   | { phase: "loading" }
   | { phase: "error"; message: string }
-  | { phase: "ready"; dossier: Dossier };
+  | { phase: "ready"; dossier: Dossier; statMode: "none" | "full" };
 
 const MONO_LABEL: CSSProperties = {
   fontFamily: "var(--font-mono)",
@@ -104,13 +104,17 @@ export function CharacterDossier(props: ScreenProps): JSX.Element {
     let cancelled = false;
     setState({ phase: "loading" });
     (async () => {
-      const dossier = await getBridge().getCharacterDossier(storyId, characterId);
+      const bridge = getBridge();
+      const [dossier, story] = await Promise.all([
+        bridge.getCharacterDossier(storyId, characterId),
+        bridge.getStory(storyId),
+      ]);
       if (cancelled) return;
       if (!dossier) {
         setState({ phase: "error", message: "This character isn't in the story's cast." });
         return;
       }
-      setState({ phase: "ready", dossier });
+      setState({ phase: "ready", dossier, statMode: story?.schema.statMode === "full" ? "full" : "none" });
     })().catch((err: unknown) => {
       if (!cancelled) {
         setState({
@@ -212,6 +216,7 @@ export function CharacterDossier(props: ScreenProps): JSX.Element {
   }
 
   const d = state.dossier;
+  const fullStats = state.statMode === "full";
   const fallen = !d.sheet.alive;
   const short = d.identity.name.split(/\s+/)[0] ?? d.identity.name;
   const accent = fallen ? "var(--muted)" : d.isPlayer ? "var(--brass)" : "var(--teal)";
@@ -517,6 +522,13 @@ export function CharacterDossier(props: ScreenProps): JSX.Element {
 
           {/* SYSTEM REGISTER — THE SHEET */}
           <div style={{ marginTop: 26, ...(narrow ? { maxWidth: 420 } : {}) }}>
+            {!fullStats ? (
+              <InlineNotice
+                severity="info"
+                title="No Stats story"
+                detail="This story is prose-only. Identity and authored character details remain available, while attributes, resources, skills, mastery and mechanical inventory stay dormant."
+              />
+            ) : (
             <div style={{ position: narrow ? "static" : "sticky", top: 0, background: "var(--bg1-raised)", border: "1px solid var(--teal-dim)", borderRadius: 13, overflow: "hidden" }}>
               <div style={{ background: "var(--teal-tint)", borderBottom: "1px solid var(--teal-dim)", padding: "13px 17px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: "0.14em", color: "var(--teal)" }}>THE SHEET · HARD STATE</span>
@@ -525,6 +537,30 @@ export function CharacterDossier(props: ScreenProps): JSX.Element {
                 </span>
               </div>
               <div style={{ padding: 17 }}>
+                {d.sheet.attributes.length > 0 ? (
+                  <>
+                    <div style={{ ...SUB_LABEL, margin: "0 0 9px" }}>ATTRIBUTES</div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 7, marginBottom: 16 }}>
+                      {d.sheet.attributes.map((attribute) => (
+                        <div
+                          key={attribute.attributeId}
+                          title={attribute.description}
+                          style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "8px 9px", background: "var(--teal-tint)", border: "1px solid var(--teal-dim)", borderRadius: 7 }}
+                        >
+                          <span style={{ minWidth: 0 }}>
+                            <span style={{ display: "block", fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--teal)", letterSpacing: ".08em" }}>{attribute.abbrev}</span>
+                            <span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 10.5, color: "var(--secondary)" }}>{attribute.name}</span>
+                          </span>
+                          <span style={{ display: "flex", alignItems: "baseline", gap: 5, fontFamily: "var(--font-mono)" }}>
+                            <strong style={{ fontSize: 15, color: "var(--ui-text)" }}>{attribute.score}</strong>
+                            <span style={{ fontSize: 10, color: "var(--brass)" }}>{attribute.modifier >= 0 ? "+" : ""}{attribute.modifier}</span>
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : null}
+
                 {/* Resources */}
                 {d.sheet.resources.map((rs) => {
                   const pct = rs.max > 0 ? Math.max(0, Math.round((rs.current / rs.max) * 100)) : 0;
@@ -560,7 +596,9 @@ export function CharacterDossier(props: ScreenProps): JSX.Element {
                             <div style={{ flex: 1, height: 4, background: "var(--bg1-base)", borderRadius: 3, overflow: "hidden" }}>
                               <div style={{ height: "100%", width: `${Math.round((sk.successCount / (sk.successCount + sk.toNext)) * 100)}%`, background: "var(--teal-dim)", borderRadius: 3 }} />
                             </div>
-                            <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--muted)" }}>{sk.toNext} to next</span>
+                            <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--muted)", whiteSpace: "nowrap" }}>
+                              {sk.successCount} successes · {sk.toNext} to next
+                            </span>
                           </div>
                         ) : null}
                       </div>
@@ -588,6 +626,7 @@ export function CharacterDossier(props: ScreenProps): JSX.Element {
                 </div>
               </div>
             </div>
+            )}
           </div>
         </div>
       </div>

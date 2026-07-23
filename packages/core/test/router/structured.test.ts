@@ -43,6 +43,15 @@ describe("extractJson", () => {
   it("handles braces inside strings", () => {
     expect(extractJson('{"s":"a}b"}')).toBe('{"s":"a}b"}');
   });
+  it("skips an unmatched prose brace before a later valid object", () => {
+    expect(extractJson('Draft { unfinished\nFinal: {"a":1}')).toBe('{"a":1}');
+  });
+  it("unwraps a JSON object encoded inside a JSON string", () => {
+    expect(extractJson(JSON.stringify('{"a":1}'))).toBe('{"a":1}');
+  });
+  it("returns null for an incomplete object", () => {
+    expect(extractJson('{"a":1')).toBeNull();
+  });
   it("returns null when there is no JSON", () => {
     expect(extractJson("no json here")).toBeNull();
   });
@@ -61,9 +70,13 @@ describe("callStructured", () => {
       '{"name":"orc"}', // missing count → invalid
       '{"name":"orc","count":2}', // repaired
     ]);
-    const out = await callStructured(router, "classifier", { system: "s", user: "u" }, Schema);
+    const repairs: Array<{ attempt: number; maxRepairs: number; error: string }> = [];
+    const out = await callStructured(router, "classifier", { system: "s", user: "u" }, Schema, {
+      onRepair: (attempt, maxRepairs, error) => repairs.push({ attempt, maxRepairs, error }),
+    });
     expect(out).toEqual({ name: "orc", count: 2 });
     expect(seen).toHaveLength(2);
+    expect(repairs).toEqual([{ attempt: 1, maxRepairs: 3, error: expect.stringContaining("count") }]);
     // The repair prompt must include the exact validation error and the prior output.
     expect(seen[1]).toContain("count");
     expect(seen[1]).toContain('{"name":"orc"}');
@@ -75,13 +88,76 @@ describe("callStructured", () => {
     expect(out).toEqual({ name: "x", count: 1 });
   });
 
+  it("retries a length-truncated response with a larger output budget", async () => {
+    const budgets: Array<number | undefined> = [];
+    let call = 0;
+    const router: Router = {
+      bindingFor: () => ({ provider: "electronhub", model: "test", source: "recommended", samplersDirty: false }),
+      async complete(_role, _prompt, options) {
+        budgets.push(options?.maxTokens);
+        call++;
+        return call === 1
+          ? { content: '{"name":"unfinished', finishReason: "length" }
+          : { content: '{"name":"orc","count":2}', finishReason: "stop" };
+      },
+      async stream() {
+        throw new Error("not used");
+      },
+    };
+    const repairs: string[] = [];
+    const out = await callStructured(router, "bootstrapper", { system: "s", user: "u" }, Schema, {
+      maxTokens: 3000,
+      maxRepairTokens: 8000,
+      onRepair: (_attempt, _max, error) => repairs.push(error),
+    });
+    expect(out).toEqual({ name: "orc", count: 2 });
+    expect(budgets).toEqual([3000, 6000]);
+    expect(repairs[0]).toMatch(/truncated.*3000-token/i);
+  });
+
+  it("treats unbalanced JSON with a normal stop as truncation and keeps repairs compact", async () => {
+    const budgets: Array<number | undefined> = [];
+    const seen: string[] = [];
+    let call = 0;
+    const oversized = `{"payload":"${"x".repeat(13_000)}`;
+    const router: Router = {
+      bindingFor: () => ({ provider: "electronhub", model: "test", source: "recommended", samplersDirty: false }),
+      async complete(_role, prompt, options) {
+        seen.push(prompt.user);
+        budgets.push(options?.maxTokens);
+        call++;
+        return call === 1
+          ? { content: oversized, finishReason: "stop" }
+          : { content: '{"name":"orc","count":2}', finishReason: "stop" };
+      },
+      async stream() {
+        throw new Error("not used");
+      },
+    };
+
+    const out = await callStructured(router, "bootstrapper", { system: "s", user: "u" }, Schema, {
+      maxTokens: 3_000,
+      maxRepairTokens: 8_000,
+    });
+    expect(out).toEqual({ name: "orc", count: 2 });
+    expect(budgets).toEqual([3_000, 6_000]);
+    expect(seen[1]).toMatch(/incomplete or unbalanced JSON/i);
+    expect(seen[1]).toMatch(/previous output omitted/i);
+    expect(seen[1]).not.toContain("x".repeat(100));
+  });
+
   it("throws ModelOutputError naming the role after exhausting repairs", async () => {
     const { router, seen } = scriptedRouter(["nope"]); // always invalid (repeats)
+    const attempts: number[] = [];
     await expect(
-      callStructured(router, "bootstrapper", { system: "s", user: "u" }, Schema, { maxRepairs: 2 })
+      callStructured(router, "bootstrapper", { system: "s", user: "u" }, Schema, {
+        maxRepairs: 2,
+        onRepair: (attempt) => attempts.push(attempt),
+      })
     ).rejects.toMatchObject({ name: "ModelOutputError", role: "bootstrapper", attempts: 3 });
     // 1 initial + 2 repairs = 3 attempts.
     expect(seen).toHaveLength(3);
+    expect(attempts).toEqual([1, 2]);
   });
 
   it("surfaces a malformed-JSON parse error into the repair prompt", async () => {

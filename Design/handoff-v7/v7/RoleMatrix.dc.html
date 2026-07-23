@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+  @keyframes rm-spin{to{transform:rotate(360deg)}}
+  @keyframes rm-fade{from{opacity:0}to{opacity:1}}
+  @keyframes rm-drop{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
+  @media (prefers-reduced-motion: reduce){*{animation-duration:.001s!important}}
+</style>
+</helmet>
+<div style="border:1px solid #382E21;border-radius:12px;overflow:visible;background:#1B1611;font-family:'IBM Plex Sans',sans-serif">
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 14px;border-bottom:1px solid #2a241d;background:#181410;border-radius:12px 12px 0 0">
+    <span style="font-size:10px;font-family:'IBM Plex Mono',monospace;letter-spacing:.08em;color:#6E5F49">DEMO</span>
+    <div style="display:flex;gap:7px">
+      <button onClick="{{ toggleOutdated }}" style="{{ outdatedToggleStyle }}">{{ outdatedToggleLabel }}</button>
+      <button onClick="{{ toggleNoStats }}" style="{{ noStatsToggleStyle }}">{{ noStatsToggleLabel }}</button>
+    </div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1.15fr;background:#231C15;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.06em;color:#74B8AE;border-radius:12px 12px 0 0">
+    <div style="padding:11px 16px">ROLE</div>
+    <div style="padding:11px 12px">PROVIDER</div>
+    <div style="padding:11px 12px">MODEL · SAMPLERS</div>
+  </div>
+
+  <sc-for list="{{ rows }}" as="r" hint-placeholder-count="5">
+    <div style="border-top:1px solid #2a241d">
+      <sc-if value="{{ r.groupHeader }}" hint-placeholder-val="{{ false }}">
+        <div style="{{ r.groupHeaderStyle }}">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.1em;color:{{ r.groupColor }}">{{ r.groupHeader }}</span>
+          <sc-if value="{{ r.groupDormant }}" hint-placeholder-val="{{ false }}"><span style="font-size:11px;color:#C9A15a;font-family:'IBM Plex Sans'">This story uses Narrator only — these roles are configured but dormant.</span></sc-if>
+        </div>
+      </sc-if>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1.15fr;align-items:start;{{ r.rowDim }}">
+        <!-- ROLE -->
+        <div style="padding:14px 16px">
+          <div style="display:flex;align-items:center;gap:9px">
+            <span style="color:#74B8AE;font-size:15px">{{ r.glyph }}</span>
+            <span style="font-size:14px;color:#D6C9AB;font-weight:500">{{ r.name }}</span>
+          </div>
+          <div style="font-size:11px;color:#6E5F49;margin-top:3px;margin-left:24px">{{ r.tier }}</div>
+          <sc-if value="{{ r.structured }}" hint-placeholder-val="{{ false }}"><div style="font-size:9px;font-family:'IBM Plex Mono',monospace;color:#4E827B;margin-top:4px;margin-left:24px;letter-spacing:.04em">STRUCTURED OUTPUT</div></sc-if>
+        </div>
+
+        <!-- PROVIDER (independent control) -->
+        <div style="padding:12px;position:relative">
+          <button onClick="{{ r.toggleProvider }}" style="{{ r.providerBtnStyle }}">
+            <span style="display:flex;align-items:center;gap:8px;min-width:0">
+              <span style="width:22px;height:22px;flex:0 0 22px;border-radius:6px;background:#2C241B;border:1px solid #382E21;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:9px;color:#74B8AE">{{ r.providerAbbr }}</span>
+              <span style="font-family:'IBM Plex Sans';font-size:12.5px;color:#D6C9AB;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.providerLabel }}</span>
+            </span>
+            <span style="color:#6E5F49;flex:0 0 auto">▾</span>
+          </button>
+          <sc-if value="{{ r.providerConn }}" hint-placeholder-val="{{ true }}"><div style="font-size:10px;color:{{ r.provConnColor }};margin-top:5px;margin-left:2px;font-family:'IBM Plex Mono',monospace">{{ r.provConnText }}</div></sc-if>
+          <sc-if value="{{ r.providerMenuOpen }}" hint-placeholder-val="{{ false }}">
+            <div style="position:absolute;z-index:40;top:44px;left:12px;right:12px;background:#231C15;border:1px solid #4E827B;border-radius:9px;box-shadow:0 14px 40px rgba(0,0,0,.6);padding:5px;max-height:280px;overflow-y:auto;animation:rm-drop .14s ease">
+              <sc-for list="{{ r.providerItems }}" as="p" hint-placeholder-count="11"><div onClick="{{ p.onClick }}" style="{{ p.style }}"><span style="display:flex;align-items:center;gap:8px"><span style="width:20px;height:20px;border-radius:5px;background:#2C241B;border:1px solid #382E21;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:8px;color:#74B8AE">{{ p.abbr }}</span>{{ p.label }}<span style="{{ p.recStyle }}">rec</span></span><span style="{{ p.tickStyle }}">✓</span></div></sc-for>
+            </div>
+          </sc-if>
+        </div>
+
+        <!-- MODEL (independent control) + sampler summary -->
+        <div style="padding:12px;position:relative">
+          <button onClick="{{ r.toggleModel }}" style="{{ r.modelBtnStyle }}">
+            <span style="display:flex;align-items:center;gap:7px;min-width:0">
+              <sc-if value="{{ r.modelBusy }}" hint-placeholder-val="{{ false }}"><span style="display:inline-block;width:12px;height:12px;border:2px solid #382E21;border-top-color:#74B8AE;border-radius:50%;animation:rm-spin .8s linear infinite;flex:0 0 auto"></span></sc-if>
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:{{ r.modelLabelColor }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.modelLabel }}</span>
+              <span style="{{ r.badgeStyle }}">{{ r.badge }}</span>
+            </span>
+            <span style="color:#6E5F49;flex:0 0 auto">▾</span>
+          </button>
+          <sc-if value="{{ r.jsonRisk }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:11px;color:#C9A15a"><span>⚠</span><span>{{ r.jsonRiskText }}</span></div>
+          </sc-if>
+          <sc-if value="{{ r.outdatedRec }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:6px;background:rgba(201,161,90,.06);border:1px solid #6E5F4955;border-radius:7px;padding:7px 9px">
+              <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:#C9A15a"><span>◈</span><span>{{ r.outdatedText }}</span></div>
+              <button onClick="{{ r.applyNewRec }}" style="margin-top:6px;font-size:10.5px;color:#74B8AE;background:transparent;border:1px solid #4E827B;border-radius:6px;padding:4px 9px;cursor:pointer">Use new recommendation</button>
+            </div>
+          </sc-if>
+
+          <!-- MODEL MENU: live fetch states -->
+          <sc-if value="{{ r.modelMenuOpen }}" hint-placeholder-val="{{ false }}">
+            <div style="position:absolute;z-index:40;top:44px;left:12px;right:12px;background:#231C15;border:1px solid #4E827B;border-radius:9px;box-shadow:0 14px 40px rgba(0,0,0,.6);padding:6px;max-height:320px;overflow-y:auto;animation:rm-drop .14s ease">
+              <!-- loading -->
+              <sc-if value="{{ r.stLoading }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;align-items:center;gap:9px;padding:14px 10px;color:#A08D6C;font-size:12px"><span style="display:inline-block;width:13px;height:13px;border:2px solid #382E21;border-top-color:#74B8AE;border-radius:50%;animation:rm-spin .8s linear infinite"></span>{{ r.loadingText }}</div>
+              </sc-if>
+              <!-- error -->
+              <sc-if value="{{ r.stError }}" hint-placeholder-val="{{ false }}">
+                <div style="padding:12px 10px">
+                  <div style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:#C96F57"><span>⚡</span>Couldn’t list models from {{ r.providerLabel }}.</div>
+                  <div style="font-size:11px;color:#6E5F49;margin-top:5px;line-height:1.5">The provider didn’t answer. Check the key or network, then try again.</div>
+                  <button onClick="{{ r.retryFetch }}" style="margin-top:9px;font-size:11px;color:#74B8AE;background:transparent;border:1px solid #4E827B;border-radius:6px;padding:5px 11px;cursor:pointer">↻ Retry</button>
+                </div>
+              </sc-if>
+              <!-- empty / discovery unavailable -->
+              <sc-if value="{{ r.stEmpty }}" hint-placeholder-val="{{ false }}">
+                <div style="padding:10px 10px 4px">
+                  <div style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:#C9A15a"><span>◈</span>{{ r.emptyTitle }}</div>
+                  <div style="font-size:11px;color:#6E5F49;margin-top:5px;line-height:1.5">{{ r.emptyBody }}</div>
+                </div>
+              </sc-if>
+              <!-- ready list -->
+              <sc-if value="{{ r.stReady }}" hint-placeholder-val="{{ true }}">
+                <div>
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:.08em;color:#8FB573;padding:7px 10px 5px">RECOMMENDED FOR {{ r.nameUpper }}</div>
+                  <sc-for list="{{ r.recommended }}" as="m" hint-placeholder-count="3"><div onClick="{{ m.onClick }}" style="{{ m.style }}"><span style="display:flex;align-items:center;gap:7px"><span style="color:#8FB573;font-size:10px">✦</span><span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#D6C9AB">{{ m.label }}</span></span><span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#6E5F49">{{ m.price }}</span></div></sc-for>
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:.08em;color:#6E5F49;padding:9px 10px 5px;border-top:1px solid #382E21;margin-top:4px">OTHER MODELS</div>
+                  <sc-for list="{{ r.otherModels }}" as="m" hint-placeholder-count="3"><div onClick="{{ m.onClick }}" style="{{ m.style }}"><span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#A08D6C">{{ m.label }}</span><span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#6E5F49">{{ m.price }}</span></div></sc-for>
+                </div>
+              </sc-if>
+              <!-- manual model-ID fallback (always available) -->
+              <div style="border-top:1px solid #382E21;margin-top:4px;padding:8px 10px 4px">
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:.08em;color:#6E5F49;margin-bottom:6px">{{ r.manualLabel }}</div>
+                <div style="display:flex;gap:6px">
+                  <input value="{{ r.freeTextValue }}" onInput="{{ r.onFreeText }}" onKeyDown="{{ r.onFreeTextKey }}" placeholder="{{ r.manualPlaceholder }}" style="flex:1;background:#14100C;border:1px solid #382E21;border-radius:6px;padding:6px 9px;color:#EADCBE;font-family:'IBM Plex Mono',monospace;font-size:11.5px;outline:none" />
+                  <button onClick="{{ r.commitFreeText }}" style="flex:0 0 auto;background:transparent;color:#74B8AE;border:1px solid #4E827B;border-radius:6px;padding:5px 10px;font-size:11px;cursor:pointer">Use</button>
+                </div>
+              </div>
+            </div>
+          </sc-if>
+
+          <!-- sampler summary toggle -->
+          <button onClick="{{ r.toggleSampler }}" style="{{ r.samplerBtnStyle }}">
+            <span style="display:flex;align-items:center;gap:7px">
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#A08D6C">{{ r.samplerSummary }}</span>
+              <sc-if value="{{ r.overridden }}" hint-placeholder-val="{{ false }}"><span style="font-size:9px;font-family:'IBM Plex Mono',monospace;color:#C9A15a">● override</span></sc-if>
+            </span>
+            <span style="color:#6E5F49">{{ r.samplerChevron }}</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- sampler panel -->
+      <sc-if value="{{ r.samplerOpen }}" hint-placeholder-val="{{ false }}">
+        <div style="padding:4px 16px 20px;background:#181410;border-top:1px solid #2a241d;animation:rm-fade .18s ease">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin:14px 0 12px">
+            <div style="display:flex;gap:7px">
+              <sc-for list="{{ r.presets }}" as="p" hint-placeholder-count="3"><button onClick="{{ p.onClick }}" style="{{ p.style }}">{{ p.name }}</button></sc-for>
+              <span style="{{ r.customTagStyle }}">Custom</span>
+            </div>
+            <button onClick="{{ r.reset }}" style="font-size:11.5px;color:#74B8AE;background:transparent;border:1px solid #4E827B;border-radius:6px;padding:5px 11px;cursor:pointer">↺ Reset to recommended</button>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px 26px">
+            <sc-for list="{{ r.samplerFields }}" as="f" hint-placeholder-count="8">
+              <div style="{{ f.wrapStyle }}">
+                <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px">
+                  <span style="font-size:12px;color:{{ f.labelColor }}">{{ f.label }}</span>
+                  <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:{{ f.valColor }}">{{ f.display }}</span>
+                </div>
+                <input type="range" min="{{ f.min }}" max="{{ f.max }}" step="{{ f.step }}" value="{{ f.value }}" onInput="{{ f.onInput }}" disabled="{{ f.disabled }}" style="{{ f.sliderStyle }}" />
+                <sc-if value="{{ f.unsupported }}" hint-placeholder-val="{{ false }}"><div style="font-size:10px;color:#6E5F49;margin-top:3px">not supported by {{ r.providerLabel }}</div></sc-if>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+    </div>
+  </sc-for>
+
+  <sc-if value="{{ anyMenuOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeMenus }}" style="position:fixed;inset:0;z-index:30"></div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:760,&quot;height&quot;:580}}">
+class Component extends DCLogic {
+  constructor(props){
+    super(props);
+    this.state={ roles:this.recommendedDefaults(), openMenu:null, fetch:this.initFetch(), expanded:null, freeText:{}, noStatsActive:false, outdated:false };
+  }
+  toggleNoStats(){ this.setState(s=>({noStatsActive:!s.noStatsActive})); }
+  toggleOutdated(){ this.setState(s=>({outdated:!s.outdated})); }
+  // canonical provider order (#2) — shared source of truth
+  providers(){return [
+    {id:'OpenRouter',abbr:'OR',rec:true,conn:'valid'},
+    {id:'Electron Hub',abbr:'EH',rec:false,conn:'valid'},
+    {id:'NanoGPT',abbr:'NG',rec:false,conn:'none'},
+    {id:'OpenAI',abbr:'AI',rec:false,conn:'none'},
+    {id:'Anthropic',abbr:'AN',rec:false,conn:'none'},
+    {id:'Google',abbr:'GG',rec:false,conn:'none'},
+    {id:'Mistral',abbr:'MI',rec:false,conn:'none'},
+    {id:'DeepSeek',abbr:'DS',rec:false,conn:'none'},
+    {id:'xAI',abbr:'XA',rec:false,conn:'none'},
+    {id:'Groq',abbr:'GQ',rec:false,conn:'none'},
+    {id:'Custom endpoint',abbr:'CE',rec:false,conn:'custom'},
+  ];}
+  presets(){return {
+    Precise:{temp:0,topP:1,topK:0,minP:0,freqPen:0,presPen:0,repPen:1,maxTok:800},
+    Balanced:{temp:0.5,topP:0.95,topK:40,minP:0.02,freqPen:0,presPen:0,repPen:1.05,maxTok:1200},
+    Creative:{temp:0.8,topP:0.98,topK:60,minP:0.05,freqPen:0.2,presPen:0.2,repPen:1.1,maxTok:1600},
+  };}
+  recommendedDefaults(){const P=this.presets();return {
+    narrator:{provider:'OpenRouter',model:'claude-sonnet-4.5',preset:'Creative',sampler:{...P.Creative},freeText:false},
+    classifier:{provider:'OpenRouter',model:'llama-3.1-8b',preset:'Precise',sampler:{...P.Precise},freeText:false},
+    analyzer:{provider:'OpenRouter',model:'llama-3.1-8b',preset:'Precise',sampler:{...P.Precise},freeText:false},
+    summarizer:{provider:'OpenRouter',model:'gemini-flash',preset:'Balanced',sampler:{...P.Balanced},freeText:false},
+    storyai:{provider:'OpenRouter',model:'claude-sonnet-4.5',preset:'Balanced',sampler:{...P.Balanced},freeText:false},
+  };}
+  initFetch(){return {narrator:'ready',classifier:'ready',analyzer:'ready',summarizer:'ready',storyai:'ready'};}
+  roleDefs(){return [
+    {key:'narrator',name:'Narrator',glyph:'✎',tier:'Writes the prose · strongest model',structured:false},
+    {key:'classifier',name:'Classifier',glyph:'⊹',tier:'Decides when to roll · cheap & fast',structured:true},
+    {key:'analyzer',name:'Analyzer',glyph:'⊚',tier:'Reads outcomes to memory · cheap',structured:true},
+    {key:'summarizer',name:'Summarizer',glyph:'❧',tier:'Folds chapters to memory · mid',structured:false},
+    {key:'storyai',name:'Story AI',glyph:'✦',tier:'Forges new worlds · mid / strong',structured:true},
+  ];}
+  catalog(){return {
+    'OpenRouter':['claude-sonnet-4.5','claude-opus-4','gpt-4o','gpt-4o-mini','gemini-2.5-pro','gemini-flash','llama-3.1-70b','llama-3.1-8b','ministral-3b','mistral-small','deepseek-v3','grok-2','mixtral-8x7b'],
+    'Electron Hub':['claude-sonnet-4.5','gpt-4o','gpt-4o-mini','gemini-2.5-pro','gemini-flash','llama-3.1-70b','llama-3.1-8b','deepseek-v3','mixtral-8x7b'],
+    'NanoGPT':[],
+    'OpenAI':['gpt-4o','gpt-4o-mini','gpt-4.1','o3-mini'],
+    'Anthropic':['claude-sonnet-4.5','claude-opus-4','claude-haiku'],
+    'Google':['gemini-2.5-pro','gemini-flash','gemini-flash-lite'],
+    'Mistral':['mistral-large','mistral-small','ministral-3b'],
+    'DeepSeek':['deepseek-v3','deepseek-r1'],
+    'xAI':['grok-2','grok-2-mini'],
+    'Groq':['llama-3.1-70b','llama-3.1-8b','mixtral-8x7b'],
+    'Custom endpoint':[],
+  };}
+  meta(){return {
+    'claude-sonnet-4.5':{label:'Claude Sonnet 4.5',price:'$3/M'},'claude-opus-4':{label:'Claude Opus 4',price:'$15/M'},
+    'claude-haiku':{label:'Claude Haiku',price:'$0.8/M'},'gpt-4o':{label:'GPT-4o',price:'$2.5/M'},
+    'gpt-4o-mini':{label:'GPT-4o mini',price:'$0.15/M'},'gpt-4.1':{label:'GPT-4.1',price:'$2/M'},
+    'o3-mini':{label:'o3-mini',price:'$1.1/M'},'gemini-2.5-pro':{label:'Gemini 2.5 Pro',price:'$1.25/M'},
+    'gemini-flash':{label:'Gemini Flash',price:'$0.07/M'},'gemini-flash-lite':{label:'Gemini Flash-Lite',price:'$0.04/M'},
+    'llama-3.1-70b':{label:'Llama 3.1 70B',price:'$0.5/M'},'llama-3.1-8b':{label:'Llama 3.1 8B',price:'$0.05/M'},
+    'ministral-3b':{label:'Ministral 3B',price:'$0.04/M'},'mistral-small':{label:'Mistral Small',price:'$0.2/M'},
+    'mistral-large':{label:'Mistral Large',price:'$2/M'},'deepseek-v3':{label:'DeepSeek V3',price:'$0.3/M'},
+    'deepseek-r1':{label:'DeepSeek R1',price:'$0.55/M'},'grok-2':{label:'Grok 2',price:'$2/M'},
+    'grok-2-mini':{label:'Grok 2 mini',price:'$0.3/M'},'mixtral-8x7b':{label:'Mixtral 8x7B',price:'$0.24/M'},
+  };}
+  noStructured(){return ['mixtral-8x7b','grok-2-mini','llama-3.1-8b'];}
+  recByRole(){return {
+    narrator:['claude-sonnet-4.5','gpt-4o','gemini-2.5-pro','claude-opus-4','mistral-large','grok-2'],
+    classifier:['llama-3.1-8b','ministral-3b','gemini-flash','gpt-4o-mini','gemini-flash-lite'],
+    analyzer:['llama-3.1-8b','gemini-flash','gpt-4o-mini','mistral-small'],
+    summarizer:['gemini-flash','claude-haiku','mistral-small','gpt-4o-mini'],
+    storyai:['claude-sonnet-4.5','gpt-4o','deepseek-v3','gemini-2.5-pro','claude-opus-4'],
+  };}
+  // demo outcome of a live fetch, per provider
+  fetchOutcome(prov){
+    if(prov==='NanoGPT') return 'empty';          // discovery returns nothing → manual entry
+    if(prov==='Custom endpoint') return 'empty';  // discovery unavailable → manual entry
+    return 'ready';
+  }
+  matchesPreset(s){const P=this.presets();for(const n of Object.keys(P)){const p=P[n];if(Object.keys(p).every(k=>Math.abs(p[k]-s[k])<1e-6))return n;}return null;}
+
+  setProvider(key,prov){
+    this.setState(st=>({openMenu:st.openMenu, fetch:{...st.fetch,[key]:'loading'}, roles:{...st.roles, [key]:{...st.roles[key], provider:prov, model:'', freeText:false}}}));
+    this.runFetch(key,prov);
+  }
+  runFetch(key,prov){
+    if(this._t) clearTimeout(this._t);
+    this._t=setTimeout(()=>{
+      const outcome=this.fetchOutcome(prov);
+      this.setState(st=>{
+        const roles={...st.roles};
+        if(outcome==='ready'){
+          const cat=this.catalog()[prov]||[];
+          const rec=this.recByRole()[key].filter(m=>cat.includes(m));
+          roles[key]={...roles[key], model: rec[0]||cat[0]||'', freeText:false};
+        }
+        return {fetch:{...st.fetch,[key]:outcome}, roles, openMenu:key+':model'};
+      });
+    },800);
+  }
+  retryFetch(key){ const prov=this.state.roles[key].provider; this.setState(st=>({fetch:{...st.fetch,[key]:'loading'}})); this.runFetch(key,prov); }
+  setModel(key,m){ this.setState(st=>({roles:{...st.roles,[key]:{...st.roles[key],model:m,freeText:false}}, openMenu:null})); }
+  commitFree(key){ const v=(this.state.freeText[key]||'').trim(); if(!v)return; this.setState(st=>({roles:{...st.roles,[key]:{...st.roles[key],model:v,freeText:true}}, openMenu:null})); }
+  setPreset(key,name){const P=this.presets();this.setState(st=>({roles:{...st.roles,[key]:{...st.roles[key],preset:name,sampler:{...P[name]}}}}));}
+  setField(key,f,v){this.setState(st=>{const s={...st.roles[key].sampler,[f]:v};return {roles:{...st.roles,[key]:{...st.roles[key],sampler:s,preset:this.matchesPreset(s)}}};});}
+  reset(key){const d=this.recommendedDefaults()[key];this.setState(st=>{const ft={...st.freeText};delete ft[key];return {roles:{...st.roles,[key]:{...d,sampler:{...d.sampler}}}, fetch:{...st.fetch,[key]:'ready'}, freeText:ft};});}
+
+  renderVals(){
+    const self=this, st=this.state, meta=this.meta(), cat=this.catalog(), recByRole=this.recByRole(), noStruct=this.noStructured();
+    const provMeta={}; this.providers().forEach(p=>provMeta[p.id]=p);
+    const fieldDefs=[
+      {k:'temp',label:'Temperature',min:0,max:2,step:0.05,dec:2},{k:'topP',label:'Top-p',min:0,max:1,step:0.01,dec:2},
+      {k:'topK',label:'Top-k',min:0,max:100,step:1,dec:0,openaiUnsupported:true},{k:'minP',label:'Min-p',min:0,max:0.5,step:0.01,dec:2,openaiUnsupported:true},
+      {k:'freqPen',label:'Frequency penalty',min:0,max:2,step:0.05,dec:2},{k:'presPen',label:'Presence penalty',min:0,max:2,step:0.05,dec:2},
+      {k:'repPen',label:'Repetition penalty',min:1,max:1.5,step:0.01,dec:2,openaiUnsupported:true},{k:'maxTok',label:'Max tokens',min:200,max:4000,step:100,dec:0},
+    ];
+    const rows=this.roleDefs().map((rd,ri)=>{
+      const grp = ri===0 ? {groupHeader:'NARRATOR — USED BY EVERY STORY', groupColor:'#74B8AE', groupDormant:false}
+                : ri===1 ? {groupHeader:'FULL STATS ROLES — USED ONLY BY FULL STATS STORIES', groupColor:st.noStatsActive?'#C9A15a':'#6E5F49', groupDormant:st.noStatsActive}
+                : {groupHeader:false, groupColor:'', groupDormant:false};
+      const dormant = ri>0 && st.noStatsActive;
+      const r=st.roles[rd.key], fs=st.fetch[rd.key], pm=provMeta[r.provider]||{abbr:'?',conn:'none'};
+      const provModels=cat[r.provider]||[];
+      const recIds=recByRole[rd.key].filter(m=>provModels.includes(m));
+      const otherIds=provModels.filter(m=>!recIds.includes(m));
+      const busy = fs==='loading';
+      const modelLabel = busy?'Loading models…':(r.model? (r.freeText?r.model:(meta[r.model]?meta[r.model].label:r.model)) : (fs==='empty'?'Enter a model ID':(fs==='error'?'Fetch failed':'— choose —')));
+      const isRec = !r.freeText && recByRole[rd.key].includes(r.model);
+      const badge = r.model?(r.freeText?'Manual':(isRec?'Recommended':'')):'';
+      const jsonRisk = rd.structured && r.model && (r.freeText || noStruct.includes(r.model));
+      const mkModel=(id)=>({label:meta[id]?meta[id].label:id, price:meta[id]?meta[id].price:'',
+        onClick:()=>self.setModel(rd.key,id),
+        style:`display:flex;align-items:center;justify-content:space-between;padding:7px 10px;border-radius:6px;cursor:pointer;background:${r.model===id?'rgba(116,184,174,.1)':'transparent'}`});
+      const connMap={valid:['#8FB573','● connected'],none:['#C9A15a','○ no key yet'],custom:['#74B8AE','⚙ endpoint']};
+      const summary=(r.preset||'Custom')+' · t'+r.sampler.temp.toFixed(2);
+      return {
+        key:rd.key, name:rd.name, nameUpper:rd.name.toUpperCase(), glyph:rd.glyph, tier:rd.tier, structured:rd.structured,
+        providerLabel:r.provider, providerAbbr:pm.abbr,
+        providerConn:true, provConnColor:connMap[pm.conn][0], provConnText:connMap[pm.conn][1],
+        providerBtnStyle:'display:flex;align-items:center;justify-content:space-between;width:100%;background:#231C15;border:1px solid #382E21;border-radius:7px;padding:8px 11px;cursor:pointer',
+        toggleProvider:()=>self.setState(s=>({openMenu:s.openMenu===rd.key+':prov'?null:rd.key+':prov'})),
+        providerMenuOpen: st.openMenu===rd.key+':prov',
+        providerItems:this.providers().map(p=>({label:p.id,abbr:p.abbr,onClick:()=>self.setProvider(rd.key,p.id),
+          style:`display:flex;align-items:center;justify-content:space-between;padding:7px 9px;border-radius:6px;cursor:pointer;font-size:12px;color:${r.provider===p.id?'#EADCBE':'#A08D6C'};background:${r.provider===p.id?'rgba(116,184,174,.1)':'transparent'}`,
+          recStyle:p.id==='OpenRouter'?"font-size:8px;font-family:'IBM Plex Mono',monospace;color:#D9A648;border:1px solid #D9A64866;border-radius:3px;padding:0 4px;margin-left:2px":'display:none',
+          tickStyle:r.provider===p.id?'color:#74B8AE;font-size:11px':'display:none'})),
+        modelBusy:busy, modelLabel, modelLabelColor: r.model||busy?'#D6C9AB':'#6E5F49',
+        modelBtnStyle:`display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;background:#231C15;border:1px solid ${fs==='error'?'#C96F5755':'#382E21'};border-radius:7px;padding:8px 11px;cursor:pointer`,
+        badge, badgeStyle: badge?`flex:0 0 auto;font-size:9px;font-family:'IBM Plex Mono',monospace;padding:1px 5px;border-radius:3px;${badge==='Recommended'?'color:#8FB573;border:1px solid #8FB57355':'color:#C9A15a;border:1px solid #6E5F49'}`:'display:none',
+        toggleModel:()=>self.setState(s=>({openMenu:s.openMenu===rd.key+':model'?null:rd.key+':model'})),
+        modelMenuOpen: st.openMenu===rd.key+':model',
+        stLoading:fs==='loading', stError:fs==='error', stEmpty:fs==='empty', stReady:fs==='ready',
+        loadingText:'Fetching '+r.provider+' models…',
+        emptyTitle: r.provider==='Custom endpoint'?'Model discovery unavailable':'No models returned',
+        emptyBody: r.provider==='Custom endpoint'?'This endpoint didn’t expose a model list. Enter the model ID your server serves.':'This provider didn’t return a catalog. Enter a model ID by hand.',
+        recommended:recIds.map(mkModel), otherModels:otherIds.map(mkModel),
+        manualLabel: (fs==='empty'||fs==='error')?'ENTER MODEL ID':'OR ENTER MODEL ID',
+        manualPlaceholder: r.provider==='Custom endpoint'?'e.g. my-local/llama-3-8b':'provider/model-name',
+        freeTextValue: st.freeText[rd.key]||'',
+        onFreeText:(e)=>{const v=e.target.value;self.setState(s=>({freeText:{...s.freeText,[rd.key]:v}}));},
+        onFreeTextKey:(e)=>{if(e.key==='Enter'){e.preventDefault();self.commitFree(rd.key);}},
+        commitFreeText:()=>self.commitFree(rd.key),
+        retryFetch:()=>self.retryFetch(rd.key),
+        jsonRisk, jsonRiskText:'This model may not guarantee structured output — mechanics could misfire.',
+        outdatedRec: st.outdated && (rd.key==='narrator'||rd.key==='storyai') && !r.freeText,
+        outdatedText: 'Recommendation data updated — “'+modelLabel+'” is no longer the top pick for '+rd.name+'.',
+        applyNewRec:()=>self.reset(rd.key),
+        samplerSummary:summary, overridden:(r.freeText||r.preset===null),
+        groupHeader:grp.groupHeader, groupColor:grp.groupColor, groupDormant:grp.groupDormant,
+        groupHeaderStyle:'display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:11px 16px 7px;background:#181410',
+        rowDim: dormant?'opacity:.55':'',
+        samplerBtnStyle:`display:flex;align-items:center;justify-content:space-between;width:100%;margin-top:9px;background:${st.expanded===rd.key?'#231C15':'transparent'};border:1px solid ${st.expanded===rd.key?'#4E827B':'#2a241d'};border-radius:7px;padding:7px 11px;cursor:pointer`,
+        samplerChevron: st.expanded===rd.key?'▴':'▾',
+        toggleSampler:()=>self.setState(s=>({expanded:s.expanded===rd.key?null:rd.key})),
+        samplerOpen: st.expanded===rd.key,
+        presets:['Precise','Balanced','Creative'].map(n=>({name:n,onClick:()=>self.setPreset(rd.key,n),
+          style:`font-size:11.5px;padding:5px 12px;border-radius:6px;cursor:pointer;${r.preset===n?'color:#74B8AE;background:rgba(116,184,174,.12);border:1px solid #4E827B':'color:#A08D6C;background:#231C15;border:1px solid #382E21'}`})),
+        customTagStyle: r.preset===null?"font-size:11.5px;padding:5px 12px;border-radius:6px;color:#C9A15a;background:rgba(201,161,90,.1);border:1px solid #6E5F49":'display:none',
+        reset:()=>self.reset(rd.key),
+        samplerFields:fieldDefs.map(fd=>{
+          const unsupported=r.provider==='OpenAI'&&fd.openaiUnsupported, v=r.sampler[fd.k];
+          return {label:fd.label,value:v,min:fd.min,max:fd.max,step:fd.step,
+            display:unsupported?'—':(fd.dec===0?String(Math.round(v)):v.toFixed(fd.dec)),
+            disabled:unsupported,unsupported,labelColor:unsupported?'#6E5F49':'#D6C9AB',valColor:unsupported?'#6E5F49':'#74B8AE',
+            wrapStyle:unsupported?'opacity:.5':'',
+            sliderStyle:`width:100%;-webkit-appearance:none;height:4px;border-radius:3px;background:#382E21;outline:none;${unsupported?'':'cursor:pointer'}`,
+            onInput:(e)=>self.setField(rd.key,fd.k,fd.dec===0?parseInt(e.target.value):parseFloat(e.target.value))};
+        }),
+      };
+    });
+    return { rows, noStatsActive:st.noStatsActive, toggleNoStats:()=>self.toggleNoStats(),
+      toggleOutdated:()=>self.toggleOutdated(),
+      outdatedToggleLabel: st.outdated?'Recommendations: outdated':'Recommendations: current',
+      outdatedToggleStyle:`font-size:11px;padding:4px 10px;border-radius:5px;cursor:pointer;border:1px solid ${st.outdated?'#C9A15a':'#382E21'};background:transparent;color:${st.outdated?'#C9A15a':'#A08D6C'};font-family:'IBM Plex Sans'`,
+      noStatsToggleLabel: st.noStatsActive?'Active story: No Stats (Full Stats roles dormant)':'Active story: Full Stats',
+      noStatsToggleStyle:`font-size:11px;padding:4px 10px;border-radius:5px;cursor:pointer;border:1px solid ${st.noStatsActive?'#C9A15a':'#4E827B'};background:transparent;color:${st.noStatsActive?'#C9A15a':'#74B8AE'};font-family:'IBM Plex Sans'`,
+      anyMenuOpen: st.openMenu!==null, closeMenus:()=>self.setState({openMenu:null}) };
+  }
+}
+</script>
+</body>
+</html>

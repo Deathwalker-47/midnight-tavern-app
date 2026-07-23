@@ -175,6 +175,10 @@ export function makeStory(overrides: Partial<StorySchema> = {}): StorySchema {
     title: "The Silent Vale",
     premise: "A test premise.",
     statMode: "full",
+    attributes: [
+      { id: "str", name: "Strength", abbrev: "STR", description: "Raw force.", defaultScore: 10 },
+      { id: "dex", name: "Dexterity", abbrev: "DEX", description: "Agility.", defaultScore: 10 },
+    ],
     resources: [
       { id: "hp", label: "Health", start: 20, max: 20, playerVisible: true, lethal: true },
       { id: "stamina", label: "Stamina", start: 10, max: 10, playerVisible: true },
@@ -235,6 +239,7 @@ export function makeStory(overrides: Partial<StorySchema> = {}): StorySchema {
     tiers: [{ id: "common", label: "Common", minProgress: 0 }],
     actions,
     startingState: {
+      attributes: { str: 14, dex: 12 },
       resources: { hp: 20, stamina: 10 },
       skills: [{ skillId: "blade", rank: "novice" }],
       inventory: [{ itemId: "sword", qty: 1 }],
@@ -243,6 +248,7 @@ export function makeStory(overrides: Partial<StorySchema> = {}): StorySchema {
       {
         templateId: "wight",
         name: "Grave-wight",
+        attributes: { str: 12, dex: 10 },
         resources: { hp: 12 },
         skills: [{ skillId: "blade", rank: "adept" }],
         inventory: [{ itemId: "sword", qty: 1 }],
@@ -265,6 +271,7 @@ export function makePlayer(overrides: Partial<CharacterHardState> = {}): Charact
     flags: {},
     alive: true,
     ...overrides,
+    attributes: overrides.attributes ?? { str: 14, dex: 12 },
   };
 }
 
@@ -280,6 +287,7 @@ export function makeEnemy(overrides: Partial<CharacterHardState> = {}): Characte
     flags: {},
     alive: true,
     ...overrides,
+    attributes: overrides.attributes ?? { str: 12, dex: 10 },
   };
 }
 

@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:radial-gradient(120% 80% at 50% -10%,#221A12,#14100C 60%);color:#EADCBE;font-family:"IBM Plex Sans",sans-serif;-webkit-font-smoothing:antialiased}
+  ::selection{background:rgba(217,166,72,.25)}
+  a{color:#74B8AE;text-decoration:none}a:hover{color:#8fd0c6}
+  ::-webkit-scrollbar{width:10px}::-webkit-scrollbar-thumb{background:#382E21;border-radius:6px;border:3px solid #14100C}
+  @keyframes mt-fade{from{opacity:0}to{opacity:1}}
+  @keyframes mt-rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+  @media (prefers-reduced-motion: reduce){*{animation-duration:.001s!important}}
+</style>
+</helmet>
+<div style="min-height:100vh;width:100vw;overflow-y:auto;display:flex;flex-direction:column;align-items:center;padding-bottom:64px">
+
+  <!-- step rail -->
+  <div style="display:flex;align-items:center;gap:10px;margin-top:26px;margin-bottom:2px">
+    <sc-for list="{{ steps }}" as="st" hint-placeholder-count="4">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="display:flex;align-items:center;gap:8px"><span style="{{ st.dotStyle }}">{{ st.mark }}</span><span style="{{ st.labelStyle }}">{{ st.label }}</span></div>
+        <sc-if value="{{ st.bar }}" hint-placeholder-val="{{ true }}"><span style="width:26px;height:1px;background:#382E21"></span></sc-if>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="flex:1;display:flex;align-items:flex-start;justify-content:center;padding:16px 20px 20px;width:100%">
+
+    <!-- STEP: MECHANICS MODE -->
+    <sc-if value="{{ isMode }}" hint-placeholder-val="{{ true }}">
+      <div style="max-width:760px;width:100%;animation:mt-fade .3s ease">
+        <div style="text-align:center;margin-bottom:8px">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.2em;color:#74B8AE">NEW STORY · STEP 3 OF 4</div>
+          <h1 style="font-family:'Cormorant Garamond',serif;font-size:32px;font-weight:600;color:#EADCBE;margin:6px 0 0">Which stat system should this story use?</h1>
+          <p style="font-size:14px;color:#A08D6C;line-height:1.6;max-width:520px;margin:8px auto 0">You can change this later — switching never re-rolls or reinterprets turns you've already played.</p>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:22px">
+          <sc-for list="{{ modes }}" as="m" hint-placeholder-count="2">
+            <div onClick="{{ m.onClick }}" style="{{ m.cardStyle }}">
+              <div style="display:flex;align-items:center;justify-content:space-between"><span style="font-family:'Cormorant Garamond',serif;font-size:23px;font-weight:600;color:#EADCBE;white-space:nowrap">{{ m.name }}</span><span style="{{ m.checkStyle }}">✓</span></div>
+              <div style="font-size:13px;color:#A08D6C;line-height:1.6;margin-top:8px;min-height:118px">{{ m.desc }}</div>
+              <div style="margin-top:10px;padding-top:10px;border-top:1px solid #382E21"><div style="font-size:10px;font-family:'IBM Plex Mono',monospace;letter-spacing:.08em;color:#6E5F49;margin-bottom:5px">GOOD FOR</div><div style="display:flex;flex-wrap:wrap;gap:5px"><sc-for list="{{ m.examples }}" as="e" hint-placeholder-count="4"><span style="font-size:10.5px;color:#A08D6C;background:#2C241B;border:1px solid #382E21;border-radius:4px;padding:2px 7px">{{ e }}</span></sc-for></div></div>
+              <div style="{{ m.roleStyle }}"><span style="font-size:11px">{{ m.roleIcon }}</span><span style="font-size:11.5px">{{ m.roleLine }}</span></div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:24px">
+          <a href="Library.dc.html" style="font-size:14px;color:#A08D6C">← Back</a>
+          <button onClick="{{ toReview }}" style="background:#D9A648;color:#1B1611;border:0;border-radius:9px;padding:12px 24px;font-weight:600;font-size:14px;cursor:pointer">{{ modeCta }}</button>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- STEP: PRE-FORGE REVIEW (Full Stats) -->
+    <sc-if value="{{ isReview }}" hint-placeholder-val="{{ false }}">
+      <div style="max-width:680px;width:100%;animation:mt-fade .3s ease">
+        <div style="text-align:center;margin-bottom:4px">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.2em;color:#74B8AE">NEW STORY · STEP 4 OF 4 · REVIEW BEFORE FORGING</div>
+          <h1 style="font-family:'Cormorant Garamond',serif;font-size:31px;font-weight:600;color:#EADCBE;margin:6px 0 0">One look before the world is forged</h1>
+          <p style="font-size:13.5px;color:#A08D6C;line-height:1.6;max-width:540px;margin:8px auto 0">Forging seals a rulebook from everything below. Confirm who you play, what mechanics were detected, and the rules of the table.</p>
+        </div>
+
+        <!-- ===== PERSONA CONFIRMATION ===== -->
+        <div style="{{ personaCardStyle }}">
+          <div style="position:absolute;top:0;left:0;right:0;height:3px;background:{{ personaStripe }}"></div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.14em;color:#74B8AE">YOUR CHARACTER WILL BE GENERATED FROM THIS PERSONA</span>
+          </div>
+
+          <sc-if value="{{ hasPersona }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex;gap:15px;align-items:center">
+              <div style="width:60px;height:60px;flex:0 0 60px;border-radius:14px;background:#2C241B;border:1px solid #D9A64866;display:flex;align-items:center;justify-content:center;font-family:'Cormorant Garamond',serif;font-weight:700;font-size:26px;color:#D9A648">{{ personaInitials }}</div>
+              <div style="flex:1;min-width:0">
+                <div style="font-family:'Cormorant Garamond',serif;font-size:25px;font-weight:600;color:#EADCBE;line-height:1.1">{{ personaName }}</div>
+                <div style="font-size:12.5px;color:#A08D6C;margin-top:2px">{{ personaTagline }}</div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:7px;flex:0 0 auto">
+                <button onClick="{{ togglePicker }}" style="background:#231C15;border:1px solid #4E827B;color:#74B8AE;border-radius:8px;padding:7px 13px;font-size:12px;cursor:pointer;white-space:nowrap">Change persona</button>
+                <a href="CardCreator.dc.html" style="text-align:center;background:transparent;border:1px solid #382E21;color:#A08D6C;border-radius:8px;padding:7px 13px;font-size:12px;white-space:nowrap">Edit persona</a>
+              </div>
+            </div>
+            <div style="margin-top:13px;padding-top:12px;border-top:1px solid #382E21">
+              <div style="font-size:12px;color:#A08D6C;line-height:1.65">{{ personaSummary }}</div>
+            </div>
+            <div style="display:flex;gap:9px;align-items:flex-start;margin-top:12px;background:rgba(216,170,90,.06);border:1px solid rgba(216,170,90,.28);border-radius:9px;padding:10px 13px">
+              <span style="color:#D9A648;font-size:14px;line-height:1.3">⚠</span>
+              <div style="font-size:12px;color:#D6C9AB;line-height:1.55">Your character sheet — attributes, skills, resources — will be generated from this persona and the story premise, then <b>sealed</b>. Change or edit the persona now if anything is wrong.</div>
+            </div>
+            <sc-if value="{{ pickerOpen }}" hint-placeholder-val="{{ false }}">
+              <div style="margin-top:12px;background:#181410;border:1px solid #382E21;border-radius:10px;padding:6px;animation:mt-fade .15s ease">
+                <sc-for list="{{ personaChoices }}" as="p" hint-placeholder-count="3"><div onClick="{{ p.onClick }}" style="{{ p.rowStyle }}"><span style="{{ p.avStyle }}">{{ p.initials }}</span><div style="flex:1"><div style="font-family:'Cormorant Garamond',serif;font-size:16px;font-weight:600;color:#EADCBE">{{ p.name }}</div><div style="font-size:11.5px;color:#A08D6C">{{ p.tagline }}</div></div><span style="{{ p.checkStyle }}">✓</span></div></sc-for>
+                <a href="Personas.dc.html" style="display:block;text-align:center;font-size:12px;color:#74B8AE;padding:8px;border-top:1px solid #382E21;margin-top:4px">Manage personas →</a>
+              </div>
+            </sc-if>
+          </sc-if>
+
+          <!-- warned no-persona path -->
+          <sc-if value="{{ noPersona }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;gap:13px;align-items:center">
+              <div style="width:60px;height:60px;flex:0 0 60px;border-radius:14px;background:#1B1611;border:1px dashed #6E5F49;display:flex;align-items:center;justify-content:center;font-size:26px;color:#6E5F49">☙</div>
+              <div style="flex:1"><div style="font-family:'Cormorant Garamond',serif;font-size:22px;font-weight:600;color:#D6C9AB">No persona selected</div><div style="font-size:12.5px;color:#A08D6C;margin-top:2px">Recommended: choose who you play before forging.</div></div>
+              <button onClick="{{ togglePicker }}" style="background:#D9A648;color:#1B1611;border:0;border-radius:8px;padding:8px 15px;font-size:12.5px;font-weight:600;cursor:pointer;white-space:nowrap">Choose a persona</button>
+            </div>
+            <div style="display:flex;gap:9px;align-items:flex-start;margin-top:13px;background:rgba(201,111,87,.07);border:1px solid rgba(201,111,87,.35);border-radius:9px;padding:11px 13px">
+              <span style="color:#C96F57;font-size:14px;line-height:1.3">⚠</span>
+              <div style="font-size:12px;color:#D6C9AB;line-height:1.55">Without a persona, the player character is generated from the premise alone — it won't reflect who you meant to be, and this can't be changed after forging. <span style="color:#C96F57">Continue without a persona</span> only if you intend a blank-slate protagonist.</div>
+            </div>
+            <sc-if value="{{ pickerOpen }}" hint-placeholder-val="{{ false }}">
+              <div style="margin-top:12px;background:#181410;border:1px solid #382E21;border-radius:10px;padding:6px;animation:mt-fade .15s ease">
+                <sc-for list="{{ personaChoices }}" as="p" hint-placeholder-count="3"><div onClick="{{ p.onClick }}" style="{{ p.rowStyle }}"><span style="{{ p.avStyle }}">{{ p.initials }}</span><div style="flex:1"><div style="font-family:'Cormorant Garamond',serif;font-size:16px;font-weight:600;color:#EADCBE">{{ p.name }}</div><div style="font-size:11.5px;color:#A08D6C">{{ p.tagline }}</div></div><span style="{{ p.checkStyle }}">✓</span></div></sc-for>
+              </div>
+            </sc-if>
+          </sc-if>
+        </div>
+
+        <!-- ===== MECHANIC-SOURCE REVIEW ===== -->
+        <div style="background:#181410;border:1px solid #382E21;border-radius:13px;padding:16px 17px;margin-top:14px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.12em;color:#74B8AE">MECHANICS DETECTED</span>
+            <span style="font-size:11px;color:#6E5F49">{{ attrCountLabel }}</span>
+          </div>
+          <p style="font-size:12px;color:#A08D6C;line-height:1.55;margin:2px 0 12px">Explicit card-defined mechanics are preserved and will not be silently replaced by generated ones. Scores use a 1–20 scale; the modifier is shown beside each.</p>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <sc-for list="{{ attrs }}" as="a" hint-placeholder-count="4">
+              <div style="background:#231C15;border:1px solid #382E21;border-left:3px solid {{ a.sourceColor }};border-radius:9px;padding:11px 13px">
+                <div style="display:flex;align-items:baseline;gap:9px;flex-wrap:wrap">
+                  <span style="font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600;color:#D6C9AB">{{ a.abbrev }}</span>
+                  <span style="font-size:13px;color:#A08D6C">{{ a.name }}</span>
+                  <span style="flex:1"></span>
+                  <span style="{{ a.scoreStyle }}">{{ a.score }}</span>
+                  <span style="font-size:9px;font-family:'IBM Plex Mono',monospace;letter-spacing:.06em;color:{{ a.sourceColor }};border:1px solid {{ a.sourceColor }}66;border-radius:3px;padding:1px 6px">{{ a.source }}</span>
+                </div>
+                <div style="font-size:12px;color:#A08D6C;line-height:1.5;margin-top:6px">{{ a.def }}</div>
+                <div style="font-size:10.5px;font-family:'IBM Plex Mono',monospace;color:#6E5F49;margin-top:5px">{{ a.scope }}</div>
+              </div>
+            </sc-for>
+          </div>
+          <sc-if value="{{ fromCard }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;gap:9px;margin-top:12px">
+              <button style="font-size:11.5px;color:#1B1611;background:#D9A648;border:0;border-radius:6px;padding:6px 13px;font-weight:600;cursor:pointer">Keep card mechanics</button>
+              <button style="font-size:11.5px;color:#A08D6C;background:transparent;border:1px solid #382E21;border-radius:6px;padding:6px 13px;cursor:pointer">Regenerate a new system</button>
+            </div>
+            <div style="font-size:10.5px;color:#6E5F49;margin-top:7px;line-height:1.5">Regenerating discards the card's explicit definitions above and forges fresh ones. Card values won't be silently overwritten unless you choose this.</div>
+          </sc-if>
+        </div>
+
+        <!-- ===== MACRO COMPATIBILITY ===== -->
+        <div style="{{ macroBoxStyle }}">
+          <div style="display:flex;gap:11px;align-items:flex-start">
+            <span style="font-size:15px;line-height:1.3;color:{{ macroIconColor }}">{{ macroIcon }}</span>
+            <div style="flex:1">
+              <div style="font-weight:600;font-size:13px;color:{{ macroTitleColor }}">{{ macroTitle }}</div>
+              <div style="font-size:12.5px;color:#A08D6C;line-height:1.55;margin-top:4px">{{ macroBody }}</div>
+              <sc-if value="{{ macroList }}" hint-placeholder-val="{{ false }}">
+                <div style="margin-top:9px;display:flex;flex-direction:column;gap:6px">
+                  <sc-for list="{{ macroRows }}" as="r" hint-placeholder-count="2">
+                    <div style="display:flex;align-items:center;gap:8px;font-size:12px;background:#181410;border:1px solid #382E21;border-radius:7px;padding:7px 10px">
+                      <span style="font-family:'IBM Plex Mono',monospace;color:#D6C9AB">{{ r.token }}</span>
+                      <span style="color:#6E5F49">in</span>
+                      <span style="color:#A08D6C">{{ r.field }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-if>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== DIFFICULTY ===== -->
+        <div style="background:#181410;border:1px solid #382E21;border-radius:13px;padding:16px 17px;margin-top:14px">
+          <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:3px">
+            <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.12em;color:#74B8AE">DIFFICULTY</span>
+          </div>
+          <p style="font-size:12px;color:#A08D6C;line-height:1.55;margin:2px 0 12px">Difficulty changes the visible check and damage values you'll see in rulings — never the story content itself. Every adjustment is shown in the ruling.</p>
+          <div style="display:flex;flex-direction:column;gap:7px">
+            <sc-for list="{{ difficulties }}" as="d" hint-placeholder-count="5">
+              <div onClick="{{ d.onClick }}" style="{{ d.rowStyle }}">
+                <span style="{{ d.radioStyle }}"></span>
+                <div style="flex:1"><div style="font-size:13.5px;font-weight:600;color:#D6C9AB">{{ d.name }}</div><div style="font-size:12px;color:#A08D6C;line-height:1.45;margin-top:2px">{{ d.desc }}</div></div>
+                <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#74B8AE;white-space:nowrap">{{ d.meta }}</span>
+              </div>
+            </sc-for>
+          </div>
+          <sc-if value="{{ customOpen }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:11px;background:#231C15;border:1px solid #4E827B55;border-radius:10px;padding:13px 14px;animation:mt-fade .15s ease">
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.1em;color:#74B8AE;margin-bottom:11px">CUSTOM LEVERS</div>
+              <sc-for list="{{ customLevers }}" as="c" hint-placeholder-count="3">
+                <div style="margin-bottom:13px">
+                  <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:5px"><span style="color:#A08D6C">{{ c.label }}</span><span style="font-family:'IBM Plex Mono',monospace;color:#74B8AE">{{ c.value }}</span></div>
+                  <div style="height:5px;background:#14100C;border-radius:3px;position:relative"><div style="position:absolute;top:0;bottom:0;left:0;width:{{ c.pct }};background:#4E827B;border-radius:3px"></div><div style="position:absolute;top:50%;left:{{ c.pct }};transform:translate(-50%,-50%);width:13px;height:13px;border-radius:50%;background:#74B8AE;border:2px solid #14100C"></div></div>
+                  <div style="display:flex;justify-content:space-between;font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:#6E5F49;margin-top:3px"><span>{{ c.min }}</span><span>{{ c.max }}</span></div>
+                </div>
+              </sc-for>
+              <div style="font-size:11px;color:#6E5F49;line-height:1.5">Values clamp to their engine-supported ranges. DC offset applies to player-side checks only; damage multipliers scale only damage, never healing.</div>
+            </div>
+          </sc-if>
+        </div>
+
+        <!-- ===== ACTION BUDGET ===== -->
+        <div style="background:#181410;border:1px solid #382E21;border-radius:13px;padding:16px 17px;margin-top:14px">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <div>
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.12em;color:#74B8AE;margin-bottom:2px">ACTIONS PER TURN</div>
+              <div style="font-size:13px;color:#D6C9AB">How many consequential actions one message may attempt</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:2px;background:#231C15;border:1px solid #382E21;border-radius:9px;padding:4px">
+              <button onClick="{{ budgetDown }}" style="{{ budgetDownStyle }}">−</button>
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:18px;font-weight:600;color:#EADCBE;min-width:34px;text-align:center">{{ actionBudget }}</span>
+              <button onClick="{{ budgetUp }}" style="{{ budgetUpStyle }}">+</button>
+            </div>
+          </div>
+          <div style="font-size:12px;color:#A08D6C;line-height:1.55;margin-top:11px">Combat, movement, item use, and consequential dialogue or social attempts all count toward the budget. Range 1–5; default 2. Extra detected actions beyond the budget are <b style="color:#D6C9AB">refused</b>, not silently performed.</div>
+          <div style="font-size:10.5px;color:#6E5F49;margin-top:7px">This is part of the story's rules. After forging it's shown read-only in Story Settings; changing it requires regenerating the rulebook.</div>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:22px">
+          <button onClick="{{ toMode }}" style="background:transparent;border:0;color:#A08D6C;font-size:14px;cursor:pointer">← Back</button>
+          <a href="ForgingProgress.dc.html" style="{{ forgeStyle }}">{{ forgeLabel }}</a>
+        </div>
+      </div>
+    </sc-if>
+  </div>
+
+  <!-- demo switcher -->
+  <div style="position:fixed;bottom:0;left:0;right:0;display:flex;flex-wrap:wrap;gap:6px;align-items:center;justify-content:center;padding:8px 20px;background:rgba(20,16,12,.9);border-top:1px solid #382E21;z-index:30">
+    <span style="font-size:10px;color:#6E5F49;font-family:'IBM Plex Mono',monospace;letter-spacing:.06em;text-transform:uppercase">Demo</span>
+    <sc-for list="{{ demoChips }}" as="c" hint-placeholder-count="5"><button onClick="{{ c.onClick }}" style="{{ c.style }}">{{ c.label }}</button></sc-for>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state={ step:'review', mode:'full', persona:'kestrel', pickerOpen:false,
+    scenario:'generated', // generated | card | none
+    difficulty:'standard', macro:'ok', budget:2 };
+
+  mod(score){ const m=Math.floor((score-10)/2); return (m>=0?'+':'−')+Math.abs(m); }
+
+  renderVals(){
+    const s=this.state, self=this;
+
+    // step rail
+    const stepList=[['Premise'],['Import'],['Mode'],['Review']];
+    const order = s.step==='mode'?2:3;
+    const steps=stepList.map((d,i)=>({label:d[0],bar:i<3,mark:i<order?'✓':(i+1),
+      dotStyle:`width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;${i<order?'background:#8FB573;color:#14100C':(i===order?'background:#D9A648;color:#1B1611':'background:#231C15;color:#6E5F49;border:1px solid #382E21')}`,
+      labelStyle:`font-size:12px;${i===order?'color:#EADCBE;font-weight:600':'color:#6E5F49'}`}));
+
+    // mode cards
+    const modeDefs=[
+      {key:'none',name:'No Stats',desc:'Pure roleplay and prose. No attributes, skills, dice, action checks, rulings, inventory, or progression. Only your Narrator model is used.',examples:['Romance','Comedy','Slice-of-life','Freeform'],roleIcon:'✎',roleLine:'Uses Narrator only',roleOk:true},
+      {key:'full',name:'Full Stats',desc:'A generated system with story-specific attributes, skills, actions, resources, equipment, dice, mastery, and persistent consequences. The Story AI forges a sealed rulebook — you don\u2019t point-buy attributes.',examples:['Adventure','Combat','Mystery','LitRPG','CRPG'],roleIcon:'⚙',roleLine:'Narrator + Classifier, Analyzer, Summarizer & Story AI',roleOk:false},
+    ];
+    const modes=modeDefs.map(m=>({...m,onClick:()=>self.setState({mode:m.key}),
+      cardStyle:`background:#1B1611;border:1px solid ${s.mode===m.key?'rgba(216,170,90,.5)':'#382E21'};border-radius:12px;padding:18px 19px;cursor:pointer;${s.mode===m.key?'box-shadow:0 0 0 1px rgba(216,170,90,.3)':''}`,
+      checkStyle:s.mode===m.key?'color:#8FB573;font-size:16px':'display:none',
+      roleStyle:`display:flex;align-items:center;gap:7px;margin-top:11px;padding:8px 11px;border-radius:8px;background:${m.roleOk?'rgba(116,184,174,.08)':'rgba(216,170,90,.06)'};border:1px solid ${m.roleOk?'#4E827B55':'#6E5F4955'};color:${m.roleOk?'#74B8AE':'#C9A15a'};font-family:'IBM Plex Mono',monospace`}));
+
+    // persona
+    const personaData={
+      kestrel:{initials:'KV',name:'Kestrel Vane',tagline:'Sellsword courier · default persona',
+        summary:'A steady-handed courier who took the sword out of necessity. Wary of debts, quick to leave. Traits: Steady hands, Reluctant hero. Mechanical hint: leans Blade.'},
+      sable:{initials:'SM',name:'Sable Morrow',tagline:'Disgraced cartographer',
+        summary:'Mapped places that were never meant to be found. Curious past the point of safety. Traits: Keen memory, Haunted. Mechanical hint: leans Lore.'},
+      orin:{initials:'OA',name:'Orin Ashfield',tagline:'Hedge-witch\u2019s apprentice',
+        summary:'Half-taught, wholly stubborn. Trades small magics for a place by the fire. Traits: Green thumb, Impulsive. Mechanical hint: leans Craft.'},
+    };
+    const cur=personaData[s.persona]||personaData.kestrel;
+    const personaChoices=[['kestrel','KV','Kestrel Vane','Sellsword courier','#D9A648'],['sable','SM','Sable Morrow','Disgraced cartographer','#74B8AE'],['orin','OA','Orin Ashfield','Hedge-witch\u2019s apprentice','#8FB573']]
+      .map(([key,initials,name,tagline,accent])=>({key,initials,name,tagline,accent,onClick:()=>self.setState({persona:key,pickerOpen:false,scenario:s.scenario==='none'?'generated':s.scenario}),
+        rowStyle:`display:flex;align-items:center;gap:11px;padding:9px 10px;border-radius:8px;cursor:pointer;background:${s.persona===key&&s.scenario!=='none'?'rgba(116,184,174,.1)':'transparent'}`,
+        avStyle:`width:34px;height:34px;flex:0 0 34px;border-radius:8px;background:#2C241B;border:1px solid ${accent}66;display:flex;align-items:center;justify-content:center;font-family:'Cormorant Garamond',serif;font-weight:700;font-size:13px;color:${accent}`,
+        checkStyle:(s.persona===key&&s.scenario!=='none')?'color:#74B8AE;font-size:13px':'display:none'}));
+
+    const noPersona=s.scenario==='none', hasPersona=!noPersona, fromCard=s.scenario==='card';
+
+    // attributes — 1-20 scale, source + scope
+    const attrGenerated=[
+      {abbrev:'MIG',name:'Might',score:14,source:'PERSONA',def:'Raw physical force — breaking, lifting, and the weight behind a blow.',scope:'Player character · from persona hint'},
+      {abbrev:'AGI',name:'Agility',score:12,source:'BLUEPRINT',def:'Speed, balance, and fine control under pressure.',scope:'World system · applies to all characters'},
+      {abbrev:'WIT',name:'Wits',score:15,source:'GENERATED',def:'Perception, reasoning, and reading a situation quickly.',scope:'World system · generated default'},
+      {abbrev:'RES',name:'Resolve',score:10,source:'GENERATED',def:'Composure and will against fear, pain, and coercion.',scope:'World system · generated default'},
+    ];
+    const attrCard=[
+      {abbrev:'BODY',name:'Body',score:14,source:'CARD',def:'Physical conditioning. Card-defined; preserved exactly.',scope:'World system · from imported card'},
+      {abbrev:'MIND',name:'Mind',score:16,source:'CARD',def:'Intellect and focus. Card-defined; preserved exactly.',scope:'World system · from imported card'},
+      {abbrev:'NERVE',name:'Nerve',score:12,source:'CARD',def:'Steadiness under threat. Card-defined; preserved exactly.',scope:'Player character · from imported card'},
+      {abbrev:'NEN',name:'Nen',score:0,source:'CARD',def:'Latent inner force — unawakened. Locked until the story establishes it.',scope:'Locked · card reason: unawakened',locked:true},
+    ];
+    const rawAttrs=fromCard?attrCard:attrGenerated;
+    const sourceColors={CARD:'#D9A648',PERSONA:'#8FB573',BLUEPRINT:'#74B8AE',CUE:'#C9A15a',GENERATED:'#6E5F49'};
+    const attrs=rawAttrs.map(a=>({...a,sourceColor:sourceColors[a.source]||'#6E5F49',
+      score:a.locked?`0 · locked`:`${a.score} (${self.mod(a.score)})`,
+      scoreStyle:`font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600;color:${a.locked?'#6E5F49':'#74B8AE'}`}));
+    const attrCountLabel=`${rawAttrs.length} attributes · usual range 3–6`;
+
+    // macro states
+    const macroBox=(bg,bd)=>`margin-top:14px;background:${bg};border:1px solid ${bd};border-radius:13px;padding:14px 16px`;
+    let macroIcon='✓',macroIconColor='#8FB573',macroTitle='',macroTitleColor='#EADCBE',macroBody='',macroBoxStyle='',macroList=false,macroRows=[];
+    if(s.macro==='ok'){ macroBoxStyle=macroBox('rgba(143,181,115,.06)','rgba(143,181,115,.3)'); macroIcon='✓'; macroIconColor='#8FB573'; macroTitle='Macros compatible'; macroTitleColor='#8FB573'; macroBody='All tokens in this card and persona resolve. {{user}} maps to your persona, {{char}} to the imported character/story. No supported token will appear raw in story prose.'; }
+    else if(s.macro==='warn'){ macroBoxStyle=macroBox('rgba(201,161,90,.06)','rgba(110,95,73,.5)'); macroIcon='◈'; macroIconColor='#C9A15a'; macroTitle='Unknown macros will be preserved, not deleted'; macroTitleColor='#C9A15a'; macroBody='These tokens aren\u2019t recognized. They\u2019re kept exactly as written so nothing is silently lost — you can resolve them later without data loss.'; macroList=true; macroRows=[{token:'{{roll:1d6}}',field:'First message'},{token:'{{getvar::mood}}',field:'System prompt'}]; }
+    else { macroBoxStyle=macroBox('rgba(181,68,47,.08)','rgba(181,68,47,.45)'); macroIcon='✖'; macroIconColor='#C96F57'; macroTitle='Unresolved token blocks a required field'; macroTitleColor='#C96F57'; macroBody='A required creation field can\u2019t be built until this token is resolved. Fix or remove it to forge.'; macroList=true; macroRows=[{token:'{{pick::}}',field:'Scenario (required) — empty argument'}]; }
+
+    // difficulty
+    const diffDefs=[
+      {key:'story',name:'Story',desc:'Forgiving. For readers who want the tale to carry them.',meta:'DC −2 · dmg ×0.6'},
+      {key:'standard',name:'Standard',desc:'The intended balance. Recommended for a first story.',meta:'DC ±0 · dmg ×1.0'},
+      {key:'hard',name:'Hard',desc:'Checks bite and wounds cost. For deliberate play.',meta:'DC +2 · dmg ×1.3'},
+      {key:'brutal',name:'Brutal',desc:'Unsparing. Positioning and preparation are survival.',meta:'DC +4 · dmg ×1.6'},
+      {key:'custom',name:'Custom',desc:'Set the DC offset and damage multipliers yourself.',meta:'your levers'},
+    ];
+    const difficulties=diffDefs.map(d=>({...d,onClick:()=>self.setState({difficulty:d.key}),
+      rowStyle:`display:flex;align-items:center;gap:12px;padding:11px 13px;border-radius:9px;cursor:pointer;border:1px solid ${s.difficulty===d.key?'rgba(116,184,174,.45)':'#382E21'};background:${s.difficulty===d.key?'rgba(116,184,174,.07)':'#231C15'}`,
+      radioStyle:`width:15px;height:15px;flex:0 0 15px;border-radius:50%;border:2px solid ${s.difficulty===d.key?'#74B8AE':'#4a3d2c'};background:${s.difficulty===d.key?'radial-gradient(circle,#74B8AE 42%,transparent 46%)':'transparent'}`}));
+    const customOpen=s.difficulty==='custom';
+    const customLevers=[
+      {label:'DC offset (player checks only)',value:'+1',pct:'62%',min:'−4',max:'+4'},
+      {label:'Damage taken multiplier',value:'×1.1',pct:'38%',min:'×0.25',max:'×2.5'},
+      {label:'Damage dealt multiplier',value:'×1.0',pct:'33%',min:'×0.25',max:'×2.5'},
+    ];
+
+    // budget
+    const budgetBtn=(enabled)=>`background:transparent;border:0;color:${enabled?'#D9A648':'#4a3f30'};font-size:20px;font-weight:600;width:30px;height:30px;border-radius:7px;cursor:${enabled?'pointer':'not-allowed'};line-height:1`;
+
+    // demo chips
+    const chipDefs=[['generated','Generated system'],['card','From a card'],['none','No persona'],['macro-warn','Macro warning'],['macro-block','Macro blocking'],['custom','Custom difficulty']];
+    const demoChips=chipDefs.map(([k,label])=>{
+      let active=false;
+      if(k==='generated') active=s.scenario==='generated'&&s.macro==='ok'&&s.difficulty!=='custom';
+      if(k==='card') active=s.scenario==='card';
+      if(k==='none') active=s.scenario==='none';
+      if(k==='macro-warn') active=s.macro==='warn';
+      if(k==='macro-block') active=s.macro==='block';
+      if(k==='custom') active=s.difficulty==='custom';
+      return {label,onClick:()=>{
+        self.setState({step:'review'});
+        if(k==='generated') self.setState({scenario:'generated',macro:'ok',difficulty:'standard'});
+        else if(k==='card') self.setState({scenario:'card',macro:'warn'});
+        else if(k==='none') self.setState({scenario:'none'});
+        else if(k==='macro-warn') self.setState({macro:'warn'});
+        else if(k==='macro-block') self.setState({macro:'block'});
+        else if(k==='custom') self.setState({difficulty:'custom'});
+      },style:`font-size:11px;padding:4px 9px;border-radius:5px;cursor:pointer;border:1px solid ${active?'#4E827B':'#382E21'};background:${active?'rgba(116,184,174,.12)':'transparent'};color:${active?'#74B8AE':'#A08D6C'}`};
+    });
+
+    const blocked=s.macro==='block';
+    return {
+      steps, demoChips,
+      isMode:s.step==='mode', isReview:s.step==='review',
+      modes, modeCta: s.mode==='none' ? 'Continue · Uses Narrator only →' : 'Continue to review →',
+      toReview:()=>self.setState({step: s.mode==='none'?'review':'review'}),
+      toMode:()=>self.setState({step:'mode'}),
+      // persona
+      hasPersona, noPersona, fromCard,
+      personaInitials:cur.initials, personaName:cur.name, personaTagline:cur.tagline, personaSummary:cur.summary,
+      personaCardStyle:`position:relative;overflow:hidden;margin-top:16px;border-radius:14px;padding:17px;background:linear-gradient(160deg,#231C15,#1B1611);border:1px solid ${noPersona?'rgba(201,111,87,.4)':'rgba(216,170,90,.35)'};box-shadow:0 6px 22px rgba(0,0,0,.4)`,
+      personaStripe: noPersona?'linear-gradient(90deg,#C96F57,transparent)':'linear-gradient(90deg,#D9A648,transparent)',
+      togglePicker:()=>self.setState(st=>({pickerOpen:!st.pickerOpen})), pickerOpen:s.pickerOpen, personaChoices,
+      // mechanics
+      attrs, attrCountLabel,
+      // macros
+      macroBoxStyle, macroIcon, macroIconColor, macroTitle, macroTitleColor, macroBody, macroList, macroRows,
+      // difficulty
+      difficulties, customOpen, customLevers,
+      // budget
+      actionBudget:s.budget,
+      budgetDown:()=>self.setState(st=>({budget:Math.max(1,st.budget-1)})),
+      budgetUp:()=>self.setState(st=>({budget:Math.min(5,st.budget+1)})),
+      budgetDownStyle:budgetBtn(s.budget>1), budgetUpStyle:budgetBtn(s.budget<5),
+      // forge
+      forgeLabel: blocked?'Resolve the blocking macro to forge':'Forge this world →',
+      forgeStyle:`background:${blocked?'#2C241B':'#D9A648'};color:${blocked?'#6E5F49':'#1B1611'};border-radius:9px;padding:12px 24px;font-weight:600;font-size:14px;${blocked?'pointer-events:none':''}`,
+    };
+  }
+}
+</script>
+</body>
+</html>

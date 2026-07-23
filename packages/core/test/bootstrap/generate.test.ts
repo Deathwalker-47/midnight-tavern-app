@@ -18,7 +18,12 @@
  * catalog-complete schema locally instead.
  */
 import { describe, it, expect } from "vitest";
-import { generateStorySchema } from "../../src/bootstrap/generate.js";
+import { generateStorySchema, PhaseASchema, PhaseBSchema } from "../../src/bootstrap/generate.js";
+import {
+  PHASE_A_SYSTEM,
+  PHASE_B_ACTION_BATCH_SYSTEM,
+  PHASE_B_FOUNDATION_SYSTEM,
+} from "../../src/bootstrap/prompts.js";
 import { validateStorySchema } from "../../src/bootstrap/validate.js";
 import { ModelOutputError } from "../../src/router/index.js";
 import type { Router, RolePrompt, ChatResponse } from "../../src/router/index.js";
@@ -75,6 +80,9 @@ function makeValidBootstrapSchema(overrides: Partial<StorySchema> = {}): StorySc
     title: "Bootstrapped Tale",
     premise: "A valid bootstrap premise.",
     statMode: "full",
+    attributes: [
+      { id: "might", name: "Might", abbrev: "MGT", description: "Raw capability.", defaultScore: 10 },
+    ],
     resources: [
       { id: "hp", label: "Health", start: 20, max: 20, playerVisible: true, lethal: true },
       { id: "stamina", label: "Stamina", start: 10, max: 10, playerVisible: true },
@@ -87,12 +95,13 @@ function makeValidBootstrapSchema(overrides: Partial<StorySchema> = {}): StorySc
     tiers: [{ id: "common", label: "Common", minProgress: 0 }],
     actions,
     startingState: {
+      attributes: { might: 12 },
       resources: { hp: 20, stamina: 10 },
       skills: [{ skillId: "combat_skill", rank: "novice" }],
       inventory: [{ itemId: "blade", qty: 1 }],
     },
     npcTemplates: [
-      { templateId: "foe", name: "A Foe", resources: { hp: 10 }, skills: [{ skillId: "combat_skill", rank: "adept" }], inventory: [] },
+      { templateId: "foe", name: "A Foe", attributes: { might: 11 }, resources: { hp: 10 }, skills: [{ skillId: "combat_skill", rank: "adept" }], inventory: [] },
     ],
     locked: false,
     ...overrides,
@@ -101,7 +110,7 @@ function makeValidBootstrapSchema(overrides: Partial<StorySchema> = {}): StorySc
 }
 
 const STORY = makeValidBootstrapSchema();
-const PHASE_A = { statMode: STORY.statMode, resources: STORY.resources, tiers: STORY.tiers, skills: STORY.skills };
+const PHASE_A = { statMode: STORY.statMode, attributes: STORY.attributes, resources: STORY.resources, tiers: STORY.tiers, skills: STORY.skills };
 const PHASE_B = {
   items: STORY.items,
   actions: STORY.actions,
@@ -114,22 +123,57 @@ const PHASE_B = {
  * system prompt for "PHASE A"/"PHASE B" and returning that phase's next scripted response
  * (repeating the last). Records per-phase call counts.
  */
-function phasedRouter(scripts: { a: string[]; b: string[] }): { router: Router; counts: { a: number; b: number } } {
+function phasedRouter(scripts: { a: string[]; b: string[] }): {
+  router: Router;
+  counts: { a: number; b: number };
+  budgets: { a: Array<number | undefined>; b: Array<number | undefined> };
+} {
   const counts = { a: 0, b: 0 };
+  const budgets: { a: Array<number | undefined>; b: Array<number | undefined> } = { a: [], b: [] };
+  let phaseBPass = -1;
+  let phaseBSource = "";
   const router: Router = {
     bindingFor: () => ({ provider: "openrouter", model: "test", source: "recommended", samplersDirty: false }),
-    async complete(_role, prompt: RolePrompt): Promise<ChatResponse> {
+    async complete(_role, prompt: RolePrompt, options): Promise<ChatResponse> {
       const key = prompt.system.includes("PHASE A") ? "a" : "b";
+      budgets[key].push(options?.maxTokens);
       const seq = scripts[key];
-      const content = seq[Math.min(counts[key], seq.length - 1)] ?? "";
-      counts[key]++;
-      return { content };
+      if (key === "a") {
+        const content = seq[Math.min(counts.a, seq.length - 1)] ?? "";
+        counts.a++;
+        return { content };
+      }
+
+      if (prompt.system.includes("PHASE B FOUNDATION")) {
+        phaseBPass++;
+        phaseBSource = seq[Math.min(phaseBPass, seq.length - 1)] ?? "";
+      }
+      counts.b++;
+      try {
+        const parsed = JSON.parse(phaseBSource) as typeof PHASE_B;
+        if (prompt.system.includes("PHASE B FOUNDATION")) {
+          return {
+            content: J({
+              items: parsed.items,
+              startingState: parsed.startingState,
+              npcTemplates: parsed.npcTemplates,
+            }),
+          };
+        }
+        const requested = prompt.user
+          .match(/REQUESTED CATEGORIES: ([^\n]+)/)?.[1]
+          ?.split(",")
+          .map((category) => category.trim()) ?? [];
+        return { content: J({ actions: parsed.actions.filter((action) => requested.includes(action.category)) }) };
+      } catch {
+        return { content: phaseBSource };
+      }
     },
     async stream() {
       throw new Error("bootstrapper never streams");
     },
   };
-  return { router, counts };
+  return { router, counts, budgets };
 }
 
 const input = { storyId: "story-boot", title: "Bootstrapped Tale", premise: "A valid bootstrap premise." };
@@ -187,12 +231,170 @@ describe("validateStorySchema — fuzz against §M5.2 invariants", () => {
 });
 
 describe("generateStorySchema — repair loop", () => {
-  it("returns a cross-valid schema from all-valid first responses", async () => {
-    const { router, counts } = phasedRouter({ a: [J(PHASE_A)], b: [J(PHASE_B)] });
+  it("gives models an explicit trainer-cost object contract", () => {
+    expect(PHASE_A_SYSTEM).toContain('"method":"trainer"');
+    expect(PHASE_A_SYSTEM).toContain('"cost":{"resources":{"resource_id":2}}');
+    expect(PHASE_A_SYSTEM).toMatch(/Never use a bare number or string for cost/i);
+  });
+
+  it("keeps the large Phase B catalog concise and gives it a larger output budget", async () => {
+    expect(PHASE_B_ACTION_BATCH_SYSTEM).toMatch(/exactly 4 concise actions/i);
+    expect(PHASE_B_ACTION_BATCH_SYSTEM).toMatch(/12 words or fewer/i);
+    const { router, budgets } = phasedRouter({ a: [J(PHASE_A)], b: [J(PHASE_B)] });
+    await generateStorySchema(router, input);
+    expect(budgets).toEqual({ a: [5000], b: [4000, 5000, 5000] });
+  });
+
+  it("splits Phase B into a foundation and bounded action batches", () => {
+    expect(PHASE_B_FOUNDATION_SYSTEM).toMatch(/do not output actions/i);
+    expect(PHASE_B_ACTION_BATCH_SYSTEM).toMatch(/exactly 4 concise actions/i);
+    expect(PHASE_B_ACTION_BATCH_SYSTEM).toMatch(/no other categories/i);
+  });
+
+  it("gives models explicit skill-rank and item-quantity contracts", () => {
+    expect(PHASE_B_FOUNDATION_SYSTEM).toContain('{"skillId":"existing_skill_id","rank":"novice"}');
+    expect(PHASE_B_FOUNDATION_SYSTEM).toContain('{"itemId":"existing_item_id","qty":1}');
+    expect(PHASE_B_ACTION_BATCH_SYSTEM).toContain('{"itemId":"existing_item_id","qty":1}');
+  });
+
+  it("normalizes the provider's numeric trainer cost without another model request", () => {
+    const phaseAWithNumericCost = {
+      ...PHASE_A,
+      resources: [
+        ...PHASE_A.resources,
+        { id: "credits", label: "Credits", start: 100, max: 999, playerVisible: true },
+      ],
+      skills: PHASE_A.skills.map((skill, index) =>
+        index === 0
+          ? {
+              ...skill,
+              unlockPaths: [{ method: "trainer", npcHint: "A veteran", cost: 25 }],
+            }
+          : skill
+      ),
+    };
+    const parsed = PhaseASchema.parse(phaseAWithNumericCost);
+    expect(parsed.skills[0]?.unlockPaths[0]).toEqual({
+      method: "trainer",
+      npcHint: "A veteran",
+      cost: { resources: { credits: 25 } },
+    });
+  });
+
+  it("turns an ambiguous numeric trainer cost into a valid no-cost object", () => {
+    const phaseAWithNumericCost = {
+      ...PHASE_A,
+      skills: PHASE_A.skills.map((skill, index) =>
+        index === 0
+          ? {
+              ...skill,
+              unlockPaths: [{ method: "trainer", npcHint: "A veteran", cost: 25 }],
+            }
+          : skill
+      ),
+    };
+    const parsed = PhaseASchema.parse(phaseAWithNumericCost);
+    expect(parsed.skills[0]?.unlockPaths[0]).toEqual({
+      method: "trainer",
+      npcHint: "A veteran",
+      cost: {},
+    });
+  });
+
+  it("normalizes safe Phase B shorthand without another model request", async () => {
+    const phaseBWithShorthand = {
+      ...PHASE_B,
+      items: PHASE_B.items.map((item, index) =>
+        index === 0
+          ? {
+              id: item.id,
+              name: item.name,
+              description: item.description,
+              kind: item.kind,
+              tier: item.tier,
+            }
+          : item
+      ),
+      startingState: {
+        resources: PHASE_B.startingState.resources,
+        skills: ["combat_skill"],
+        inventory: ["blade", { itemId: "manual" }],
+      },
+      npcTemplates: [
+        {
+          templateId: "foe",
+          name: "A Foe",
+          resources: { hp: 10 },
+          skills: [{ skillId: "combat_skill" }],
+          inventory: [{ itemId: "blade" }],
+        },
+        {
+          templateId: "bystander",
+          name: "A Bystander",
+        },
+      ],
+    };
+
+    const parsed = PhaseBSchema.parse(phaseBWithShorthand);
+    expect(parsed.items[0]?.props).toEqual({});
+    expect(parsed.startingState.skills).toEqual([{ skillId: "combat_skill", rank: "novice" }]);
+    expect(parsed.startingState.inventory).toEqual([
+      { itemId: "blade", qty: 1 },
+      { itemId: "manual", qty: 1 },
+    ]);
+    expect(parsed.npcTemplates[0]?.skills).toEqual([{ skillId: "combat_skill", rank: "novice" }]);
+    expect(parsed.npcTemplates[0]?.inventory).toEqual([{ itemId: "blade", qty: 1 }]);
+    expect(parsed.npcTemplates[1]).toMatchObject({ resources: {}, skills: [], inventory: [] });
+
+    const { router, counts } = phasedRouter({ a: [J(PHASE_A)], b: [J(phaseBWithShorthand)] });
     const out = await generateStorySchema(router, input);
     expect(validateStorySchema(out)).toEqual([]);
+    expect(counts).toEqual({ a: 1, b: 3 });
+  });
+
+  it("returns a cross-valid schema from all-valid first responses", async () => {
+    const { router, counts } = phasedRouter({ a: [J(PHASE_A)], b: [J(PHASE_B)] });
+    const phases: string[] = [];
+    const out = await generateStorySchema(router, input, { onProgress: (phase) => phases.push(phase) });
+    expect(validateStorySchema(out)).toEqual([]);
     expect(out.locked).toBe(false); // generate leaves it unlocked; freeze locks it
-    expect(counts).toEqual({ a: 1, b: 1 });
+    expect(counts).toEqual({ a: 1, b: 3 });
+    expect(phases).toEqual(["phase-a", "phase-b", "validate"]);
+  });
+
+  it("assigns missing skill and trial coverage without another model repair", async () => {
+    const requiredFlags = ["survived_stack_ambush", "entered_the_sump"];
+    const phaseAWithTrials = {
+      ...PHASE_A,
+      skills: PHASE_A.skills.map((skill, index) =>
+        index < requiredFlags.length
+          ? { ...skill, unlockPaths: [{ method: "trial" as const, flagId: requiredFlags[index]! }] }
+          : skill
+      ),
+    };
+    const phaseBWithoutCoverage = {
+      ...PHASE_B,
+      actions: PHASE_B.actions.map(({ requiresSkill: _omitted, ...action }) => action),
+    };
+    const { router, counts } = phasedRouter({
+      a: [J(phaseAWithTrials)],
+      b: [J(phaseBWithoutCoverage)],
+    });
+
+    const out = await generateStorySchema(router, input);
+    const usedSkills = new Set(out.actions.flatMap((action) => action.requiresSkill ?? []));
+    const trueFlags = new Set(
+      out.actions.flatMap((action) =>
+        Object.values(action.effects).flatMap((effect) =>
+          effect.setFlag?.value ? [effect.setFlag.flagId] : []
+        )
+      )
+    );
+
+    expect(phaseAWithTrials.skills.every((skill) => usedSkills.has(skill.id))).toBe(true);
+    expect(requiredFlags.every((flagId) => trueFlags.has(flagId))).toBe(true);
+    expect(validateStorySchema(out)).toEqual([]);
+    expect(counts).toEqual({ a: 1, b: 3 });
   });
 
   it("repairs a Zod-invalid then non-JSON Phase A before succeeding", async () => {
@@ -200,22 +402,33 @@ describe("generateStorySchema — repair loop", () => {
       a: ['{"statMode":"full"}', "I cannot comply.", J(PHASE_A)], // invalid, non-JSON, valid
       b: [J(PHASE_B)],
     });
-    const out = await generateStorySchema(router, input);
+    const phases: string[] = [];
+    const out = await generateStorySchema(router, input, { onProgress: (phase) => phases.push(phase) });
     expect(validateStorySchema(out)).toEqual([]);
     expect(counts.a).toBe(3); // two repairs consumed
+    expect(phases).toEqual(["phase-a", "repair", "repair", "phase-b", "validate"]);
   });
 
   it("re-prompts Phase B when the assembled schema fails cross-validation, then succeeds", async () => {
-    // First Phase B is Zod-valid but cross-invalid (a category stripped below the minimum).
-    const crossInvalidB = { ...PHASE_B, actions: PHASE_B.actions.filter((a) => a.category !== "utility") };
+    const crossInvalidB = {
+      ...PHASE_B,
+      actions: PHASE_B.actions.map((action, index) =>
+        index === 0 ? { ...action, requiresSkill: "no_such_skill" } : action
+      ),
+    };
     const { router, counts } = phasedRouter({ a: [J(PHASE_A)], b: [J(crossInvalidB), J(PHASE_B)] });
     const out = await generateStorySchema(router, input);
     expect(validateStorySchema(out)).toEqual([]);
-    expect(counts.b).toBe(2); // one cross-validation repass
+    expect(counts.b).toBe(6); // three bounded calls per pass, one cross-validation repass
   });
 
   it("throws ModelOutputError naming the bootstrapper after exhausting schema repairs", async () => {
-    const crossInvalidB = { ...PHASE_B, actions: PHASE_B.actions.filter((a) => a.category !== "utility") };
+    const crossInvalidB = {
+      ...PHASE_B,
+      actions: PHASE_B.actions.map((action, index) =>
+        index === 0 ? { ...action, requiresSkill: "no_such_skill" } : action
+      ),
+    };
     const { router } = phasedRouter({ a: [J(PHASE_A)], b: [J(crossInvalidB)] }); // never fixes it
     await expect(generateStorySchema(router, input, { maxSchemaRepairs: 2 })).rejects.toMatchObject({
       name: "ModelOutputError",
@@ -224,10 +437,15 @@ describe("generateStorySchema — repair loop", () => {
   });
 
   it("wraps the cross-validation errors into the thrown message", async () => {
-    const crossInvalidB = { ...PHASE_B, actions: PHASE_B.actions.filter((a) => a.category !== "utility") };
+    const crossInvalidB = {
+      ...PHASE_B,
+      actions: PHASE_B.actions.map((action, index) =>
+        index === 0 ? { ...action, requiresSkill: "no_such_skill" } : action
+      ),
+    };
     const { router } = phasedRouter({ a: [J(PHASE_A)], b: [J(crossInvalidB)] });
     const err = await generateStorySchema(router, input, { maxSchemaRepairs: 1 }).catch((e) => e as ModelOutputError);
     expect(err).toBeInstanceOf(ModelOutputError);
-    expect((err as ModelOutputError).message).toMatch(/Category "utility"|cross-validation/i);
+    expect((err as ModelOutputError).message).toMatch(/no_such_skill|cross-validation/i);
   });
 });

@@ -13,12 +13,14 @@ export {
   type PhaseB,
   type BootstrapInput,
   type BootstrapOptions,
+  type BootstrapPhase,
 } from "./generate.js";
 export { validateStorySchema } from "./validate.js";
 export { deterministicRepair, formatValidationFeedback } from "./repair.js";
 export {
   freezeSchema,
   bootstrapStory,
+  createNoStatsSchema,
   UnfreezableSchemaError,
   type BootstrapResult,
   type PlayerSeed,
@@ -28,9 +30,12 @@ export {
   instantiateFromTemplate,
   instantiateGeneric,
 } from "./instantiate.js";
+export { changeStoryStatMode, type ChangeStatModeOptions } from "./switchMode.js";
 export {
   PHASE_A_SYSTEM,
-  PHASE_B_SYSTEM,
+  PHASE_B_ACTION_BATCH_SYSTEM,
+  PHASE_B_FOUNDATION_SYSTEM,
   buildPhaseAUser,
-  buildPhaseBUser,
+  buildPhaseBActionBatchUser,
+  buildPhaseBFoundationUser,
 } from "./prompts.js";

@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:#14100C;color:#EADCBE;font-family:"IBM Plex Sans",sans-serif;-webkit-font-smoothing:antialiased}
+  ::selection{background:rgba(217,166,72,.25)}
+  a{color:#D9A648;text-decoration:none}a:hover{color:#F2C56B}
+  ::-webkit-scrollbar{width:11px}::-webkit-scrollbar-thumb{background:#382E21;border-radius:6px;border:3px solid #14100C}
+  .dsd-die{width:40px;height:40px;border-radius:8px;background:#14100C;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:17px}
+</style>
+</helmet>
+<div style="min-height:100vh;width:100vw;overflow-y:auto;padding:0 0 80px">
+  <div style="max-width:1080px;margin:0 auto;padding:40px 34px 0">
+
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:6px">
+      <div style="width:52px;height:52px;border-radius:12px;background:linear-gradient(145deg,#2C241B,#1B1611);border:1px solid rgba(216,170,90,.3);display:flex;align-items:center;justify-content:center;font-family:'Cormorant Garamond',serif;font-weight:700;font-size:28px;color:#D9A648">M</div>
+      <div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.2em;color:#74B8AE">MIDNIGHT TAVERN · V7</div>
+        <h1 style="font-family:'Cormorant Garamond',serif;font-size:36px;font-weight:600;color:#EADCBE;margin:2px 0 0;line-height:1.05">Design system — V7 delta</h1>
+      </div>
+    </div>
+    <p style="font-size:14px;color:#A08D6C;line-height:1.7;max-width:660px;margin:12px 0 8px">Only the components that are <b style="color:#D6C9AB">new or changed</b> in V7. Tokens, type, the two registers (serif/brass STORY · mono/teal SYSTEM), buttons, and unchanged V6 components live in the base <a href="DesignSystem.dc.html">Design System</a>. Each card lists the states a build must cover.</p>
+
+    <sc-for list="{{ sections }}" as="s" hint-placeholder-count="8">
+      <div style="margin-top:30px">
+        <div style="display:flex;align-items:baseline;gap:11px;margin-bottom:4px"><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.12em;color:#74B8AE">{{ s.tag }}</span><h2 style="font-family:'Cormorant Garamond',serif;font-size:24px;font-weight:600;color:#EADCBE;margin:0">{{ s.title }}</h2><span style="{{ s.changeStyle }}">{{ s.change }}</span></div>
+        <p style="font-size:13px;color:#A08D6C;line-height:1.6;max-width:660px;margin:2px 0 12px">{{ s.desc }}</p>
+      </div>
+    </sc-for>
+
+    <!-- 1 · ATTRIBUTE SCALE -->
+    <div style="margin-top:-6px"></div>
+
+  </div>
+
+  <!-- Rich component cards -->
+  <div style="max-width:1080px;margin:0 auto;padding:0 34px">
+
+    <!-- ATTRIBUTE ROW -->
+    <div style="{{ cardStyle }}">
+      <div style="{{ cardHeadStyle }}"><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.12em;color:#74B8AE">AttributeRow</span><span style="{{ chgStyle }}">CHANGED · 1–10 → 1–20</span></div>
+      <div style="padding:18px">
+        <p style="font-size:12.5px;color:#A08D6C;line-height:1.6;margin:0 0 14px;max-width:640px">Scores use a <b style="color:#D6C9AB">1–20</b> scale; the modifier is derived by one formula — <span style="font-family:'IBM Plex Mono',monospace;color:#74B8AE">mod = ⌊(score−10)/2⌋</span> — and shown beside the score. Scores above 20 appear only where the card establishes superhuman capability. The usual number of attributes per system is 3–6. An explicit card-defined 0 renders as a locked/unavailable state with its reason.</p>
+        <div style="display:flex;flex-wrap:wrap;gap:10px">
+          <sc-for list="{{ attrExamples }}" as="a" hint-placeholder-count="5">
+            <div style="background:#231C15;border:1px solid #382E21;border-radius:8px;padding:9px 13px;display:flex;align-items:center;gap:10px;font-family:'IBM Plex Mono',monospace"><span style="color:#A08D6C;font-size:12px">{{ a.abbrev }}</span><span style="font-size:14px;color:{{ a.color }}">{{ a.score }}</span><span style="color:#74B8AE;font-size:13px">{{ a.mod }}</span></div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+
+    <!-- DM RULING ARTIFACT -->
+    <div style="{{ cardStyle }}">
+      <div style="{{ cardHeadStyle }}"><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.12em;color:#74B8AE">RulingArtifact → “DM Ruling”</span><span style="{{ chgStyle }}">CHANGED · above prose · new roll modes</span></div>
+      <div style="padding:18px">
+        <p style="font-size:12.5px;color:#A08D6C;line-height:1.6;margin:0 0 14px;max-width:640px">The ruling is labelled <b style="color:#D6C9AB">DM RULING</b> and always renders <b style="color:#D6C9AB">above</b> the narrator prose it governs — prose never appears to be the authority for a mechanical result. New: advantage / disadvantage / cancellation dice, opposed dual-mode, base→effective difficulty, XP, and loot. Collapsed by default with a full-detail expansion (action/target/attribute/skill definitions).</p>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px">
+
+          <!-- advantage -->
+          <div style="background:linear-gradient(160deg,#231C15,#1B1611);border:1px solid #8FB57344;border-left:3px solid #8FB573;border-radius:10px;padding:13px">
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.16em;color:#74B8AE;margin-bottom:8px">DM RULING · advantage</div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <div class="dsd-die" style="border:1px solid #4a3d2c;color:#6E5F49;opacity:.55;text-decoration:line-through;font-size:14px;width:34px;height:34px">9</div>
+              <div class="dsd-die" style="border:1px solid #8FB573;color:#8FB573;font-size:14px;width:34px;height:34px">17</div>
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#D6C9AB">d20 <b style="color:#8FB573">17</b> +2 +5 = <b style="color:#8FB573">24</b></div>
+            </div>
+            <div style="font-size:11px;color:#8FB573;margin-top:7px">▲ Target is unaware (advantage)</div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#6E5F49;margin-top:3px">vs DC 15 → 17 (Hard)</div>
+          </div>
+
+          <!-- disadvantage -->
+          <div style="background:linear-gradient(160deg,#231C15,#1B1611);border:1px solid #C96F5744;border-left:3px solid #C96F57;border-radius:10px;padding:13px">
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.16em;color:#74B8AE;margin-bottom:8px">DM RULING · disadvantage</div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <div class="dsd-die" style="border:1px solid #C96F57;color:#C96F57;font-size:14px;width:34px;height:34px">6</div>
+              <div class="dsd-die" style="border:1px solid #4a3d2c;color:#6E5F49;opacity:.55;text-decoration:line-through;font-size:14px;width:34px;height:34px">14</div>
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#D6C9AB">d20 <b style="color:#C96F57">6</b> +2 +5 = <b style="color:#C96F57">13</b></div>
+            </div>
+            <div style="font-size:11px;color:#C96F57;margin-top:7px">▼ Exhausted · Wounded (disadvantage)</div>
+          </div>
+
+          <!-- cancellation -->
+          <div style="background:linear-gradient(160deg,#231C15,#1B1611);border:1px solid #74B8AE44;border-left:3px solid #74B8AE;border-radius:10px;padding:13px">
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.16em;color:#74B8AE;margin-bottom:8px">DM RULING · cancelled → normal</div>
+            <div style="display:flex;align-items:center;gap:8px"><div class="dsd-die" style="border:1px solid #74B8AE;color:#74B8AE;font-size:14px;width:34px;height:34px">15</div><div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#D6C9AB">d20 15 +7 = 22</div></div>
+            <div style="font-size:11px;color:#8FB573;margin-top:7px">▲ Unaware <span style="color:#6E5F49">and</span> <span style="color:#C96F57">▼ Wounded</span></div>
+            <div style="font-size:11px;color:#6E5F49;font-style:italic;margin-top:2px">cancel to a single die</div>
+          </div>
+
+          <!-- loot / XP -->
+          <div style="background:linear-gradient(160deg,#231C15,#1B1611);border:1px solid #F5CE6E44;border-left:3px solid #F5CE6E;border-radius:10px;padding:13px">
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.16em;color:#74B8AE;margin-bottom:8px">DM RULING · XP + loot</div>
+            <div style="font-size:12.5px;color:#F5CE6E;display:flex;align-items:center;gap:6px">✦ Blade +20 XP <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;border:1px solid #F5CE6E66;border-radius:3px;padding:1px 5px">RANK UP → MASTER</span></div>
+            <div style="margin-top:8px;padding-top:8px;border-top:1px solid #382E21;display:flex;align-items:center;gap:8px"><span style="color:#B5442F">❖</span><span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#74B8AE">LOOT</span><span style="font-family:'Cormorant Garamond',serif;font-weight:600;color:#EADCBE">Choirbreaker</span><span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:#B5442F;border:1px solid #B5442F66;border-radius:3px;padding:1px 6px;box-shadow:0 0 8px #B5442F55">★ MYTHICAL</span></div>
+          </div>
+        </div>
+        <div style="font-size:11px;color:#6E5F49;line-height:1.6;margin-top:12px">States: normal · advantage · disadvantage · cancellation · opposed (per-side mode) · denied (no die, dashed ⊘) · action-budget-exceeded · classifier-unavailable · failed · successful · critical. Difficulty shows base→effective DC + preset; damage multiplier in the effects line (e.g. <span style="font-family:'IBM Plex Mono',monospace;color:#C96F57">8 dmg ×1.3 Hard</span>).</div>
+      </div>
+    </div>
+
+    <!-- ITEM TIERS + LOADOUT -->
+    <div style="{{ cardStyle }}">
+      <div style="{{ cardHeadStyle }}"><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.12em;color:#74B8AE">ItemTier · Loadout</span><span style="{{ newStyle }}">NEW</span></div>
+      <div style="padding:18px">
+        <p style="font-size:12.5px;color:#A08D6C;line-height:1.6;margin:0 0 12px;max-width:640px">Five tiers, legible without color (distinct glyph + full name). <b style="color:#B5442F">Mythical</b> is god-tier and never looks like ordinary loot. Seven equipment slots; a two-handed item occupies Primary + Secondary; inventory stays visually distinct from the equipped loadout so a stored item can't appear to grant effects.</p>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px">
+          <sc-for list="{{ tiers }}" as="t" hint-placeholder-count="5"><span style="{{ t.style }}">{{ t.mark }} {{ t.name }}</span></sc-for>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px">
+          <sc-for list="{{ slots }}" as="sl" hint-placeholder-count="7"><div style="background:#231C15;border:1px solid #382E21;border-radius:8px;padding:9px 11px"><div style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:#6E5F49;letter-spacing:.08em">{{ sl.slot }}</div><div style="font-size:12px;color:#D6C9AB;margin-top:3px">{{ sl.item }}</div></div></sc-for>
+        </div>
+        <div style="font-size:11px;color:#6E5F49;line-height:1.6;margin-top:12px">Slot states: empty · compatible-available · equipped · compare/replace · two-handed occupation · requirement-not-met · incompatible · unique-already-equipped · copies-owned · effect-active · effect-conditional · recently-gained · recently-changed · fallen (locked) · No Stats (no equipment UI).</div>
+      </div>
+    </div>
+
+    <!-- COMPOSER ADDITIONS -->
+    <div style="{{ cardStyle }}">
+      <div style="{{ cardHeadStyle }}"><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.12em;color:#74B8AE">Composer · Suggestions · Feedback</span><span style="{{ newStyle }}">NEW</span></div>
+      <div style="padding:18px">
+        <div style="display:flex;align-items:flex-end;gap:9px;background:#14100C;border:1px solid rgba(216,170,90,.25);border-radius:10px;padding:9px 11px;max-width:520px">
+          <div style="width:32px;height:32px;border-radius:7px;background:#231C15;border:1px solid #4E827B;color:#74B8AE;display:flex;align-items:center;justify-content:center">✦</div>
+          <div style="flex:1;color:#6E5F49;font-family:'Source Serif 4',serif;font-size:15px;padding:5px 0">What does Kestrel do?</div>
+          <div style="background:#D9A648;color:#1B1611;border-radius:7px;padding:8px 15px;font-weight:600;font-size:13px">Send</div>
+        </div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#74B8AE;margin-top:7px">Up to 2 actions this turn</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#74B8AE">FEEDBACK CHIPS →</span>
+          <sc-for list="{{ fbChips }}" as="c" hint-placeholder-count="5"><span style="font-size:11.5px;padding:5px 11px;border-radius:14px;border:1px solid #4E827B55;background:#231C15;color:#74B8AE">{{ c }}</span></sc-for>
+        </div>
+        <div style="font-size:11px;color:#6E5F49;line-height:1.6;margin-top:12px">Contextual suggestions: 5–6 context-aware entries (action / move / dialogue); selecting inserts into the composer but never sends; states loading · ready · empty · failure; respects the action budget in Full Stats. Overflow: accepted vs refused actions shown; refused get no roll/XP/loot. Regenerate-with-feedback: preset chips + 300-char free text; the fixed ruling and mechanics never change.</div>
+      </div>
+    </div>
+
+    <!-- STREAMING TERMINAL STATES -->
+    <div style="{{ cardStyle }}">
+      <div style="{{ cardHeadStyle }}"><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.12em;color:#74B8AE">StreamingIndicator</span><span style="{{ chgStyle }}">CHANGED · terminal states</span></div>
+      <div style="padding:18px;display:flex;flex-direction:column;gap:9px">
+        <sc-for list="{{ streamStates }}" as="s" hint-placeholder-count="7">
+          <div style="display:flex;align-items:center;gap:10px;font-size:13.5px"><span style="font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:.06em;color:{{ s.color }};border:1px solid {{ s.color }}55;border-radius:3px;padding:1px 7px;flex:0 0 96px;text-align:center">{{ s.tag }}</span><span style="font-family:'Source Serif 4',serif;font-style:italic;color:{{ s.color }}">{{ s.text }}</span></div>
+        </sc-for>
+        <div style="font-size:11px;color:#6E5F49;line-height:1.6;margin-top:4px">The composer re-enables only when the operation is terminal (idle / error / cancelled / timed-out). Stale-operation and app-restart recovery presented in place, without navigating away.</div>
+      </div>
+    </div>
+
+    <!-- CLASSIFIER RECOVERY -->
+    <div style="{{ cardStyle }}">
+      <div style="{{ cardHeadStyle }}"><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.12em;color:#74B8AE">ClassifierRecovery</span><span style="{{ newStyle }}">NEW</span></div>
+      <div style="padding:18px">
+        <p style="font-size:12.5px;color:#A08D6C;line-height:1.6;margin:0 0 12px;max-width:640px">When mechanics can't be classified, the player's turn stays visible and a mechanical attempt is never shown as a successful ruled action. Distinct states, each with accurate copy + recovery action:</p>
+        <div style="display:flex;flex-wrap:wrap;gap:8px">
+          <sc-for list="{{ classifierStates }}" as="c" hint-placeholder-count="8"><span style="background:#231C15;border:1px dashed #6E5F49;border-radius:6px;padding:6px 11px;font-size:11.5px;color:#A08D6C">{{ c }}</span></sc-for>
+        </div>
+      </div>
+    </div>
+
+    <!-- JOURNAL ENTRY -->
+    <div style="{{ cardStyle }}">
+      <div style="{{ cardHeadStyle }}"><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.12em;color:#74B8AE">JournalEntry</span><span style="{{ newStyle }}">NEW</span></div>
+      <div style="padding:18px">
+        <div style="background:#1B1611;border:1px solid #382E21;border-left:3px solid #74B8AE;border-radius:9px;padding:10px 13px;display:flex;align-items:center;gap:11px">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:#74B8AE;border:1px solid #74B8AE55;border-radius:3px;padding:1px 6px">ROLL</span>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#6E5F49">CH3·T8</span>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#D6C9AB">Kestrel — Strike: d20 (17/9̶) +2 +5 = 24 vs DC 17 (Hard) → SUCCESS</span>
+        </div>
+        <div style="font-size:11px;color:#6E5F49;line-height:1.6;margin-top:12px">Story-scoped Journal tab. Grouped by chapter; filters (Rolls · Denied · Progression · Items · Milestones) + actor; expandable full math; export Markdown / CSV. Denied entries visually distinct (dashed) from failed rolls. Chapter / arc / rulebook-version boundaries rendered as bands. States: empty · loading · filtered-empty · load-more · export-success · export-error. No Stats has no journal surface.</div>
+      </div>
+    </div>
+
+    <!-- DIFFICULTY + BUDGET -->
+    <div style="{{ cardStyle }}">
+      <div style="{{ cardHeadStyle }}"><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.12em;color:#74B8AE">DifficultyPicker · ActionBudget</span><span style="{{ newStyle }}">NEW</span></div>
+      <div style="padding:18px;display:flex;gap:18px;flex-wrap:wrap">
+        <div style="flex:1;min-width:240px">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#74B8AE;margin-bottom:8px">DIFFICULTY · Standard default</div>
+          <sc-for list="{{ difficulties }}" as="d" hint-placeholder-count="5"><div style="display:flex;align-items:center;gap:9px;padding:6px 0"><span style="width:13px;height:13px;border-radius:50%;border:2px solid {{ d.on }};background:{{ d.fill }}"></span><span style="font-size:13px;color:#D6C9AB">{{ d.name }}</span><span style="flex:1"></span><span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#74B8AE">{{ d.meta }}</span></div></sc-for>
+        </div>
+        <div style="flex:1;min-width:240px">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#74B8AE;margin-bottom:8px">ACTIONS PER TURN · 1–5, default 2</div>
+          <div style="display:inline-flex;align-items:center;gap:4px;background:#231C15;border:1px solid #382E21;border-radius:9px;padding:5px"><span style="color:#D9A648;font-size:18px;width:28px;text-align:center">−</span><span style="font-family:'IBM Plex Mono',monospace;font-size:18px;font-weight:600;color:#EADCBE;width:34px;text-align:center">2</span><span style="color:#D9A648;font-size:18px;width:28px;text-align:center">+</span></div>
+          <div style="font-size:11px;color:#6E5F49;line-height:1.6;margin-top:10px">Difficulty applies from the next turn, never retroactive, and doesn't affect opposed-check DCs. Action budget is part of the sealed rulebook — read-only in Story Settings; changing it needs rulebook regeneration.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PROVIDER / RECOMMENDATION BADGES -->
+    <div style="{{ cardStyle }}">
+      <div style="{{ cardHeadStyle }}"><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.12em;color:#74B8AE">PrimaryProvider · RecommendationBadges</span><span style="{{ chgStyle }}">CHANGED · data-driven</span></div>
+      <div style="padding:18px;display:flex;flex-wrap:wrap;gap:10px;align-items:center">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:#D9A648;border:1px solid #D9A648;border-radius:4px;padding:2px 7px;letter-spacing:.06em">PRIMARY</span>
+        <span style="font-size:10.5px;color:#74B8AE;background:transparent;border:1px solid #4E827B;border-radius:6px;padding:3px 9px">Make primary</span>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:#8FB573;border:1px solid #8FB57355;border-radius:3px;padding:1px 6px">Recommended</span>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:#C9A15a;border:1px solid #6E5F49;border-radius:3px;padding:1px 6px">Custom</span>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:#C9A15a;border:1px solid #6E5F4955;border-radius:3px;padding:1px 6px">◈ Outdated recommendation</span>
+        <div style="width:100%;font-size:11px;color:#6E5F49;line-height:1.6;margin-top:4px">Exactly one Primary badge when valid providers exist; Make-primary on others; saving another provider never changes Primary; removing Primary needs an explicit replacement. Recommendation metadata (recommended-for-role, parameter summary, Reset-to-recommended, outdated/unavailable) is data-driven and kept separate from the live provider inventory — no model names or values are chosen in the design.</div>
+      </div>
+    </div>
+
+    <div style="height:30px"></div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  renderVals(){
+    const cardStyle='background:#181410;border:1px solid #382E21;border-radius:13px;margin-top:16px;overflow:hidden';
+    const cardHeadStyle='display:flex;align-items:center;justify-content:space-between;padding:11px 16px;background:#1B1611;border-bottom:1px solid #382E21';
+    const chgStyle="font-family:'IBM Plex Mono',monospace;font-size:9px;color:#C9A15a;border:1px solid #6E5F49;border-radius:4px;padding:2px 7px;letter-spacing:.04em";
+    const newStyle="font-family:'IBM Plex Mono',monospace;font-size:9px;color:#8FB573;border:1px solid #8FB57355;border-radius:4px;padding:2px 7px;letter-spacing:.04em";
+    const TM={Common:{m:'◇',c:'#A08D6C'},Uncommon:{m:'◈',c:'#8FB573'},Rare:{m:'❖',c:'#74B8AE'},Legendary:{m:'★',c:'#D9A648'},Mythical:{m:'✷',c:'#B5442F'}};
+    return {
+      cardStyle, cardHeadStyle, chgStyle, newStyle,
+      sections:[{tag:'OVERVIEW',title:'What changed in V7',change:'',changeStyle:'display:none',
+        desc:'Nine component families are new or revised: the 1–20 attribute scale, the DM Ruling artifact (now authoritative and above prose, with advantage/disadvantage/difficulty/XP/loot), five item tiers and a seven-slot loadout, contextual suggestions, regenerate-with-feedback, streaming terminal states, classifier recovery, the Mechanical Journal, difficulty + action budget, and data-driven provider recommendations. Everything below is a spec of states, not a finished screen — see the prototypes for behavior.'}],
+      attrExamples:[
+        {abbrev:'—',score:'10',mod:'(+0)',color:'#D6C9AB'},
+        {abbrev:'—',score:'14',mod:'(+2)',color:'#D6C9AB'},
+        {abbrev:'—',score:'20',mod:'(+5)',color:'#D6C9AB'},
+        {abbrev:'card',score:'22',mod:'(+6)',color:'#D9A648'},
+        {abbrev:'NEN',score:'0',mod:'locked',color:'#6E5F49'},
+      ],
+      tiers:['Common','Uncommon','Rare','Legendary','Mythical'].map(name=>({name,mark:TM[name].m,style:`font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:${TM[name].c};border:1px solid ${TM[name].c}66;border-radius:4px;padding:4px 10px${name==='Mythical'?';box-shadow:0 0 8px '+TM[name].c+'55':''}`})),
+      slots:[['PRIMARY','Choirbreaker'],['SECONDARY','— two-handed —'],['HEAD','Warden Helm'],['BODY','Scout leathers'],['UTILITY','Climbing kit'],['ACCESSORY I','Warden Signet'],['ACCESSORY II','empty']].map(([slot,item])=>({slot,item})),
+      fbChips:['Shorter','More detail','More tension','Less flowery','Different take'],
+      streamStates:[
+        {tag:'THINKING',text:'The story is thinking',color:'#D9A648'},
+        {tag:'STREAMING',text:'The story continues…',color:'#D9A648'},
+        {tag:'SAVING',text:'Saving this turn…',color:'#74B8AE'},
+        {tag:'IDLE',text:'ready for your next turn',color:'#8FB573'},
+        {tag:'ERROR',text:'The telling failed to finish',color:'#C96F57'},
+        {tag:'CANCELLED',text:'You stopped this turn',color:'#8A8175'},
+        {tag:'TIMED OUT',text:'The response timed out',color:'#C9A15a'},
+      ],
+      classifierStates:['No content','Invalid response','Timeout / unavailable provider','Low confidence','Unresolved action','Unresolved target','Narration-only continuation','Successful retry'],
+      difficulties:[
+        {name:'Story',meta:'DC −2 · ×0.6',on:'#4a3d2c',fill:'transparent'},
+        {name:'Standard',meta:'DC ±0 · ×1.0',on:'#74B8AE',fill:'radial-gradient(circle,#74B8AE 42%,transparent 46%)'},
+        {name:'Hard',meta:'DC +2 · ×1.3',on:'#4a3d2c',fill:'transparent'},
+        {name:'Brutal',meta:'DC +4 · ×1.6',on:'#4a3d2c',fill:'transparent'},
+        {name:'Custom',meta:'your levers',on:'#4a3d2c',fill:'transparent'},
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

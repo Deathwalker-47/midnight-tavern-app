@@ -1,6 +1,6 @@
 /**
  * RoleMatrixRow — one row of the role→model matrix (Settings): a role glyph + name +
- * description, a model dropdown, and a fit badge (Recommended = green / Advanced = amber).
+ * description, separate provider/model dropdowns, and a fit badge.
  * The five roles come from the low-level plan (D9): Narrator, Classifier, Analyzer, Summarizer,
  * Bootstrapper. Presentational: options + selection + onChange are supplied by the caller.
  */
@@ -20,11 +20,16 @@ export interface RoleMatrixRowProps {
   /** Display name; defaults from the role. */
   name?: string;
   description: string;
+  providerOptions?: RoleModelOption[];
+  providerValue?: string;
+  onProviderChange?: (value: string) => void;
   options: RoleModelOption[];
   value: string;
   onChange: (value: string) => void;
   /** Fit of the currently-selected model for this role. */
   fit: RoleFit;
+  modelState?: "idle" | "loading" | "ready" | "error";
+  onRefreshModels?: () => void;
   disabled?: boolean;
   className?: string;
   style?: CSSProperties;
@@ -47,14 +52,32 @@ const ROLE_NAME: Record<ModelRole, string> = {
 };
 
 export function RoleMatrixRow(props: RoleMatrixRowProps): JSX.Element {
-  const { role, name = ROLE_NAME[role], description, options, value, onChange, fit, disabled = false, className, style } = props;
+  const {
+    role,
+    name = ROLE_NAME[role],
+    description,
+    providerOptions = [],
+    providerValue = "",
+    onProviderChange = () => {},
+    options,
+    value,
+    onChange,
+    fit,
+    modelState = "ready",
+    onRefreshModels,
+    disabled = false,
+    className,
+    style,
+  } = props;
   return (
     <div
       className={className}
       data-role={role}
       style={{
         display: "grid",
-        gridTemplateColumns: "1fr auto auto",
+        gridTemplateColumns: providerOptions.length > 0
+          ? "minmax(180px, 1fr) minmax(120px, 0.55fr) minmax(190px, 0.85fr) auto"
+          : "1fr auto auto",
         alignItems: "center",
         gap: 14,
         padding: "12px 0",
@@ -73,10 +96,34 @@ export function RoleMatrixRow(props: RoleMatrixRowProps): JSX.Element {
         </div>
       </div>
 
+      {providerOptions.length > 0 ? <select
+        value={providerValue}
+        onChange={(e) => onProviderChange(e.target.value)}
+        disabled={disabled}
+        aria-label={`${name} provider`}
+        style={{
+          fontFamily: "var(--font-mono)",
+          fontSize: 12,
+          color: "var(--ui-text)",
+          background: "var(--bg3-raised)",
+          border: "1px solid var(--hairline)",
+          borderRadius: "var(--radius-chip)",
+          padding: "6px 8px",
+          width: "100%",
+        }}
+      >
+        {providerOptions.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select> : null}
+
+      <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        disabled={disabled}
+        disabled={disabled || modelState === "loading" || options.length === 0}
         aria-label={`${name} model`}
         style={{
           fontFamily: "var(--font-mono)",
@@ -86,15 +133,31 @@ export function RoleMatrixRow(props: RoleMatrixRowProps): JSX.Element {
           border: "1px solid var(--hairline)",
           borderRadius: "var(--radius-chip)",
           padding: "6px 8px",
-          maxWidth: 220,
+          width: "100%",
+          minWidth: 0,
         }}
       >
+        {modelState === "loading" ? <option value="">Loading models…</option> : null}
+        {modelState !== "loading" && options.length === 0 ? <option value="">No models loaded</option> : null}
         {options.map((o) => (
           <option key={o.value} value={o.value}>
             {o.label}
           </option>
         ))}
       </select>
+      {onRefreshModels ? (
+        <button
+          type="button"
+          onClick={onRefreshModels}
+          disabled={disabled || modelState === "loading"}
+          aria-label={`Refresh ${name} models`}
+          title="Refresh live models"
+          style={{ background: "transparent", border: 0, color: "var(--teal)", cursor: "pointer", padding: 4 }}
+        >
+          ↻
+        </button>
+      ) : null}
+      </div>
 
       <Chip tone={fit === "recommended" ? "recommended" : "advanced"}>
         {fit === "recommended" ? "RECOMMENDED" : "ADVANCED"}

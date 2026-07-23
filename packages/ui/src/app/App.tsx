@@ -21,7 +21,7 @@ import {
 } from "./router.js";
 import { registry } from "../screens/registry.js";
 import { useStoriesStore } from "../state/storiesStore.js";
-import { useSettingsStore } from "../state/settingsStore.js";
+import { setupIsComplete, useSettingsStore } from "../state/settingsStore.js";
 import { useUiStore, bindReducedMotion } from "../state/uiStore.js";
 import { getBridge } from "../bridge/core.js";
 
@@ -60,6 +60,9 @@ export function App() {
   const roleMap = useSettingsStore((s) => s.roleMap);
   const trial = useSettingsStore((s) => s.trial);
   const license = useSettingsStore((s) => s.license);
+  const settingsLoaded = useSettingsStore((s) => s.loaded);
+  const setupState = useSettingsStore((s) => s.setupState);
+  const setupComplete = setupIsComplete(setupState);
 
   // One-time app wiring: browser history ↔ router, reduced-motion, and initial data loads.
   useEffect(() => {
@@ -81,21 +84,57 @@ export function App() {
     }
   }, [route, params.storyId, current?.id, openStory]);
 
+  useEffect(() => {
+    if (!settingsLoaded || setupComplete || route === "setup") return;
+    const modelDependent =
+      route === "wizard" ||
+      STORY_ROUTES.includes(route) ||
+      (route === "blueprint" && !params.storyId);
+    if (modelDependent || (route === "library" && !setupState.dismissed)) {
+      navigate("setup", {
+        ...(modelDependent ? { returnTo: route, setupReason: "models-required" } : {}),
+        ...(params.storyId ? { storyId: params.storyId } : {}),
+      });
+    }
+  }, [settingsLoaded, setupComplete, setupState.dismissed, route, params.storyId, navigate]);
+
   const Screen = registry[route];
-  const storyOpen = STORY_ROUTES.includes(route) && !!current;
+  const activeStoryId = params.storyId ?? current?.id;
+  const storyOpen = STORY_ROUTES.includes(route) && !!activeStoryId;
 
   return (
     <div style={styles.app}>
-      <Rail route={route} navigate={navigate} storyId={params.storyId} roleModel={roleMap?.narrator.model} trialDays={trial?.daysRemaining} licensed={license.status === "valid"} />
+      <Rail route={route} navigate={navigate} storyId={activeStoryId} roleModel={roleMap?.narrator.model} trialDays={trial?.daysRemaining} licensed={license.status === "valid"} />
       <div style={styles.mainColumn}>
-        <Header route={route} params={params} navigate={navigate} storyOpen={storyOpen} />
+        <Header
+          route={route}
+          params={activeStoryId ? { ...params, storyId: activeStoryId } : params}
+          navigate={navigate}
+          storyOpen={storyOpen}
+        />
+        {!setupComplete && route !== "setup" ? <SetupBanner navigate={navigate} /> : null}
         <main style={styles.main}>
           <Suspense fallback={<ScreenFallback />}>
-            <Screen storyId={params.storyId} />
+            <Screen storyId={activeStoryId} />
           </Suspense>
         </main>
       </div>
       <ToastLayer />
+    </div>
+  );
+}
+
+function SetupBanner(props: { navigate: (route: Route, params?: RouteParams) => void }): JSX.Element {
+  return (
+    <div style={styles.setupBanner} role="status">
+      <div>
+        <strong style={{ color: "var(--ui-text)" }}>Connect a model provider to start creating.</strong>
+        <span style={{ marginLeft: 8 }}>Browsing and card import remain available.</span>
+      </div>
+      <div style={{ display: "flex", gap: 8 }}>
+        <button type="button" style={styles.setupLink} onClick={() => props.navigate("settings")}>Provider settings</button>
+        <button type="button" style={styles.setupButton} onClick={() => props.navigate("setup")}>Continue setup →</button>
+      </div>
     </div>
   );
 }
@@ -239,6 +278,7 @@ function chapterLabelFor(messageCount: number): string {
 function screenTitle(route: Route): string {
   const map: Record<Route, string> = {
     library: "Library",
+    setup: "Connect models",
     play: "Play",
     overview: "Overview",
     characters: "Characters",
@@ -250,7 +290,7 @@ function screenTitle(route: Route): string {
     personas: "Personas",
     cardcreator: "Card Creator",
     lorebook: "Lorebook",
-    wizard: "Setup",
+    wizard: "New story",
     designsystem: "Design System",
   };
   return map[route];
@@ -401,6 +441,35 @@ const styles: Record<string, CSSProperties> = {
   },
   subTabActive: { color: "var(--prose)", fontWeight: 600, borderBottom: "2px solid var(--brass)" },
   main: { flex: 1, minHeight: 0, overflow: "auto" },
+  setupBanner: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 16,
+    padding: "10px 18px",
+    background: "color-mix(in srgb, var(--brass) 10%, var(--bg1-panel))",
+    borderBottom: "1px solid var(--brass)",
+    color: "var(--secondary)",
+    fontFamily: "var(--font-ui)",
+    fontSize: 12.5,
+  },
+  setupLink: {
+    color: "var(--teal)",
+    background: "transparent",
+    border: 0,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+  },
+  setupButton: {
+    color: "var(--bg0-ground)",
+    background: "var(--brass)",
+    border: 0,
+    borderRadius: "var(--radius-chip)",
+    cursor: "pointer",
+    fontWeight: 700,
+    padding: "7px 10px",
+    whiteSpace: "nowrap",
+  },
   fallback: { display: "flex", alignItems: "center", justifyContent: "center", height: "100%" },
   fallbackText: { color: "var(--muted)", fontSize: 12, letterSpacing: "0.08em" },
   toastLayer: {

@@ -21,6 +21,7 @@ import type {
   ItemDef,
   StorySchema,
 } from "../types/index.js";
+import { scoreToMod } from "../engine/attributes.js";
 
 /** An outgoing relationship edge: this character → someone (name resolved for display). §7. */
 export interface DossierOutgoingEdge {
@@ -88,6 +89,14 @@ export interface Dossier {
     toPlayer?: { trust: number; power: number; feeling?: string };
   };
   sheet: {
+    attributes: {
+      attributeId: string;
+      name: string;
+      abbrev: string;
+      score: number;
+      modifier: number;
+      description: string;
+    }[];
     resources: { id: string; label: string; current: number; max: number }[];
     skills: DossierSkill[];
     inventory: { itemId: string; name: string; qty: number; kind: string }[];
@@ -108,6 +117,17 @@ function whatTheyAreFrom(soft: CharacterSoftState | undefined): string {
 /** Project the hard sheet (resources/skills/inventory), resolving display names via the schema. */
 function buildSheet(schema: StorySchema, hard: CharacterHardState, itemsById: Map<string, ItemDef>) {
   const skillDefs = new Map(schema.skills.map((s) => [s.id, s]));
+  const attributes: Dossier["sheet"]["attributes"] = schema.attributes.map((definition) => {
+    const score = hard.attributes[definition.id] ?? definition.defaultScore;
+    return {
+      attributeId: definition.id,
+      name: definition.name,
+      abbrev: definition.abbrev,
+      score,
+      modifier: scoreToMod(score),
+      description: definition.description,
+    };
+  });
   const resources: Dossier["sheet"]["resources"] = [];
   for (const def of schema.resources) {
     const state = hard.resources[def.id];
@@ -131,7 +151,7 @@ function buildSheet(schema: StorySchema, hard: CharacterHardState, itemsById: Ma
       const def = itemsById.get(e.itemId);
       return { itemId: e.itemId, name: def?.name ?? e.itemId, qty: e.qty, kind: def?.kind ?? "misc" };
     });
-  return { resources, skills, inventory, alive: hard.alive };
+  return { attributes, resources, skills, inventory, alive: hard.alive };
 }
 
 /**

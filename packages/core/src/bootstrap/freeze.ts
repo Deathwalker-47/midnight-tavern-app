@@ -50,6 +50,26 @@ export interface PlayerSeed {
   characterId?: string;
 }
 
+/** Build a sealed, entirely local No Stats rulebook. No model role participates. */
+export function createNoStatsSchema(input: BootstrapInput): StorySchema {
+  return {
+    schemaVersion: 1,
+    storyId: input.storyId,
+    title: input.title,
+    premise: input.premise,
+    statMode: "none",
+    attributes: [],
+    resources: [],
+    skills: [],
+    items: [],
+    tiers: [],
+    actions: [],
+    startingState: { attributes: {}, resources: {}, skills: [], inventory: [] },
+    npcTemplates: [],
+    locked: true,
+  };
+}
+
 /**
  * Full "create story" flow: generate a schema from the premise, freeze it, and persist the
  * story plus the player's hard state atomically. Returns the stored records' ids.
@@ -61,20 +81,27 @@ export async function bootstrapStory(
   player: PlayerSeed,
   options: BootstrapOptions = {}
 ): Promise<BootstrapResult> {
-  const generated = await generateStorySchema(router, input, options);
-  const schema = freezeSchema(generated);
+  let installedSchema: StorySchema;
+  if (input.statMode === "none") {
+    installedSchema = createNoStatsSchema(input);
+  } else {
+    const generated = await generateStorySchema(router, { ...input, statMode: "full" }, options);
+    options.onProgress?.("freeze");
+    installedSchema = freezeSchema(generated);
+  }
 
   const story: StoryRecord = {
     id: input.storyId,
     title: input.title,
     createdAt: Date.now(),
-    schema,
+    schema: installedSchema,
     locked: true,
   };
 
   const playerCharacterId = player.characterId ?? randomUUID();
-  const hard = instantiatePlayer(schema, playerCharacterId);
+  const hard = instantiatePlayer(installedSchema, playerCharacterId);
 
+  options.onProgress?.("install");
   await store.transaction(async () => {
     await store.stories.insert(story);
     await store.characters.insert({

@@ -11,6 +11,11 @@
  * structured-call layer and tests — can inject canned config without a live database.
  */
 import { z } from "zod";
+import {
+  NOOP_DIAGNOSTIC_LOGGER,
+  type DiagnosticData,
+  type DiagnosticLogger,
+} from "../observability/logger.js";
 import type { ChatMessage, ChatRequest, ChatResponse, FetchLike, ProviderConfig, StreamHandler } from "./providers/types.js";
 import { makeProvider, PROVIDER_IDS, type ProviderId } from "./providers/registry.js";
 import { DEFAULT_ROLE_MAP, ProviderIdSchema, type Role, type RoleBinding, type RoleMap } from "./roles.js";
@@ -66,6 +71,18 @@ export class MissingCredentialsError extends Error {
   }
 }
 
+/** Raised when a provider request exceeds the router's bounded request window. */
+export class ProviderTimeoutError extends Error {
+  constructor(
+    readonly provider: ProviderId,
+    readonly model: string,
+    readonly timeoutMs: number
+  ) {
+    super(`The ${provider} request timed out after ${Math.round(timeoutMs / 1_000)} seconds. Try again or choose another model.`);
+    this.name = "ProviderTimeoutError";
+  }
+}
+
 export interface Router {
   /** The binding backing a role (provider, model, samplers). */
   bindingFor(role: Role): RoleBinding;
@@ -73,7 +90,7 @@ export interface Router {
   complete(
     role: Role,
     prompt: RolePrompt,
-    opts?: { jsonMode?: boolean; signal?: AbortSignal }
+    opts?: { jsonMode?: boolean; signal?: AbortSignal; maxTokens?: number }
   ): Promise<ChatResponse>;
   /** Streaming completion — intended for the narrator role only. */
   stream(
@@ -88,6 +105,69 @@ export interface RouterDeps {
   roleMap?: RoleMap;
   providerConfigs: ProviderConfigs;
   fetchImpl?: FetchLike;
+  /** Local diagnostic sink. Request bodies, prompts, responses, and credentials are never passed. */
+  logger?: DiagnosticLogger;
+  /** Per-provider request deadline. Defaults to 90 seconds. */
+  requestTimeoutMs?: number;
+}
+
+const DEFAULT_REQUEST_TIMEOUT_MS = 180_000;
+
+type RequestGuard = {
+  signal: AbortSignal;
+  run<T>(request: Promise<T>): Promise<T>;
+  timedOut(): boolean;
+  dispose(): void;
+};
+
+function cancellationError(signal: AbortSignal): Error {
+  if (signal.reason instanceof Error) return signal.reason;
+  const error = new Error("The request was cancelled.");
+  error.name = "AbortError";
+  return error;
+}
+
+function requestGuard(
+  parent: AbortSignal | undefined,
+  timeoutError: ProviderTimeoutError
+): RequestGuard {
+  const controller = new AbortController();
+  let didTimeout = false;
+  let rejectCancellation: (reason: Error) => void = () => undefined;
+  const cancellation = new Promise<never>((_resolve, reject) => {
+    rejectCancellation = reject;
+  });
+  const cancelFromParent = () => {
+    const error = parent ? cancellationError(parent) : cancellationError(controller.signal);
+    controller.abort(error);
+    rejectCancellation(error);
+  };
+  if (parent?.aborted) cancelFromParent();
+  else parent?.addEventListener("abort", cancelFromParent, { once: true });
+
+  const timer = setTimeout(() => {
+    didTimeout = true;
+    controller.abort(timeoutError);
+    rejectCancellation(timeoutError);
+  }, timeoutError.timeoutMs);
+
+  return {
+    signal: controller.signal,
+    run<T>(request: Promise<T>): Promise<T> {
+      return Promise.race([request, cancellation]);
+    },
+    timedOut: () => didTimeout,
+    dispose() {
+      clearTimeout(timer);
+      parent?.removeEventListener("abort", cancelFromParent);
+    },
+  };
+}
+
+function errorMetadata(error: unknown): DiagnosticData {
+  if (!(error instanceof Error)) return { errorName: "UnknownError" };
+  const status = "status" in error && typeof error.status === "number" ? error.status : undefined;
+  return { errorName: error.name, ...(status === undefined ? {} : { status }) };
 }
 
 function toMessages(prompt: RolePrompt): ChatMessage[] {
@@ -101,6 +181,17 @@ function toMessages(prompt: RolePrompt): ChatMessage[] {
 export function makeRouter(deps: RouterDeps): Router {
   const roleMap = deps.roleMap ?? DEFAULT_ROLE_MAP;
   const fetchImpl = deps.fetchImpl ?? fetch;
+  const logger = deps.logger ?? NOOP_DIAGNOSTIC_LOGGER;
+  const requestTimeoutMs = deps.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
+  let requestSequence = 0;
+
+  function log(level: keyof DiagnosticLogger, event: string, data?: DiagnosticData): void {
+    try {
+      logger[level](event, data);
+    } catch {
+      // Diagnostics must never alter application behavior.
+    }
+  }
 
   function resolve(role: Role): { binding: RoleBinding; config: ProviderConfig } {
     const binding = roleMap[role];
@@ -111,38 +202,108 @@ export function makeRouter(deps: RouterDeps): Router {
     return { binding, config };
   }
 
+  async function runProviderRequest(
+    operation: "complete" | "stream",
+    role: Role,
+    signal: AbortSignal | undefined,
+    jsonMode: boolean,
+    request: (binding: RoleBinding, config: ProviderConfig, signal: AbortSignal) => Promise<ChatResponse>
+  ): Promise<ChatResponse> {
+    const startedAt = Date.now();
+    const requestId = `llm-${startedAt.toString(36)}-${++requestSequence}`;
+    let binding: RoleBinding;
+    let config: ProviderConfig;
+    try {
+      ({ binding, config } = resolve(role));
+    } catch (error) {
+      log("error", "llm.request.rejected", { requestId, role, ...errorMetadata(error) });
+      throw error;
+    }
+
+    const timeoutError = new ProviderTimeoutError(binding.provider, binding.model, requestTimeoutMs);
+    const guard = requestGuard(signal, timeoutError);
+    const common = {
+      requestId,
+      operation,
+      role,
+      provider: binding.provider,
+      model: binding.model,
+      jsonMode,
+    };
+    log("info", "llm.request.started", common);
+    try {
+      const response = await guard.run(request(binding, config, guard.signal));
+      log("info", "llm.request.completed", {
+        ...common,
+        durationMs: Date.now() - startedAt,
+        responseChars: response.content.length,
+        ...(response.finishReason ? { finishReason: response.finishReason } : {}),
+        ...(response.usage?.completionTokens === undefined
+          ? {}
+          : { completionTokens: response.usage.completionTokens }),
+      });
+      return response;
+    } catch (error) {
+      log("error", "llm.request.failed", {
+        ...common,
+        durationMs: Date.now() - startedAt,
+        timedOut: guard.timedOut(),
+        cancelled: signal?.aborted ?? false,
+        ...errorMetadata(error),
+      });
+      throw error;
+    } finally {
+      guard.dispose();
+    }
+  }
+
   return {
     bindingFor(role) {
       return roleMap[role];
     },
 
     async complete(role, prompt, opts) {
-      const { binding, config } = resolve(role);
-      const provider = makeProvider(binding.provider, fetchImpl);
-      return provider.chat(
-        {
-          model: binding.model,
-          messages: toMessages(prompt),
-          ...samplerRequestFields(binding),
-          jsonMode: opts?.jsonMode ?? false,
-          signal: opts?.signal,
-        },
-        config
+      return runProviderRequest(
+        "complete",
+        role,
+        opts?.signal,
+        opts?.jsonMode ?? false,
+        async (binding, config, signal) => {
+          const provider = makeProvider(binding.provider, fetchImpl);
+          return provider.chat(
+            {
+              model: binding.model,
+              messages: toMessages(prompt),
+              ...samplerRequestFields(binding),
+              ...(opts?.maxTokens === undefined ? {} : { maxTokens: opts.maxTokens }),
+              jsonMode: opts?.jsonMode ?? false,
+              signal,
+            },
+            config
+          );
+        }
       );
     },
 
     async stream(role, prompt, onDelta, opts) {
-      const { binding, config } = resolve(role);
-      const provider = makeProvider(binding.provider, fetchImpl);
-      return provider.chatStream(
-        {
-          model: binding.model,
-          messages: toMessages(prompt),
-          ...samplerRequestFields(binding),
-          signal: opts?.signal,
-        },
-        config,
-        onDelta
+      return runProviderRequest(
+        "stream",
+        role,
+        opts?.signal,
+        false,
+        async (binding, config, signal) => {
+          const provider = makeProvider(binding.provider, fetchImpl);
+          return provider.chatStream(
+            {
+              model: binding.model,
+              messages: toMessages(prompt),
+              ...samplerRequestFields(binding),
+              signal,
+            },
+            config,
+            onDelta
+          );
+        }
       );
     },
   };

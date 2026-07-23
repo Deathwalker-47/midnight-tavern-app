@@ -4,15 +4,16 @@
  * bridge is never called: we set the shelf status by hand so tests are deterministic.
  */
 import { describe, it, expect, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { Library } from "../../src/screens/Library";
 import { useStoriesStore } from "../../src/state/storiesStore";
 import { useSettingsStore } from "../../src/state/settingsStore";
-import type { TrialStatus } from "../../src/bridge/core";
+import { makeMemoryBridge, setBridge, type TrialStatus } from "../../src/bridge/core";
 
 const expiredTrial: TrialStatus = { startedAt: 0, expiresAt: 1, active: false, daysRemaining: 0 };
 
 beforeEach(() => {
+  setBridge(makeMemoryBridge());
   useStoriesStore.setState({ stories: [], status: "ready", error: undefined });
   useSettingsStore.setState({ entitlement: { canCreateStory: true, via: "trial" } });
 });
@@ -43,8 +44,8 @@ describe("Library", () => {
     useStoriesStore.setState({
       status: "ready",
       stories: [
-        { id: "a", title: "Embers of the Silent Vale", createdAt: 2, locked: true, messageCount: 58 },
-        { id: "b", title: "The Tidewright’s Bargain", createdAt: 1, locked: true, messageCount: 34 },
+        { id: "a", title: "Embers of the Silent Vale", createdAt: 2, locked: true, messageCount: 58, statMode: "full", migrationPending: false },
+        { id: "b", title: "The Tidewright’s Bargain", createdAt: 1, locked: true, messageCount: 34, statMode: "none", migrationPending: false },
       ],
     });
     render(<Library />);
@@ -59,5 +60,32 @@ describe("Library", () => {
     render(<Library />);
     expect(screen.getByTestId("library-trial-banner")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /new story/i })).toBeDisabled();
+  });
+
+  it("opens a file picker and previews a parsed character card", async () => {
+    const bridge = makeMemoryBridge();
+    bridge.importCardFromBytes = async () => ({
+      spec: "Card format V3",
+      card: {} as never,
+      mapped: {
+        name: "Mara Voss",
+        premise: "A navigator follows a drowned constellation.",
+        identity: { traits: ["watchful"], likes: [], dislikes: [] },
+        openings: ["The tide clock stops."],
+        lorebook: [{ keys: ["tide clock"], content: "An illegal navigation engine.", enabled: true }],
+        blueprint: { name: "Mara Voss", firstMessage: "The tide clock stops." },
+      },
+    });
+    setBridge(bridge);
+    render(<Library />);
+
+    fireEvent.click(screen.getByRole("button", { name: /import card/i }));
+    const input = screen.getByLabelText("Choose a character card file");
+    fireEvent.change(input, { target: { files: [new File(["{}"], "mara.json", { type: "application/json" })] } });
+
+    await screen.findByText("Mara Voss");
+    expect(screen.getByText(/1 opening/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /use this card/i }));
+    await waitFor(() => expect(useStoriesStore.getState().draft?.importedCard?.name).toBe("Mara Voss"));
   });
 });

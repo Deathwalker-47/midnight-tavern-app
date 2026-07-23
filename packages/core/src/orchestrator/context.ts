@@ -16,6 +16,7 @@ import type { Store, CharacterRecord } from "../store/index.js";
 import type { Ruling, StorySchema, ActionDef, Outcome, NarratorStyleInputs } from "../types/index.js";
 import { renderStyleSettings } from "../types/index.js";
 import { buildMemoryBlock } from "../summarizer/index.js";
+import { scoreToMod } from "../engine/attributes.js";
 
 /**
  * Framework narrator instructions (§8, first block of the system frame). Style directives from a
@@ -38,6 +39,11 @@ export const AUTHORITY_CLAUSE = [
   "invent has no mechanical effect.",
 ].join("\n");
 
+export const NO_STATS_CLAUSE = [
+  "MODE: This is a No Stats story. Continue the fiction from the player's action.",
+  "Do not invent dice, checks, rulings, skill ranks, attributes, or other game mechanics.",
+].join("\n");
+
 /**
  * Compose the narrator system frame in the fixed order the plan mandates (§3):
  *   1. framework preamble
@@ -49,8 +55,15 @@ export const AUTHORITY_CLAUSE = [
  * Every user-supplied slot is optional; the preamble and authority clause are always present,
  * and the authority clause is guaranteed to be the final block regardless of blueprint contents.
  */
-export function buildNarratorSystem(style: NarratorStyleInputs = {}): string {
-  const blocks: string[] = [NARRATOR_PREAMBLE];
+export function buildNarratorSystem(
+  style: NarratorStyleInputs = {},
+  statMode: StorySchema["statMode"] = "full"
+): string {
+  const blocks: string[] = [
+    statMode === "none"
+      ? "You are the narrator of an interactive story. Write the next story beat in its established voice; you may voice multiple NPCs."
+      : NARRATOR_PREAMBLE,
+  ];
 
   if (style.narratorStyleDirective) {
     blocks.push(`Author's style directive (voice and tone only):\n${style.narratorStyleDirective}`);
@@ -67,7 +80,7 @@ export function buildNarratorSystem(style: NarratorStyleInputs = {}): string {
   }
 
   // The authority clause is always the final block — user text can never displace it.
-  blocks.push(AUTHORITY_CLAUSE);
+  blocks.push(statMode === "none" ? NO_STATS_CLAUSE : AUTHORITY_CLAUSE);
   return blocks.join("\n\n");
 }
 
@@ -144,6 +157,13 @@ function renderEffects(ruling: Ruling, nameFor: (id: string) => string): string[
     const who = ruling.targetId ? nameFor(ruling.targetId) : "target";
     out.push(`${who} ${rid} ${delta >= 0 ? "+" : ""}${delta}`);
   }
+  for (const [attributeId, delta] of Object.entries(e.attributeDeltaSelf ?? {})) {
+    out.push(`${nameFor(ruling.actorId)} ${attributeId} ${delta >= 0 ? "+" : ""}${delta}`);
+  }
+  for (const [attributeId, delta] of Object.entries(e.attributeDeltaTarget ?? {})) {
+    const who = ruling.targetId ? nameFor(ruling.targetId) : "target";
+    out.push(`${who} ${attributeId} ${delta >= 0 ? "+" : ""}${delta}`);
+  }
   if (e.grantItem) out.push(`gained ${e.grantItem.qty}× ${e.grantItem.itemId}`);
   if (e.setFlag) out.push(`${e.setFlag.flagId}=${e.setFlag.value}`);
   return out;
@@ -155,6 +175,14 @@ function renderHardSnapshot(record: CharacterRecord, schema: StorySchema): strin
   const bits: string[] = [
     `${record.name}${record.isPlayer ? " (player)" : ""}: ${hard.alive ? "alive" : "DEAD"}`,
   ];
+  const attributes = schema.attributes
+    .map((definition) => {
+      const score = hard.attributes[definition.id] ?? definition.defaultScore;
+      const modifier = scoreToMod(score);
+      return `${definition.abbrev} ${score} (${modifier >= 0 ? "+" : ""}${modifier})`;
+    })
+    .join(", ");
+  if (attributes) bits.push(`attributes: ${attributes}`);
   const resByLabel = new Map(schema.resources.map((r) => [r.id, r.label]));
   const res = Object.entries(hard.resources)
     .map(([id, s]) => `${resByLabel.get(id) ?? id} ${s.current}/${s.max}`)
@@ -235,7 +263,7 @@ export async function assembleContext(
 ): Promise<AssembledContext> {
   const { storyId, schema, rulings, presentIds, playerText } = args;
   // Framework preamble + optional user style text + authority clause (always last). §3 guardrail.
-  const systemFrame = buildNarratorSystem(args.styleInputs ?? {});
+  const systemFrame = buildNarratorSystem(args.styleInputs ?? {}, schema.statMode);
   const budget =
     (await store.settings.get("contextBudget", z.number().int().positive())) ??
     DEFAULT_CONTEXT_BUDGET;
@@ -255,7 +283,9 @@ export async function assembleContext(
   const hardLines = present.map((r) => renderHardSnapshot(r, schema));
 
   // Blocks 5–6: memory (soft slices + arc + chapters).
-  const memory = await buildMemoryBlock(store, storyId, presentIds);
+  const memory = schema.statMode === "full"
+    ? await buildMemoryBlock(store, storyId, presentIds)
+    : { softSlices: [] as string[], chapters: [] as string[], arc: undefined as string | undefined };
 
   // Block 7: triggered lorebook, matched against player text + recent narration.
   const recent = await store.messages.recent(storyId, 8);
@@ -286,8 +316,10 @@ export async function assembleContext(
   };
 
   // 2, 3: authoritative truth.
+  if (schema.statMode === "full") {
   pushAlways("This turn's rulings (authoritative — narrate exactly)", rulingLines.length ? rulingLines.join("\n") : "No mechanical actions this turn.");
   pushAlways("Present characters (hard state)", hardLines.join("\n"));
+  }
 
   // 4: persona / protagonist essentials.
   if (args.personaBlock) pushIfFits("Player & protagonist", args.personaBlock);

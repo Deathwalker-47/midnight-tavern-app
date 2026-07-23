@@ -38,6 +38,8 @@ export interface ChatRequest {
 export interface ChatResponse {
   content: string;
   usage?: { promptTokens?: number; completionTokens?: number };
+  /** Provider stop signal, such as `stop`, `length`, or `content_filter`. */
+  finishReason?: string;
 }
 
 /** Per-provider credentials/endpoint, resolved from settings at router construction. */
@@ -47,6 +49,13 @@ export interface ProviderConfig {
   baseUrl?: string;
 }
 
+/** A model advertised by a provider's live model-list endpoint. */
+export type ProviderModel = {
+  id: string;
+  label: string;
+  contextLength?: number;
+};
+
 /** Called with each incremental text delta during a streaming completion. */
 export type StreamHandler = (delta: string) => void;
 
@@ -55,6 +64,10 @@ export interface Provider {
   readonly id: string;
   /** Whether the provider honors `jsonMode` (drives structured-call strategy). */
   readonly supportsJsonMode: boolean;
+  /** Probe an authenticated account endpoint when model listing alone is public. */
+  validateConfig?(config: ProviderConfig, signal?: AbortSignal): Promise<void>;
+  /** Fetch the models currently available to these credentials. */
+  listModels?(config: ProviderConfig, signal?: AbortSignal): Promise<ProviderModel[]>;
   chat(req: ChatRequest, config: ProviderConfig): Promise<ChatResponse>;
   /** Streams deltas to `onDelta` and resolves with the full aggregated response. */
   chatStream(req: ChatRequest, config: ProviderConfig, onDelta: StreamHandler): Promise<ChatResponse>;

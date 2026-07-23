@@ -35,7 +35,13 @@ function definedFlagIds(actions: ActionDef[]): Set<string> {
 /** Validate one prerequisite/condition's reference against the tables. */
 function checkCondition(
   cond: Condition,
-  ctx: { skills: Set<string>; resources: Set<string>; items: Set<string>; flags: Set<string> },
+  ctx: {
+    skills: Set<string>;
+    resources: Set<string>;
+    items: Set<string>;
+    flags: Set<string>;
+    attributes: Set<string>;
+  },
   where: string,
   errors: string[]
 ): void {
@@ -58,6 +64,11 @@ function checkCondition(
           `${where}: prerequisite references flag "${cond.flagId}" that no action ever sets.`
         );
       break;
+    case "attribute":
+      if (!ctx.attributes.has(cond.attributeId)) {
+        errors.push(`${where}: prerequisite references unknown attribute "${cond.attributeId}".`);
+      }
+      break;
   }
 }
 
@@ -69,11 +80,46 @@ export function validateStorySchema(schema: StorySchema): string[] {
   const errors: string[] = [];
 
   const skillIds = new Set(schema.skills.map((s) => s.id));
+  const attributeIds = new Set(schema.attributes.map((attribute) => attribute.id));
   const resourceIds = new Set(schema.resources.map((r) => r.id));
   const itemIds = new Set(schema.items.map((i) => i.id));
   const tierIds = new Set(schema.tiers.map((t) => t.id));
   const flagIds = definedFlagIds(schema.actions);
-  const ctx = { skills: skillIds, resources: resourceIds, items: itemIds, flags: flagIds };
+  const ctx = {
+    skills: skillIds,
+    resources: resourceIds,
+    items: itemIds,
+    flags: flagIds,
+    attributes: attributeIds,
+  };
+
+  if (schema.statMode === "none") {
+    const mechanicalCounts = {
+      attributes: schema.attributes.length,
+      resources: schema.resources.length,
+      skills: schema.skills.length,
+      items: schema.items.length,
+      tiers: schema.tiers.length,
+      actions: schema.actions.length,
+      npcTemplates: schema.npcTemplates.length,
+    };
+    for (const [name, count] of Object.entries(mechanicalCounts)) {
+      if (count > 0) errors.push(`No Stats schema must have no ${name}; found ${count}.`);
+    }
+    if (
+      Object.keys(schema.startingState.attributes).length > 0 ||
+      Object.keys(schema.startingState.resources).length > 0 ||
+      schema.startingState.skills.length > 0 ||
+      schema.startingState.inventory.length > 0
+    ) {
+      errors.push("No Stats starting state must be mechanically empty.");
+    }
+    return errors;
+  }
+
+  if (schema.attributes.length === 0) {
+    errors.push('Full Stats schema must define at least one attribute.');
+  }
 
   // --- Catalog size & balance (§2.2) ---
   if (schema.actions.length < CATALOG_MIN_ACTIONS) {
@@ -103,6 +149,11 @@ export function validateStorySchema(schema: StorySchema): string[] {
         exercisedSkills.add(a.requiresSkill);
       }
     }
+    if (a.governingAttribute && !attributeIds.has(a.governingAttribute)) {
+      errors.push(
+        `Action "${a.id}" uses unknown governing attribute "${a.governingAttribute}".`
+      );
+    }
     // Effect references: resource deltas, granted items.
     for (const [outcome, eff] of Object.entries(a.effects)) {
       const at = `Action "${a.id}" (${outcome})`;
@@ -111,6 +162,12 @@ export function validateStorySchema(schema: StorySchema): string[] {
       }
       for (const rid of Object.keys(eff.resourceDeltaTarget ?? {})) {
         if (!resourceIds.has(rid)) errors.push(`${at}: unknown target resource "${rid}".`);
+      }
+      for (const attributeId of Object.keys(eff.attributeDeltaSelf ?? {})) {
+        if (!attributeIds.has(attributeId)) errors.push(`${at}: unknown self attribute "${attributeId}".`);
+      }
+      for (const attributeId of Object.keys(eff.attributeDeltaTarget ?? {})) {
+        if (!attributeIds.has(attributeId)) errors.push(`${at}: unknown target attribute "${attributeId}".`);
       }
       if (eff.grantItem && !itemIds.has(eff.grantItem.itemId)) {
         errors.push(`${at}: grants unknown item "${eff.grantItem.itemId}".`);
@@ -167,17 +224,18 @@ export function validateStorySchema(schema: StorySchema): string[] {
 
   // --- Lethal-resource rule (§M2.4 / §M5.2) ---
   const lethalCount = schema.resources.filter((r) => r.lethal).length;
-  if (schema.statMode === "none") {
-    if (schema.resources.length > 0) {
-      errors.push(`statMode "none" must have no resources; found ${schema.resources.length}.`);
-    }
-  } else if (lethalCount !== 1) {
+  if (lethalCount !== 1) {
     errors.push(
       `Exactly one resource must be marked lethal when statMode is "${schema.statMode}"; found ${lethalCount}.`
     );
   }
 
   // --- Starting state references ---
+  for (const attributeId of Object.keys(schema.startingState.attributes)) {
+    if (!attributeIds.has(attributeId)) {
+      errors.push(`Starting state sets unknown attribute "${attributeId}".`);
+    }
+  }
   for (const rid of Object.keys(schema.startingState.resources)) {
     if (!resourceIds.has(rid)) errors.push(`Starting state sets unknown resource "${rid}".`);
   }
@@ -190,6 +248,11 @@ export function validateStorySchema(schema: StorySchema): string[] {
 
   // --- NPC template references ---
   for (const t of schema.npcTemplates) {
+    for (const attributeId of Object.keys(t.attributes)) {
+      if (!attributeIds.has(attributeId)) {
+        errors.push(`NPC template "${t.templateId}" uses unknown attribute "${attributeId}".`);
+      }
+    }
     for (const rid of Object.keys(t.resources)) {
       if (!resourceIds.has(rid))
         errors.push(`NPC template "${t.templateId}" uses unknown resource "${rid}".`);

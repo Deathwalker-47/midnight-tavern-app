@@ -1,0 +1,972 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:#14100C;color:#EADCBE;font-family:"IBM Plex Sans",sans-serif;-webkit-font-smoothing:antialiased}
+  ::selection{background:rgba(217,166,72,.25)}
+  a{color:#D9A648;text-decoration:none}a:hover{color:#F2C56B}
+  ::-webkit-scrollbar{width:11px;height:11px}::-webkit-scrollbar-thumb{background:#382E21;border-radius:6px;border:3px solid #14100C}
+  ::-webkit-scrollbar-thumb:hover{background:#4a3d2c}
+  @property --rt{syntax:'<integer>';initial-value:0;inherits:false}
+  @keyframes mt-fade{from{opacity:0}to{opacity:1}}
+  @keyframes mt-rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+  @keyframes mt-die{0%{transform:rotate(-100deg) scale(.7);opacity:0}60%{opacity:1}100%{transform:rotate(0) scale(1);opacity:1}}
+  @keyframes mt-count{from{--rt:0}}
+  @keyframes mt-stamp{0%{transform:scale(1.5) rotate(-8deg);opacity:0}70%{transform:scale(.92) rotate(-8deg);opacity:1}100%{transform:scale(1) rotate(-6deg);opacity:1}}
+  @keyframes mt-ring{0%{transform:scale(.4);opacity:.8}100%{transform:scale(2.4);opacity:0}}
+  @keyframes mt-ink{0%,80%,100%{opacity:.25;transform:translateY(0)}40%{opacity:1;transform:translateY(-3px)}}
+  @keyframes mt-flash{0%{background:rgba(201,111,87,.55)}100%{background:transparent}}
+  @keyframes mt-shimmer{0%{background-position:-120% 0}100%{background-position:220% 0}}
+  @media (prefers-reduced-motion: reduce){*{animation-duration:.001s!important;animation-delay:0s!important;transition-duration:.001s!important}}
+  @media (max-width:980px){.mt-party-meta{display:none}}
+  .mt-mgroup{position:relative}
+  .mt-mctrl{opacity:0;transition:opacity .15s ease}
+  .mt-mgroup:hover .mt-mctrl,.mt-mgroup:focus-within .mt-mctrl{opacity:1}
+  .mt-mctrl.mt-latest{opacity:1}
+  @media (prefers-reduced-motion: reduce){.mt-mctrl{transition:none}}
+</style>
+</helmet>
+<div style="display:flex;height:100vh;width:100vw;overflow:hidden;background:#14100C">
+
+  <!-- LEFT RAIL -->
+  <nav style="width:72px;flex:0 0 72px;background:#1B1611;border-right:1px solid #382E21;display:flex;flex-direction:column;align-items:center;padding:14px 0;gap:4px">
+    <div title="Midnight Tavern" style="width:40px;height:40px;border-radius:9px;background:linear-gradient(145deg,#2C241B,#1B1611);border:1px solid rgba(216,170,90,.25);display:flex;align-items:center;justify-content:center;font-family:'Cormorant Garamond',serif;font-weight:700;font-size:24px;color:#D9A648;margin-bottom:14px">M</div>
+    <sc-for list="{{ railItems }}" as="it" hint-placeholder-count="5">
+      <a href="{{ it.href }}" title="{{ it.label }}" style="{{ it.style }}">
+        <span style="{{ it.iconStyle }}">{{ it.glyph }}</span>
+        <span style="font-size:9px;letter-spacing:.02em">{{ it.label }}</span>
+      </a>
+    </sc-for>
+    <div style="flex:1"></div>
+    <div style="width:52px;display:flex;flex-direction:column;align-items:center;gap:9px;padding-top:8px;border-top:1px solid #382E21">
+      <div title="{{ modelTitle }}" style="display:flex;flex-direction:column;align-items:center;gap:4px">
+        <span style="width:9px;height:9px;border-radius:50%;background:{{ modelDot }};box-shadow:0 0 8px {{ modelDot }}"></span>
+        <span style="font-size:8px;color:#6E5F49;text-align:center;line-height:1.2">Sonnet</span>
+      </div>
+      <div title="Trial · 9 days left" style="font-size:8px;color:#6E5F49;text-align:center;border:1px solid #382E21;border-radius:5px;padding:3px 4px;line-height:1.15">Trial<br>9d</div>
+    </div>
+  </nav>
+
+  <!-- MAIN COLUMN -->
+  <div style="flex:1;display:flex;flex-direction:column;min-width:0">
+
+    <!-- STORY HEADER + TABS -->
+    <header style="flex:0 0 auto;background:#1B1611;border-bottom:1px solid #382E21;padding:12px 22px 0 22px">
+      <div style="display:flex;align-items:baseline;gap:12px">
+        <div style="font-family:'Cormorant Garamond',serif;font-size:22px;font-weight:600;color:#EADCBE;letter-spacing:.01em">Embers of the Silent Vale</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#74B8AE;letter-spacing:.04em">CH 3 · UNDER THE OSSUARY</div>
+        <div style="flex:1"></div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#6E5F49">58 messages · Hard</div>
+      </div>
+      <div style="display:flex;gap:2px;margin-top:12px">
+        <a href="Play.dc.html" style="padding:9px 15px;font-size:13px;font-weight:600;color:#EADCBE;border-bottom:2px solid #D9A648">Play</a>
+        <a href="Overview.dc.html" style="padding:9px 15px;font-size:13px;color:#A08D6C;border-bottom:2px solid transparent">Overview</a>
+        <a href="Characters.dc.html" style="padding:9px 15px;font-size:13px;color:#A08D6C;border-bottom:2px solid transparent">Characters</a>
+        <a href="Journal.dc.html" style="padding:9px 15px;font-size:13px;color:#A08D6C;border-bottom:2px solid transparent">Journal</a>
+        <a href="StorySettings.dc.html" style="padding:9px 15px;font-size:13px;color:#A08D6C;border-bottom:2px solid transparent">Story Settings</a>
+      </div>
+    </header>
+
+    <!-- DEMO STATE SWITCHER -->
+    <div style="flex:0 0 auto;display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:7px 22px;background:#14100C;border-bottom:1px solid #382E21">
+      <span style="font-size:10px;color:#6E5F49;font-family:'IBM Plex Mono',monospace;letter-spacing:.06em;text-transform:uppercase;margin-right:2px">Demo state</span>
+      <sc-for list="{{ demoChips }}" as="c" hint-placeholder-count="7">
+        <button onClick="{{ c.onClick }}" style="{{ c.style }}">{{ c.label }}</button>
+      </sc-for>
+    </div>
+
+    <!-- BODY: STREAM + DRAWER -->
+    <div style="flex:1;display:flex;min-height:0">
+
+      <!-- STORY STREAM -->
+      <section style="flex:1;min-width:0;position:relative;display:flex;flex-direction:column">
+        <div style="flex:0 0 auto;display:flex;align-items:center;gap:8px;padding:9px 34px;border-bottom:1px solid #382E21;background:#181410;overflow-x:auto">
+          <span class="mt-party-meta" style="font-size:9px;font-family:'IBM Plex Mono',monospace;letter-spacing:.12em;color:#6E5F49;flex:0 0 auto">PRESENT</span>
+          <sc-for list="{{ party }}" as="p" hint-placeholder-count="3">
+            <button onClick="{{ p.onClick }}" title="{{ p.title }}" style="{{ p.chipStyle }}">
+              <div style="{{ p.avatarStyle }}">{{ p.initials }}</div>
+              <div class="mt-party-meta" style="display:flex;flex-direction:column;gap:3px;min-width:0">
+                <div style="display:flex;align-items:center;gap:6px"><span style="font-size:12px;font-weight:500;white-space:nowrap;color:{{ p.nameColor }}">{{ p.name }}</span><span style="{{ p.moodStyle }}">{{ p.moodGlyph }}</span></div>
+                <div style="width:66px;height:4px;background:#14100C;border-radius:3px;overflow:hidden"><div style="{{ p.hpBar }}"></div></div>
+              </div>
+            </button>
+          </sc-for>
+        </div>
+        <div ref="{{ scrollRef }}" onScroll="{{ onScroll }}" style="flex:1;overflow-y:auto;padding:26px 0 8px 0">
+          <div style="max-width:770px;margin:0 auto;padding:0 34px">
+
+            <!-- chapter marker -->
+            <div style="display:flex;align-items:center;gap:14px;margin:6px 0 22px 0">
+              <div style="flex:1;height:1px;background:linear-gradient(90deg,transparent,#382E21)"></div>
+              <div style="text-align:center">
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.22em;color:#74B8AE">CHAPTER THREE</div>
+                <div style="font-family:'Cormorant Garamond',serif;font-size:26px;font-weight:600;color:#EADCBE;margin-top:2px">Under the Ossuary</div>
+              </div>
+              <div style="flex:1;height:1px;background:linear-gradient(270deg,transparent,#382E21)"></div>
+            </div>
+
+            <!-- empty state -->
+            <sc-if value="{{ isEmpty }}" hint-placeholder-val="{{ false }}">
+              <div style="text-align:center;padding:40px 20px;color:#6E5F49">
+                <div style="font-size:34px;color:#4a3d2c">✎</div>
+                <div style="font-family:'Cormorant Garamond',serif;font-size:22px;color:#D6C9AB;margin-top:8px">The page is blank, and yours to open</div>
+                <div style="font-size:13px;color:#A08D6C;margin-top:5px;line-height:1.6;max-width:380px;margin-left:auto;margin-right:auto">Say what Kestrel does, and the story begins.</div>
+              </div>
+            </sc-if>
+
+            <!-- rendered message log -->
+            <div ref="{{ logRef }}">
+              <sc-for list="{{ log }}" as="m" hint-placeholder-count="4">
+                <div class="mt-mgroup" style="{{ m.groupStyle }}">
+                  <div style="{{ m.wrapStyle }}">{{ m.node }}</div>
+                  <sc-if value="{{ m.showControls }}" hint-placeholder-val="{{ false }}">
+                    <div class="mt-mctrl {{ m.latestClass }}" style="position:relative">
+                      <div style="{{ m.ctrlRowStyle }}">
+                        <sc-if value="{{ m.isLatest }}" hint-placeholder-val="{{ false }}">
+                          <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">
+                            <div style="display:flex;align-items:center;gap:2px;background:#1B1611;border:1px solid #382E21;border-radius:7px;padding:2px 3px">
+                              <button onClick="{{ m.swipePrev }}" title="Previous telling" style="{{ m.prevStyle }}">‹</button>
+                              <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#D6C9AB;min-width:32px;text-align:center">{{ m.counter }}</span>
+                              <button onClick="{{ m.swipeNext }}" title="{{ m.nextTitle }}" style="{{ m.nextStyle }}">›</button>
+                            </div>
+                            <button onClick="{{ m.toggleFeedback }}" title="Regenerate with feedback" style="{{ m.fbBtnStyle }}">✦ Regenerate with feedback</button>
+                            <sc-if value="{{ m.hasRuling }}" hint-placeholder-val="{{ false }}"><span title="This turn had a DM Ruling — the roll is locked; only the telling changes" style="display:flex;align-items:center;gap:4px;font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:.06em;color:#74B8AE;border:1px solid #4E827B;border-radius:4px;padding:2px 5px"><span style="font-size:11px">⚄</span>ROLL LOCKED</span></sc-if>
+                            <sc-if value="{{ m.swiping }}" hint-placeholder-val="{{ false }}"><span style="font-size:12px;font-style:italic;color:#A08D6C;font-family:'Source Serif 4',serif">retelling…</span></sc-if>
+                          </div>
+                        </sc-if>
+                        <div style="flex:1"></div>
+                        <button onClick="{{ m.onMenu }}" title="More" style="{{ m.menuBtnStyle }}">⋯</button>
+                      </div>
+
+                      <!-- regenerate-with-feedback panel -->
+                      <sc-if value="{{ m.feedbackOpen }}" hint-placeholder-val="{{ false }}">
+                        <div style="margin-top:9px;background:#1B1611;border:1px solid #4E827B55;border-radius:11px;padding:13px 14px;animation:mt-rise .16s ease;max-width:560px">
+                          <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.1em;color:#74B8AE;margin-bottom:8px">REGENERATE THE TELLING — MECHANICS STAY FIXED</div>
+                          <div style="display:flex;flex-wrap:wrap;gap:6px">
+                            <sc-for list="{{ m.fbChips }}" as="ch" hint-placeholder-count="5"><button onClick="{{ ch.onClick }}" style="{{ ch.style }}">{{ ch.label }}</button></sc-for>
+                          </div>
+                          <div style="margin-top:9px;background:#14100C;border:1px solid #382E21;border-radius:8px;padding:9px 11px">
+                            <textarea onInput="{{ m.onFbInput }}" placeholder="Or say what to change about the telling…" rows="2" style="width:100%;resize:none;background:transparent;border:0;outline:none;color:#EADCBE;font-family:'Source Serif 4',serif;font-size:14px;line-height:1.5"></textarea>
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:5px"><span style="{{ m.fbCountStyle }}">{{ m.fbCount }}/300</span></div>
+                          </div>
+                          <sc-if value="{{ m.fbError }}" hint-placeholder-val="{{ false }}"><div style="font-size:11.5px;color:#C96F57;margin-top:7px">{{ m.fbError }}</div></sc-if>
+                          <div style="display:flex;align-items:center;gap:9px;margin-top:10px">
+                            <button onClick="{{ m.fbGenerate }}" style="{{ m.fbGenStyle }}">{{ m.fbGenLabel }}</button>
+                            <button onClick="{{ m.toggleFeedback }}" style="background:transparent;border:0;color:#A08D6C;font-size:12.5px;cursor:pointer">Cancel</button>
+                            <div style="flex:1"></div>
+                            <span style="font-size:10.5px;color:#6E5F49;font-style:italic;font-family:'Source Serif 4',serif">The ruling, dice, XP & loot don't change.</span>
+                          </div>
+                        </div>
+                      </sc-if>
+                      <!-- inspect feedback that produced active variant -->
+                      <sc-if value="{{ m.activeFeedback }}" hint-placeholder-val="{{ false }}">
+                        <div style="margin-top:7px;font-size:11px;color:#74B8AE;font-family:'IBM Plex Mono',monospace">↳ this telling was steered: "<span style="color:#A08D6C">{{ m.activeFeedback }}</span>"</div>
+                      </sc-if>
+
+                      <sc-if value="{{ m.showHint }}" hint-placeholder-val="{{ false }}">
+                        <div style="font-size:10.5px;color:#6E5F49;margin-top:5px;font-style:italic;font-family:'Source Serif 4',serif">Swiping rewrites how it's told — the DM Ruling already happened and stands.</div>
+                      </sc-if>
+                      <sc-if value="{{ m.menuOpen }}" hint-placeholder-val="{{ false }}">
+                        <div style="position:absolute;z-index:12;right:0;top:34px;background:#231C15;border:1px solid #4E827B;border-radius:9px;box-shadow:0 12px 32px rgba(0,0,0,.55);padding:5px;min-width:190px;animation:mt-rise .14s ease">
+                          <sc-if value="{{ m.isLatest }}" hint-placeholder-val="{{ false }}">
+                            <button onClick="{{ m.onDelete }}" style="display:flex;width:100%;align-items:center;gap:9px;background:transparent;border:0;color:#D6C9AB;font-size:12.5px;padding:8px 10px;border-radius:6px;cursor:pointer;text-align:left">↩ Delete last exchange</button>
+                          </sc-if>
+                          <button onClick="{{ m.onRewind }}" style="display:flex;width:100%;align-items:center;gap:9px;background:transparent;border:0;color:#C96F57;font-size:12.5px;padding:8px 10px;border-radius:6px;cursor:pointer;text-align:left">⟲ Rewind to here</button>
+                        </div>
+                      </sc-if>
+                    </div>
+                  </sc-if>
+                </div>
+              </sc-for>
+            </div>
+
+            <!-- streaming / terminal indicator -->
+            <sc-if value="{{ streamShown }}" hint-placeholder-val="{{ false }}">
+              <div style="{{ streamStyle }}">
+                <div style="display:flex;align-items:center;gap:10px">
+                  <sc-if value="{{ streamDots }}" hint-placeholder-val="{{ true }}">
+                    <span style="display:inline-flex;gap:4px">
+                      <span style="width:5px;height:5px;border-radius:50%;background:{{ streamAccent }};animation:mt-ink 1.1s infinite"></span>
+                      <span style="width:5px;height:5px;border-radius:50%;background:{{ streamAccent }};animation:mt-ink 1.1s infinite;animation-delay:.18s"></span>
+                      <span style="width:5px;height:5px;border-radius:50%;background:{{ streamAccent }};animation:mt-ink 1.1s infinite;animation-delay:.36s"></span>
+                    </span>
+                  </sc-if>
+                  <sc-if value="{{ streamIcon }}" hint-placeholder-val="{{ false }}"><span style="font-size:14px;color:{{ streamAccent }}">{{ streamIcon }}</span></sc-if>
+                  <span style="font-family:'Source Serif 4',serif;font-style:italic;color:{{ streamTextColor }};font-size:15px">{{ streamText }}</span>
+                  <sc-if value="{{ streamAction }}" hint-placeholder-val="{{ false }}"><button onClick="{{ streamRetry }}" style="background:transparent;border:1px solid {{ streamAccent }};color:{{ streamAccent }};font-size:11.5px;border-radius:6px;padding:4px 10px;cursor:pointer;font-family:'IBM Plex Sans'">{{ streamAction }}</button></sc-if>
+                </div>
+                <sc-if value="{{ streamSub }}" hint-placeholder-val="{{ false }}"><div style="font-size:11.5px;color:#6E5F49;margin-top:6px;line-height:1.5">{{ streamSub }}</div></sc-if>
+              </div>
+            </sc-if>
+
+            <!-- inline notices -->
+            <sc-if value="{{ notice }}" hint-placeholder-val="{{ false }}">
+              <div style="{{ noticeStyle }}">
+                <div style="display:flex;align-items:flex-start;gap:11px">
+                  <span style="font-size:15px;line-height:1.2">{{ noticeIcon }}</span>
+                  <div style="flex:1">
+                    <div style="font-weight:600;font-size:13px;color:{{ noticeTitleColor }}">{{ noticeTitle }}</div>
+                    <div style="font-size:13px;color:#A08D6C;margin-top:3px;line-height:1.5">{{ noticeBody }}</div>
+                    <sc-if value="{{ noticeCta }}" hint-placeholder-val="{{ false }}">
+                      <a href="Settings.dc.html" style="display:inline-block;margin-top:9px;font-size:12px;font-weight:600;color:#74B8AE;border:1px solid #4E827B;border-radius:6px;padding:6px 11px">{{ noticeCta }}</a>
+                    </sc-if>
+                  </div>
+                </div>
+              </div>
+            </sc-if>
+
+            <div style="height:20px"></div>
+          </div>
+        </div>
+
+        <sc-if value="{{ showAnchor }}" hint-placeholder-val="{{ false }}">
+          <button onClick="{{ scrollToEnd }}" style="position:absolute;bottom:150px;left:50%;transform:translateX(-50%);background:#2C241B;border:1px solid rgba(216,170,90,.3);color:#D9A648;font-size:12px;font-weight:600;border-radius:20px;padding:7px 15px;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.5);animation:mt-rise .2s ease">↓ Jump to latest</button>
+        </sc-if>
+
+        <!-- REWIND CONFIRM DIALOG -->
+        <sc-if value="{{ rewindOpen }}" hint-placeholder-val="{{ false }}">
+          <div style="position:absolute;inset:0;background:rgba(10,8,5,.72);backdrop-filter:blur(2px);display:flex;align-items:center;justify-content:center;padding:30px;z-index:20;animation:mt-fade .18s ease">
+            <div style="width:470px;max-width:100%;background:#1B1611;border:1px solid rgba(201,111,87,.4);border-radius:13px;box-shadow:0 24px 70px rgba(0,0,0,.6);overflow:hidden;animation:mt-rise .22s ease">
+              <div style="padding:22px 24px 0">
+                <div style="display:flex;align-items:center;gap:10px"><span style="font-size:18px;color:#C96F57">⟲</span><div style="font-family:'Cormorant Garamond',serif;font-size:23px;font-weight:600;color:#EADCBE">Rewind the story?</div></div>
+                <div style="font-size:13.5px;color:#A08D6C;line-height:1.6;margin-top:10px">This removes this moment and <b style="color:#D6C9AB">everything after it</b> — {{ rewindCount }} later message(s) discarded. Stats, skills, XP, inventory, and equipped loadout revert to how they stood here.</div>
+                <div style="font-size:12.5px;color:#6E5F49;line-height:1.55;margin-top:9px;background:#181410;border:1px solid #382E21;border-radius:8px;padding:10px 12px">Journal entries at or after this point are removed too. Summaries and the arc document after this point rebuild on the next turn. This can't be undone.</div>
+              </div>
+              <div style="display:flex;justify-content:flex-end;gap:9px;padding:16px 24px;border-top:1px solid #382E21;margin-top:18px;background:#14100C">
+                <button onClick="{{ cancelRewind }}" style="background:transparent;border:1px solid #382E21;color:#A08D6C;font-size:13px;border-radius:8px;padding:9px 16px;cursor:pointer">Keep the story</button>
+                <button onClick="{{ confirmRewind }}" style="background:#C96F57;color:#14100C;border:0;font-size:13px;font-weight:600;border-radius:8px;padding:9px 16px;cursor:pointer">Rewind &amp; discard</button>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- COMPOSER -->
+        <div style="flex:0 0 auto;border-top:1px solid #382E21;background:#1B1611;padding:12px 34px 14px 34px;position:relative">
+          <div style="max-width:770px;margin:0 auto">
+
+            <!-- suggestions popover -->
+            <sc-if value="{{ suggestOpen }}" hint-placeholder-val="{{ false }}">
+              <div style="position:absolute;bottom:100%;left:34px;right:34px;margin:0 auto 8px;max-width:770px;background:#231C15;border:1px solid #4E827B;border-radius:12px;box-shadow:0 -8px 30px rgba(0,0,0,.5);padding:12px 13px;animation:mt-rise .16s ease;z-index:8">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:9px">
+                  <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.1em;color:#74B8AE">SUGGESTIONS · RESPECTS YOUR {{ budgetShort }}-ACTION BUDGET</span>
+                  <div style="display:flex;gap:8px">
+                    <button onClick="{{ regenSuggest }}" title="Regenerate" style="background:transparent;border:0;color:#A08D6C;font-size:12px;cursor:pointer">↻ Regenerate</button>
+                    <button onClick="{{ toggleSuggest }}" title="Dismiss" style="background:transparent;border:0;color:#6E5F49;font-size:14px;cursor:pointer;line-height:1">×</button>
+                  </div>
+                </div>
+                <sc-if value="{{ suggestLoading }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;flex-direction:column;gap:7px">
+                    <sc-for list="{{ suggestSkeletons }}" as="k" hint-placeholder-count="5"><div style="height:34px;border-radius:8px;background:linear-gradient(90deg,#1B1611,#231C15,#1B1611);background-size:220% 100%;animation:mt-shimmer 1.2s infinite"></div></sc-for>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ suggestEmpty }}" hint-placeholder-val="{{ false }}">
+                  <div style="text-align:center;padding:16px;font-size:12.5px;color:#A08D6C;line-height:1.5">No clear suggestions for this moment. Try describing what you want, or <span onClick="{{ regenSuggest }}" style="color:#74B8AE;cursor:pointer">regenerate</span>.</div>
+                </sc-if>
+                <sc-if value="{{ suggestFail }}" hint-placeholder-val="{{ false }}">
+                  <div style="text-align:center;padding:14px;font-size:12.5px;color:#C96F57;line-height:1.5">Couldn't fetch suggestions. <span onClick="{{ regenSuggest }}" style="color:#74B8AE;cursor:pointer">Try again</span></div>
+                </sc-if>
+                <sc-if value="{{ suggestReady }}" hint-placeholder-val="{{ true }}">
+                  <div style="display:flex;flex-direction:column;gap:6px">
+                    <sc-for list="{{ suggestions }}" as="sg" hint-placeholder-count="5">
+                      <button onClick="{{ sg.onClick }}" style="display:flex;align-items:center;gap:10px;text-align:left;background:#1B1611;border:1px solid #382E21;border-radius:8px;padding:9px 11px;cursor:pointer" style-hover="border-color:#4E827B">
+                        <span style="font-size:9px;font-family:'IBM Plex Mono',monospace;letter-spacing:.06em;color:{{ sg.kindColor }};border:1px solid {{ sg.kindColor }}55;border-radius:3px;padding:2px 6px;flex:0 0 auto">{{ sg.kind }}</span>
+                        <span style="font-family:'Source Serif 4',serif;font-size:14px;color:#EADCBE;line-height:1.4">{{ sg.text }}</span>
+                      </button>
+                    </sc-for>
+                  </div>
+                  <div style="font-size:10.5px;color:#6E5F49;margin-top:8px;font-style:italic;font-family:'Source Serif 4',serif">Picking one drops it into your message to edit — nothing sends automatically.</div>
+                </sc-if>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ overflow }}" hint-placeholder-val="{{ false }}">
+              <div style="background:rgba(201,161,90,.06);border:1px solid #6E5F4955;border-radius:9px;padding:10px 13px;margin-bottom:9px;animation:mt-fade .2s ease">
+                <div style="font-size:12px;color:#C9A15a;font-weight:600">More actions than your turn allows</div>
+                <div style="margin-top:6px;display:flex;flex-direction:column;gap:5px">
+                  <sc-for list="{{ overflowRows }}" as="o" hint-placeholder-count="3"><div style="display:flex;align-items:center;gap:8px;font-size:12px"><span style="{{ o.tagStyle }}">{{ o.tag }}</span><span style="color:{{ o.textColor }}">{{ o.text }}</span></div></sc-for>
+                </div>
+                <div style="font-size:11px;color:#6E5F49;margin-top:7px;line-height:1.5">Refused actions get no roll, consequence, XP, or loot. <span onClick="{{ editTurn }}" style="color:#74B8AE;cursor:pointer">Edit your turn</span> to keep them.</div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ ambiguity }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:9px;font-size:12px;color:#C9A15a;animation:mt-fade .2s ease">
+                <span>◈</span><span>That's a little vague — try naming what Kestrel does, and to whom.</span>
+              </div>
+            </sc-if>
+
+            <div style="{{ composerStyle }}">
+              <button onClick="{{ toggleSuggest }}" title="Contextual suggestions" style="{{ suggestBtnStyle }}">✦</button>
+              <textarea ref="{{ inputRef }}" onInput="{{ onInput }}" onKeyDown="{{ onKey }}" placeholder="{{ placeholder }}" rows="1" disabled="{{ inputDisabled }}" style="flex:1;resize:none;background:transparent;border:0;outline:none;color:#EADCBE;font-family:'Source Serif 4',serif;font-size:16px;line-height:1.5;max-height:120px;padding:4px 0"></textarea>
+              <button onClick="{{ send }}" disabled="{{ sendDisabled }}" style="{{ sendStyle }}">{{ sendLabel }}</button>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;font-size:11px;color:#6E5F49;gap:12px;flex-wrap:wrap">
+              <div style="display:flex;gap:14px;align-items:center">
+                <span style="font-family:'IBM Plex Mono',monospace;color:#74B8AE">{{ budgetHelper }}</span>
+                <span><b style="color:#A08D6C;font-family:'IBM Plex Mono',monospace">Enter</b> to send</span>
+              </div>
+              <span style="font-family:'IBM Plex Mono',monospace">Playing as <span style="color:#D9A648">Kestrel Vane</span></span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- LIVING CARD DRAWER -->
+      <aside style="{{ drawerStyle }}">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #382E21">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.14em;color:#74B8AE">LIVING CARDS</div>
+          <button onClick="{{ toggleDrawer }}" title="Close (Esc)" style="background:transparent;border:0;color:#6E5F49;font-size:18px;cursor:pointer;line-height:1">×</button>
+        </div>
+        <div style="flex:1;overflow-y:auto;padding:16px 16px 24px 16px">
+          <div style="background:#231C15;border:1px solid rgba(216,170,90,.18);border-radius:10px;padding:15px;margin-bottom:14px;position:relative;overflow:hidden">
+            <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,#D9A648,transparent)"></div>
+            <div style="display:flex;justify-content:space-between;align-items:flex-start">
+              <div>
+                <div style="font-family:'Cormorant Garamond',serif;font-size:21px;font-weight:600;color:#EADCBE">Kestrel Vane</div>
+                <div style="font-size:11px;color:#A08D6C">Sellsword courier · you</div>
+              </div>
+              <span style="font-size:9px;font-family:'IBM Plex Mono',monospace;color:#74B8AE;border:1px solid #4E827B;border-radius:4px;padding:2px 5px">PLAYER</span>
+            </div>
+            <div style="margin-top:13px;display:flex;flex-direction:column;gap:9px">
+              <div>
+                <div style="display:flex;justify-content:space-between;font-size:10px;font-family:'IBM Plex Mono',monospace;color:#A08D6C;margin-bottom:3px"><span>HEALTH</span><span style="{{ hpNumStyle }}">{{ kestrelHp }}<span style="color:#6E5F49">/24</span></span></div>
+                <div style="height:7px;background:#14100C;border-radius:4px;overflow:hidden"><div style="{{ hpBarStyle }}"></div></div>
+              </div>
+              <div>
+                <div style="display:flex;justify-content:space-between;font-size:10px;font-family:'IBM Plex Mono',monospace;color:#A08D6C;margin-bottom:3px"><span>STAMINA</span><span>10<span style="color:#6E5F49">/14</span></span></div>
+                <div style="height:7px;background:#14100C;border-radius:4px;overflow:hidden"><div style="height:100%;width:71%;background:#4E827B;border-radius:4px"></div></div>
+              </div>
+            </div>
+            <div style="margin-top:14px">
+              <div style="font-size:10px;font-family:'IBM Plex Mono',monospace;letter-spacing:.1em;color:#6E5F49;margin-bottom:7px">ATTRIBUTES <span style="color:#4a3d2c">· 1–20</span></div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 12px">
+                <sc-for list="{{ kestrelAttrs }}" as="a" hint-placeholder-count="4">
+                  <div style="display:flex;align-items:center;justify-content:space-between;font-family:'IBM Plex Mono',monospace;font-size:12px">
+                    <span style="color:#A08D6C">{{ a.abbrev }}</span>
+                    <span style="display:flex;align-items:center;gap:6px"><span style="color:#D6C9AB">{{ a.score }}</span><span style="color:#74B8AE">{{ a.mod }}</span><sc-if value="{{ a.changed }}" hint-placeholder-val="{{ false }}"><span title="Recently changed" style="width:6px;height:6px;border-radius:50%;background:#F5CE6E;box-shadow:0 0 6px #F5CE6E"></span></sc-if></span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+            <div style="margin-top:14px">
+              <div style="font-size:10px;font-family:'IBM Plex Mono',monospace;letter-spacing:.1em;color:#6E5F49;margin-bottom:7px">SKILLS · XP</div>
+              <sc-for list="{{ kestrelSkills }}" as="s" hint-placeholder-count="3">
+                <div style="padding:6px 0">
+                  <div style="display:flex;align-items:center;justify-content:space-between">
+                    <div style="display:flex;align-items:center;gap:7px"><span style="font-size:13px;color:#D6C9AB">{{ s.name }}</span><sc-if value="{{ s.changed }}" hint-placeholder-val="{{ false }}"><span title="Recently advanced" style="width:6px;height:6px;border-radius:50%;background:#F5CE6E;box-shadow:0 0 6px #F5CE6E"></span></sc-if></div>
+                    <span style="font-size:9px;font-family:'IBM Plex Mono',monospace;color:#74B8AE;text-transform:uppercase">{{ s.rank }}</span>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:7px;margin-top:4px">
+                    <div style="flex:1;height:5px;background:#14100C;border-radius:3px;overflow:hidden"><div style="{{ s.xpBarStyle }}"></div></div>
+                    <span style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:#6E5F49">{{ s.xpText }}</span>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+            <div style="margin-top:13px">
+              <div style="font-size:10px;font-family:'IBM Plex Mono',monospace;letter-spacing:.1em;color:#6E5F49;margin-bottom:7px">EQUIPPED</div>
+              <div style="display:flex;flex-wrap:wrap;gap:6px">
+                <sc-for list="{{ equipped }}" as="i" hint-placeholder-count="4">
+                  <span style="font-size:11px;color:{{ i.color }};background:#2C241B;border:1px solid {{ i.color }}44;border-radius:5px;padding:4px 8px">{{ i.name }}</span>
+                </sc-for>
+              </div>
+            </div>
+            <a href="CharacterDossier.dc.html" style="display:flex;align-items:center;justify-content:space-between;margin-top:13px;padding-top:11px;border-top:1px solid #382E21;font-size:11.5px;font-weight:500;color:#D9A648">Open full profile<span>→</span></a>
+          </div>
+
+          <div style="background:#231C15;border:1px solid #382E21;border-radius:10px;padding:14px;margin-bottom:12px">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start">
+              <div>
+                <div style="font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:600;color:#EADCBE">Wren Callow</div>
+                <div style="font-size:11px;color:#A08D6C">Scout · restless · ossuary stair</div>
+              </div>
+              <div style="text-align:right;font-family:'IBM Plex Mono',monospace"><div style="font-size:12px;{{ wrenHpStyle }}">{{ wrenHp }}<span style="color:#6E5F49">/16</span></div><div style="font-size:9px;color:#6E5F49">HP</div></div>
+            </div>
+            <div style="margin-top:9px;display:flex;flex-wrap:wrap;gap:5px">
+              <span style="font-size:10px;color:#A08D6C;background:#2C241B;border-radius:4px;padding:2px 6px">Sharp-eyed</span>
+              <span style="font-size:10px;color:#A08D6C;background:#2C241B;border-radius:4px;padding:2px 6px">Debt-haunted</span>
+            </div>
+            <a href="CharacterDossier.dc.html" style="display:flex;align-items:center;justify-content:space-between;margin-top:11px;font-size:11.5px;font-weight:500;color:#D9A648">Open full profile<span>→</span></a>
+          </div>
+
+          <div style="background:#1B1611;border:1px dashed #382E21;border-radius:10px;padding:13px">
+            <div style="font-size:10px;font-family:'IBM Plex Mono',monospace;letter-spacing:.1em;color:#6E5F49;margin-bottom:5px">SCENE</div>
+            <div style="font-family:'Cormorant Garamond',serif;font-size:16px;color:#EADCBE">The Ossuary Stair</div>
+            <div style="font-size:12px;color:#A08D6C;line-height:1.5;margin-top:4px">Cold-fire censers gutter in their niches. A sealed reliquary gate blocks the descent.</div>
+          </div>
+        </div>
+      </aside>
+
+      <sc-if value="{{ drawerClosed }}" hint-placeholder-val="{{ false }}">
+        <button onClick="{{ toggleDrawer }}" title="Open living cards" style="position:absolute;right:0;top:50%;transform:translateY(-50%);background:#231C15;border:1px solid #382E21;border-right:0;border-radius:8px 0 0 8px;color:#74B8AE;padding:14px 7px;cursor:pointer;writing-mode:vertical-rl;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.14em">CARDS</button>
+      </sc-if>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = {
+    demo:'ready', log:[], streamPhase:null, ambiguity:false, drawerOpen:true, showAnchor:false,
+    input:'', kestrelHp:19, hpFlash:false, wrenHp:14, step:0,
+    bladeXp:{cur:180,next:240,rank:'expert'}, bladeChanged:false,
+    menuOpenId:null, swipingId:null, feedbackOpenId:null, fbText:'', fbGenerating:false,
+    rewindOpen:false, rewindIndex:null, lastTurnHadRuling:false,
+    suggestOpen:false, suggestState:'ready', budget:2,
+    expanded:{},
+  };
+  _mid=0;
+  refs={};
+  setRef(k){ return (el)=>{ if(el) this.refs[k]=el; }; }
+  timers(){ this._t=this._t||[]; return this._t; }
+  after(ms,fn){ const id=setTimeout(fn,ms); this.timers().push(id); return id; }
+  scrollEnd(){ requestAnimationFrame(()=>{ const el=this.refs&&this.refs.scroll; if(el) el.scrollTop=el.scrollHeight; }); }
+
+  componentDidMount(){
+    this.seed();
+    this._key=(e)=>{ if(e.key==='Escape'){ if(this.state.suggestOpen) this.setState({suggestOpen:false}); else if(this.state.drawerOpen) this.setState({drawerOpen:false}); } };
+    window.addEventListener('keydown', this._key);
+  }
+  componentWillUnmount(){ window.removeEventListener('keydown', this._key); if(this._t) this._t.forEach(clearTimeout); }
+
+  mod(n){ const m=Math.floor((n-10)/2); return (m>=0?'+':'−')+Math.abs(m); }
+
+  // ---- alt tellings for swipe (prose only) ----
+  POOLS(){ return {
+    'wren-open':[
+      [{name:'Wren'},{t:' tilts the lock-plate toward the cold-fire and huffs a quiet laugh. "Choir-forged, this one. Give me a breath or two — and keep the dark off my back."'}],
+      [{name:'Wren'},{t:' crouches to the plate, picks already whispering. "Old work. A moment — and mind nothing gets its teeth in me while I count the pins."'}],
+    ],
+  }; }
+
+  seed(){
+    const P=(parts,beat)=>({kind:'prose',parts,beat});
+    const base=[
+      {kind:'you',text:'I press my ear to the reliquary gate and listen for movement beyond it.'},
+      {kind:'ruling',data:{
+        type:'opposed', action:{name:'Listen at the gate',def:'Attend closely to detect sound, movement, or presence.'},
+        skill:{name:'Perception',def:'Notice detail and read a space under pressure.',rank:'adept'},
+        opposed:{a:{label:'Kestrel · Perception',mode:'normal',dice:[11],used:0,mod:2,total:13},b:{label:'Ambient noise',mode:'normal',dice:[9],used:0,mod:3,total:12}},
+        verdict:'success', dcBase:null, preset:'Hard',
+        line:'You place the sound: many small things, waking.'}},
+      P([{t:'The gate is cold enough to sting. Beyond the iron you hear the slow drip of meltwater and, beneath it, a dry chittering — like teeth worried against teeth. '},{name:'Wren'},{t:' crouches at your shoulder, one hand already on her picks.'}]),
+      {kind:'you',text:'"Can you get us through?" I ask Wren, and set my shoulder to the dark behind us.'},
+      P([{name:'Wren'},{t:' turns the lock-plate to the censer-light and clicks her tongue. "Old Choir work. Give me a moment — and don\u2019t let anything chew on me while I\u2019m busy."'}],'wren-open'),
+    ];
+    base.forEach(m=>{ m.id=this._mid++; });
+    this.setState({log:base});
+  }
+
+  // ---------- variant/swipe ----------
+  ensureVar(m){
+    if(m._list) return;
+    if(m.kind==='prose'){ m._list=[m.parts]; m._more=(this.POOLS()[m.beat]||[]).slice(); }
+    else { m._list=[m.data?m.data.line:null]; m._more=[]; }
+    m._vi=0; m._fb=[null];
+  }
+  swipePrev(m){ this.ensureVar(m); if(m._vi>0){ m._vi--; this.setState(s=>({log:[...s.log]})); } }
+  swipeNext(m){
+    this.ensureVar(m);
+    if(m._vi<m._list.length-1){ m._vi++; this.setState(s=>({log:[...s.log]})); return; }
+    this.setState({swipingId:m.id});
+    this.after(900,()=>{ let n=m._more.length?m._more.shift():m._list[0]; m._list.push(n); m._fb.push(null); m._vi=m._list.length-1; this.setState(s=>({log:[...s.log],swipingId:null})); });
+  }
+  toggleMenu(id){ this.setState(s=>({menuOpenId:s.menuOpenId===id?null:id})); }
+  toggleFeedback(id){ this.setState(s=>({feedbackOpenId:s.feedbackOpenId===id?null:id, fbText:'', fbGenerating:false})); }
+  fbGenerate(m){
+    const t=this.state.fbText.trim();
+    if(t.length>300) return;
+    this.setState({fbGenerating:true});
+    this.after(1000,()=>{ this.ensureVar(m); m._list.push(m._list[0]); m._fb.push(t||'(preset)'); m._vi=m._list.length-1; this.setState(s=>({log:[...s.log], fbGenerating:false, feedbackOpenId:null, fbText:''})); });
+  }
+  deleteLast(){ this.setState(s=>{ const log=[...s.log]; let idx=-1; for(let i=log.length-1;i>=0;i--){ if(log[i].kind==='you'){ idx=i; break; } } return {log: idx>=0?log.slice(0,idx):log.slice(0,-1), menuOpenId:null, step:Math.max(0,s.step-1), lastTurnHadRuling:false}; }); }
+  openRewind(i){ this.setState({rewindIndex:i, rewindOpen:true, menuOpenId:null}); }
+  cancelRewind(){ this.setState({rewindOpen:false, rewindIndex:null}); }
+  confirmRewind(){ this.setState(s=>({log:s.log.slice(0,s.rewindIndex), rewindOpen:false, rewindIndex:null, menuOpenId:null})); }
+
+  // ---------- dice element ----------
+  dieEl(value,color,opts){
+    const R=React.createElement, o=opts||{};
+    return R('div',{style:{
+      width:o.small?36:44,height:o.small?36:44,flex:`0 0 ${o.small?36:44}px`,borderRadius:8,background:'#14100C',
+      border:`1px solid ${o.dim?'#4a3d2c':color}`,display:'flex',alignItems:'center',justifyContent:'center',position:'relative',
+      fontFamily:"'IBM Plex Mono',monospace",fontWeight:600,fontSize:o.small?15:18,
+      color:o.dim?'#6E5F49':color, opacity:o.dim?.55:1,
+      textDecoration:o.strike?'line-through':'none',
+      ...(o.animate?{animation:'mt-die .35s cubic-bezier(.2,.8,.3,1.2) both'}:{}),
+    }}, String(value),
+      o.ring? R('div',{style:{position:'absolute',inset:-2,borderRadius:10,border:`2px solid ${color}`,animation:'mt-ring 1.1s ease-out .4s both'}}):null);
+  }
+
+  // ---------- ruling artifact (V7) ----------
+  ruling(d, mid){
+    const R=React.createElement;
+    const reduced=this.state.demo==='reduced';
+    const A=(name,delay,dur)=> reduced?{}:{animation:`${name} ${dur} ${delay} both`};
+    const pal={
+      success:{c:'#8FB573',label:'SUCCESS'}, failure:{c:'#C96F57',label:'FAILURE'},
+      critS:{c:'#F5CE6E',label:'CRITICAL SUCCESS'}, critF:{c:'#B5442F',label:'CRITICAL FAILURE'},
+      denied:{c:'#8A8175',label:'DENIED'}, opposed:{c:'#74B8AE',label:'YOU WIN'}, npc:{c:'#74B8AE',label:'HIT'},
+      budget:{c:'#C9A15a',label:'REFUSED'}, classifier:{c:'#8A8175',label:'UNRULED'},
+    };
+    let key;
+    if(d.type==='crit') key=d.crit==='fail'?'critF':'critS';
+    else if(d.type==='denied') key='denied';
+    else if(d.type==='budget') key='budget';
+    else if(d.type==='classifier') key='classifier';
+    else if(d.type==='opposed') key='opposed';
+    else if(d.type==='npc') key='npc';
+    else key = d.verdict==='failure'?'failure':'success';
+    const p=pal[key], accent=p.c;
+    const expanded = !!this.state.expanded[mid];
+
+    const card=(children)=> R('div',{style:{
+      background:'linear-gradient(160deg,#231C15,#1B1611)',border:`1px solid ${accent}44`,borderLeft:`3px solid ${accent}`,
+      borderRadius:10,padding:'13px 15px',margin:'8px 0',boxShadow:'0 6px 20px rgba(0,0,0,.4)',position:'relative',overflow:'hidden',
+      ...A('mt-rise','.4s','.4s ease')
+    }}, children);
+
+    const header=(sub)=> R('div',{style:{display:'flex',alignItems:'center',gap:8,marginBottom:9}},
+      R('span',{style:{fontFamily:"'IBM Plex Mono',monospace",fontSize:10,letterSpacing:'.16em',color:'#74B8AE',fontWeight:600}},'DM RULING'),
+      sub?R('span',{style:{fontSize:11,color:'#6E5F49'}},'· '+sub):null,
+      R('div',{style:{flex:1}}),
+      (d.type!=='denied'&&d.type!=='budget'&&d.type!=='classifier')?R('button',{onClick:()=>this.toggleExpand(mid),style:{background:'transparent',border:'1px solid #382E21',color:'#74B8AE',fontSize:10,fontFamily:"'IBM Plex Mono',monospace",borderRadius:5,padding:'2px 8px',cursor:'pointer'}}, expanded?'Less':'Details'):null
+    );
+
+    // ---- DENIED (no dice) ----
+    if(d.type==='denied'){
+      return card([ header(d.skill&&d.skill.name),
+        R('div',{style:{display:'flex',alignItems:'center',gap:12}},
+          R('div',{style:{width:40,height:40,borderRadius:8,border:'1px dashed #8A8175',display:'flex',alignItems:'center',justifyContent:'center',color:'#8A8175',fontSize:20}},'⊘'),
+          R('div',{},
+            R('div',{style:{fontFamily:"'IBM Plex Mono',monospace",fontWeight:600,fontSize:15,color:'#8A8175',letterSpacing:'.04em'}},'ACTION DENIED'),
+            R('div',{style:{fontSize:13,color:'#A08D6C',marginTop:2}}, d.reason))),
+        d.hint?R('div',{style:{marginTop:10,fontSize:12,color:'#74B8AE',borderTop:'1px solid #382E21',paddingTop:9}}, d.hint):null
+      ]);
+    }
+    // ---- BUDGET EXCEEDED ----
+    if(d.type==='budget'){
+      return card([ header('turn budget'),
+        R('div',{style:{display:'flex',alignItems:'center',gap:12}},
+          R('div',{style:{width:40,height:40,borderRadius:8,border:'1px dashed #C9A15a',display:'flex',alignItems:'center',justifyContent:'center',color:'#C9A15a',fontSize:19}},'⊗'),
+          R('div',{},
+            R('div',{style:{fontFamily:"'IBM Plex Mono',monospace",fontWeight:600,fontSize:14,color:'#C9A15a',letterSpacing:'.04em'}},'ACTION REFUSED — BUDGET EXHAUSTED'),
+            R('div',{style:{fontSize:13,color:'#A08D6C',marginTop:2}}, d.reason))),
+        R('div',{style:{marginTop:10,fontSize:12,color:'#6E5F49',borderTop:'1px solid #382E21',paddingTop:9}},'No roll, consequence, XP, or loot. Split it across turns.')
+      ]);
+    }
+    // ---- CLASSIFIER UNAVAILABLE ----
+    if(d.type==='classifier'){
+      return card([ header('classifier'),
+        R('div',{style:{display:'flex',alignItems:'center',gap:12}},
+          R('div',{style:{width:40,height:40,borderRadius:8,border:'1px dashed #8A8175',display:'flex',alignItems:'center',justifyContent:'center',color:'#8A8175',fontSize:19}},'?'),
+          R('div',{},
+            R('div',{style:{fontFamily:"'IBM Plex Mono',monospace",fontWeight:600,fontSize:14,color:'#8A8175',letterSpacing:'.04em'}}, d.headline),
+            R('div',{style:{fontSize:13,color:'#A08D6C',marginTop:2}}, d.reason))),
+        R('div',{style:{marginTop:11,display:'flex',flexWrap:'wrap',gap:8}}, (d.actions||[]).map((a,i)=>R('button',{key:i,style:{background:i===0?'#D9A648':'transparent',color:i===0?'#1B1611':'#74B8AE',border:i===0?'0':'1px solid #4E827B',borderRadius:6,padding:'6px 12px',fontSize:12,fontWeight:i===0?600:400,cursor:'pointer',fontFamily:"'IBM Plex Sans'"}}, a)))
+      ]);
+    }
+
+    // ---- ROLL-BASED (normal / adv / disadv / crit / opposed / npc) ----
+    const rows=[];
+    const renderRoll=(rr,label,dcInfo)=>{
+      const isAdv=rr.mode==='advantage', isDis=rr.mode==='disadvantage', isCancel=rr.mode==='cancel';
+      const dice=rr.dice||[rr.roll];
+      const diceEls=dice.map((val,i)=>{
+        const used = i===rr.used;
+        return this.dieEl(val, accent, {small:dice.length>1, dim:!used, strike:!used && dice.length>1, animate:used, ring:d.type==='crit'&&used});
+      });
+      const nat = dice[rr.used];
+      const modeLabel = isAdv?'ADVANTAGE':isDis?'DISADVANTAGE':isCancel?'CANCELLED → NORMAL':'';
+      const modeColor = isAdv?'#8FB573':isDis?'#C96F57':'#A08D6C';
+      return R('div',{style:{marginBottom:label?10:0}},
+        label?R('div',{style:{fontSize:11,color:'#A08D6C',marginBottom:6}}, label):null,
+        R('div',{style:{display:'flex',alignItems:'center',gap:11}},
+          R('div',{style:{display:'flex',gap:6}}, diceEls),
+          R('div',{style:{flex:1,...A('mt-fade','.4s','.35s ease')}},
+            R('div',{style:{fontFamily:"'IBM Plex Mono',monospace",fontSize:13.5,color:'#D6C9AB'}},
+              R('span',{},'d20 '),R('b',{style:{color:accent}},nat),
+              R('span',{style:{color:'#6E5F49'}}, ` ${rr.mod>=0?'+':'−'} ${Math.abs(rr.mod)}`),
+              rr.masteryMod!=null?R('span',{style:{color:'#6E5F49'}}, ` + ${rr.masteryMod}`):null,
+              R('span',{style:{color:'#6E5F49'}},'  =  '),
+              R('b',{style:{fontSize:16,color:accent}}, rr.total)),
+            dcInfo?R('div',{style:{fontFamily:"'IBM Plex Mono',monospace",fontSize:12,color:'#6E5F49',marginTop:2}}, dcInfo):null
+          )
+        ),
+        modeLabel?R('div',{style:{marginTop:7,fontSize:11,fontFamily:"'IBM Plex Mono',monospace",color:modeColor,letterSpacing:'.04em'}}, modeLabel):null,
+        (rr.advReasons&&rr.advReasons.length)?R('div',{style:{marginTop:4,fontSize:11.5,color:'#8FB573'}}, '▲ '+rr.advReasons.join(' · ')+' (advantage)'):null,
+        (rr.disReasons&&rr.disReasons.length)?R('div',{style:{marginTop:3,fontSize:11.5,color:'#C96F57'}}, '▼ '+rr.disReasons.join(' · ')+' (disadvantage)'):null,
+        isCancel?R('div',{style:{marginTop:3,fontSize:11,color:'#6E5F49',fontStyle:'italic'}}, 'Advantage and disadvantage cancel — rolled as a single die.'):null
+      );
+    };
+
+    // difficulty DC line
+    const dcLine=(base,off,eff,preset)=>{
+      if(base==null) return null;
+      if(off && off!==0) return `vs DC ${base} → ${eff} (${preset})`;
+      return `vs DC ${eff}`;
+    };
+
+    const stamp = R('div',{style:{fontFamily:"'IBM Plex Mono',monospace",fontWeight:600,fontSize:12.5,letterSpacing:'.1em',color:accent,border:`2px solid ${accent}`,borderRadius:3,padding:'5px 10px',transform:'rotate(-6deg)',whiteSpace:'nowrap',...A('mt-stamp','.5s','.5s cubic-bezier(.3,1.4,.4,1)')}}, p.label);
+
+    let body;
+    if(d.type==='opposed'){
+      body=R('div',{},
+        renderRoll({...d.opposed.a, advReasons:d.opposed.a.advReasons, disReasons:d.opposed.a.disReasons}, d.opposed.a.label, null),
+        R('div',{style:{fontFamily:"'IBM Plex Mono',monospace",fontSize:10,color:'#6E5F49',textAlign:'center',margin:'2px 0'}},'— vs —'),
+        renderRoll(d.opposed.b, d.opposed.b.label, null),
+        R('div',{style:{display:'flex',justifyContent:'flex-end',marginTop:8}}, stamp)
+      );
+    } else {
+      const dcInfo = dcLine(d.dcBase,d.dcOffset,d.dcEff,d.preset);
+      body=R('div',{style:{display:'flex',alignItems:'flex-start',gap:13}},
+        R('div',{style:{flex:1}}, renderRoll({...d, roll:d.roll}, null, dcInfo)),
+        stamp
+      );
+    }
+
+    // effects line (with difficulty multiplier if present)
+    const effectsEl = (d.effects&&d.effects.length)?R('div',{style:{marginTop:10,paddingTop:9,borderTop:'1px solid #382E21',display:'flex',flexWrap:'wrap',gap:'4px 14px',...A('mt-fade','1.1s','.4s ease')}},
+      d.effects.map((e,i)=>R('span',{key:i,style:{fontFamily:"'IBM Plex Mono',monospace",fontSize:12,color:e.color||accent}}, e.text))):null;
+
+    // XP line
+    const xpEl = d.xp?R('div',{style:{marginTop:8,fontSize:12.5,color:'#F5CE6E',display:'flex',alignItems:'center',gap:7,...A('mt-fade','1.25s','.5s ease')}},
+      R('span',{},'✦'),
+      R('span',{},`${d.xp.skill} +${d.xp.amount} XP`),
+      d.xp.rankup?R('span',{style:{fontFamily:"'IBM Plex Mono',monospace",fontSize:10,letterSpacing:'.04em',color:'#F5CE6E',border:'1px solid #F5CE6E66',borderRadius:3,padding:'1px 6px'}}, d.xp.rankup):R('span',{style:{fontFamily:"'IBM Plex Mono',monospace",fontSize:11,color:'#6E5F49'}}, `→ ${d.xp.next}`)
+    ):null;
+
+    // compact loot line
+    const lootEl = d.loot?this.lootLine(d.loot, mid, expanded):null;
+
+    // expanded detail (defs)
+    const detailEl = expanded?R('div',{style:{marginTop:10,paddingTop:10,borderTop:'1px solid #382E21',display:'flex',flexDirection:'column',gap:8,...A('mt-fade','0s','.2s ease')}},
+      d.action?this.defRow('ACTION', d.action.name, d.action.def):null,
+      d.target?this.defRow('TARGET', d.target.name, d.target.def):null,
+      d.attr?this.defRow('ATTRIBUTE', `${d.attr.name} ${d.attr.score} (${this.mod(d.attr.score)})`, d.attr.def):null,
+      d.skill?this.defRow('SKILL', `${d.skill.name} · ${(d.skill.rank||'').toUpperCase()}`, d.skill.def):null
+    ):null;
+
+    return card([
+      header(d.skill&&d.skill.name?d.skill.name:(d.action&&d.action.name)),
+      body,
+      d.line?R('div',{style:{marginTop:11,paddingTop:10,borderTop:'1px solid #382E21',fontFamily:"'Source Serif 4',serif",fontStyle:'italic',fontSize:14,color:'#EADCBE',...A('mt-fade','1.1s','.4s ease')}}, d.line):null,
+      effectsEl, xpEl, lootEl, detailEl
+    ]);
+  }
+  toggleExpand(mid){ this.setState(s=>({expanded:{...s.expanded,[mid]:!s.expanded[mid]}})); }
+  defRow(label,name,def){
+    const R=React.createElement;
+    return R('div',{},
+      R('div',{style:{display:'flex',alignItems:'baseline',gap:8}},
+        R('span',{style:{fontFamily:"'IBM Plex Mono',monospace",fontSize:9,letterSpacing:'.1em',color:'#6E5F49',flex:'0 0 72px'}}, label),
+        R('span',{style:{fontSize:13,color:'#D6C9AB',fontWeight:600}}, name)),
+      def?R('div',{style:{fontSize:12,color:'#A08D6C',lineHeight:1.5,marginLeft:80,marginTop:1}}, def):null
+    );
+  }
+  lootLine(loot, mid, expanded){
+    const R=React.createElement;
+    const tierColors={Common:'#A08D6C',Uncommon:'#8FB573',Rare:'#74B8AE',Legendary:'#D9A648',Mythical:'#B5442F'};
+    const tc=tierColors[loot.tier]||'#A08D6C';
+    const grand = loot.tier==='Legendary'||loot.tier==='Mythical';
+    const head=R('div',{style:{marginTop:10,paddingTop:9,borderTop:'1px solid #382E21'}},
+      R('div',{style:{display:'flex',alignItems:'center',gap:9}},
+        R('span',{style:{fontSize:14,color:tc}}, grand?'❖':'◈'),
+        R('span',{style:{fontFamily:"'IBM Plex Mono',monospace",fontSize:10,letterSpacing:'.08em',color:'#74B8AE'}},'LOOT'),
+        R('span',{style:{fontSize:13.5,color:'#EADCBE',fontFamily:"'Cormorant Garamond',serif",fontWeight:600}}, loot.item),
+        loot.qty>1?R('span',{style:{fontFamily:"'IBM Plex Mono',monospace",fontSize:11,color:'#6E5F49'}}, `×${loot.qty}`):null,
+        R('span',{style:{fontSize:9,fontFamily:"'IBM Plex Mono',monospace",letterSpacing:'.06em',color:tc,border:`1px solid ${tc}66`,borderRadius:3,padding:'1px 6px',...(grand?{boxShadow:`0 0 10px ${tc}44`}:{})}}, (grand?'★ ':'')+loot.tier.toUpperCase())
+      ),
+      expanded?R('div',{style:{marginTop:8,fontSize:12,color:'#A08D6C',lineHeight:1.55}},
+        loot.def,
+        loot.effects?R('div',{style:{marginTop:5,fontFamily:"'IBM Plex Mono',monospace",fontSize:11.5,color:'#8FB573'}}, loot.effects):null,
+        R('div',{style:{marginTop:5,fontFamily:"'IBM Plex Mono',monospace",fontSize:11,color:'#6E5F49'}}, `source: ${loot.source}`),
+        loot.requirement?R('div',{style:{marginTop:3,fontFamily:"'IBM Plex Mono',monospace",fontSize:11,color:'#C9A15a'}}, `requires: ${loot.requirement}`):null
+      ):null,
+      R('div',{style:{marginTop:9,display:'flex',flexWrap:'wrap',gap:7}},
+        R('button',{style:{background:'#D9A648',color:'#1B1611',border:0,borderRadius:6,padding:'6px 12px',fontSize:11.5,fontWeight:600,cursor:'pointer'}}, loot.requirement?'Requirement not met — store':'Equip now'),
+        R('button',{style:{background:'transparent',color:'#A08D6C',border:'1px solid #382E21',borderRadius:6,padding:'6px 12px',fontSize:11.5,cursor:'pointer'}},'Keep in inventory'),
+        R('a',{href:'CharacterDossier.dc.html',style:{color:'#74B8AE',fontSize:11.5,alignSelf:'center'}},'View item →')
+      )
+    );
+    return head;
+  }
+
+  stack(items, mid){
+    const R=React.createElement;
+    return R('div',{style:{margin:'8px 0'}},
+      R('div',{style:{fontFamily:"'IBM Plex Mono',monospace",fontSize:10,letterSpacing:'.16em',color:'#74B8AE',margin:'0 0 2px 3px'}},'EXCHANGE · 2 ROLLS'),
+      items.map((it,i)=>R('div',{key:i,style:{position:'relative'}}, this.ruling(it, mid+'-'+i)))
+    );
+  }
+
+  nodeFor(m){
+    const R=React.createElement;
+    if(m.kind==='you'){
+      return R('div',{style:{margin:'18px 0',display:'flex',gap:11,justifyContent:'flex-end'}},
+        R('div',{style:{maxWidth:'82%',background:'#2C241B',border:'1px solid rgba(216,170,90,.18)',borderRadius:'10px 10px 3px 10px',padding:'9px 13px',fontFamily:"'Source Serif 4',serif",fontSize:15,color:'#D6C9AB',lineHeight:1.55}}, m.text));
+    }
+    if(m.kind==='prose'){
+      return R('p',{style:{fontFamily:"'Source Serif 4',serif",fontSize:17,lineHeight:1.75,color:'#EADCBE',margin:'14px 0',maxWidth:'66ch'}},
+        m.parts.map((pp,i)=> pp.name?R('span',{key:i,style:{color:'#D9A648',fontWeight:600}},pp.name):R('span',{key:i},pp.t)));
+    }
+    if(m.kind==='ruling') return this.ruling(m.data, 'm'+m.id);
+    if(m.kind==='stack') return this.stack(m.items, 'm'+m.id);
+    return null;
+  }
+
+  // ---------- scripted turns (canonical order: ruling(s) ABOVE prose) ----------
+  runTurn(youText){
+    const step=this.state.step;
+    if(youText.trim().length>0 && youText.trim().length<12){ this.setState({ambiguity:true,input:''}); if(this.refs.input) this.refs.input.value=''; return; }
+    this.setState(s=>({log:[...s.log,{kind:'you',text:youText,id:this._mid++}], ambiguity:false, streamPhase:'thinking', input:'', menuOpenId:null, suggestOpen:false}));
+    if(this.refs.input) this.refs.input.value='';
+    this.scrollEnd();
+
+    this.after(900,()=>{ this.setState({streamPhase:'streaming'}); });
+    this.after(1500,()=>{
+      let add=[], extra={};
+      if(step===0){ // advantage success + XP
+        add=[{kind:'ruling',data:{
+          type:'success', action:{name:'Strike from cover',def:'Attack an unaware or off-guard target from concealment.'},
+          target:{name:'Grave-wight',def:'A restless ossuary revenant; slow, but cold to the touch.'},
+          attr:{name:'Might',score:14,def:'Physical force behind a blow.'},
+          skill:{name:'Blade',def:'Close-quarters swordwork.',rank:'expert'},
+          roll:{mode:'advantage',dice:[9,17],used:1,mod:2,masteryMod:5,total:24,advReasons:['Target is unaware']},
+          dcBase:15,dcOffset:2,dcEff:17,preset:'Hard', verdict:'success',
+          line:'You come out of the dark and the blade is already moving.',
+          effects:[{text:'Grave-wight −11 HP (×0.9 Hard)',color:'#C96F57'}],
+          xp:{skill:'Blade',amount:12,next:'240',rankup:null}}}];
+        add.push({kind:'prose',beat:'narrate',parts:[{t:'The wight never hears you. Steel takes it beneath the arm and folds it against the wall in a gust of grave-ash.'}]});
+      } else if(step===1){ // crit + Mythical loot
+        add=[{kind:'ruling',data:{
+          type:'crit',crit:'success', action:{name:'Finishing blow',def:'A decisive strike against a reeling foe.'},
+          attr:{name:'Might',score:14,def:'Physical force behind a blow.'},
+          skill:{name:'Blade',def:'Close-quarters swordwork.',rank:'expert'},
+          roll:{mode:'normal',dice:[20],used:0,mod:2,masteryMod:5,total:27},
+          dcBase:13,dcOffset:2,dcEff:15,preset:'Hard', verdict:'success',
+          line:'Steel meets bone and the wight comes apart entirely.',
+          xp:{skill:'Blade',amount:20,rankup:'RANK UP → MASTER'},
+          loot:{item:'Choirbreaker',tier:'Mythical',qty:1,def:'A saber quenched in cathedral-silence. Wounds it deals do not close by ordinary means.',effects:'+2 Blade · enables action “Silence the Choir”',source:'Grave-wight (critical)',requirement:null}}}];
+        add.push({kind:'prose',beat:'narrate',parts:[{t:'Something falls from the ash where the wight stood — a blade that makes no sound at all, not even as it rings against the stone.'}]});
+        extra={bladeChanged:true, bladeXp:{cur:0,next:0,rank:'master'}};
+      } else {
+        add=[{kind:'prose',beat:'narrate',parts:[{t:'The ash settles. In the sudden quiet, the censers gutter and the ossuary breathes out a long, cold sigh. Somewhere below, a bell begins to toll — slow, deliberate, far too deep to be rung by any living hand.'}]}];
+      }
+      add.forEach(a=>{ a.id=this._mid++; });
+      const hadRuling = step<2;
+      this.setState(s=>({log:[...s.log,...add], streamPhase:'saving', step:s.step+1, lastTurnHadRuling:hadRuling, ...extra}));
+      this.scrollEnd();
+      this.after(700,()=>{ this.setState({streamPhase:null}); if(extra.bladeChanged) this.after(2600,()=>this.setState({bladeChanged:false})); });
+    });
+  }
+
+  applyDemo(d){
+    // seeded log states
+    if(d==='ready'){ this.setState({demo:d,step:0}); this.seed(); return; }
+    if(['denied','disadv','cancel','opposed','budget','loot','classifierNoContent','classifierTimeout','classifierLowConf','classifierTarget'].includes(d)){
+      this.setState({demo:d, log:this.stateLog(d), streamPhase:null});
+      return;
+    }
+    if(d.startsWith('stream-')){ this.setState({demo:'ready', streamPhase:d.replace('stream-','')}); return; }
+    this.setState({demo:d, streamPhase:null});
+  }
+  // build a focused log for a state demo
+  stateLog(d){
+    const you=(text)=>({kind:'you',text,id:this._mid++});
+    const mk=(data)=>({kind:'ruling',data,id:this._mid++});
+    const skB={name:'Blade',def:'Close-quarters swordwork.',rank:'expert'};
+    if(d==='denied') return [ you('I try to pick the reliquary lock myself.'), mk({type:'denied',skill:{name:'Lockpicking'},action:{name:'Pick lock'},reason:'Requires Lockpicking — a skill Kestrel has not learned.',hint:'Wren carries picks. Ask her, or find another way through.'}) ];
+    if(d==='disadv') return [ you('Exhausted and bleeding, I swing at the wight anyway.'), mk({type:'failure',action:{name:'Attack (melee)',def:'A close swing at a target.'},attr:{name:'Might',score:14,def:'Force behind a blow.'},skill:skB,roll:{mode:'disadvantage',dice:[14,6],used:1,mod:2,masteryMod:5,total:13,disReasons:['Exhausted','Wounded']},dcBase:15,dcOffset:2,dcEff:17,preset:'Hard',verdict:'failure',line:'The blow goes wide; the effort costs you more than it lands.',effects:[{text:'no damage dealt',color:'#6E5F49'}]}) ];
+    if(d==='cancel') return [ you('Hidden in the dark but half-dead on my feet, I strike.'), mk({type:'success',action:{name:'Strike from cover',def:'Attack from concealment.'},skill:skB,roll:{mode:'cancel',dice:[15],used:0,mod:2,masteryMod:5,total:22,advReasons:['Target is unaware'],disReasons:['Wounded']},dcBase:15,dcOffset:2,dcEff:17,preset:'Hard',verdict:'success',line:'Advantage and disadvantage answer each other; the strike lands true regardless.'}) ];
+    if(d==='opposed') return [ you('I try to wrench the reliquary gate open against whatever holds it.'), mk({type:'opposed',action:{name:'Force the gate',def:'Overpower a physical obstacle.'},skill:{name:'Athletics',rank:'adept',def:'Feats of strength and endurance.'},preset:'Hard',verdict:'success',opposed:{a:{label:'Kestrel · Athletics',mode:'advantage',dice:[12,18],used:1,mod:2,masteryMod:3,total:23,advReasons:['Braced footing']},b:{label:'Gate mechanism',mode:'disadvantage',dice:[16,5],used:1,mod:6,total:11,disReasons:['Rusted hinges']}},line:'Metal shrieks and gives; the gate grinds inward.'}) ];
+    if(d==='budget') return [ you('I parry the wight, disarm it, kick it down the stair, then sprint past — all at once.'), mk({type:'success',action:{name:'Parry',def:'Deflect an incoming attack.'},skill:skB,roll:{mode:'normal',dice:[16],used:0,mod:2,masteryMod:5,total:23},dcBase:12,dcOffset:2,dcEff:14,preset:'Hard',verdict:'success',line:'You turn the wight\u2019s claw on your guard.'}), mk({type:'budget',reason:'Your turn allows 2 actions. “Disarm” and “sprint past” were refused — send them next turn.'}) ];
+    if(d==='loot') return [ you('I search the fallen captain\u2019s body.'), mk({type:'success',action:{name:'Search',def:'Examine a person or place for items.'},skill:{name:'Investigation',rank:'adept',def:'Find what is hidden or overlooked.'},roll:{mode:'normal',dice:[14],used:0,mod:1,masteryMod:3,total:18},dcBase:12,dcOffset:2,dcEff:14,preset:'Hard',verdict:'success',line:'Beneath the captain\u2019s cloak, a strongbox with a broken clasp.',loot:{item:'Warden\u2019s Signet',tier:'Rare',qty:1,def:'A signet that opens Warden-sealed doors and marks the bearer as a captain of the watch.',effects:'enables action “Command the Watch” · +1 Persuasion vs guards',source:'Captain\u2019s strongbox (non-combat)',requirement:null}}) ];
+    if(d==='classifierNoContent') return [ you('...'), mk({type:'classifier',headline:'NOTHING TO RULE ON',reason:'Your turn had no describable action, so no ruling was made. Your text is kept — add what Kestrel does.',actions:['Edit turn']}) ];
+    if(d==='classifierTimeout') return [ you('I feint left, then drive my shoulder into the door.'), mk({type:'classifier',headline:'CLASSIFIER UNAVAILABLE',reason:'The classifier provider timed out, so mechanics couldn\u2019t be decided. Your turn is preserved exactly as written.',actions:['Retry mechanics','Configure Classifier']}) ];
+    if(d==='classifierLowConf') return [ you('I do the thing with the... you know.'), mk({type:'classifier',headline:'LOW CONFIDENCE',reason:'The classifier wasn\u2019t sure what you attempted. Clarify, and it will rule accordingly — nothing was rolled.',actions:['Clarify','Edit turn']}) ];
+    if(d==='classifierTarget') return [ you('I strike the shadow at the far end of the hall.'), mk({type:'classifier',headline:'UNRESOLVED TARGET',reason:'No “shadow” is present in the current scene. Name a target that exists, and the strike will be ruled.',actions:['Clarify target','Edit turn']}) ];
+    return [];
+  }
+
+  renderVals(){
+    const s=this.state, self=this, R=React.createElement;
+    const railItems=[
+      {label:'Library',glyph:'❏',href:'Library.dc.html',active:false},
+      {label:'Story',glyph:'✎',href:'Play.dc.html',active:true},
+      {label:'Personas',glyph:'☙',href:'Personas.dc.html',active:false},
+      {label:'Lore',glyph:'❦',href:'Lorebook.dc.html',active:false},
+      {label:'Settings',glyph:'⚙',href:'Settings.dc.html',active:false},
+    ].map(it=>({...it,style:`display:flex;flex-direction:column;align-items:center;gap:3px;width:56px;padding:8px 0;border-radius:8px;text-decoration:none;color:${it.active?'#EADCBE':'#6E5F49'};background:${it.active?'#2C241B':'transparent'};border:1px solid ${it.active?'rgba(216,170,90,.2)':'transparent'}`,iconStyle:`font-size:18px;color:${it.active?'#D9A648':'#8A7A5c'}`}));
+
+    const chipDefs=[['ready','Live turns'],['denied','Denied'],['disadv','Disadvantage'],['cancel','Adv/dis cancel'],['opposed','Opposed'],['budget','Budget exceeded'],['loot','Loot award'],['classifierNoContent','No content'],['classifierTimeout','Classifier timeout'],['classifierLowConf','Low confidence'],['classifierTarget','Unresolved target'],['stream-thinking','Stream: thinking'],['stream-saving','Stream: saving'],['stream-error','Stream: error'],['stream-cancelled','Stream: cancelled'],['stream-timedout','Stream: timed out'],['modelFail','Model failure'],['trialExpired','Trial expired'],['error','Network error'],['loading','Loading'],['empty','Empty'],['reduced','Reduced motion']];
+    const demoChips=chipDefs.map(([k,label])=>({label,onClick:()=>self.applyDemo(k),
+      style:`font-size:11px;font-family:'IBM Plex Sans';padding:4px 9px;border-radius:5px;cursor:pointer;border:1px solid ${(s.demo===k||('stream-'+s.streamPhase)===k)?'#4E827B':'#382E21'};background:${(s.demo===k||('stream-'+s.streamPhase)===k)?'rgba(116,184,174,.12)':'transparent'};color:${(s.demo===k||('stream-'+s.streamPhase)===k)?'#74B8AE':'#A08D6C'}`}));
+
+    // log
+    const arr=s.log||[];
+    const busy = s.streamPhase==='thinking'||s.streamPhase==='streaming'||s.demo==='loading';
+    const lastNarr=(()=>{ if(busy) return -1; for(let i=arr.length-1;i>=0;i--){ if(arr[i].kind==='prose') return i; } return -1; })();
+    const log=arr.map((m,i)=>{
+      const isYou=m.kind==='you';
+      const isLatest=i===lastNarr;
+      if(isLatest) self.ensureVar(m);
+      let node;
+      if(m._list && m.kind==='prose'){ node=self.nodeFor({kind:'prose',parts:m._list[m._vi]}); }
+      else node=self.nodeFor(m);
+      const has=!!m._list, total=has?m._list.length:1, vi=has?m._vi:0, atEnd=vi>=total-1;
+      const fbOpen = s.feedbackOpenId===m.id;
+      const fbChips=[['Shorter','shorter'],['More detail','longer'],['More tension','tension'],['Less flowery','plainer'],['Different take','different']].map(([label,id])=>({label,onClick:()=>{ self.setState({fbText:label}); },style:`font-size:11.5px;font-family:'IBM Plex Sans';padding:5px 11px;border-radius:14px;cursor:pointer;border:1px solid #4E827B55;background:#231C15;color:#74B8AE`}));
+      const activeFb = m._fb ? m._fb[m._vi] : null;
+      return {
+        key:i, node, wrapStyle:'', groupStyle:'',
+        showControls:!isYou, isLatest, latestClass:isLatest?'mt-latest':'',
+        ctrlRowStyle:'display:flex;align-items:center;gap:9px;margin-top:7px;flex-wrap:wrap',
+        counter:`${vi+1}/${total}`,
+        prevStyle:`background:transparent;border:0;color:${vi>0?'#A08D6C':'#4a3f30'};font-size:15px;cursor:${vi>0?'pointer':'default'};padding:0 5px;line-height:1`,
+        nextStyle:'background:transparent;border:0;color:#A08D6C;font-size:15px;cursor:pointer;padding:0 5px;line-height:1',
+        nextTitle: atEnd?'Generate another telling':'Next telling',
+        fbBtnStyle:`background:transparent;border:1px solid ${fbOpen?'#4E827B':'#382E21'};color:${fbOpen?'#74B8AE':'#A08D6C'};font-size:11px;border-radius:6px;padding:3px 9px;cursor:pointer;font-family:'IBM Plex Sans'`,
+        hasRuling:isLatest && s.lastTurnHadRuling,
+        swiping:isLatest && s.swipingId===m.id,
+        showHint:isLatest && !fbOpen,
+        menuOpen:s.menuOpenId===m.id,
+        menuBtnStyle:'background:transparent;border:0;color:#6E5F49;font-size:16px;cursor:pointer;padding:2px 7px;border-radius:5px;line-height:1',
+        swipePrev:()=>self.swipePrev(m), swipeNext:()=>self.swipeNext(m),
+        onMenu:()=>self.toggleMenu(m.id), onDelete:()=>self.deleteLast(), onRewind:()=>self.openRewind(i),
+        toggleFeedback:()=>self.toggleFeedback(m.id), feedbackOpen:fbOpen, fbChips,
+        onFbInput:(e)=>self.setState({fbText:e.target.value}),
+        fbCount:s.fbText.length, fbCountStyle:`font-family:'IBM Plex Mono',monospace;font-size:10px;color:${s.fbText.length>300?'#C96F57':'#6E5F49'}`,
+        fbError: s.fbText.length>300?'Feedback is capped at 300 characters — trim it to regenerate.':null,
+        fbGenerate:()=>self.fbGenerate(m), fbGenLabel: s.fbGenerating?'Regenerating…':'Regenerate',
+        fbGenStyle:`background:${s.fbText.length>300?'#2C241B':'#D9A648'};color:${s.fbText.length>300?'#6E5F49':'#1B1611'};border:0;border-radius:7px;padding:7px 14px;font-size:12.5px;font-weight:600;cursor:${s.fbText.length>300?'not-allowed':'pointer'}`,
+        activeFeedback: activeFb,
+      };
+    });
+
+    // streaming indicator
+    const sp=s.streamPhase;
+    let streamShown=!!sp, streamDots=false, streamIcon='', streamText='', streamSub='', streamAccent='#D9A648', streamTextColor='#A08D6C', streamAction='', streamStyle='margin:16px 0';
+    const stbox=(bd,ac)=>`margin:16px 0;padding:12px 14px;border-radius:10px;background:${bd};border:1px solid ${ac}`;
+    if(sp==='thinking'){ streamDots=true; streamText='The story is thinking'; streamStyle='margin:20px 0'; }
+    else if(sp==='streaming'){ streamDots=true; streamText='The story continues…'; streamAccent='#D9A648'; streamStyle='margin:20px 0'; }
+    else if(sp==='saving'){ streamIcon='⟳'; streamText='Saving this turn…'; streamAccent='#74B8AE'; streamSub='Committing the ruling, XP, and any loot. The composer re-opens when this is done.'; streamStyle='margin:16px 0'; }
+    else if(sp==='error'){ streamIcon='✖'; streamText='The telling failed to finish'; streamAccent='#C96F57'; streamTextColor='#C96F57'; streamAction='Retry'; streamSub='The ruling was committed; only the prose failed. Retry re-tells this turn.'; streamStyle=stbox('rgba(181,68,47,.08)','rgba(181,68,47,.4)'); }
+    else if(sp==='cancelled'){ streamIcon='⊘'; streamText='You stopped this turn'; streamAccent='#8A8175'; streamAction='Resume'; streamSub='Nothing was committed. Your message is kept in the composer.'; streamStyle=stbox('#1B1611','#382E21'); }
+    else if(sp==='timedout'){ streamIcon='◷'; streamText='The response timed out'; streamAccent='#C9A15a'; streamTextColor='#C9A15a'; streamAction='Retry'; streamSub='A stale operation was detected on restart — resume where you left off without navigating away.'; streamStyle=stbox('rgba(201,161,90,.06)','#6E5F4955'); }
+
+    // notices
+    let notice=false,noticeStyle='',noticeIcon='',noticeTitle='',noticeBody='',noticeTitleColor='#EADCBE',noticeCta=null;
+    const box=(bd,ac)=>`margin:16px 0;background:${bd};border:1px solid ${ac};border-radius:10px;padding:14px 16px;animation:mt-rise .25s ease`;
+    if(s.demo==='modelFail'){ notice=true; noticeStyle=box('rgba(181,68,47,.08)','rgba(181,68,47,.4)'); noticeIcon='✖'; noticeTitle='The Narrator model returned nothing'; noticeBody='Your Narrator failed to produce prose after two tries. The ruling stands — only the telling is missing.'; noticeTitleColor='#C96F57'; noticeCta='Try a recommended model →'; }
+    if(s.demo==='trialExpired'){ notice=true; noticeStyle=box('rgba(216,170,90,.06)','rgba(216,170,90,.3)'); noticeIcon='◷'; noticeTitle='Your trial has ended'; noticeBody='Your stories are yours to read forever — unlock to keep playing.'; noticeTitleColor='#D9A648'; }
+    if(s.demo==='error'){ notice=true; noticeStyle=box('rgba(181,68,47,.08)','rgba(181,68,47,.4)'); noticeIcon='⚡'; noticeTitle='Couldn\u2019t reach the provider'; noticeBody='The request timed out. Your turn is saved and will resume when you send again.'; noticeTitleColor='#C96F57'; }
+
+    const kestrelHp=s.demo==='death'?0:s.kestrelHp;
+    const hpPct=Math.round((kestrelHp/24)*100);
+    const hpColor=kestrelHp<=0?'#8A8175':(kestrelHp<9?'#C96F57':'#8FB573');
+    const hpBarStyle=`height:100%;width:${hpPct}%;background:${hpColor};border-radius:4px;transition:width .5s ease${s.hpFlash?';animation:mt-flash .6s ease':''}`;
+    const hpNumStyle=`font-family:'IBM Plex Mono',monospace;color:${hpColor}`;
+
+    // skills w/ XP bars
+    const xpBar=(cur,next,changed)=>`height:100%;width:${next>0?Math.round(cur/next*100):100}%;background:${changed?'#F5CE6E':'#4E827B'};border-radius:3px;transition:width .5s ease`;
+    const kestrelSkills=[
+      {name:'Blade', rank:s.bladeXp.rank, changed:s.bladeChanged, xpBarStyle: s.bladeXp.rank==='master'?'height:100%;width:100%;background:#F5CE6E;border-radius:3px':xpBar(s.bladeXp.cur,s.bladeXp.next,s.bladeChanged), xpText: s.bladeXp.rank==='master'?'MASTER':`${s.bladeXp.cur}/${s.bladeXp.next} XP`},
+      {name:'Persuasion', rank:'adept', changed:false, xpBarStyle:xpBar(60,120,false), xpText:'60/120 XP'},
+      {name:'Arcane Sight', rank:'novice', changed:false, xpBarStyle:xpBar(15,80,false), xpText:'15/80 XP'},
+    ];
+
+    // party
+    const partyDead=s.demo==='death';
+    const party=[
+      {name:'Kestrel',initials:'KV',hp:kestrelHp,max:24,mood:'wary',glyph:'◑',accent:'#D9A648',you:true,fallen:false},
+      {name:'Wren',initials:'WC',hp:s.wrenHp,max:16,mood:'restless',glyph:'◇',accent:'#74B8AE',you:false,fallen:false},
+      {name:'Aldric',initials:'BA',hp:partyDead?0:30,max:30,mood:'steady',glyph:'●',accent:'#74B8AE',you:false,fallen:partyDead},
+    ].map(p=>{ const pct=Math.max(0,Math.round(p.hp/p.max*100)); const hc=p.fallen?'#8A8175':(pct<40?'#C96F57':(pct<70?'#F5CE6E':'#8FB573'));
+      return {...p,title:`${p.name} — ${p.fallen?'fallen':p.mood} · HP ${p.hp}/${p.max}`,onClick:()=>self.setState({drawerOpen:true}),
+        chipStyle:`display:flex;align-items:center;gap:9px;background:${p.fallen?'#181310':'#231C15'};border:1px solid ${p.you?'rgba(216,170,90,.3)':'#382E21'};border-radius:9px;padding:6px 12px 6px 6px;cursor:pointer;flex:0 0 auto;${p.fallen?'opacity:.6':''}`,
+        avatarStyle:`width:30px;height:30px;flex:0 0 30px;border-radius:7px;background:#2C241B;border:1px solid ${p.accent}55;display:flex;align-items:center;justify-content:center;font-family:'Cormorant Garamond',serif;font-weight:700;font-size:14px;color:${p.fallen?'#8A8175':p.accent}`,
+        nameColor:p.fallen?'#8A8175':(p.you?'#EADCBE':'#D6C9AB'),moodGlyph:p.fallen?'FALLEN':p.glyph,
+        moodStyle:`font-size:${p.fallen?9:11}px;color:${p.fallen?'#8A8175':'#8A7A5c'}${p.fallen?";font-family:'IBM Plex Mono',monospace;letter-spacing:.08em":''}`,
+        hpBar:`height:100%;width:${pct}%;background:${hc};border-radius:3px;transition:width .4s ease`};
+    });
+
+    // composer
+    const terminalStream = ['error','cancelled','timedout','saving'].includes(sp) || sp===null;
+    const inputDisabled = busy || s.demo==='trialExpired';
+    const sendDisabled = inputDisabled;
+    const placeholder = s.demo==='trialExpired'?'Reading is open — new turns need a license…':(busy?'The storyteller is writing…':'What does Kestrel do?');
+    const composerStyle=`display:flex;align-items:flex-end;gap:9px;background:#14100C;border:1px solid ${busy?'#382E21':'rgba(216,170,90,.25)'};border-radius:10px;padding:9px 11px;opacity:${inputDisabled?.6:1}`;
+    const sendStyle=`flex:0 0 auto;background:${sendDisabled?'#2C241B':'#D9A648'};color:${sendDisabled?'#6E5F49':'#1B1611'};border:0;border-radius:7px;padding:9px 17px;font-weight:600;font-size:13px;cursor:${sendDisabled?'default':'pointer'};font-family:'IBM Plex Sans'`;
+    const suggestBtnStyle=`flex:0 0 auto;width:34px;height:34px;border-radius:7px;background:${s.suggestOpen?'rgba(116,184,174,.14)':'#231C15'};border:1px solid ${s.suggestOpen?'#4E827B':'#382E21'};color:#74B8AE;font-size:15px;cursor:pointer;line-height:1`;
+
+    // suggestions
+    const suggestions=[
+      {kind:'ACTION',text:'Cut the censer-chains to drop the light and break their line of sight.',kindColor:'#8FB573'},
+      {kind:'MOVE',text:'Fall back to the ossuary stair where they can only come at you one at a time.',kindColor:'#74B8AE'},
+      {kind:'ACTION',text:'Bar the reliquary gate behind you with the fallen captain\u2019s pike.',kindColor:'#8FB573'},
+      {kind:'DIALOGUE',text:'Call to Wren to ready her picks on the far door — you\u2019ll buy her the time.',kindColor:'#D9A648'},
+      {kind:'ACTION',text:'Search the captain\u2019s body for anything that turns this fight.',kindColor:'#8FB573'},
+    ].map(sg=>({...sg,onClick:()=>{ if(self.refs.input){ self.refs.input.value=sg.text; self.refs.input.focus(); } self.setState({input:sg.text, suggestOpen:false}); }}));
+    const suggestSkeletons=[1,1,1,1,1];
+    const ss=s.suggestState;
+
+    const overflow = s.demo==='budget';
+    const overflowRows=[
+      {tag:'RULED',text:'Parry the wight',tagStyle:'font-family:\'IBM Plex Mono\',monospace;font-size:9px;color:#8FB573;border:1px solid #8FB57355;border-radius:3px;padding:1px 6px',textColor:'#D6C9AB'},
+      {tag:'RULED',text:'Step back to the stair',tagStyle:'font-family:\'IBM Plex Mono\',monospace;font-size:9px;color:#8FB573;border:1px solid #8FB57355;border-radius:3px;padding:1px 6px',textColor:'#D6C9AB'},
+      {tag:'REFUSED',text:'Disarm · sprint past (over budget)',tagStyle:'font-family:\'IBM Plex Mono\',monospace;font-size:9px;color:#C9A15a;border:1px solid #C9A15a55;border-radius:3px;padding:1px 6px',textColor:'#6E5F49'},
+    ];
+
+    return {
+      railItems, demoChips, log, party,
+      modelTitle:'Narrator: Claude Sonnet · connected', modelDot:'#8FB573',
+      isEmpty: s.demo==='empty',
+      streamShown, streamDots, streamIcon, streamText, streamSub, streamAccent, streamTextColor, streamAction, streamStyle,
+      streamRetry:()=>{ self.setState({streamPhase:null}); },
+      ambiguity: s.ambiguity,
+      notice,noticeStyle,noticeIcon,noticeTitle,noticeBody,noticeTitleColor,noticeCta,
+      scrollRef:self.setRef('scroll'), logRef:self.setRef('log'), inputRef:self.setRef('input'),
+      onScroll:(e)=>{ const el=e.target; self.setState({showAnchor: el.scrollHeight-el.scrollTop-el.clientHeight>240}); },
+      showAnchor:s.showAnchor, scrollToEnd:()=>{ self.scrollEnd(); self.setState({showAnchor:false}); },
+      onInput:(e)=>self.setState({input:e.target.value}),
+      onKey:(e)=>{ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); if(!sendDisabled&&e.target.value.trim()) self.runTurn(e.target.value); } },
+      send:()=>{ const v=self.refs.input?self.refs.input.value:''; if(!sendDisabled&&v.trim()) self.runTurn(v); },
+      placeholder, composerStyle, sendStyle, inputDisabled, sendDisabled, sendLabel:'Send',
+      budgetHelper:`Up to ${s.budget} actions this turn`, budgetShort:s.budget,
+      suggestBtnStyle, toggleSuggest:()=>self.setState(st=>({suggestOpen:!st.suggestOpen, suggestState:'ready'})),
+      suggestOpen:s.suggestOpen, suggestState:ss,
+      suggestLoading:ss==='loading', suggestEmpty:ss==='empty', suggestFail:ss==='fail', suggestReady:ss==='ready',
+      suggestions, suggestSkeletons,
+      regenSuggest:()=>{ self.setState({suggestState:'loading'}); self.after(700,()=>self.setState({suggestState:'ready'})); },
+      overflow, overflowRows, editTurn:()=>self.applyDemo('ready'),
+      drawerStyle:`flex:0 0 ${s.drawerOpen?'320px':'0px'};width:${s.drawerOpen?'320px':'0'};background:#1B1611;border-left:1px solid #382E21;display:flex;flex-direction:column;overflow:hidden;transition:flex-basis .25s ease,width .25s ease`,
+      drawerClosed:!s.drawerOpen, toggleDrawer:()=>self.setState(st=>({drawerOpen:!st.drawerOpen})),
+      kestrelHp, hpBarStyle, hpNumStyle, kestrelSkills,
+      kestrelAttrs:[
+        {abbrev:'MIG',score:'14',mod:'(+2)',changed:false},
+        {abbrev:'AGI',score:'12',mod:'(+1)',changed:false},
+        {abbrev:'WIT',score:'15',mod:'(+2)',changed:false},
+        {abbrev:'RES',score:'10',mod:'(+0)',changed:false},
+      ],
+      equipped:[{name:'Vale saber',color:'#A08D6C'},{name:'Oil-treated cloak',color:'#A08D6C'},{name:'Warden signet',color:'#74B8AE'}],
+      wrenHp:s.wrenHp, wrenHpStyle:'color:#8FB573',
+      rewindOpen:s.rewindOpen, rewindCount: s.rewindIndex!=null?(arr.length-s.rewindIndex):0,
+      cancelRewind:()=>self.cancelRewind(), confirmRewind:()=>self.confirmRewind(),
+    };
+  }
+}
+</script>
+</body>
+</html>

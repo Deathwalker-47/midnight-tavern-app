@@ -26,10 +26,41 @@ import {
   makeRouter,
   ROLES,
   ROLE_LABELS,
+  PROVIDER_IDS,
+  makeProvider,
   type FetchLike,
   type ProviderConfigs,
   type SamplerProfile,
 } from "../../src/router/index.js";
+
+describe("provider discovery", () => {
+  it("keeps Electron Hub and NanoGPT second and third in the provider order", () => {
+    expect(PROVIDER_IDS.slice(0, 4)).toEqual(["openrouter", "electronhub", "nanogpt", "openai"]);
+  });
+
+  it("validates OpenRouter against the authenticated key endpoint and parses live models", async () => {
+    const calls: { url: string; authorization?: string }[] = [];
+    const fetchImpl = (async (url: string, init?: RequestInit) => {
+      const headers = init?.headers as Record<string, string> | undefined;
+      calls.push({ url, ...(headers?.["authorization"] ? { authorization: headers["authorization"] } : {}) });
+      const body = url.endsWith("/models")
+        ? { data: [{ id: "vendor/model-a", name: "Model A", context_length: 32_000 }] }
+        : { data: { label: "test key" } };
+      return new Response(JSON.stringify(body), { status: 200 });
+    }) as unknown as FetchLike;
+    const provider = makeProvider("openrouter", fetchImpl);
+
+    await provider.validateConfig?.({ apiKey: "sk-or-test" });
+    const models = await provider.listModels?.({ apiKey: "sk-or-test" });
+
+    expect(calls.map((call) => call.url)).toEqual([
+      "https://openrouter.ai/api/v1/key",
+      "https://openrouter.ai/api/v1/models",
+    ]);
+    expect(calls.every((call) => call.authorization === "Bearer sk-or-test")).toBe(true);
+    expect(models).toEqual([{ id: "vendor/model-a", label: "Model A", contextLength: 32_000 }]);
+  });
+});
 
 function cannedFetch(content: string): { fetch: FetchLike; calls: { body: any }[] } {
   const calls: { body: any }[] = [];

@@ -18,7 +18,14 @@ import { createRoot, type Root } from "react-dom/client";
 import "./theme/tokens.css";
 import { App } from "./app/App.js";
 import { initBridge } from "./bridge/core.js";
+import {
+  diagnosticError,
+  diagnosticsLogger,
+  initializeDiagnostics,
+  revealDiagnostics,
+} from "./observability/logger.js";
 
+initializeDiagnostics();
 const container = document.getElementById("root");
 if (!container) throw new Error("Missing #root element in index.html");
 const root: Root = createRoot(container);
@@ -86,6 +93,22 @@ function renderStartupFailure(err: unknown): void {
         >
           Try again
         </button>
+        <button
+          type="button"
+          onClick={() => void revealDiagnostics().catch((error: unknown) => {
+            diagnosticsLogger.error("diagnostics.reveal.failed", { error: diagnosticError(error) });
+          })}
+          style={{
+            padding: "0.5rem 1rem",
+            cursor: "pointer",
+            border: 0,
+            background: "transparent",
+            color: "inherit",
+            textDecoration: "underline",
+          }}
+        >
+          Open diagnostic logs
+        </button>
       </div>
     </StrictMode>
   );
@@ -100,12 +123,19 @@ function renderApp(): void {
 }
 
 async function bootstrap(): Promise<void> {
-  if (isTauriRuntime()) {
+  const backend = isTauriRuntime() ? "sqlite" : "memory";
+  const startedAt = Date.now();
+  diagnosticsLogger.info("bridge.initialization.started", { backend });
+  if (backend === "sqlite") {
     // Desktop: real persistence is mandatory. Failure surfaces, never silently degrades to memory.
     try {
       await initBridge({ backend: "sqlite" });
     } catch (err) {
-      console.error("[startup] SQLite bridge init failed:", err);
+      diagnosticsLogger.error("bridge.initialization.failed", {
+        backend,
+        durationMs: Date.now() - startedAt,
+        error: diagnosticError(err),
+      });
       renderStartupFailure(err);
       return;
     }
@@ -113,6 +143,10 @@ async function bootstrap(): Promise<void> {
     // Browser dev / tests: in-memory backend so the app boots without a native runtime.
     await initBridge({ backend: "memory" });
   }
+  diagnosticsLogger.info("bridge.initialization.completed", {
+    backend,
+    durationMs: Date.now() - startedAt,
+  });
   renderApp();
 }
 

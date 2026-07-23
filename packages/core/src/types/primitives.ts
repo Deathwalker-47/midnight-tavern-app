@@ -5,9 +5,13 @@
  */
 import { z } from "zod";
 
-/** Whether a story uses no, light, or full mechanical stats. */
-export const StatModeSchema = z.enum(["none", "light", "full"]);
+/** The two final v5 stat systems. `light` is accepted only by legacy migration code. */
+export const StatModeSchema = z.enum(["none", "full"]);
 export type StatMode = z.infer<typeof StatModeSchema>;
+
+/** Pre-v5 persisted value. Never use this for a live story. */
+export const LegacyStatModeSchema = z.literal("light");
+export type LegacyStatMode = z.infer<typeof LegacyStatModeSchema>;
 
 /**
  * A learned skill's mastery rank. The rank supplies the d20 modifier (D1) and

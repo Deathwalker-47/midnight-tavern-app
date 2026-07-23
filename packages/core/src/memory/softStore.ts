@@ -167,6 +167,7 @@ export async function applySoftPatch(
           hard: {
             characterId: entry.characterId,
             isPlayer: false,
+            attributes: {},
             resources: {},
             skills: [],
             inventory: [],

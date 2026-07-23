@@ -5,7 +5,7 @@
 # pinned (no floating "^"/"~" ranges) so CI reproduces the same build every time.
 [package]
 name = "midnight-tavern"
-version = "0.1.0"
+version = "0.1.3"
 description = "Midnight Tavern desktop shell (Tauri v2)"
 authors = ["Midnight Tavern"]
 edition = "2021"
@@ -42,6 +42,8 @@ tauri-plugin-fs = "2.0.3"
 serde = { version = "1.0.210", features = ["derive"] }
 serde_json = "1.0.128"
 log = "0.4.22"
+tauri-plugin-log = "2"
+tauri-plugin-opener = "2"
 
 [features]
 # This feature is used by the Tauri CLI to enable custom-protocol asset serving

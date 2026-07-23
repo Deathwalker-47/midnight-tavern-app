@@ -18,6 +18,7 @@ import type { StorySchema, Condition, CostSpec } from "../types/index.js";
 import { rankAtLeast } from "../types/index.js";
 import type { CharacterHardState } from "../types/index.js";
 import type { GateVerdict, MechanicalIntent } from "../types/index.js";
+import { attrScore } from "./attributes.js";
 
 const deny = (reason: string): GateVerdict => ({ allowed: false, reason });
 const ALLOW: GateVerdict = { allowed: true };
@@ -74,6 +75,8 @@ export function conditionHolds(actor: CharacterHardState, cond: Condition): bool
       return heldQty(actor, cond.itemId) > 0;
     case "flag":
       return (actor.flags[cond.flagId] ?? false) === cond.value;
+    case "attribute":
+      return attrScore(actor, cond.attributeId) >= cond.min;
   }
 }
 

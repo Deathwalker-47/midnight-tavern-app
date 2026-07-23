@@ -201,6 +201,25 @@ export function Overview(props: ScreenProps): JSX.Element {
     );
   }
 
+  if (current.schema.statMode === "none") {
+    const exchangeCount = messages.filter((message) => message.role === "narrator").length;
+    return (
+      <div style={styles.screen} data-testid="overview-no-stats">
+        <div style={{ maxWidth: 760, margin: "30px auto", padding: "28px 30px", background: "var(--bg1-panel)", border: "1px solid var(--hairline)", borderRadius: 13 }}>
+          <div className="mono" style={{ color: "var(--teal)", fontSize: 10, letterSpacing: ".13em", marginBottom: 12 }}>NO STATS · NARRATOR-ONLY CONTINUITY</div>
+          <h2 style={{ margin: "0 0 12px", color: "var(--ui-text)", fontFamily: "var(--font-display)", fontSize: 28 }}>Your prose remains the record</h2>
+          <p style={{ color: "var(--secondary)", lineHeight: 1.7, margin: "0 0 18px", fontFamily: "var(--font-prose)" }}>
+            This story keeps its {exchangeCount} completed exchange{exchangeCount === 1 ? "" : "s"}, persona, lorebooks and full local transcript. Automatic analyzer evolution and automatic chapter or arc summaries are intentionally dormant, so this page never invents a mechanical or model-generated record.
+          </p>
+          <div style={{ padding: "14px 16px", borderLeft: "2px solid var(--brass)", background: "var(--brass-tint)", color: "var(--secondary)", lineHeight: 1.6 }}>
+            <strong style={{ color: "var(--ui-text)" }}>Premise</strong><br />
+            {current.schema.premise || "No premise was recorded for this story."}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const messageCount = messages.length;
   const timelineChapters = buildChapters(chapters, messageCount);
   const currentChapterMsgs = messagesInCurrentChapter(chapters, messageCount);

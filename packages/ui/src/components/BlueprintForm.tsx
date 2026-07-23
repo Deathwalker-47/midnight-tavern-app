@@ -69,6 +69,15 @@ export function BlueprintForm(props: BlueprintFormProps): JSX.Element {
     list.splice(i, 1);
     onChange({ ...value, alternateGreetings: list });
   }
+  function setStyle(
+    key: "pov" | "tense" | "proseLength",
+    next: "" | "first" | "second" | "third" | "past" | "present" | "brief" | "medium" | "long"
+  ): void {
+    const styleSettings = { ...(value.styleSettings ?? {}) };
+    if (next) styleSettings[key] = next as never;
+    else delete styleSettings[key];
+    onChange({ ...value, styleSettings });
+  }
 
   const groupStyle: CSSProperties = {
     background: "var(--bg1-panel)",
@@ -122,6 +131,50 @@ export function BlueprintForm(props: BlueprintFormProps): JSX.Element {
           <button type="button" onClick={addGreeting} style={{ background: "transparent", border: "1px solid var(--teal-dim)", borderRadius: 7, color: "var(--teal)", cursor: "pointer", fontSize: 12, padding: "6px 12px" }}>
             + Add greeting
           </button>
+        </div>
+      </section>
+
+      <section style={groupStyle}>
+        <div style={groupHeadStyle}>PROSE STYLE</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10 }}>
+          <Field label="Point of view">
+            <select
+              aria-label="Point of view"
+              style={inputStyle}
+              value={value.styleSettings?.pov ?? ""}
+              onChange={(event) => setStyle("pov", event.target.value as "" | "first" | "second" | "third")}
+            >
+              <option value="">Default</option>
+              <option value="first">First person</option>
+              <option value="second">Second person</option>
+              <option value="third">Third person</option>
+            </select>
+          </Field>
+          <Field label="Tense">
+            <select
+              aria-label="Tense"
+              style={inputStyle}
+              value={value.styleSettings?.tense ?? ""}
+              onChange={(event) => setStyle("tense", event.target.value as "" | "past" | "present")}
+            >
+              <option value="">Default</option>
+              <option value="past">Past</option>
+              <option value="present">Present</option>
+            </select>
+          </Field>
+          <Field label="Prose length">
+            <select
+              aria-label="Prose length"
+              style={inputStyle}
+              value={value.styleSettings?.proseLength ?? ""}
+              onChange={(event) => setStyle("proseLength", event.target.value as "" | "brief" | "medium" | "long")}
+            >
+              <option value="">Default</option>
+              <option value="brief">Brief</option>
+              <option value="medium">Medium</option>
+              <option value="long">Long</option>
+            </select>
+          </Field>
         </div>
       </section>
 

@@ -16,6 +16,7 @@ function card(over: Partial<LivingCardView> & Pick<LivingCardView, "characterId"
     inventory: [],
     skills: [],
     ...over,
+    attributes: over.attributes ?? [],
   };
 }
 

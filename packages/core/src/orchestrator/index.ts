@@ -27,6 +27,7 @@ export {
   swipeLastTurn,
   selectVariant,
   deleteLastTurn,
+  deleteFromExchange,
   rewindTo,
   type SwipeOptions,
   type SwipeResult,

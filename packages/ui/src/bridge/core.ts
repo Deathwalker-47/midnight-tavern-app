@@ -25,6 +25,7 @@ export type {
   StorySchema,
   Blueprint,
   StoryStyleSettings,
+  StatMode,
   MessageRecord,
   MessageRole,
   Ruling,
@@ -65,6 +66,8 @@ export type {
   Lorebook,
   AttachedLorebook,
   RankedModel,
+  ProviderModel,
+  SetupState,
 } from "@midnight-tavern/core";
 
 import type {
@@ -88,11 +91,16 @@ import type {
   Lorebook,
   AttachedLorebook,
   RankedModel,
+  ProviderModel,
+  SetupState,
   MappedCard,
+  LorebookSeed,
   CharacterCard,
   ChapterRecord,
   ArcRecord,
   Store,
+  BootstrapPhase,
+  StatMode,
 } from "@midnight-tavern/core";
 
 // Value import: the Tauri storage driver. Browser-safe — it only pulls `@tauri-apps/api/core`
@@ -108,6 +116,8 @@ export interface StorySummary {
   createdAt: number;
   locked: boolean;
   messageCount: number;
+  statMode: StatMode;
+  migrationPending: boolean;
 }
 
 /** One present-cast entry for the PartyStrip (soft state condensed to what the strip renders). */
@@ -128,10 +138,25 @@ export interface CreateStoryArgs {
   storyId?: string;
   title: string;
   premise: string;
+  /** User-selected v5 stat system. The UI must ask; the bridge defaults only for old callers. */
+  statMode?: StatMode;
   /** The protagonist's display name. */
   playerName: string;
+  /** Full author-facing narrative configuration saved with the new story. */
+  blueprint?: Blueprint;
+  /** Optional chosen opening, persisted as the first narrator message. */
+  openingMessage?: string;
+  /** Imported character-book entries to create and attach after bootstrap. */
+  lorebookSeeds?: LorebookSeed[];
   /** Optional streaming sink for the forging interstitial's progress copy. */
-  onProgress?: (phase: "phase-a" | "phase-b" | "validate" | "freeze" | "install") => void;
+  onProgress?: (phase: BootstrapPhase) => void;
+  signal?: AbortSignal;
+}
+
+export interface ChangeStoryStatModeArgs {
+  storyId: string;
+  target: StatMode;
+  onProgress?: (phase: BootstrapPhase) => void;
   signal?: AbortSignal;
 }
 
@@ -218,6 +243,7 @@ export interface CoreBridge {
   createStory(args: CreateStoryArgs): Promise<CreateStoryResult>;
   renameStory(id: string, title: string): Promise<void>;
   deleteStory(id: string): Promise<void>;
+  changeStoryStatMode(args: ChangeStoryStatModeArgs): Promise<StoryRecord>;
   /** Read a story's author-facing Story Blueprint (§3), or undefined if it has none. */
   getBlueprint(id: string): Promise<Blueprint | undefined>;
   /** Save (or clear, with `undefined`) a story's Story Blueprint. Style/identity only — the frozen mechanical schema is untouched. */
@@ -251,6 +277,8 @@ export interface CoreBridge {
   deleteLastTurn(storyId: string): Promise<void>;
   /** Rewind to just before the message at `fromIdx`, truncating every message/ruling/checkpoint at idx ≥ fromIdx. */
   rewindTo(storyId: string, fromIdx: number): Promise<void>;
+  /** Remove the selected completed exchange itself and every later exchange. */
+  deleteFromExchange(storyId: string, fromIdx: number): Promise<void>;
 
   // — Settings: providers + role map —
   getProviderConfigs(): Promise<ProviderConfigs>;
@@ -271,6 +299,15 @@ export interface CoreBridge {
     baseUrl?: string,
     signal?: AbortSignal
   ): Promise<KeyValidation>;
+  /** Fetch the provider's current model inventory with the supplied credentials. */
+  listProviderModels(
+    provider: ProviderId,
+    apiKey: string,
+    baseUrl?: string,
+    signal?: AbortSignal
+  ): Promise<ProviderModel[]>;
+  getSetupState(): Promise<SetupState>;
+  setSetupState(state: SetupState): Promise<void>;
 
   // — Licensing / trial —
   evaluateLicense(): Promise<LicenseState>;
@@ -316,7 +353,7 @@ export interface CoreBridge {
 
   // — Model recommendations (v2 §1/§5) —
   /** Ranked models for a role on a provider — recommended-for-role first, then a free-text affordance in the UI. */
-  modelsForRole(role: Role, provider: ProviderId): RankedModel[];
+  modelsForRole(role: Role, provider: ProviderId, availableIds?: readonly string[]): RankedModel[];
   /** The app's shipped recommended assignment for a role (wizard + "reset to recommended"). */
   defaultAssignmentFor(role: Role): RoleBinding;
 
@@ -335,7 +372,19 @@ export interface CoreBridge {
 // The real (SQLite) backend reads the canonical values straight from core (see sqliteBridge.ts);
 // this browser stub can't value-import them (would pull core's native graph), so it carries a
 // synced copy. Keep in step with core/src/router/roles.ts when those defaults change.
-const MEMORY_PROVIDER_IDS = ["openrouter", "openai", "anthropic"] as const;
+const MEMORY_PROVIDER_IDS: readonly ProviderId[] = [
+  "openrouter",
+  "electronhub",
+  "nanogpt",
+  "openai",
+  "anthropic",
+  "google",
+  "mistral",
+  "deepseek",
+  "xai",
+  "groq",
+  "custom",
+];
 
 const MEMORY_DEFAULT_ROLE_MAP: RoleMap = {
   narrator: { provider: "openrouter", model: "anthropic/claude-sonnet-4", source: "recommended", samplersDirty: false, samplers: { temperature: 0.8, maxTokens: 1200 } },
@@ -346,14 +395,38 @@ const MEMORY_DEFAULT_ROLE_MAP: RoleMap = {
 };
 
 const MEMORY_KNOWN_MODELS: KnownModel[] = [
-  { provider: "openrouter", model: "anthropic/claude-sonnet-4", label: "Claude Sonnet 4", tier: "recommended" },
-  { provider: "openrouter", model: "openai/gpt-4o", label: "GPT-4o", tier: "recommended" },
-  { provider: "openrouter", model: "google/gemini-2.0-flash-001", label: "Gemini 2.0 Flash", tier: "recommended" },
-  { provider: "openrouter", model: "openai/gpt-4o-mini", label: "GPT-4o mini", tier: "recommended" },
-  { provider: "openrouter", model: "deepseek/deepseek-chat", label: "DeepSeek V3", tier: "advanced" },
-  { provider: "openrouter", model: "meta-llama/llama-3.3-70b-instruct", label: "Llama 3.3 70B", tier: "advanced" },
-  { provider: "openai", model: "gpt-4o", label: "GPT-4o (direct)", tier: "advanced" },
-  { provider: "anthropic", model: "claude-sonnet-4-20250514", label: "Claude Sonnet 4 (direct)", tier: "advanced" },
+  {
+    provider: "openrouter",
+    model: "anthropic/claude-sonnet-4",
+    label: "Claude Sonnet 4",
+    tier: "recommended",
+    supportsJsonMode: true,
+  },
+  {
+    provider: "openrouter",
+    model: "openai/gpt-4o",
+    label: "GPT-4o",
+    tier: "recommended",
+    supportsJsonMode: true,
+  },
+  {
+    provider: "openrouter",
+    model: "google/gemini-2.0-flash-001",
+    label: "Gemini 2.0 Flash",
+    tier: "recommended",
+    supportsJsonMode: true,
+  },
+  {
+    provider: "openrouter",
+    model: "openai/gpt-4o-mini",
+    label: "GPT-4o mini",
+    tier: "recommended",
+    supportsJsonMode: true,
+  },
+  { provider: "openrouter", model: "deepseek/deepseek-chat", label: "DeepSeek V3", tier: "advanced", supportsJsonMode: true },
+  { provider: "openrouter", model: "meta-llama/llama-3.3-70b-instruct", label: "Llama 3.3 70B", tier: "advanced", supportsJsonMode: true },
+  { provider: "openai", model: "gpt-4o", label: "GPT-4o (direct)", tier: "advanced", supportsJsonMode: true },
+  { provider: "anthropic", model: "claude-sonnet-4-20250514", label: "Claude Sonnet 4 (direct)", tier: "advanced", supportsJsonMode: false },
 ];
 
 const TRIAL_DURATION_MS = 14 * 24 * 60 * 60 * 1000;
@@ -385,7 +458,12 @@ function uid(): string {
 }
 
 /** A minimal frozen-schema shell so `StoryRecord` typechecks without a live bootstrapper. */
-function stubSchema(storyId: string, title: string, premise: string): StoryRecord["schema"] {
+function stubSchema(
+  storyId: string,
+  title: string,
+  premise: string,
+  statMode: StatMode
+): StoryRecord["schema"] {
   // The stub only needs the shape to satisfy the type; the real schema is produced by core's
   // bootstrapper. Cast keeps us honest to the field names without duplicating every sub-schema.
   return {
@@ -393,13 +471,18 @@ function stubSchema(storyId: string, title: string, premise: string): StoryRecor
     storyId,
     title,
     premise,
-    statMode: "narrative",
-    resources: [{ id: "hp", label: "Health", min: 0, max: 20, playerVisible: true, lethal: true }],
+    statMode,
+    attributes: statMode === "full"
+      ? [{ id: "resolve", name: "Resolve", abbrev: "RES", description: "Force of will.", defaultScore: 10 }]
+      : [],
+    resources: statMode === "full"
+      ? [{ id: "hp", label: "Health", start: 20, max: 20, playerVisible: true, lethal: true }]
+      : [],
     tiers: [],
     skills: [],
     items: [],
     actions: [],
-    startingState: { resources: {}, skills: [], inventory: [] },
+    startingState: { attributes: statMode === "full" ? { resolve: 10 } : {}, resources: {}, skills: [], inventory: [] },
     npcTemplates: [],
     locked: true,
   } as unknown as StoryRecord["schema"];
@@ -424,6 +507,7 @@ export function makeMemoryBridge(): CoreBridge {
   const lorebooks = new Map<string, MemLorebook>();
   const providerConfigs: ProviderConfigs = {};
   let roleMap: RoleMap = structuredCloneSafe(MEMORY_DEFAULT_ROLE_MAP);
+  let setupState: SetupState = { validatedProviders: [], rolesConfirmed: false, dismissed: false };
   const personas: PersonaRecord[] = [];
   let licenseState: LicenseState = { status: "unlicensed" };
   let trialStartedAt: number | undefined;
@@ -459,6 +543,8 @@ export function makeMemoryBridge(): CoreBridge {
           createdAt: s.record.createdAt,
           locked: s.record.locked,
           messageCount: s.messages.length,
+          statMode: s.record.schema.statMode,
+          migrationPending: Boolean(s.record.schema.migrationPending),
         }))
         .sort((a, b) => b.createdAt - a.createdAt);
     },
@@ -468,10 +554,14 @@ export function makeMemoryBridge(): CoreBridge {
     },
 
     async createStory(args) {
-      args.onProgress?.("phase-a");
-      await delay(120);
-      args.onProgress?.("phase-b");
-      await delay(120);
+      const statMode = args.statMode ?? "full";
+      if (statMode === "full") {
+        args.onProgress?.("phase-a");
+        await delay(120, args.signal);
+        args.onProgress?.("phase-b");
+        await delay(120, args.signal);
+      }
+      if (args.signal?.aborted) throw abortError(args.signal);
       args.onProgress?.("validate");
       args.onProgress?.("freeze");
       args.onProgress?.("install");
@@ -481,8 +571,9 @@ export function makeMemoryBridge(): CoreBridge {
         id: storyId,
         title: args.title,
         createdAt: Date.now(),
-        schema: stubSchema(storyId, args.title, args.premise),
+        schema: stubSchema(storyId, args.title, args.premise, statMode),
         locked: true,
+        ...(args.blueprint ? { blueprint: args.blueprint } : {}),
       };
       const playerCharacterId = uid();
       const card: LivingCardView = {
@@ -490,13 +581,27 @@ export function makeMemoryBridge(): CoreBridge {
         name: args.playerName,
         isPlayer: true,
         alive: true,
-        resources: [{ id: "hp", label: "Health", current: 20, max: 20, playerVisible: true }],
+        attributes: statMode === "full"
+          ? [{ attributeId: "resolve", name: "Resolve", abbrev: "RES", score: 10, modifier: 0, description: "Force of will." }]
+          : [],
+        resources: statMode === "full"
+          ? [{ id: "hp", label: "Health", current: 20, max: 20, playerVisible: true }]
+          : [],
         inventory: [],
         skills: [],
       };
       stories.set(storyId, {
         record,
-        messages: [],
+        messages: args.openingMessage?.trim()
+          ? [{
+              id: uid(),
+              storyId,
+              idx: 0,
+              role: "narrator",
+              content: args.openingMessage.trim(),
+              createdAt: Date.now(),
+            }]
+          : [],
         rulings: [],
         cast: [
           {
@@ -504,11 +609,20 @@ export function makeMemoryBridge(): CoreBridge {
             name: args.playerName,
             isPlayer: true,
             alive: true,
-            hp: { current: 20, max: 20, label: "Health" },
+            ...(statMode === "full" ? { hp: { current: 20, max: 20, label: "Health" } } : {}),
           },
         ],
         cards: new Map([[playerCharacterId, card]]),
-        lorebook: [],
+        lorebook: (args.lorebookSeeds ?? []).map((seed, index) => ({
+          id: uid(),
+          lorebookId: storyId,
+          keys: seed.keys,
+          content: seed.content,
+          enabled: seed.enabled,
+          alwaysOn: false,
+          priority: 0,
+          insertionOrder: index,
+        })),
         attachedLorebooks: [],
       });
       return { story: record, playerCharacterId };
@@ -520,6 +634,36 @@ export function makeMemoryBridge(): CoreBridge {
 
     async deleteStory(id) {
       stories.delete(id);
+    },
+
+    async changeStoryStatMode(args) {
+      const story = requireStory(args.storyId);
+      if (args.signal?.aborted) throw abortError(args.signal);
+      if (args.target === "full" && story.record.schema.actions.length === 0) {
+        args.onProgress?.("phase-a");
+        await delay(120, args.signal);
+        args.onProgress?.("phase-b");
+        await delay(120, args.signal);
+        story.record.schema = stubSchema(story.record.id, story.record.title, story.record.schema.premise, "full");
+      } else {
+        story.record.schema = { ...story.record.schema, statMode: args.target };
+      }
+      delete story.record.schema.legacyStatMode;
+      delete story.record.schema.migrationPending;
+      args.onProgress?.("validate");
+      args.onProgress?.("freeze");
+      args.onProgress?.("install");
+      story.messages.push({
+        id: uid(),
+        storyId: story.record.id,
+        idx: story.messages.length,
+        role: "system",
+        content: args.target === "none"
+          ? "Stat system changed to No Stats. Mechanics are paused; earlier exchanges are preserved."
+          : "Stat system changed to Full Stats. Mechanics begin from this boundary; earlier exchanges are unchanged.",
+        createdAt: Date.now(),
+      });
+      return story.record;
     },
 
     async getBlueprint(id) {
@@ -615,8 +759,31 @@ export function makeMemoryBridge(): CoreBridge {
 
     async rewindTo(storyId, fromIdx) {
       const story = requireStory(storyId);
-      story.messages = story.messages.filter((m) => m.idx < fromIdx);
-      story.rulings = [];
+      const selected = story.messages.find((message) => message.idx === fromIdx);
+      if (!selected) return;
+      const cutoff = selected.role === "player" ? fromIdx + 2 : fromIdx + 1;
+      story.messages = story.messages.filter((m) => m.idx < cutoff);
+      story.rulings = story.rulings.filter((r) => {
+        const attached = r.messageId
+          ? story.messages.find((message) => message.id === r.messageId)
+          : undefined;
+        return attached !== undefined;
+      });
+    },
+
+    async deleteFromExchange(storyId, fromIdx) {
+      const story = requireStory(storyId);
+      const selected = story.messages.find((message) => message.idx === fromIdx);
+      if (!selected) return;
+      const narratorIdx = selected.role === "player" ? fromIdx + 1 : fromIdx;
+      const narrator = story.messages.find((message) => message.idx === narratorIdx && message.role === "narrator");
+      if (!narrator) throw new Error("deleteFromExchange: selected message is not part of a completed exchange.");
+      const previous = story.messages.find((message) => message.idx === narrator.idx - 1);
+      const cutoff = previous?.role === "player" ? previous.idx : narrator.idx;
+      story.messages = story.messages.filter((message) => message.idx < cutoff);
+      story.rulings = story.rulings.filter((ruling) =>
+        ruling.messageId ? story.messages.some((message) => message.id === ruling.messageId) : false
+      );
     },
 
     async listPresentCast(storyId) {
@@ -665,6 +832,7 @@ export function makeMemoryBridge(): CoreBridge {
           incoming: [],
         },
         sheet: {
+          attributes: card.attributes,
           resources: card.resources.map((b) => ({
             id: b.id,
             label: b.label,
@@ -711,6 +879,10 @@ export function makeMemoryBridge(): CoreBridge {
     },
     async removeProviderConfig(provider) {
       delete providerConfigs[provider];
+      setupState = {
+        ...setupState,
+        validatedProviders: setupState.validatedProviders.filter((id) => id !== provider),
+      };
     },
     async getRoleMap() {
       return structuredCloneSafe(roleMap);
@@ -733,6 +905,20 @@ export function makeMemoryBridge(): CoreBridge {
       // Stub heuristic only: a key beginning with "sk-bad" fails, everything else passes.
       if (apiKey.startsWith("sk-bad")) return { state: "rejected", reason: "The provider rejected this key." };
       return { state: "valid", label: "Stub credentials", balance: "$4.20" };
+    },
+    async listProviderModels(provider, apiKey, baseUrl) {
+      if (!apiKey.trim()) throw new Error("Enter a key to load models.");
+      if (provider === "custom" && !baseUrl?.trim()) throw new Error("Enter a base URL to load models.");
+      const known = MEMORY_KNOWN_MODELS.filter((model) => model.provider === provider);
+      return (known.length > 0 ? known : [{ model: `${provider}/default-model`, label: "Default model" }]).map(
+        (model) => ({ id: model.model, label: model.label })
+      );
+    },
+    async getSetupState() {
+      return structuredCloneSafe(setupState);
+    },
+    async setSetupState(state) {
+      setupState = structuredCloneSafe(state);
     },
 
     async evaluateLicense() {
@@ -883,15 +1069,19 @@ export function makeMemoryBridge(): CoreBridge {
     },
 
     // — Model recommendations (v2 §1/§5) — stub ranks from the mirrored known-models list.
-    modelsForRole(_role, provider) {
-      return MEMORY_KNOWN_MODELS.filter((m) => m.provider === provider).map((m) => ({
-        id: m.model,
-        label: m.label,
-        provider: m.provider,
-        tier: m.tier,
-        recommendedForRole: m.tier === "recommended",
-        supportsJsonMode: true,
-      }));
+    modelsForRole(_role, provider, availableIds) {
+      const ids = availableIds ?? MEMORY_KNOWN_MODELS.filter((m) => m.provider === provider).map((m) => m.model);
+      return ids.map((id) => {
+        const m = MEMORY_KNOWN_MODELS.find((known) => known.provider === provider && known.model === id);
+        return {
+          id,
+          label: m?.label ?? id,
+          provider,
+          tier: m?.tier ?? "advanced",
+          recommendedForRole: m?.tier === "recommended",
+          supportsJsonMode: m?.supportsJsonMode ?? false,
+        };
+      });
     },
     defaultAssignmentFor(role) {
       return structuredCloneSafe(MEMORY_DEFAULT_ROLE_MAP[role]);
@@ -912,8 +1102,29 @@ export function makeMemoryBridge(): CoreBridge {
   };
 }
 
-function delay(ms: number): Promise<void> {
-  return new Promise((r) => setTimeout(r, ms));
+function abortError(signal: AbortSignal): Error {
+  if (signal.reason instanceof Error) return signal.reason;
+  const error = new Error("The request was cancelled.");
+  error.name = "AbortError";
+  return error;
+}
+
+function delay(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(abortError(signal));
+      return;
+    }
+    const cancel = () => {
+      clearTimeout(timer);
+      reject(signal ? abortError(signal) : new Error("The request was cancelled."));
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", cancel);
+      resolve();
+    }, ms);
+    signal?.addEventListener("abort", cancel, { once: true });
+  });
 }
 
 function structuredCloneSafe<T>(value: T): T {

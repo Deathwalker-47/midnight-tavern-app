@@ -18,7 +18,7 @@
  * the same render path. Talks to core only through `usePlayStore`, `useUiStore` and the bridge
  * façade. Token CSS variables only — no raw hex.
  */
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
 import {
   PartyStrip,
   RulingArtifact,
@@ -126,17 +126,29 @@ function rulingToArtifact(r: Ruling, nameOf: (id: string) => string): RulingArti
   const variant: RulingArtifactVariant = opposed ? "opposed" : VARIANT_BY_OUTCOME[outcome];
 
   const rollVM: RulingRoll = {
-    title: `${nameOf(r.actorId)} · ${humanize(r.actionId)}`,
+    title: `${nameOf(r.actorId)} · ${r.actionLabel ?? humanize(r.actionId)}`,
     outcome,
     d20: roll.d20,
     modifier: roll.modifier,
     total: roll.total,
     dc: roll.dc,
+    modifierTerms: [
+      ...(roll.attributeId && roll.attributeModifier !== undefined
+        ? [{ label: humanize(roll.attributeId), value: roll.attributeModifier }]
+        : []),
+      ...(roll.masterySkillId && roll.masteryModifier !== undefined
+        ? [{ label: humanize(roll.masterySkillId), value: roll.masteryModifier }]
+        : []),
+    ],
   };
   if (opposed) {
     rollVM.opposed = {
       attacker: `${nameOf(r.actorId)} ${roll.total}`,
       defender: r.targetId ? `${nameOf(r.targetId)} ${roll.opposedTotal}` : `DC ${roll.dc}`,
+      attackerFormula: `d20 ${roll.d20} ${roll.modifier >= 0 ? "+" : "−"} ${Math.abs(roll.modifier)}`,
+      defenderFormula: roll.opposedD20 !== undefined && roll.opposedModifier !== undefined
+        ? `d20 ${roll.opposedD20} ${roll.opposedModifier >= 0 ? "+" : "−"} ${Math.abs(roll.opposedModifier)}`
+        : undefined,
     };
   }
 
@@ -160,22 +172,20 @@ type StreamItem = { kind: "msg"; key: string; message: MessageRecord } | { kind:
 function buildStream(messages: MessageRecord[], rulings: Ruling[]): StreamItem[] {
   const ordered = [...messages].sort((a, b) => a.idx - b.idx);
   const ids = new Set(ordered.map((m) => m.id));
-  const byTurn = new Map<string, Ruling[]>();
+  const byMessage = new Map<string, Ruling[]>();
   for (const r of rulings) {
-    if (!ids.has(r.turnId)) continue;
-    const bucket = byTurn.get(r.turnId);
+    const messageId = r.messageId ?? (ids.has(r.turnId) ? r.turnId : undefined);
+    if (!messageId || !ids.has(messageId)) continue;
+    const bucket = byMessage.get(messageId);
     if (bucket) bucket.push(r);
-    else byTurn.set(r.turnId, [r]);
+    else byMessage.set(messageId, [r]);
   }
   const items: StreamItem[] = [];
   for (const m of ordered) {
-    items.push({ kind: "msg", key: m.id, message: m });
-    const attached = byTurn.get(m.id) ?? [];
+    const attached = byMessage.get(m.id) ?? [];
     attached.forEach((r, i) => items.push({ kind: "ruling", key: `${m.id}:r${i}`, ruling: r }));
+    items.push({ kind: "msg", key: m.id, message: m });
   }
-  rulings.forEach((r, i) => {
-    if (!ids.has(r.turnId)) items.push({ kind: "ruling", key: `orphan-${i}`, ruling: r });
-  });
   return items;
 }
 
@@ -275,6 +285,7 @@ const DEMO_CARD: LivingCardView = {
   name: "Kestrel Vane",
   isPlayer: true,
   alive: true,
+  attributes: [],
   resources: [
     { id: "hp", label: "Health", current: 19, max: 24, playerVisible: true },
     { id: "stamina", label: "Stamina", current: 10, max: 14, playerVisible: true },
@@ -320,7 +331,7 @@ function errorCopy(kind: TurnErrorKind, role: string): ErrorCopy {
       };
     case "model-output":
       return {
-        title: "The Narrator model returned nothing",
+        title: `The ${role} model returned nothing`,
         body: `Your ${role} failed to produce prose after two tries. This role needs a capable model.`,
         settingsCta: "Try a recommended model →",
         retry: true,
@@ -348,8 +359,8 @@ export function Play(props: PlayProps): JSX.Element {
   const clearError = usePlayStore((s) => s.clearError);
   const swipeLast = usePlayStore((s) => s.swipeLast);
   const selectVariant = usePlayStore((s) => s.selectVariant);
-  const deleteLast = usePlayStore((s) => s.deleteLast);
   const rewind = usePlayStore((s) => s.rewind);
+  const deleteFrom = usePlayStore((s) => s.deleteFrom);
   const storeMessages = usePlayStore((s) => s.messages);
   const storeRulings = usePlayStore((s) => s.rulings);
   const storeCast = usePlayStore((s) => s.cast);
@@ -463,7 +474,14 @@ export function Play(props: PlayProps): JSX.Element {
 
   // Rewind confirmation: the design's confirm dialog names exactly what's removed.
   const [rewindTarget, setRewindTarget] = useState<number | undefined>(undefined);
+  const [deleteTarget, setDeleteTarget] = useState<number | undefined>(undefined);
   const historyBusy = thinking || loading;
+  const rewindLaterCount = rewindTarget === undefined
+    ? 0
+    : messages.filter((message) => message.role === "narrator" && message.idx > rewindTarget).length;
+  const deleteExchangeCount = deleteTarget === undefined
+    ? 0
+    : messages.filter((message) => message.role === "narrator" && message.idx >= deleteTarget).length;
 
   const onSwipe = useCallback((): void => {
     if (historyBusy) return;
@@ -482,6 +500,12 @@ export function Play(props: PlayProps): JSX.Element {
     setRewindTarget(undefined);
     if (target !== undefined) void rewind(target);
   }, [rewindTarget, rewind]);
+
+  const onConfirmDelete = useCallback((): void => {
+    const target = deleteTarget;
+    setDeleteTarget(undefined);
+    if (target !== undefined) void deleteFrom(target);
+  }, [deleteTarget, deleteFrom]);
 
   // ── Composer ────────────────────────────────────────────────────────────────────────────────
   const [draft, setDraft] = useState<string>("");
@@ -653,8 +677,8 @@ export function Play(props: PlayProps): JSX.Element {
                             if (active < variants.length - 1) onSelectVariant(m.idx, active + 1);
                             else if (isLatest) onSwipe();
                           }}
-                          {...(isLatest ? { onDeleteLastExchange: () => void deleteLast() } : {})}
                           onRewindToHere={() => setRewindTarget(m.idx)}
+                          onDeleteFromHere={() => setDeleteTarget(m.idx)}
                         />
                       </div>
                     );
@@ -719,12 +743,12 @@ export function Play(props: PlayProps): JSX.Element {
 
       <ConfirmDialog
         open={rewindTarget !== undefined}
-        tone="danger"
-        title="Rewind to here?"
+        tone="default"
+        title="Rewind to this exchange?"
         body={
           <span>
-            This removes this message and everything after it — including its rulings and the state they set.
-            Any chapter or arc summaries built from the removed turns will be rebuilt at the next threshold.
+            This keeps the selected exchange and removes {rewindLaterCount} later exchange{rewindLaterCount === 1 ? "" : "s"}.
+            Your attributes, resources, inventory, skills and world state return to how they were at the end of the selected exchange.
             <b style={{ color: "var(--ui-text)" }}> This can't be undone.</b>
           </span>
         }
@@ -732,6 +756,22 @@ export function Play(props: PlayProps): JSX.Element {
         cancelLabel="Keep everything"
         onConfirm={onConfirmRewind}
         onCancel={() => setRewindTarget(undefined)}
+      />
+      <ConfirmDialog
+        open={deleteTarget !== undefined}
+        tone="danger"
+        title="Delete from this exchange?"
+        body={
+          <span>
+            This removes the selected exchange too, plus {Math.max(0, deleteExchangeCount - 1)} later exchange{deleteExchangeCount - 1 === 1 ? "" : "s"}.
+            Hard state returns to the end of the previous exchange. This is more destructive than Rewind.
+            <b style={{ color: "var(--failure)" }}> This can't be undone.</b>
+          </span>
+        }
+        confirmLabel={`Delete ${deleteExchangeCount} exchange${deleteExchangeCount === 1 ? "" : "s"}`}
+        cancelLabel="Keep everything"
+        onConfirm={onConfirmDelete}
+        onCancel={() => setDeleteTarget(undefined)}
       />
     </div>
   );
@@ -758,9 +798,41 @@ function MessageBlock(props: { message: MessageRecord; nameOf: (id: string) => s
     );
   }
   return (
-    <p style={S.prose} data-testid="play-narrator">
-      {message.content}
-    </p>
+    <div style={S.prose} data-testid="play-narrator">
+      <SafeStoryText text={message.content} />
+    </div>
+  );
+}
+
+function inlineStoryText(text: string, keyPrefix: string): ReactNode[] {
+  const tokens = text.split(/(\*\*[^*\n]+\*\*|\*[^*\n]+\*|_[^_\n]+_|`[^`\n]+`)/g);
+  return tokens.filter(Boolean).map((token, index) => {
+    const key = `${keyPrefix}-${index}`;
+    if (token.startsWith("**") && token.endsWith("**")) return <strong key={key}>{token.slice(2, -2)}</strong>;
+    if ((token.startsWith("*") && token.endsWith("*")) || (token.startsWith("_") && token.endsWith("_"))) {
+      return <em key={key}>{token.slice(1, -1)}</em>;
+    }
+    if (token.startsWith("`") && token.endsWith("`")) return <code key={key}>{token.slice(1, -1)}</code>;
+    return token;
+  });
+}
+
+/** SillyTavern-compatible essentials without ever interpreting card HTML. */
+function SafeStoryText(props: { text: string }): JSX.Element {
+  const paragraphs = props.text.replace(/\r\n/g, "\n").split(/\n{2,}/);
+  return (
+    <>
+      {paragraphs.map((paragraph, paragraphIndex) => (
+        <p key={paragraphIndex} style={{ margin: paragraphIndex === 0 ? 0 : "0.9em 0 0" }}>
+          {paragraph.split("\n").map((line, lineIndex) => (
+            <span key={lineIndex}>
+              {lineIndex > 0 ? <br /> : null}
+              {inlineStoryText(line, `${paragraphIndex}-${lineIndex}`)}
+            </span>
+          ))}
+        </p>
+      ))}
+    </>
   );
 }
 

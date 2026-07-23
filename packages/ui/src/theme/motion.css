@@ -175,3 +175,6 @@
     animation-timing-function: ease-in-out;
   }
 }
+@keyframes mt-spin {
+  to { transform: rotate(360deg); }
+}

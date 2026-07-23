@@ -282,7 +282,7 @@ describe("buildMemoryBlock", () => {
       storyId: STORY_ID,
       name: "Mara",
       isPlayer: false,
-      hard: { characterId: "mara", isPlayer: false, resources: {}, skills: [], inventory: [], flags: {}, alive: true },
+      hard: { characterId: "mara", isPlayer: false, attributes: {}, resources: {}, skills: [], inventory: [], flags: {}, alive: true },
       soft: newSoftState("mara", "Mara"),
       softTier: "secondary",
     });

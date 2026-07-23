@@ -26,11 +26,13 @@ beforeEach(() => {
 });
 
 describe("Settings screen", () => {
-  it("renders the three sections once loaded", async () => {
+  it("renders the settings and local diagnostics sections once loaded", async () => {
     render(<Settings />);
     await waitFor(() => expect(screen.getByText("Providers & keys")).toBeInTheDocument());
     expect(screen.getByText("Model roles")).toBeInTheDocument();
     expect(screen.getByText("License")).toBeInTheDocument();
+    expect(screen.getByText("Diagnostics")).toBeInTheDocument();
+    expect(screen.getByText(/Nothing is uploaded/i)).toBeInTheDocument();
     // A provider card per known provider id (OpenRouter is present + recommended).
     expect(screen.getByText("OpenRouter")).toBeInTheDocument();
   });

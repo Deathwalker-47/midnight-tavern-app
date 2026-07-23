@@ -15,6 +15,7 @@ import type {
   ItemDef,
   StorySchema,
 } from "../types/index.js";
+import { scoreToMod } from "../engine/attributes.js";
 
 /** One resource bar as the UI shows it (label from schema, values from hard state). */
 export interface ResourceBar {
@@ -37,6 +38,17 @@ export interface SkillLine {
   skillId: string;
   name: string;
   rank: string;
+  successCount?: number;
+  toNext?: number | null;
+}
+
+export interface AttributeLine {
+  attributeId: string;
+  name: string;
+  abbrev: string;
+  score: number;
+  modifier: number;
+  description: string;
 }
 
 /** The full read-only card the UI renders for one character. */
@@ -46,6 +58,7 @@ export interface LivingCardView {
   isPlayer: boolean;
   alive: boolean;
   /** Mechanical side (hard state). */
+  attributes: AttributeLine[];
   resources: ResourceBar[];
   inventory: InventoryLine[];
   skills: SkillLine[];
@@ -92,11 +105,31 @@ function inventoryLines(itemsById: Map<string, ItemDef>, hard: CharacterHardStat
 /** Resolve learned skill ids to display names via the schema skill table. */
 function skillLines(schema: StorySchema, hard: CharacterHardState): SkillLine[] {
   const byId = new Map(schema.skills.map((s) => [s.id, s]));
-  return hard.skills.map((s) => ({
-    skillId: s.skillId,
-    name: byId.get(s.skillId)?.name ?? s.skillId,
-    rank: s.rank,
-  }));
+  return hard.skills.map((s) => {
+    const definition = byId.get(s.skillId);
+    const perRank = definition?.masteryAdvance.successesPerRank;
+    return {
+      skillId: s.skillId,
+      name: definition?.name ?? s.skillId,
+      rank: s.rank,
+      successCount: s.successCount,
+      toNext: s.rank === "master" || perRank === undefined ? null : Math.max(0, perRank - s.successCount),
+    };
+  });
+}
+
+function attributeLines(schema: StorySchema, hard: CharacterHardState): AttributeLine[] {
+  return schema.attributes.map((definition) => {
+    const score = hard.attributes[definition.id] ?? definition.defaultScore;
+    return {
+      attributeId: definition.id,
+      name: definition.name,
+      abbrev: definition.abbrev,
+      score,
+      modifier: scoreToMod(score),
+      description: definition.description,
+    };
+  });
 }
 
 /** Condense a soft state into the card's narrative slice (most-recent observations first). */
@@ -135,9 +168,10 @@ export async function getLivingCard(
     name: record.name,
     isPlayer: record.isPlayer,
     alive: record.hard.alive,
-    resources: resourceBars(schema, record.hard),
-    inventory: inventoryLines(itemsById, record.hard),
-    skills: skillLines(schema, record.hard),
+    attributes: schema.statMode === "full" ? attributeLines(schema, record.hard) : [],
+    resources: schema.statMode === "full" ? resourceBars(schema, record.hard) : [],
+    inventory: schema.statMode === "full" ? inventoryLines(itemsById, record.hard) : [],
+    skills: schema.statMode === "full" ? skillLines(schema, record.hard) : [],
   };
   if (record.soft) card.soft = softSlice(record.soft, recentObservations);
   return card;

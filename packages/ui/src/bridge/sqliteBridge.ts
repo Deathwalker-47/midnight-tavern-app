@@ -13,7 +13,7 @@
  * stub faked (per-phase bootstrap progress, provider-key balance), the divergence is called out
  * inline rather than papered over.
  */
-import type { Store } from "@midnight-tavern/core";
+import type { Role, Store } from "@midnight-tavern/core";
 import type {
   CastMember,
   CardImportResult,
@@ -26,6 +26,7 @@ import type {
   SubmitTurnArgs,
   SubmitTurnOutcome,
 } from "./core.js";
+import { diagnosticError, diagnosticsLogger } from "../observability/logger.js";
 
 /**
  * Build the real bridge over an already-opened, migrated {@link Store}. `core` is the live core
@@ -39,12 +40,23 @@ export function buildSqliteBridge(
   // Router deps come from stored settings. We rebuild the router per operation that needs it
   // (createStory / submitTurn / validateProviderKey) rather than caching, so a settings change
   // mid-session is picked up without a bridge reload. Reads are cheap (two settings rows).
-  async function currentRouter() {
+  async function currentRouter(requiredRoles: readonly Role[] = core.ROLES) {
     const providerConfigs =
       (await store.settings.get(core.PROVIDER_CONFIGS_SETTING_KEY, core.ProviderConfigsSchema)) ?? {};
     const roleMap =
       (await store.settings.get(core.ROLE_MAP_SETTING_KEY, core.RoleMapSchema)) ?? core.DEFAULT_ROLE_MAP;
-    return core.makeRouter({ providerConfigs, roleMap });
+    for (const role of requiredRoles) {
+      const binding = roleMap[role];
+      if (!providerConfigs[binding.provider]?.apiKey) {
+        diagnosticsLogger.error("router.configuration.rejected", {
+          role,
+          provider: binding.provider,
+          reason: "missing-credentials",
+        });
+        throw new core.MissingCredentialsError(role, binding.provider);
+      }
+    }
+    return core.makeRouter({ providerConfigs, roleMap, logger: diagnosticsLogger });
   }
 
   async function requireStory(storyId: string) {
@@ -87,6 +99,8 @@ export function buildSqliteBridge(
           createdAt: record.createdAt,
           locked: record.locked,
           messageCount: (await store.messages.listByStory(record.id)).length,
+          statMode: record.schema.statMode,
+          migrationPending: Boolean(record.schema.migrationPending),
         }))
       );
       return summaries.sort((a, b) => b.createdAt - a.createdAt);
@@ -97,24 +111,81 @@ export function buildSqliteBridge(
     },
 
     async createStory(args: CreateStoryArgs): Promise<CreateStoryResult> {
-      // core's bootstrapStory exposes no per-phase progress hook; the interstitial's phase copy is
-      // driven coarsely here — "phase-a" before the generate+freeze call, the remaining phases once
-      // it resolves. If finer progress is wanted later, bootstrapStory must expose an onPhase cb.
-      args.onProgress?.("phase-a");
-      const router = await currentRouter();
       const storyId = args.storyId ?? crypto.randomUUID();
-      const result = await core.bootstrapStory(
-        router,
-        store,
-        { storyId, title: args.title, premise: args.premise },
-        { name: args.playerName },
-        args.signal ? { signal: args.signal } : {}
-      );
-      args.onProgress?.("phase-b");
-      args.onProgress?.("validate");
-      args.onProgress?.("freeze");
-      args.onProgress?.("install");
-      return { story: result.story, playerCharacterId: result.playerCharacterId };
+      const startedAt = Date.now();
+      diagnosticsLogger.info("story.forge.started", {
+        operationId: storyId,
+        hasBlueprint: Boolean(args.blueprint),
+        hasOpening: Boolean(args.openingMessage?.trim()),
+        loreEntryCount: args.lorebookSeeds?.length ?? 0,
+      });
+      try {
+        const mode = args.statMode ?? "full";
+        const router = await currentRouter(mode === "none" ? ["narrator"] : core.ROLES);
+        const result = await core.bootstrapStory(
+          router,
+          store,
+          { storyId, title: args.title, premise: args.premise, statMode: args.statMode ?? "full" },
+          { name: args.playerName },
+          {
+            ...(args.signal ? { signal: args.signal } : {}),
+            onProgress: (phase) => {
+              diagnosticsLogger.info("story.forge.progress", { operationId: storyId, phase });
+              args.onProgress?.(phase);
+            },
+          }
+        );
+        if (args.blueprint) {
+          await store.stories.setBlueprint(storyId, args.blueprint);
+          result.story.blueprint = args.blueprint;
+        }
+        if (args.openingMessage?.trim()) {
+          await store.messages.insert({
+            id: crypto.randomUUID(),
+            storyId,
+            idx: 0,
+            role: "narrator",
+            content: args.openingMessage.trim(),
+            createdAt: Date.now(),
+          });
+        }
+        if (args.lorebookSeeds?.length) {
+          const lorebookId = crypto.randomUUID();
+          await store.lorebook.createLorebook({
+            id: lorebookId,
+            name: `${args.title} imported lore`,
+            description: "Imported from a character card.",
+            createdAt: Date.now(),
+            source: "imported_card",
+          });
+          await store.lorebook.attach(storyId, lorebookId);
+          for (const [index, seed] of args.lorebookSeeds.entries()) {
+            await store.lorebook.insertEntry({
+              id: crypto.randomUUID(),
+              lorebookId,
+              keys: seed.keys,
+              content: seed.content,
+              enabled: seed.enabled,
+              alwaysOn: false,
+              priority: 0,
+              insertionOrder: index,
+            });
+          }
+        }
+        diagnosticsLogger.info("story.forge.completed", {
+          operationId: storyId,
+          durationMs: Date.now() - startedAt,
+        });
+        return { story: result.story, playerCharacterId: result.playerCharacterId };
+      } catch (error) {
+        diagnosticsLogger.error("story.forge.failed", {
+          operationId: storyId,
+          durationMs: Date.now() - startedAt,
+          cancelled: args.signal?.aborted ?? false,
+          error: diagnosticError(error),
+        });
+        throw error;
+      }
     },
 
     async renameStory(id, title) {
@@ -124,6 +195,17 @@ export function buildSqliteBridge(
 
     async deleteStory(id) {
       await store.stories.delete(id);
+    },
+
+    async changeStoryStatMode(args) {
+      const router = await currentRouter(args.target === "none" ? ["narrator"] : core.ROLES);
+      return core.changeStoryStatMode(router, store, args.storyId, args.target, {
+        ...(args.signal ? { signal: args.signal } : {}),
+        onProgress: (phase) => {
+          diagnosticsLogger.info("story.stat_mode.progress", { operationId: args.storyId, phase, target: args.target });
+          args.onProgress?.(phase);
+        },
+      });
     },
 
     async getBlueprint(id) {
@@ -142,18 +224,40 @@ export function buildSqliteBridge(
     },
 
     async submitTurn(args: SubmitTurnArgs): Promise<SubmitTurnOutcome> {
-      const router = await currentRouter();
-      const result = await core.submitTurn(router, store, args.storyId, args.playerText, {
-        ...(args.onDelta ? { onDelta: args.onDelta } : {}),
-        ...(args.personaBlock ? { personaBlock: args.personaBlock } : {}),
-        ...(args.signal ? { signal: args.signal } : {}),
-      });
-      // core resolves `background` (analyzer + summaries) after the prose. We don't block the UI on
-      // it, but must not let an unhandled rejection escape — swallow after logging.
-      void result.background.catch((err) => {
-        console.error("submitTurn background post-processing failed:", err);
-      });
-      return { prose: result.prose, rulings: result.rulings, narratorIdx: result.narratorIdx };
+      const startedAt = Date.now();
+      diagnosticsLogger.info("turn.submit.started", { operationId: args.storyId });
+      try {
+        const story = await requireStory(args.storyId);
+        const router = await currentRouter(story.schema.statMode === "none" ? ["narrator"] : core.ROLES);
+        const result = await core.submitTurn(router, store, args.storyId, args.playerText, {
+          ...(args.onDelta ? { onDelta: args.onDelta } : {}),
+          ...(args.personaBlock ? { personaBlock: args.personaBlock } : {}),
+          ...(args.signal ? { signal: args.signal } : {}),
+        });
+        diagnosticsLogger.info("turn.submit.completed", {
+          operationId: args.storyId,
+          durationMs: Date.now() - startedAt,
+          rulingCount: result.rulings.length,
+        });
+        // Analyzer + summaries continue after prose. Keep the UI responsive while recording their
+        // terminal state and preventing an unhandled rejection.
+        void result.background.then(
+          () => diagnosticsLogger.info("turn.background.completed", { operationId: args.storyId }),
+          (error: unknown) => diagnosticsLogger.error("turn.background.failed", {
+            operationId: args.storyId,
+            error: diagnosticError(error),
+          })
+        );
+        return { prose: result.prose, rulings: result.rulings, narratorIdx: result.narratorIdx };
+      } catch (error) {
+        diagnosticsLogger.error("turn.submit.failed", {
+          operationId: args.storyId,
+          durationMs: Date.now() - startedAt,
+          cancelled: args.signal?.aborted ?? false,
+          error: diagnosticError(error),
+        });
+        throw error;
+      }
     },
 
     async listPresentCast(storyId): Promise<CastMember[]> {
@@ -194,7 +298,8 @@ export function buildSqliteBridge(
 
     // ── Play: turn history (v2 §6) ───────────────────────────────────────────────────────────────
     async swipeLastTurn(args) {
-      const router = await currentRouter();
+      const story = await requireStory(args.storyId);
+      const router = await currentRouter(story.schema.statMode === "none" ? ["narrator"] : ["narrator", "analyzer"]);
       return core.swipeLastTurn(router, store, args.storyId, {
         ...(args.onDelta ? { onDelta: args.onDelta } : {}),
         ...(args.personaBlock ? { personaBlock: args.personaBlock } : {}),
@@ -214,9 +319,13 @@ export function buildSqliteBridge(
       await core.rewindTo(store, storyId, fromIdx);
     },
 
+    async deleteFromExchange(storyId, fromIdx) {
+      await core.deleteFromExchange(store, storyId, fromIdx);
+    },
+
     async listRulings(storyId) {
       const records = await store.rulings.listByStory(storyId);
-      return records.map((r) => r.ruling);
+      return records.map((r) => ({ ...r.ruling, messageId: r.messageId }));
     },
 
     async listChapters(storyId) {
@@ -243,6 +352,16 @@ export function buildSqliteBridge(
         (await store.settings.get(core.PROVIDER_CONFIGS_SETTING_KEY, core.ProviderConfigsSchema)) ?? {};
       delete configs[provider];
       await store.settings.set(core.PROVIDER_CONFIGS_SETTING_KEY, core.ProviderConfigsSchema, configs);
+      if (core.SETUP_STATE_SETTING_KEY && core.SetupStateSchema) {
+        const setup =
+          (await store.settings.get(core.SETUP_STATE_SETTING_KEY, core.SetupStateSchema)) ??
+          core.DEFAULT_SETUP_STATE ??
+          { validatedProviders: [], rolesConfirmed: false, dismissed: false };
+        await store.settings.set(core.SETUP_STATE_SETTING_KEY, core.SetupStateSchema, {
+          ...setup,
+          validatedProviders: setup.validatedProviders.filter((id) => id !== provider),
+        });
+      }
     },
 
     async getRoleMap() {
@@ -271,10 +390,21 @@ export function buildSqliteBridge(
       // core has no dedicated key-probe endpoint (providers expose only chat/chatStream), and no
       // balance surface, so we do a minimal real chat call: success ⇒ valid, failure ⇒ rejected.
       // Balance is intentionally omitted rather than faked (the stub showed a placeholder "$4.20").
-      const model = core.KNOWN_MODELS.find((m) => m.provider === provider)?.model;
-      if (!model) return { state: "rejected", reason: `No known model for provider ${provider}.` };
       const chatProvider = core.makeProvider(provider);
       try {
+        await chatProvider.validateConfig?.(
+          { apiKey: trimmed, ...(baseUrl ? { baseUrl } : {}) },
+          signal
+        );
+        if (chatProvider.listModels) {
+          const models = await chatProvider.listModels(
+            { apiKey: trimmed, ...(baseUrl ? { baseUrl } : {}) },
+            signal
+          );
+          return { state: "valid", label: `Key accepted · ${models.length} models` };
+        }
+        const model = core.KNOWN_MODELS.find((candidate) => candidate.provider === provider)?.model;
+        if (!model) return { state: "rejected", reason: `No known model for provider ${provider}.` };
         await chatProvider.chat(
           {
             model,
@@ -288,6 +418,31 @@ export function buildSqliteBridge(
       } catch (err) {
         return { state: "rejected", reason: (err as Error).message || "The provider rejected this key." };
       }
+    },
+
+    async listProviderModels(provider, apiKey, baseUrl, signal) {
+      const providerClient = core.makeProvider(provider);
+      if (!providerClient.listModels) throw new Error(`${provider} does not expose model discovery.`);
+      return providerClient.listModels(
+        { apiKey: apiKey.trim(), ...(baseUrl ? { baseUrl } : {}) },
+        signal
+      );
+    },
+
+    async getSetupState() {
+      if (!core.SETUP_STATE_SETTING_KEY || !core.SetupStateSchema) {
+        return { validatedProviders: [], rolesConfirmed: false, dismissed: false };
+      }
+      return (
+        (await store.settings.get(core.SETUP_STATE_SETTING_KEY, core.SetupStateSchema)) ??
+        core.DEFAULT_SETUP_STATE ??
+        { validatedProviders: [], rolesConfirmed: false, dismissed: false }
+      );
+    },
+
+    async setSetupState(state) {
+      if (!core.SETUP_STATE_SETTING_KEY || !core.SetupStateSchema) return;
+      await store.settings.set(core.SETUP_STATE_SETTING_KEY, core.SetupStateSchema, state);
     },
 
     // ── Licensing / trial ──────────────────────────────────────────────────────────────────────
@@ -423,8 +578,8 @@ export function buildSqliteBridge(
     },
 
     // ── Model recommendations (v2 §1/§5) ─────────────────────────────────────────────────────────
-    modelsForRole(role, provider) {
-      return core.modelsForRole(role, provider);
+    modelsForRole(role, provider, availableIds) {
+      return core.modelsForRole(role, provider, availableIds);
     },
 
     defaultAssignmentFor(role) {

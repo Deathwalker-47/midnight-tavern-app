@@ -28,11 +28,12 @@ import type { ForgeStep, ForgeStepStatus } from "../components";
 import type { ScreenProps } from "./registry";
 
 /** The forge phases the bridge streams via `onProgress`, mapped to human step labels. */
-const FORGE_PHASES = ["phase-a", "phase-b", "validate", "freeze", "install"] as const;
+const FORGE_PHASES = ["phase-a", "repair", "phase-b", "validate", "freeze", "install"] as const;
 type ForgePhase = (typeof FORGE_PHASES)[number];
 
 const STEP_LABELS: Record<ForgePhase, string> = {
   "phase-a": "Reading your premise",
+  repair: "Correcting the model's structured response",
   "phase-b": "Deciding the rules of this world",
   validate: "Writing the skill catalog",
   freeze: "Sealing the rulebook",

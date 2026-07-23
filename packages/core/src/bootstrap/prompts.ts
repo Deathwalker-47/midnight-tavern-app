@@ -1,26 +1,25 @@
 /**
  * Bootstrapper prompt contracts (low-level-plan §8.5, §2.2).
  *
- * The two phase prompts. Each states the §2.2 catalog constraints explicitly and embeds a
- * one-per-category example so the model has a concrete target shape. The user prompts carry
- * the premise (Phase A) and the Phase A output (Phase B), plus any cross-validation
- * feedback the repair loop injects.
+ * The Phase A prompt defines the world shape. Phase B is split into a compact foundation
+ * request and bounded action batches so provider output ceilings cannot truncate the full
+ * catalog. User prompts carry the prior phase output and cross-validation feedback.
  */
 import {
   CATALOG_MIN_ACTIONS,
-  CATALOG_MIN_PER_CATEGORY,
   DC_MIN,
   DC_MAX,
 } from "../types/index.js";
 import type { PhaseA } from "./generate.js";
+import type { StatMode } from "../types/index.js";
 
 /** Phase A: define the world's stat mode, resources, tiers, and skills. */
 export const PHASE_A_SYSTEM = [
   "You are the story bootstrapper for a d20 roleplay engine. This is PHASE A of two.",
   "From the premise, design the world's numeric and skill shape ONLY. Output JSON with:",
-  "- statMode: \"none\" | \"light\" | \"full\". Use \"none\" for pure social/narrative stories",
-  "  (then resources MUST be an empty array). Use \"light\" or \"full\" for stories with",
-  "  combat, survival, or resource tension.",
+  "- statMode: exactly \"none\" or \"full\". Never emit \"light\".",
+  "- attributes: for full, generally 3-6 genre-specific entries with id, name, abbrev,",
+  "  description, and defaultScore (ordinary scores 8-16, absolute band 1-30). For none, [].",
   "- resources: numeric bars (id, label, start, max, playerVisible, optional regenPerScene,",
   "  optional lethal). When statMode is not \"none\", EXACTLY ONE resource must have",
   "  lethal:true (reaching 0 kills the character) — typically health/hp.",
@@ -28,65 +27,117 @@ export const PHASE_A_SYSTEM = [
   "- skills: learnable abilities (id, name, description, tier, prerequisites[], unlockPaths[],",
   "  masteryAdvance{successesPerRank}). Every skill you define WILL need at least one action",
   "  that uses it in Phase B, so do not over-produce skills.",
-  "Keep ids lowercase snake_case. Design 4–10 skills and 3–6 tiers.",
+  "  Every unlockPaths entry MUST use exactly one of these JSON shapes:",
+  '  {"method":"trainer","npcHint":"who teaches it","cost":{"resources":{"resource_id":2}}}',
+  '  {"method":"manual","itemId":"item_id"}',
+  '  {"method":"trial","flagId":"flag_id"}',
+  "  Trainer cost is ALWAYS an object. Never use a bare number or string for cost; use {} for no cost.",
+  "Keep ids lowercase snake_case. Design 4–8 skills and 3–5 tiers. Keep descriptions concise.",
 ].join("\n");
 
-/** Phase B: build the item table, action catalog, starting state, and NPC templates. */
-export const PHASE_B_SYSTEM = [
-  "You are the story bootstrapper for a d20 roleplay engine. This is PHASE B of two.",
-  "Given the premise and the Phase A world shape, produce the interactive layer as JSON:",
-  "- items: equipment/consumables (id, name, description, kind, tier, optional requiresSkill,",
-  "  props map e.g. {\"damage\":6} or {\"heal\":10}).",
-  "- actions: THE ACTION CATALOG. This is the hard constraint:",
-  `  • at least ${CATALOG_MIN_ACTIONS} actions total,`,
-  `  • at least ${CATALOG_MIN_PER_CATEGORY} in EACH category: combat, social, exploration, crafting, utility,`,
-  `  • every action's dc is an integer within ${DC_MIN}–${DC_MAX} (5 trivial … 25 near-impossible),`,
-  "  • each action has a full effects table with one EffectSpec per outcome:",
-  "    crit_success, success, failure, crit_failure. Each EffectSpec needs a narrationHint.",
-  "  • an action may requireSkill (must be a Phase A skill id) and/or requiresItemKind.",
-  "  • combat actions typically deal resourceDeltaTarget; use scaleByItemProp to scale by a weapon prop.",
-  "- startingState: what the player begins with (resources map, skills[], inventory[]).",
-  "- npcTemplates: sheets for foreseeable key NPCs (templateId, name, resources, skills, inventory).",
-  "REFERENCE RULES: every skill/item/resource/flag you mention must exist. Every Phase A skill",
-  "must be used by at least one action. A flag referenced by a trial unlock must be set by some action.",
-  "",
-  "Example of one action per category (shape only):",
-  JSON.stringify(
-    {
-      id: "strike",
-      category: "combat",
-      label: "Strike",
-      requiresSkill: "melee",
-      requiresItemKind: "weapon",
-      dc: 12,
-      costs: { resources: { stamina: 2 } },
-      effects: {
-        crit_success: { resourceDeltaTarget: { hp: -8 }, scaleByItemProp: "damage", narrationHint: "a devastating blow" },
-        success: { resourceDeltaTarget: { hp: -4 }, scaleByItemProp: "damage", narrationHint: "a clean hit" },
-        failure: { narrationHint: "the strike misses" },
-        crit_failure: { resourceDeltaSelf: { hp: -1 }, narrationHint: "you overextend" },
-      },
-    },
-    null,
-    0
-  ),
-].join("\n");
-
-/** Build the Phase A user prompt from the premise. */
-export function buildPhaseAUser(premise: string): string {
-  return ["PREMISE:", premise, "", "Design Phase A (statMode, resources, tiers, skills)."].join("\n");
+/**
+ * Builds the Phase A user prompt.
+ *
+ * @param premise - User-authored story premise.
+ * @returns Prompt containing the premise and Phase A request.
+ */
+export function buildPhaseAUser(premise: string, statMode?: StatMode): string {
+  return [
+    "PREMISE:",
+    premise,
+    "",
+    ...(statMode ? [`USER-SELECTED STAT SYSTEM: ${statMode}. This value is mandatory.`] : []),
+    "Design Phase A (statMode, attributes, resources, tiers, skills).",
+  ].join("\n");
 }
 
-/** Build the Phase B user prompt from the premise, Phase A output, and repair feedback. */
-export function buildPhaseBUser(premise: string, phaseA: PhaseA, feedback: string): string {
+/** Phase B foundation: the compact item and actor layer, without the action catalog. */
+export const PHASE_B_FOUNDATION_SYSTEM = [
+  "You are the story bootstrapper for a d20 roleplay engine. This is PHASE B FOUNDATION.",
+  "Output one JSON object containing ONLY items, startingState, and npcTemplates.",
+  "- items: 8-12 concise equipment/consumables with id, name, description, kind, tier,",
+  '  optional requiresSkill, and a numeric props map such as {"damage":6}.',
+  "- startingState: resources map, skills array, and inventory array.",
+  "  It also includes attributes, assigning every Phase A attribute a score in 1-30.",
+  "- npcTemplates: 2-4 key NPCs with templateId, name, attributes, resources, skills, and inventory.",
+  'Every skill grant is {"skillId":"existing_skill_id","rank":"novice"}.',
+  'Every inventory entry is {"itemId":"existing_item_id","qty":1}.',
+  "Use only Phase A resource and skill ids. Inventory item ids must exist in your items array.",
+  "Keep ids lowercase snake_case and descriptions concise. Do not output actions in this call.",
+].join("\n");
+
+/** Phase B action batch: a bounded subset of the otherwise oversized action catalog. */
+export const PHASE_B_ACTION_BATCH_SYSTEM = [
+  "You are the story bootstrapper for a d20 roleplay engine. This is PHASE B ACTION BATCH.",
+  'Output one JSON object with exactly one key: {"actions":[...]}.',
+  `For EACH requested category, output exactly ${CATALOG_MIN_ACTIONS / 5} concise actions and no other categories.`,
+  `Every dc is an integer within ${DC_MIN}-${DC_MAX}.`,
+  "Every action has effects for crit_success, success, failure, and crit_failure.",
+  "Every EffectSpec has a narrationHint of 12 words or fewer.",
+  "requiresSkill must be a Phase A skill id; requiresItemKind is optional.",
+  "governingAttribute should be a Phase A attribute id for capability-based actions; omit only for flat luck.",
+  "Resource deltas/costs use Phase A resource ids. Item costs/grants use foundation item ids.",
+  'Every item cost/grant is {"itemId":"existing_item_id","qty":1}.',
+  "Prefix every action id with its category so ids remain unique across batches.",
+  "Use every REQUIRED SKILL ID at least once and set every REQUIRED TRIAL FLAG at least once.",
+].join("\n");
+
+/**
+ * Builds the compact Phase B foundation request.
+ *
+ * @param premise - User-authored story premise.
+ * @param phaseA - Validated world-shape output.
+ * @param feedback - Cross-validation failures from a prior pass.
+ * @returns Prompt for items, starting state, and NPC templates.
+ */
+export function buildPhaseBFoundationUser(premise: string, phaseA: PhaseA, feedback: string): string {
   const parts = [
     "PREMISE:",
     premise,
     "",
     "PHASE A OUTPUT (build on exactly these ids):",
-    JSON.stringify(phaseA, null, 0),
+    JSON.stringify(phaseA),
     "",
-    "Design Phase B (items, actions, startingState, npcTemplates).",
+    "Design items, startingState, and npcTemplates only.",
+  ];
+  if (feedback) parts.push("", feedback);
+  return parts.join("\n");
+}
+
+/**
+ * Builds one bounded action-catalog request.
+ *
+ * @param premise - User-authored story premise.
+ * @param phaseA - Validated world-shape output.
+ * @param foundation - Validated item and actor foundation.
+ * @param categories - Action categories assigned to this batch.
+ * @param requiredSkillIds - Skills not yet covered by an earlier batch.
+ * @param requiredTrialFlags - Trial flags not yet set by an earlier batch.
+ * @param feedback - Cross-validation failures from a prior pass.
+ * @returns Prompt for a bounded action subset.
+ */
+export function buildPhaseBActionBatchUser(
+  premise: string,
+  phaseA: PhaseA,
+  foundation: unknown,
+  categories: readonly string[],
+  requiredSkillIds: readonly string[],
+  requiredTrialFlags: readonly string[],
+  feedback: string
+): string {
+  const parts = [
+    "PREMISE:",
+    premise,
+    "",
+    "PHASE A OUTPUT:",
+    JSON.stringify(phaseA),
+    "",
+    "PHASE B FOUNDATION:",
+    JSON.stringify(foundation),
+    "",
+    `REQUESTED CATEGORIES: ${categories.join(", ")}`,
+    `REQUIRED SKILL IDS: ${requiredSkillIds.join(", ") || "none"}`,
+    `REQUIRED TRIAL FLAGS: ${requiredTrialFlags.join(", ") || "none"}`,
   ];
   if (feedback) parts.push("", feedback);
   return parts.join("\n");

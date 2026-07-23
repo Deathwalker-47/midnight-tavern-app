@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:radial-gradient(120% 80% at 50% -10%,#221A12,#14100C 60%);color:#EADCBE;font-family:"IBM Plex Sans",sans-serif;-webkit-font-smoothing:antialiased;min-height:100vh}
+  ::selection{background:rgba(217,166,72,.25)}
+  a{color:#D9A648;text-decoration:none}a:hover{color:#F2C56B}
+  ::-webkit-scrollbar{width:11px}::-webkit-scrollbar-thumb{background:#382E21;border-radius:6px;border:3px solid #14100C}
+</style>
+</helmet>
+<div style="min-height:100vh;width:100vw;overflow-y:auto;padding:56px 32px 80px">
+  <div style="max-width:1080px;margin:0 auto">
+    <div style="display:flex;align-items:center;gap:16px;margin-bottom:8px">
+      <div style="width:56px;height:56px;border-radius:13px;background:linear-gradient(145deg,#2C241B,#1B1611);border:1px solid rgba(216,170,90,.3);display:flex;align-items:center;justify-content:center;font-family:'Cormorant Garamond',serif;font-weight:700;font-size:32px;color:#D9A648">M</div>
+      <div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.2em;color:#74B8AE">MIDNIGHT TAVERN · HANDOFF V7</div>
+        <h1 style="font-family:'Cormorant Garamond',serif;font-size:40px;font-weight:600;color:#EADCBE;margin:2px 0 0;line-height:1.1">V7 prototypes</h1>
+      </div>
+    </div>
+    <p style="font-size:15px;color:#A08D6C;line-height:1.7;max-width:680px;margin:12px 0 8px">A clean V7 revision on the V6 visual baseline. Attributes are now <b style="color:#74B8AE">1–20</b>; the <b style="color:#D6C9AB">DM Ruling</b> sits above and is authoritative over narrator prose; the universal-action catalog is data-driven; XP replaces success counts; and four competitive-adoption features — advantage/disadvantage, difficulty, regenerate-with-feedback, and the Mechanical Journal — are designed throughout. Start at <a href="StoryCreation.dc.html">Story Creation</a> or jump into <a href="Play.dc.html">Play</a>. Read the <a href="../00-V7-DESIGN-SPEC.md">V7 spec</a>.</p>
+    <div style="font-size:12.5px;color:#6E5F49;margin:6px 0 34px">Every screen carries a <b style="color:#74B8AE">Demo</b> switcher for its states. One canonical Play prototype — no separate Chat.</div>
+
+    <sc-for list="{{ groups }}" as="g" hint-placeholder-count="3">
+      <div style="margin-bottom:34px">
+        <div style="font-size:11px;font-family:'IBM Plex Mono',monospace;letter-spacing:.14em;color:#74B8AE;margin-bottom:14px">{{ g.name }}</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px">
+          <sc-for list="{{ g.screens }}" as="sc" hint-placeholder-count="3">
+            <a href="{{ sc.href }}" style="display:block;background:linear-gradient(160deg,#231C15,#1B1611);border:1px solid #382E21;border-radius:12px;padding:18px 19px;transition:border-color .15s ease,transform .15s ease" style-hover="border-color:rgba(216,170,90,.35);transform:translateY(-2px)">
+              <div style="display:flex;align-items:center;gap:11px">
+                <div style="{{ sc.iconStyle }}">{{ sc.glyph }}</div>
+                <div style="flex:1;min-width:0"><div style="display:flex;align-items:center;gap:8px"><div style="font-family:'Cormorant Garamond',serif;font-size:20px;font-weight:600;color:#EADCBE;line-height:1.1">{{ sc.title }}</div><span style="{{ sc.numStyle }}">{{ sc.num }}</span></div><div style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:#6E5F49">{{ sc.file }}</div></div>
+              </div>
+              <div style="font-size:12.5px;color:#A08D6C;line-height:1.55;margin-top:11px">{{ sc.desc }}</div>
+              <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:11px"><sc-for list="{{ sc.tags }}" as="t" hint-placeholder-count="2"><span style="font-size:10px;font-family:'IBM Plex Mono',monospace;color:#74B8AE;background:rgba(116,184,174,.08);border-radius:3px;padding:2px 7px">{{ t }}</span></sc-for></div>
+            </a>
+          </sc-for>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  renderVals(){
+    const mk=(num,glyph,color,title,file,desc,tags)=>({num,glyph,title,file,desc,tags,
+      iconStyle:`width:40px;height:40px;flex:0 0 40px;border-radius:9px;background:#2C241B;border:1px solid ${color}44;display:flex;align-items:center;justify-content:center;font-size:19px;color:${color}`,
+      numStyle: num?`font-family:'IBM Plex Mono',monospace;font-size:9px;color:#D9A648;border:1px solid rgba(216,170,90,.4);border-radius:3px;padding:1px 5px;flex:0 0 auto`:'display:none',
+      href:file});
+    const groups=[
+      {name:'CANONICAL V7 PROTOTYPES',screens:[
+        mk('1','✦','#D9A648','Story Creation','StoryCreation.dc.html','Pre-forge review: prominent persona confirmation + warnings, mechanic-source review (name, score, source, world-vs-PC), corrected 1–20 attributes, macro compatible/warning/blocking, difficulty picker, and the 1–5 action budget.',['persona','1–20','difficulty']),
+        mk('2','❋','#D9A648','Forging Progress','ForgingProgress.dc.html','Truthful fragment-based forge: named stages, active substep, latest real-progress event, elapsed. Slow, degraded, timed-out, failed, cancelled, resumable, success — plus the regeneration variant. No cosmetic percentage.',['B','no %','regen']),
+        mk('3','✎','#D9A648','Play','Play.dc.html','The canonical chat. Ruling above prose; composer budget + overflow; 5–6 contextual suggestions; advantage/disadvantage/cancel/opposed rulings; classifier recovery; streaming terminal states; regenerate-with-feedback; loot award.',['signature','all states']),
+        mk('4','◈','#F5CE6E','Living Card / Loadout','LivingCardLoadout.dc.html','Reached from a character’s full profile. Seven equipment slots, five tiers legible without color, XP bars, inventory kept distinct from equipped, item detail, and every equip state.',['7 slots','5 tiers']),
+        mk('5','☙','#D9A648','Character Dossier','CharacterDossier.dc.html','The complete profile: mentality, story-so-far, relationships (both directions), history, and — for Full Stats — attributes, skills/XP, equipped loadout & progression. Player, companion, fallen, sparse, loading, empty, No Stats.',['full profile']),
+        mk('6','⚖','#74B8AE','Story Settings','StorySettings.dc.html','The sealed rulebook: searchable catalogs (attributes 1–20, skills, story actions, resources, items), read-only universal-action reference, five item tiers + loot eligibility, difficulty, read-only action budget, and destructive regeneration.',['catalogs','regen']),
+        mk('7','❧','#74B8AE','Mechanical Journal','Journal.dc.html','New story tab. Chapter-grouped history; filters (Rolls, Denied, Progression, Items, Milestones) + actor; expandable full roll math; Markdown / CSV export. Empty, loading, filtered-empty, load-more, export states.',['ledger','export']),
+        mk('8','⊞','#74B8AE','Settings / Role Matrix','Settings.dc.html','Explicit Primary provider (single badge, Make-primary, never auto-changed) with data-driven recommendations: recommended-for-role, parameter summary, Custom marker, Reset-to-recommended, outdated-recommendation.',['primary','recs']),
+        mk('9','◆','#8FB573','Design System delta','DesignSystemDelta.dc.html','Only the new or changed V7 components and the states each must cover — attribute row, DM Ruling, tiers & loadout, composer additions, streaming, classifier, journal, difficulty/budget, provider badges.',['delta','states']),
+      ]},
+      {name:'CARRIED FORWARD FROM V6',screens:[
+        mk('','⊞','#74B8AE','Role Matrix (component)','RoleMatrix.dc.html','The embedded model configurator used inside Settings: separate Provider/Model controls, live fetch, per-role samplers, recommended + outdated states.',['component']),
+        mk('','❧','#74B8AE','Overview','Overview.dc.html','Chapter timeline and the living arc document the storyteller reads before every turn.',['document']),
+        mk('','☙','#74B8AE','Characters','Characters.dc.html','The roster of living cards — party and antagonists — linking into each full Dossier.',['roster']),
+        mk('','❦','#74B8AE','Lorebook Import','LorebookImport.dc.html','JSON import flow: picker → preview (lossy fields + conflict) → validation/partial → success.',['import']),
+        mk('','✦','#D9A648','Setup Wizard','SetupWizard.dc.html','First-run onboarding — connect a provider and confirm the model roles.',['first run']),
+        mk('','❏','#D9A648','Library','Library.dc.html','The shelf of stories and the New Story Builder; connect-your-storyteller gating.',['home']),
+        mk('','☙','#8FB573','Personas','Personas.dc.html','The selves you carry between stories, and the persona editor.',['personas']),
+        mk('','❦','#8FB573','Lorebook','Lorebook.dc.html','Keyword-triggered lore entries injected into context.',['lore']),
+        mk('','◈','#F5CE6E','Design System (base)','DesignSystem.dc.html','The unchanged V6 foundations: color, type, registers, buttons, and base components.',['tokens']),
+      ]},
+    ];
+    return { groups };
+  }
+}
+</script>
+</body>
+</html>

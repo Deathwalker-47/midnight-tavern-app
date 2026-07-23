@@ -4,7 +4,7 @@
  * contests (win/tie/loss), item-prop scaling, cost payment, and mastery advancement.
  */
 import { describe, it, expect } from "vitest";
-import { resolve } from "../src/index.js";
+import { resolve, scoreToMod } from "../src/index.js";
 import type { MechanicalIntent } from "../src/index.js";
 import { d20Sequence } from "../src/index.js";
 import { makeStory, makePlayer, makeEnemy, learned } from "./fixtures.js";
@@ -29,6 +29,29 @@ describe("resolve — gate denial", () => {
 });
 
 describe("resolve — outcome branches", () => {
+  it("combines the governing attribute and mastery modifiers", () => {
+    const story = makeStory();
+    story.attributes = [
+      { id: "might", name: "Might", abbrev: "MIG", description: "Physical power", defaultScore: 10 },
+    ];
+    story.actions.find((action) => action.id === "attack_melee")!.governingAttribute = "might";
+    const actor = makePlayer({ attributes: { might: 14 } });
+
+    const r = resolve(story, actor, makeEnemy(), intent(), d20Sequence([9]));
+
+    expect(scoreToMod(14)).toBe(2);
+    expect(r.ruling.roll).toMatchObject({
+      attributeId: "might",
+      attributeScore: 14,
+      attributeModifier: 2,
+      masterySkillId: "blade",
+      masteryModifier: 1,
+      modifier: 3,
+      total: 12,
+      outcome: "success",
+    });
+  });
+
   it("crit_success on a natural 20 regardless of DC", () => {
     const r = resolve(makeStory(), makePlayer(), makeEnemy(), intent(), d20Sequence([20]));
     expect(r.ruling.roll?.outcome).toBe("crit_success");
@@ -163,6 +186,30 @@ describe("resolve — effects & mutations", () => {
 });
 
 describe("resolve — opposed contests", () => {
+  it("uses the same attribute plus mastery formula for both sides", () => {
+    const story = makeStory();
+    story.attributes = [
+      { id: "might", name: "Might", abbrev: "MIG", description: "Physical power", defaultScore: 10 },
+    ];
+    story.actions.find((action) => action.id === "duel")!.governingAttribute = "might";
+    const actor = makePlayer({ attributes: { might: 14 } });
+    const target = makeEnemy({ attributes: { might: 8 } });
+
+    const r = resolve(story, actor, target, intent({ actionId: "duel" }), d20Sequence([10, 10]));
+
+    expect(r.ruling.roll).toMatchObject({
+      attributeModifier: 2,
+      masteryModifier: 1,
+      modifier: 3,
+      opposedAttributeModifier: -1,
+      opposedMasteryModifier: 3,
+      opposedModifier: 2,
+      total: 13,
+      opposedTotal: 12,
+      outcome: "success",
+    });
+  });
+
   it("attacker wins when total exceeds the defender's", () => {
     // attacker novice +1 rolls 15 ⇒ 16; defender adept +3 rolls 10 ⇒ 13.
     const r = resolve(makeStory(), makePlayer(), makeEnemy(), intent({ actionId: "duel" }), d20Sequence([15, 10]));

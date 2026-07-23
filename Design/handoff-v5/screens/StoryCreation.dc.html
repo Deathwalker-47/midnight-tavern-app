@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:radial-gradient(120% 80% at 50% -10%,#221A12,#14100C 60%);color:#EADCBE;font-family:"IBM Plex Sans",sans-serif;-webkit-font-smoothing:antialiased}
+  ::selection{background:rgba(217,166,72,.25)}
+  a{color:#74B8AE;text-decoration:none}
+  ::-webkit-scrollbar{width:10px}::-webkit-scrollbar-thumb{background:#382E21;border-radius:6px;border:3px solid #14100C}
+  @keyframes mt-fade{from{opacity:0}to{opacity:1}}
+  @keyframes mt-rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+  @media (prefers-reduced-motion: reduce){*{animation-duration:.001s!important}}
+</style>
+</helmet>
+<div style="min-height:100vh;width:100vw;overflow-y:auto;display:flex;flex-direction:column;align-items:center">
+
+  <!-- step rail -->
+  <div style="display:flex;align-items:center;gap:10px;margin-top:30px;margin-bottom:6px">
+    <sc-for list="{{ steps }}" as="st" hint-placeholder-count="4">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="display:flex;align-items:center;gap:8px"><span style="{{ st.dotStyle }}">{{ st.mark }}</span><span style="{{ st.labelStyle }}">{{ st.label }}</span></div>
+        <sc-if value="{{ st.bar }}" hint-placeholder-val="{{ true }}"><span style="width:28px;height:1px;background:#382E21"></span></sc-if>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="flex:1;display:flex;align-items:flex-start;justify-content:center;padding:16px 20px 60px;width:100%">
+
+    <!-- STEP: MECHANICS MODE (L) -->
+    <sc-if value="{{ isMode }}" hint-placeholder-val="{{ true }}">
+      <div style="max-width:760px;width:100%;animation:mt-fade .3s ease">
+        <div style="text-align:center;margin-bottom:8px">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.2em;color:#74B8AE">NEW STORY · STEP 3 OF 4</div>
+          <h1 style="font-family:'Cormorant Garamond',serif;font-size:32px;font-weight:600;color:#EADCBE;margin:6px 0 0">Which stat system should this story use?</h1>
+          <p style="font-size:14px;color:#A08D6C;line-height:1.6;max-width:520px;margin:8px auto 0">You can change this later — switching never re-rolls or reinterprets turns you’ve already played.</p>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:22px">
+          <sc-for list="{{ modes }}" as="m" hint-placeholder-count="2">
+            <div onClick="{{ m.onClick }}" style="{{ m.cardStyle }}">
+              <div style="display:flex;align-items:center;justify-content:space-between"><span style="font-family:'Cormorant Garamond',serif;font-size:23px;font-weight:600;color:#EADCBE;white-space:nowrap">{{ m.name }}</span><span style="{{ m.checkStyle }}">✓</span></div>
+              <div style="font-size:13px;color:#A08D6C;line-height:1.6;margin-top:8px;min-height:118px">{{ m.desc }}</div>
+              <div style="margin-top:10px;padding-top:10px;border-top:1px solid #382E21"><div style="font-size:10px;font-family:'IBM Plex Mono',monospace;letter-spacing:.08em;color:#6E5F49;margin-bottom:5px">GOOD FOR</div><div style="display:flex;flex-wrap:wrap;gap:5px"><sc-for list="{{ m.examples }}" as="e" hint-placeholder-count="4"><span style="font-size:10.5px;color:#A08D6C;background:#2C241B;border:1px solid #382E21;border-radius:4px;padding:2px 7px">{{ e }}</span></sc-for></div></div>
+              <div style="{{ m.roleStyle }}"><span style="font-size:11px">{{ m.roleIcon }}</span><span style="font-size:11.5px">{{ m.roleLine }}</span></div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:24px">
+          <a href="Library.dc.html" style="font-size:14px;color:#A08D6C">← Back</a>
+          <button onClick="{{ toPersona }}" style="background:#D9A648;color:#1B1611;border:0;border-radius:9px;padding:12px 24px;font-weight:600;font-size:14px;cursor:pointer">{{ modeCta }}</button>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- STEP: PERSONA CONFIRM (I) -->
+    <sc-if value="{{ isPersona }}" hint-placeholder-val="{{ false }}">
+      <div style="max-width:560px;width:100%;animation:mt-fade .3s ease">
+        <div style="text-align:center;margin-bottom:6px">
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.2em;color:#74B8AE">NEW STORY · STEP 4 OF 4</div>
+          <h1 style="font-family:'Cormorant Garamond',serif;font-size:32px;font-weight:600;color:#EADCBE;margin:6px 0 0">Who will you play as?</h1>
+        </div>
+
+        <!-- from-card note (I): card ≠ player -->
+        <sc-if value="{{ fromCard }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;gap:11px;align-items:flex-start;background:rgba(116,184,174,.06);border:1px solid #4E827B55;border-radius:10px;padding:12px 14px;margin-top:14px">
+            <span style="color:#74B8AE;font-size:15px">☙</span>
+            <div style="font-size:12.5px;color:#A08D6C;line-height:1.55">The imported card <b style="color:#D6C9AB">“Seraphine Dusk”</b> becomes a character in the world — <b style="color:#D6C9AB">you</b> play as your own persona, chosen below.</div>
+          </div>
+        </sc-if>
+
+        <!-- no-persona empty state -->
+        <sc-if value="{{ noPersona }}" hint-placeholder-val="{{ false }}">
+          <div style="text-align:center;background:#1B1611;border:1px dashed #4a3d2c;border-radius:12px;padding:30px 24px;margin-top:16px">
+            <div style="font-size:32px;color:#6E5F49">☙</div>
+            <div style="font-family:'Cormorant Garamond',serif;font-size:20px;color:#EADCBE;margin-top:6px">You don’t have a persona yet</div>
+            <div style="font-size:13px;color:#A08D6C;line-height:1.55;margin-top:5px">A persona is who you are in the story. Create one to continue — there’s no anonymous “traveler” fallback.</div>
+            <a href="CardCreator.dc.html" style="display:inline-block;margin-top:14px;background:#D9A648;color:#1B1611;border-radius:8px;padding:10px 18px;font-weight:600;font-size:13px">Create a persona to play as</a>
+          </div>
+        </sc-if>
+
+        <!-- chosen persona confirm -->
+        <sc-if value="{{ hasPersona }}" hint-placeholder-val="{{ true }}">
+          <div style="background:linear-gradient(160deg,#231C15,#1B1611);border:1px solid rgba(216,170,90,.22);border-radius:13px;padding:18px;margin-top:16px;position:relative;overflow:hidden">
+            <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#D9A648,transparent)"></div>
+            <div style="font-size:11px;color:#A08D6C;margin-bottom:10px">You will play as</div>
+            <div style="display:flex;gap:14px;align-items:center">
+              <div style="width:56px;height:56px;flex:0 0 56px;border-radius:13px;background:#2C241B;border:1px solid #D9A64866;display:flex;align-items:center;justify-content:center;font-family:'Cormorant Garamond',serif;font-weight:700;font-size:24px;color:#D9A648">KV</div>
+              <div style="flex:1"><div style="font-family:'Cormorant Garamond',serif;font-size:24px;font-weight:600;color:#EADCBE">Kestrel Vane</div><div style="font-size:12.5px;color:#A08D6C">Sellsword courier · <span style="color:#8FB573">default persona</span></div></div>
+              <button onClick="{{ togglePicker }}" style="background:#231C15;border:1px solid #4E827B;color:#74B8AE;border-radius:8px;padding:8px 13px;font-size:12.5px;cursor:pointer">Change persona</button>
+            </div>
+            <div style="margin-top:13px;padding-top:12px;border-top:1px solid #382E21">
+              <div style="font-size:10px;font-family:'IBM Plex Mono',monospace;letter-spacing:.08em;color:#6E5F49;margin-bottom:6px">CARRIED INTO YOUR CHARACTER</div>
+              <div style="font-size:12.5px;color:#A08D6C;line-height:1.7">name · description · traits <span style="color:#6E5F49">(Steady hands, Reluctant hero)</span> · avatar · mechanical hints <span style="color:#6E5F49">(suggested: Blade adept)</span></div>
+            </div>
+            <sc-if value="{{ pickerOpen }}" hint-placeholder-val="{{ false }}">
+              <div style="margin-top:12px;background:#181410;border:1px solid #382E21;border-radius:10px;padding:6px;animation:mt-fade .15s ease">
+                <sc-for list="{{ personaChoices }}" as="p" hint-placeholder-count="3"><div onClick="{{ p.onClick }}" style="{{ p.rowStyle }}"><span style="{{ p.avStyle }}">{{ p.initials }}</span><div style="flex:1"><div style="font-family:'Cormorant Garamond',serif;font-size:16px;font-weight:600;color:#EADCBE">{{ p.name }}</div><div style="font-size:11.5px;color:#A08D6C">{{ p.tagline }}</div></div><span style="{{ p.checkStyle }}">✓</span></div></sc-for>
+                <a href="Personas.dc.html" style="display:block;text-align:center;font-size:12px;color:#74B8AE;padding:8px;border-top:1px solid #382E21;margin-top:4px">Manage personas →</a>
+              </div>
+            </sc-if>
+          </div>
+        </sc-if>
+
+        <!-- narrator authority note (J) -->
+        <div style="display:flex;gap:10px;align-items:center;background:#1B1611;border:1px solid #382E21;border-radius:10px;padding:12px 14px;margin-top:14px">
+          <span style="color:#74B8AE;font-size:14px">✎</span>
+          <div style="flex:1;font-size:12px;color:#A08D6C;line-height:1.5">Narrated by your global <b style="color:#D6C9AB">Narrator</b>: OpenRouter · Claude Sonnet 4.5.</div>
+          <a href="RoleMatrix.dc.html" style="font-size:12px;color:#74B8AE;flex:0 0 auto">Configure models</a>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:22px">
+          <button onClick="{{ toMode }}" style="background:transparent;border:0;color:#A08D6C;font-size:14px;cursor:pointer">← Back</button>
+          <a href="ForgingProgress.dc.html" style="{{ forgeStyle }}">Forge this world →</a>
+        </div>
+      </div>
+    </sc-if>
+  </div>
+
+  <!-- demo switcher -->
+  <div style="position:fixed;bottom:0;left:0;right:0;display:flex;flex-wrap:wrap;gap:6px;align-items:center;justify-content:center;padding:8px 20px;background:rgba(20,16,12,.85);border-top:1px solid #382E21">
+    <span style="font-size:10px;color:#6E5F49;font-family:'IBM Plex Mono',monospace;letter-spacing:.06em;text-transform:uppercase">Demo</span>
+    <sc-for list="{{ demoChips }}" as="c" hint-placeholder-count="4"><button onClick="{{ c.onClick }}" style="{{ c.style }}">{{ c.label }}</button></sc-for>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state={ step:'mode', mode:'full', persona:'kestrel', pickerOpen:false, scenario:'default' };
+  renderVals(){
+    const s=this.state, self=this;
+    const steps=[['Premise'],['Import'],['Mode'],['Persona']].map((d,i)=>{
+      const order = s.step==='mode'?2:3;
+      return {label:d[0],bar:i<3,mark:i<order?'✓':(i+1),
+        dotStyle:`width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;${i<order?'background:#8FB573;color:#14100C':(i===order?'background:#D9A648;color:#1B1611':'background:#231C15;color:#6E5F49;border:1px solid #382E21')}`,
+        labelStyle:`font-size:12px;${i===order?'color:#EADCBE;font-weight:600':'color:#6E5F49'}`};
+    });
+
+    const modeDefs=[
+      {key:'none',name:'No Stats',desc:'Pure roleplay and prose. No attributes, skills, dice, action checks, rulings, inventory rules, or progression. Only your Narrator model is used.',examples:['Romance','Comedy','Slice-of-life','Freeform'],roleIcon:'✎',roleLine:'Uses Narrator only',roleOk:true},
+      {key:'full',name:'Full Stats',desc:'A generated roleplaying system with story-specific attributes, skills, actions, resources, equipment, dice, mastery, and persistent consequences. The Story AI forges a sealed rulebook — you don’t point-buy attributes.',examples:['Adventure','Combat','Mystery','LitRPG','CRPG'],roleIcon:'⚙',roleLine:'Narrator + Classifier, Analyzer, Summarizer & Story AI',roleOk:false},
+    ];
+    const modes=modeDefs.map(m=>({...m,onClick:()=>self.setState({mode:m.key}),
+      cardStyle:`background:#1B1611;border:1px solid ${s.mode===m.key?'rgba(216,170,90,.5)':'#382E21'};border-radius:12px;padding:18px 19px;cursor:pointer;${s.mode===m.key?'box-shadow:0 0 0 1px rgba(216,170,90,.3)':''}`,
+      checkStyle:s.mode===m.key?'color:#8FB573;font-size:16px':'display:none',
+      roleStyle:`display:flex;align-items:center;gap:7px;margin-top:11px;padding:8px 11px;border-radius:8px;background:${m.roleOk?'rgba(116,184,174,.08)':'rgba(216,170,90,.06)'};border:1px solid ${m.roleOk?'#4E827B55':'#6E5F4955'};color:${m.roleOk?'#74B8AE':'#C9A15a'};font-family:'IBM Plex Mono',monospace`}));
+
+    const personaChoices=[
+      {key:'kestrel',initials:'KV',name:'Kestrel Vane',tagline:'Sellsword courier',accent:'#D9A648'},
+      {key:'sable',initials:'SM',name:'Sable Morrow',tagline:'Disgraced cartographer',accent:'#74B8AE'},
+      {key:'orin',initials:'OA',name:'Orin Ashfield',tagline:'Hedge-witch’s apprentice',accent:'#8FB573'},
+    ].map(p=>({...p,onClick:()=>self.setState({persona:p.key,pickerOpen:false}),
+      rowStyle:`display:flex;align-items:center;gap:11px;padding:9px 10px;border-radius:8px;cursor:pointer;background:${s.persona===p.key?'rgba(116,184,174,.1)':'transparent'}`,
+      avStyle:`width:34px;height:34px;flex:0 0 34px;border-radius:8px;background:#2C241B;border:1px solid ${p.accent}66;display:flex;align-items:center;justify-content:center;font-family:'Cormorant Garamond',serif;font-weight:700;font-size:13px;color:${p.accent}`,
+      checkStyle:s.persona===p.key?'color:#74B8AE;font-size:13px':'display:none'}));
+
+    const demoChips=[['normalflow','Standard'],['fromcard','From a card'],['nopersona','No persona']].map(([k,label])=>({label,onClick:()=>{
+      if(k==='fromcard') self.setState({step:'persona',scenario:'card'});
+      else if(k==='nopersona') self.setState({step:'persona',scenario:'none'});
+      else self.setState({step:'mode',scenario:'default'});
+    },style:`font-size:11px;padding:4px 9px;border-radius:5px;cursor:pointer;border:1px solid #382E21;background:transparent;color:#A08D6C`}));
+
+    return {
+      steps, demoChips,
+      isMode:s.step==='mode', isPersona:s.step==='persona',
+      modes, modeCta: s.mode==='none' ? 'Continue · Uses Narrator only →' : 'Continue →',
+      toPersona:()=>self.setState({step:'persona'}), toMode:()=>self.setState({step:'mode'}),
+      fromCard:s.scenario==='card', noPersona:s.scenario==='none', hasPersona:s.scenario!=='none',
+      togglePicker:()=>self.setState(st=>({pickerOpen:!st.pickerOpen})), pickerOpen:s.pickerOpen, personaChoices,
+      forgeStyle:`background:${s.scenario==='none'?'#2C241B':'#D9A648'};color:${s.scenario==='none'?'#6E5F49':'#1B1611'};border-radius:9px;padding:12px 24px;font-weight:600;font-size:14px;${s.scenario==='none'?'pointer-events:none':''}`,
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -49,6 +49,8 @@ interface PlayState {
   deleteLast: () => Promise<void>;
   /** Rewind to just before the message at `fromIdx`, truncating everything at idx ≥ fromIdx. */
   rewind: (fromIdx: number) => Promise<void>;
+  /** Delete the selected exchange itself plus everything after it. */
+  deleteFrom: (fromIdx: number) => Promise<void>;
   clearError: () => void;
   reset: () => void;
 }
@@ -57,13 +59,28 @@ interface PlayState {
 function classifyError(err: unknown): TurnError {
   const message = err instanceof Error ? err.message : String(err);
   const lower = message.toLowerCase();
+  const rawRole = /(?:model\s+)?role\s+["']([^"']+)["']/i.exec(message)?.[1];
+  const role = rawRole
+    ? rawRole.replace(/[_-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase())
+    : "Narrator";
   if (lower.includes("api key") || lower.includes("credential") || lower.includes("401") || lower.includes("unauthor")) {
-    return { kind: "provider-auth", role: "Narrator", message };
+    return { kind: "provider-auth", role, message };
   }
   if (lower.includes("timeout") || lower.includes("network") || lower.includes("fetch") || lower.includes("reach")) {
-    return { kind: "network", role: "Narrator", message };
+    return { kind: "network", role, message };
   }
-  return { kind: "model-output", role: "Narrator", message };
+  return { kind: "model-output", role, message };
+}
+
+let operationGeneration = 0;
+
+function beginOperation(): number {
+  operationGeneration += 1;
+  return operationGeneration;
+}
+
+function isCurrentOperation(generation: number, storyId: string, get: () => PlayState): boolean {
+  return operationGeneration === generation && get().storyId === storyId;
 }
 
 export const usePlayStore = create<PlayState>((set, get) => ({
@@ -77,6 +94,7 @@ export const usePlayStore = create<PlayState>((set, get) => ({
   turnError: undefined,
 
   load: async (storyId) => {
+    const generation = beginOperation();
     set({ storyId, loading: true, turnError: undefined });
     try {
       const bridge = getBridge();
@@ -85,8 +103,10 @@ export const usePlayStore = create<PlayState>((set, get) => ({
         bridge.listRulings(storyId),
         bridge.listPresentCast(storyId),
       ]);
-      set({ messages, rulings, cast, loading: false });
+      if (!isCurrentOperation(generation, storyId, get)) return;
+      set({ messages, rulings, cast, loading: false, thinking: false, proseBuffer: "" });
     } catch (err) {
+      if (!isCurrentOperation(generation, storyId, get)) return;
       set({ loading: false, turnError: classifyError(err) });
     }
   },
@@ -94,6 +114,7 @@ export const usePlayStore = create<PlayState>((set, get) => ({
   submit: async (playerText, opts = {}) => {
     const storyId = get().storyId;
     if (!storyId) return;
+    const generation = beginOperation();
 
     // Optimistically show the player line so the stream feels immediate.
     const optimistic: MessageRecord = {
@@ -115,7 +136,11 @@ export const usePlayStore = create<PlayState>((set, get) => ({
       const outcome = await getBridge().submitTurn({
         storyId,
         playerText,
-        onDelta: (delta) => set((s) => ({ proseBuffer: s.proseBuffer + delta })),
+        onDelta: (delta) => {
+          if (isCurrentOperation(generation, storyId, get)) {
+            set((s) => ({ proseBuffer: s.proseBuffer + delta }));
+          }
+        },
         ...(opts.personaBlock ? { personaBlock: opts.personaBlock } : {}),
         ...(opts.signal ? { signal: opts.signal } : {}),
       });
@@ -126,9 +151,11 @@ export const usePlayStore = create<PlayState>((set, get) => ({
         bridge.listRulings(storyId),
         bridge.listPresentCast(storyId),
       ]);
+      if (!isCurrentOperation(generation, storyId, get)) return;
       set({ messages, rulings, cast, thinking: false, proseBuffer: "" });
       void outcome;
     } catch (err) {
+      if (!isCurrentOperation(generation, storyId, get)) return;
       // Keep the optimistic player line (turn is "saved"); surface the error card.
       set({ thinking: false, proseBuffer: "", turnError: classifyError(err) });
     }
@@ -139,11 +166,16 @@ export const usePlayStore = create<PlayState>((set, get) => ({
   swipeLast: async (opts = {}) => {
     const storyId = get().storyId;
     if (!storyId) return;
+    const generation = beginOperation();
     set({ thinking: true, proseBuffer: "", turnError: undefined });
     try {
       await getBridge().swipeLastTurn({
         storyId,
-        onDelta: (delta) => set((s) => ({ proseBuffer: s.proseBuffer + delta })),
+        onDelta: (delta) => {
+          if (isCurrentOperation(generation, storyId, get)) {
+            set((s) => ({ proseBuffer: s.proseBuffer + delta }));
+          }
+        },
         ...(opts.personaBlock ? { personaBlock: opts.personaBlock } : {}),
         ...(opts.signal ? { signal: opts.signal } : {}),
       });
@@ -154,8 +186,10 @@ export const usePlayStore = create<PlayState>((set, get) => ({
         bridge.listRulings(storyId),
         bridge.listPresentCast(storyId),
       ]);
+      if (!isCurrentOperation(generation, storyId, get)) return;
       set({ messages, rulings, cast, thinking: false, proseBuffer: "" });
     } catch (err) {
+      if (!isCurrentOperation(generation, storyId, get)) return;
       set({ thinking: false, proseBuffer: "", turnError: classifyError(err) });
     }
   },
@@ -163,11 +197,13 @@ export const usePlayStore = create<PlayState>((set, get) => ({
   selectVariant: async (messageIdx, variantIndex) => {
     const storyId = get().storyId;
     if (!storyId) return;
+    const generation = beginOperation();
     try {
       await getBridge().selectVariant(storyId, messageIdx, variantIndex);
       const messages = await getBridge().listMessages(storyId);
-      set({ messages });
+      if (isCurrentOperation(generation, storyId, get)) set({ messages });
     } catch (err) {
+      if (!isCurrentOperation(generation, storyId, get)) return;
       set({ turnError: classifyError(err) });
     }
   },
@@ -175,10 +211,13 @@ export const usePlayStore = create<PlayState>((set, get) => ({
   deleteLast: async () => {
     const storyId = get().storyId;
     if (!storyId) return;
+    const generation = beginOperation();
     try {
       await getBridge().deleteLastTurn(storyId);
+      if (!isCurrentOperation(generation, storyId, get)) return;
       await get().load(storyId);
     } catch (err) {
+      if (!isCurrentOperation(generation, storyId, get)) return;
       set({ turnError: classifyError(err) });
     }
   },
@@ -186,15 +225,33 @@ export const usePlayStore = create<PlayState>((set, get) => ({
   rewind: async (fromIdx) => {
     const storyId = get().storyId;
     if (!storyId) return;
+    const generation = beginOperation();
     try {
       await getBridge().rewindTo(storyId, fromIdx);
+      if (!isCurrentOperation(generation, storyId, get)) return;
       await get().load(storyId);
     } catch (err) {
+      if (!isCurrentOperation(generation, storyId, get)) return;
       set({ turnError: classifyError(err) });
     }
   },
 
-  reset: () =>
+  deleteFrom: async (fromIdx) => {
+    const storyId = get().storyId;
+    if (!storyId) return;
+    const generation = beginOperation();
+    try {
+      await getBridge().deleteFromExchange(storyId, fromIdx);
+      if (!isCurrentOperation(generation, storyId, get)) return;
+      await get().load(storyId);
+    } catch (err) {
+      if (!isCurrentOperation(generation, storyId, get)) return;
+      set({ turnError: classifyError(err) });
+    }
+  },
+
+  reset: () => {
+    beginOperation();
     set({
       storyId: undefined,
       messages: [],
@@ -204,5 +261,6 @@ export const usePlayStore = create<PlayState>((set, get) => ({
       thinking: false,
       proseBuffer: "",
       turnError: undefined,
-    }),
+    });
+  },
 }));

@@ -38,6 +38,11 @@ export type ClassifiedTurn = z.infer<typeof ClassifiedTurnSchema>;
 export const RollRecordSchema = z.object({
   d20: z.number().int().min(1).max(20),
   modifier: z.number().int(),
+  attributeId: z.string().optional(),
+  attributeScore: z.number().int().optional(),
+  attributeModifier: z.number().int().optional(),
+  masterySkillId: z.string().optional(),
+  masteryModifier: z.number().int().optional(),
   total: z.number().int(),
   dc: z.number().int(),
   outcome: OutcomeSchema,
@@ -45,6 +50,9 @@ export const RollRecordSchema = z.object({
   opposedD20: z.number().int().min(1).max(20).optional(),
   opposedModifier: z.number().int().optional(),
   opposedTotal: z.number().int().optional(),
+  opposedAttributeScore: z.number().int().optional(),
+  opposedAttributeModifier: z.number().int().optional(),
+  opposedMasteryModifier: z.number().int().optional(),
 });
 export type RollRecord = z.infer<typeof RollRecordSchema>;
 
@@ -69,8 +77,11 @@ export type MasteryAdvance = z.infer<typeof MasteryAdvanceSchema>;
  */
 export const RulingSchema = z.object({
   turnId: z.string(),
+  /** Narrator message this ruling causally precedes; attached when the exchange commits. */
+  messageId: z.string().optional(),
   actorId: z.string(),
   actionId: z.string(),
+  actionLabel: z.string().optional(),
   targetId: z.string().optional(),
   gate: GateVerdictSchema, // gate verdict BEFORE any roll
   roll: RollRecordSchema.optional(), // absent when denied

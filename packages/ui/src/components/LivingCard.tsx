@@ -132,6 +132,59 @@ function SectionLabel(props: { children: ReactNode }): JSX.Element {
   );
 }
 
+function signed(value: number): string {
+  return value >= 0 ? `+${value}` : String(value);
+}
+
+function Attributes(props: { card: CoreLivingCardView; compact?: boolean }): JSX.Element | null {
+  if (props.card.attributes.length === 0) return null;
+  return (
+    <>
+      <SectionLabel>ATTRIBUTES</SectionLabel>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: props.compact ? "repeat(3, minmax(0, 1fr))" : "repeat(2, minmax(0, 1fr))",
+          gap: 7,
+        }}
+      >
+        {props.card.attributes.map((attribute) => (
+          <div
+            key={attribute.attributeId}
+            title={`${attribute.name}: ${attribute.description}`}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 7,
+              padding: props.compact ? "6px 8px" : "8px 10px",
+              background: "var(--teal-tint)",
+              border: "1px solid var(--teal-dim)",
+              borderRadius: 7,
+              minWidth: 0,
+            }}
+          >
+            <span style={{ minWidth: 0 }}>
+              <span style={{ display: "block", fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--teal)", letterSpacing: ".08em" }}>
+                {attribute.abbrev}
+              </span>
+              {!props.compact ? (
+                <span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 11, color: "var(--secondary)" }}>
+                  {attribute.name}
+                </span>
+              ) : null}
+            </span>
+            <span style={{ display: "flex", alignItems: "baseline", gap: 5, fontFamily: "var(--font-mono)" }}>
+              <strong style={{ fontSize: 15, color: "var(--ui-text)" }}>{attribute.score}</strong>
+              <span style={{ fontSize: 10, color: "var(--brass)" }}>{signed(attribute.modifier)}</span>
+            </span>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
 /** Compact drawer form. */
 export function LivingCard(props: LivingCardProps): JSX.Element {
   const { card, recentlyAdvancedSkillIds = [], animate = true, className, style } = props;
@@ -143,6 +196,7 @@ export function LivingCard(props: LivingCardProps): JSX.Element {
     <CardShell card={card} accent={accent} fallen={fallen} className={className} style={style}>
       <CardHeader card={card} accent={accent} fallen={fallen} />
       <Resources card={card} fallen={fallen} animate={animate} visibleOnly />
+      <Attributes card={card} compact />
       {card.skills.length > 0 ? (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
           {card.skills.slice(0, 4).map((s) => (
@@ -171,6 +225,8 @@ export function LivingCardView(props: LivingCardProps): JSX.Element {
 
       <Resources card={card} fallen={fallen} animate={animate} visibleOnly={false} />
 
+      <Attributes card={card} />
+
       {soft?.traits && soft.traits.length > 0 ? (
         <>
           <SectionLabel>TRAITS</SectionLabel>
@@ -183,14 +239,21 @@ export function LivingCardView(props: LivingCardProps): JSX.Element {
           <SectionLabel>SKILLS</SectionLabel>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {card.skills.map((s) => (
-              <div key={s.skillId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--ui-text)" }}>{s.name}</span>
-                <MasteryPips
-                  rank={asRank(s.rank)}
-                  recentlyAdvanced={recentlyAdvancedSkillIds.includes(s.skillId)}
-                  showModifier
-                  animate={animate}
-                />
+              <div key={s.skillId} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--ui-text)" }}>{s.name}</span>
+                  <MasteryPips
+                    rank={asRank(s.rank)}
+                    recentlyAdvanced={recentlyAdvancedSkillIds.includes(s.skillId)}
+                    showModifier
+                    animate={animate}
+                  />
+                </div>
+                {s.toNext !== undefined && s.toNext !== null && s.successCount !== undefined ? (
+                  <span style={{ alignSelf: "flex-end", fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--muted)" }}>
+                    {s.successCount} successes · {s.toNext} to next rank
+                  </span>
+                ) : null}
               </div>
             ))}
           </div>

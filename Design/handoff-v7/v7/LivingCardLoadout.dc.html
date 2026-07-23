@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:#14100C;color:#EADCBE;font-family:"IBM Plex Sans",sans-serif;-webkit-font-smoothing:antialiased}
+  ::selection{background:rgba(217,166,72,.25)}
+  a{color:#D9A648;text-decoration:none}a:hover{color:#F2C56B}
+  ::-webkit-scrollbar{width:10px;height:10px}::-webkit-scrollbar-thumb{background:#382E21;border-radius:6px;border:3px solid #14100C}
+  @keyframes mt-fade{from{opacity:0}to{opacity:1}}
+  @keyframes mt-rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+  @keyframes mt-pulse{0%,100%{opacity:.55}50%{opacity:1}}
+  @keyframes mt-glow{0%,100%{box-shadow:0 0 0 rgba(181,68,47,0)}50%{box-shadow:0 0 16px rgba(181,68,47,.4)}}
+  @media (prefers-reduced-motion: reduce){*{animation-duration:.001s!important}}
+</style>
+</helmet>
+<div style="display:flex;height:100vh;width:100vw;overflow:hidden;background:#14100C">
+
+  <!-- LEFT RAIL -->
+  <nav style="width:72px;flex:0 0 72px;background:#1B1611;border-right:1px solid #382E21;display:flex;flex-direction:column;align-items:center;padding:14px 0;gap:4px">
+    <div style="width:40px;height:40px;border-radius:9px;background:linear-gradient(145deg,#2C241B,#1B1611);border:1px solid rgba(216,170,90,.25);display:flex;align-items:center;justify-content:center;font-family:'Cormorant Garamond',serif;font-weight:700;font-size:24px;color:#D9A648;margin-bottom:14px">M</div>
+    <sc-for list="{{ railItems }}" as="it" hint-placeholder-count="5">
+      <a href="{{ it.href }}" title="{{ it.label }}" style="{{ it.style }}"><span style="{{ it.iconStyle }}">{{ it.glyph }}</span><span style="font-size:9px">{{ it.label }}</span></a>
+    </sc-for>
+  </nav>
+
+  <div style="flex:1;display:flex;flex-direction:column;min-width:0">
+    <header style="flex:0 0 auto;background:#1B1611;border-bottom:1px solid #382E21;padding:12px 22px">
+      <div style="display:flex;align-items:center;gap:9px;font-size:12.5px">
+        <a href="CharacterDossier.dc.html" style="color:#A08D6C">Characters</a>
+        <span style="color:#4a3d2c">›</span>
+        <a href="CharacterDossier.dc.html" style="color:#A08D6C">Kestrel Vane</a>
+        <span style="color:#4a3d2c">›</span>
+        <span style="color:#EADCBE;font-weight:600">Loadout</span>
+        <div style="flex:1"></div>
+        <a href="CharacterDossier.dc.html" style="font-size:12px;color:#74B8AE;border:1px solid #4E827B;border-radius:7px;padding:6px 12px">← Back to full profile</a>
+      </div>
+      <div style="font-family:'Cormorant Garamond',serif;font-size:24px;font-weight:600;color:#EADCBE;margin-top:8px">Kestrel Vane <span style="font-family:'IBM Plex Sans';font-size:13px;font-weight:400;color:#A08D6C">· equipment &amp; loadout</span></div>
+    </header>
+
+    <div style="flex:0 0 auto;display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:7px 22px;background:#14100C;border-bottom:1px solid #382E21">
+      <span style="font-size:10px;color:#6E5F49;font-family:'IBM Plex Mono',monospace;letter-spacing:.06em;text-transform:uppercase;margin-right:2px">Demo state</span>
+      <sc-for list="{{ demoChips }}" as="c" hint-placeholder-count="8"><button onClick="{{ c.onClick }}" style="{{ c.style }}">{{ c.label }}</button></sc-for>
+    </div>
+
+    <div style="flex:1;overflow-y:auto;padding:22px 26px 60px">
+      <div style="max-width:1180px;margin:0 auto">
+
+        <!-- No Stats variant -->
+        <sc-if value="{{ noStats }}" hint-placeholder-val="{{ false }}">
+          <div style="max-width:560px;margin:40px auto;text-align:center;background:#1B1611;border:1px dashed #382E21;border-radius:14px;padding:34px 26px">
+            <div style="font-size:34px;color:#4a3d2c">☙</div>
+            <div style="font-family:'Cormorant Garamond',serif;font-size:24px;color:#EADCBE;margin-top:8px">Kestrel Vane</div>
+            <div style="font-size:13px;color:#A08D6C;line-height:1.6;margin-top:8px;max-width:400px;margin-left:auto;margin-right:auto">This is a <b style="color:#D6C9AB">No Stats</b> story. There's no equipment, attributes, or loadout to manage — only who Kestrel is and how the story remembers her. See the full profile for identity, relationships, and history.</div>
+            <a href="CharacterDossier.dc.html" style="display:inline-block;margin-top:16px;background:#D9A648;color:#1B1611;border-radius:8px;padding:10px 18px;font-weight:600;font-size:13px">Open character profile →</a>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ fullStats }}" hint-placeholder-val="{{ true }}">
+        <div style="display:grid;grid-template-columns:300px 1fr 320px;gap:18px;align-items:start">
+
+          <!-- LEFT: living card -->
+          <div style="{{ cardStyle }}">
+            <div style="position:absolute;top:0;left:0;right:0;height:3px;background:{{ cardStripe }}"></div>
+            <div style="display:flex;justify-content:space-between;align-items:flex-start">
+              <div><div style="font-family:'Cormorant Garamond',serif;font-size:24px;font-weight:600;color:#EADCBE">Kestrel Vane</div><div style="font-size:12px;color:#A08D6C">Sellsword courier · you</div></div>
+              <span style="{{ statusBadgeStyle }}">{{ statusBadge }}</span>
+            </div>
+            <sc-if value="{{ fallen }}" hint-placeholder-val="{{ false }}"><div style="margin-top:10px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#8A8175;letter-spacing:.1em;background:#181310;border:1px solid #382E21;border-radius:6px;padding:6px 9px">☠ FALLEN · loadout locked · equipped effects inactive</div></sc-if>
+            <div style="margin-top:14px;display:flex;flex-direction:column;gap:9px">
+              <div><div style="display:flex;justify-content:space-between;font-size:10px;font-family:'IBM Plex Mono',monospace;color:#A08D6C;margin-bottom:3px"><span>HEALTH</span><span style="color:{{ hpColor }}">{{ hp }}<span style="color:#6E5F49">/24</span></span></div><div style="height:7px;background:#14100C;border-radius:4px;overflow:hidden"><div style="height:100%;width:{{ hpPct }};background:{{ hpColor }};border-radius:4px"></div></div></div>
+              <div><div style="display:flex;justify-content:space-between;font-size:10px;font-family:'IBM Plex Mono',monospace;color:#A08D6C;margin-bottom:3px"><span>STAMINA</span><span>10<span style="color:#6E5F49">/14</span></span></div><div style="height:7px;background:#14100C;border-radius:4px;overflow:hidden"><div style="height:100%;width:71%;background:#4E827B;border-radius:4px"></div></div></div>
+            </div>
+            <div style="margin-top:15px">
+              <div style="font-size:10px;font-family:'IBM Plex Mono',monospace;letter-spacing:.1em;color:#6E5F49;margin-bottom:7px">ATTRIBUTES <span style="color:#4a3d2c">· 1–20</span></div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px 14px">
+                <sc-for list="{{ attrs }}" as="a" hint-placeholder-count="4">
+                  <div style="display:flex;align-items:center;justify-content:space-between;font-family:'IBM Plex Mono',monospace;font-size:12.5px"><span style="color:#A08D6C">{{ a.abbrev }}</span><span style="display:flex;gap:6px"><span style="color:#D6C9AB">{{ a.score }}</span><span style="color:#74B8AE">{{ a.mod }}</span><sc-if value="{{ a.changed }}" hint-placeholder-val="{{ false }}"><span style="width:6px;height:6px;border-radius:50%;background:#F5CE6E;box-shadow:0 0 6px #F5CE6E;align-self:center"></span></sc-if></span></div>
+                </sc-for>
+              </div>
+              <div style="font-size:10.5px;color:#6E5F49;margin-top:8px;line-height:1.5">MIG shows <b style="color:#74B8AE">+6</b> — a rare attribute boost from an equipped item is active. Base 14, +2 from gear.</div>
+            </div>
+            <div style="margin-top:15px">
+              <div style="font-size:10px;font-family:'IBM Plex Mono',monospace;letter-spacing:.1em;color:#6E5F49;margin-bottom:7px">SKILLS · XP</div>
+              <sc-for list="{{ skills }}" as="s" hint-placeholder-count="3">
+                <div style="padding:5px 0"><div style="display:flex;justify-content:space-between"><span style="font-size:13px;color:#D6C9AB">{{ s.name }}</span><span style="font-size:9px;font-family:'IBM Plex Mono',monospace;color:#74B8AE;text-transform:uppercase">{{ s.rank }}</span></div><div style="display:flex;align-items:center;gap:7px;margin-top:4px"><div style="flex:1;height:5px;background:#14100C;border-radius:3px;overflow:hidden"><div style="{{ s.barStyle }}"></div></div><span style="font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:#6E5F49">{{ s.xp }}</span></div></div>
+              </sc-for>
+            </div>
+            <a href="CharacterDossier.dc.html" style="display:flex;align-items:center;justify-content:space-between;margin-top:14px;padding-top:12px;border-top:1px solid #382E21;font-size:11.5px;font-weight:500;color:#D9A648">Open full profile<span>→</span></a>
+          </div>
+
+          <!-- CENTER: loadout + inventory -->
+          <div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:11px">
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.12em;color:#74B8AE">EQUIPPED LOADOUT · 7 SLOTS</div>
+              <sc-if value="{{ banner }}" hint-placeholder-val="{{ false }}"><span style="{{ bannerStyle }}">{{ banner }}</span></sc-if>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+              <sc-for list="{{ slots }}" as="sl" hint-placeholder-count="7">
+                <div onClick="{{ sl.onClick }}" style="{{ sl.style }}">
+                  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+                    <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:.1em;color:#6E5F49">{{ sl.slot }}</span>
+                    <sc-if value="{{ sl.tier }}" hint-placeholder-val="{{ false }}"><span style="{{ sl.tierStyle }}">{{ sl.tierMark }} {{ sl.tier }}</span></sc-if>
+                  </div>
+                  <sc-if value="{{ sl.item }}" hint-placeholder-val="{{ true }}">
+                    <div style="font-family:'Cormorant Garamond',serif;font-size:16px;font-weight:600;color:{{ sl.nameColor }};line-height:1.15">{{ sl.item }}</div>
+                    <div style="font-size:11px;color:{{ sl.effectColor }};margin-top:3px;line-height:1.4">{{ sl.effect }}</div>
+                    <sc-if value="{{ sl.flag }}" hint-placeholder-val="{{ false }}"><div style="{{ sl.flagStyle }}">{{ sl.flag }}</div></sc-if>
+                  </sc-if>
+                  <sc-if value="{{ sl.empty }}" hint-placeholder-val="{{ false }}">
+                    <div style="font-size:12.5px;color:#4a3d2c;font-style:italic">{{ sl.emptyText }}</div>
+                  </sc-if>
+                </div>
+              </sc-for>
+            </div>
+
+            <!-- inventory (distinct from equipped) -->
+            <div style="margin-top:20px;display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.12em;color:#A08D6C">INVENTORY · NOT EQUIPPED</div>
+              <span style="font-size:10.5px;color:#6E5F49;font-style:italic;font-family:'Source Serif 4',serif">Stored items grant no effects until equipped.</span>
+            </div>
+            <div style="background:#181410;border:1px dashed #382E21;border-radius:11px;padding:12px">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                <sc-for list="{{ inventory }}" as="i" hint-placeholder-count="4">
+                  <div onClick="{{ i.onClick }}" style="display:flex;align-items:center;gap:9px;background:#231C15;border:1px solid #382E21;border-radius:8px;padding:8px 10px;cursor:pointer">
+                    <span style="{{ i.tierStyle }}">{{ i.tierMark }}</span>
+                    <div style="flex:1;min-width:0"><div style="font-size:13px;color:#D6C9AB">{{ i.name }}</div><div style="font-size:10.5px;color:#6E5F49">{{ i.meta }}</div></div>
+                    <sc-if value="{{ i.badge }}" hint-placeholder-val="{{ false }}"><span style="{{ i.badgeStyle }}">{{ i.badge }}</span></sc-if>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+
+            <!-- tier legend -->
+            <div style="margin-top:18px;background:#181410;border:1px solid #382E21;border-radius:11px;padding:13px 15px">
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.1em;color:#74B8AE;margin-bottom:9px">ITEM TIERS · LEGIBLE WITHOUT COLOR</div>
+              <div style="display:flex;flex-wrap:wrap;gap:8px">
+                <sc-for list="{{ tiers }}" as="t" hint-placeholder-count="5"><span style="{{ t.style }}">{{ t.mark }} {{ t.name }}</span></sc-for>
+              </div>
+              <div style="font-size:11px;color:#6E5F49;margin-top:9px;line-height:1.5">Each tier carries a distinct glyph and its full name, so rank never depends on hue alone. <b style="color:#B5442F">Mythical</b> is a god-tier, near-impossible classification — it never looks like ordinary loot.</div>
+            </div>
+          </div>
+
+          <!-- RIGHT: item detail -->
+          <div style="background:#231C15;border:1px solid #382E21;border-radius:13px;padding:16px;position:relative;overflow:hidden">
+            <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,{{ detailTierColor }},transparent)"></div>
+            <div style="display:flex;align-items:center;justify-content:space-between">
+              <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:.1em;color:#6E5F49">ITEM DETAIL</span>
+              <span style="{{ detailTierBadge }}">{{ detailTierMark }} {{ detailTier }}</span>
+            </div>
+            <div style="font-family:'Cormorant Garamond',serif;font-size:22px;font-weight:600;color:#EADCBE;margin-top:9px;line-height:1.15">{{ detailName }}</div>
+            <div style="font-size:12px;color:#A08D6C;line-height:1.6;margin-top:6px">{{ detailDesc }}</div>
+
+            <div style="margin-top:13px;display:flex;flex-direction:column;gap:8px">
+              <sc-for list="{{ detailEffects }}" as="e" hint-placeholder-count="4">
+                <div style="display:flex;gap:9px;align-items:flex-start">
+                  <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:.06em;color:{{ e.color }};border:1px solid {{ e.color }}55;border-radius:3px;padding:2px 6px;flex:0 0 auto;white-space:nowrap">{{ e.kind }}</span>
+                  <span style="font-size:12px;color:#D6C9AB;line-height:1.45">{{ e.text }}</span>
+                </div>
+              </sc-for>
+            </div>
+
+            <sc-if value="{{ detailReq }}" hint-placeholder-val="{{ false }}">
+              <div style="margin-top:12px;background:rgba(201,161,90,.06);border:1px solid #6E5F4955;border-radius:8px;padding:9px 11px;font-size:11.5px;color:#C9A15a;line-height:1.5">{{ detailReq }}</div>
+            </sc-if>
+
+            <div style="margin-top:14px;padding-top:12px;border-top:1px solid #382E21;display:flex;flex-direction:column;gap:8px">
+              <button style="{{ detailPrimaryStyle }}">{{ detailPrimary }}</button>
+              <button style="background:transparent;color:#A08D6C;border:1px solid #382E21;border-radius:8px;padding:9px;font-size:12.5px;cursor:pointer">Keep in inventory</button>
+            </div>
+
+            <!-- compare / replace -->
+            <sc-if value="{{ compare }}" hint-placeholder-val="{{ false }}">
+              <div style="margin-top:14px;background:#181410;border:1px solid #4E827B55;border-radius:10px;padding:12px;animation:mt-fade .2s ease">
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:.08em;color:#74B8AE;margin-bottom:9px">REPLACE WHAT'S EQUIPPED?</div>
+                <div style="display:flex;align-items:stretch;gap:8px">
+                  <div style="flex:1;background:#231C15;border:1px solid #382E21;border-radius:8px;padding:9px"><div style="font-size:9px;color:#6E5F49;font-family:'IBM Plex Mono',monospace">CURRENT</div><div style="font-size:13px;color:#D6C9AB;font-family:'Cormorant Garamond',serif;font-weight:600;margin-top:2px">Vale saber</div><div style="font-size:10.5px;color:#8FB573;margin-top:3px;font-family:'IBM Plex Mono',monospace">+1 Blade</div></div>
+                  <div style="align-self:center;color:#6E5F49;font-size:14px">→</div>
+                  <div style="flex:1;background:#231C15;border:1px solid #74B8AE55;border-radius:8px;padding:9px"><div style="font-size:9px;color:#74B8AE;font-family:'IBM Plex Mono',monospace">NEW</div><div style="font-size:13px;color:#EADCBE;font-family:'Cormorant Garamond',serif;font-weight:600;margin-top:2px">Choirbreaker</div><div style="font-size:10.5px;color:#8FB573;margin-top:3px;font-family:'IBM Plex Mono',monospace">+2 Blade <span style="color:#74B8AE">(+1)</span></div></div>
+                </div>
+                <div style="font-size:10.5px;color:#6E5F49;margin-top:9px;line-height:1.5">Replacing returns Vale saber to inventory — it is never silently unequipped or discarded.</div>
+              </div>
+            </sc-if>
+          </div>
+        </div>
+        </sc-if>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state={ demo:'default', selected:'choirbreaker' };
+  tierMeta(){ return {
+    Common:{mark:'◇',color:'#A08D6C'}, Uncommon:{mark:'◈',color:'#8FB573'},
+    Rare:{mark:'❖',color:'#74B8AE'}, Legendary:{mark:'★',color:'#D9A648'}, Mythical:{mark:'✷',color:'#B5442F'},
+  }; }
+  tierPill(tier,glow){ const t=this.tierMeta()[tier]; return `font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:.05em;color:${t.color};border:1px solid ${t.color}66;border-radius:3px;padding:1px 6px;${glow?`box-shadow:0 0 10px ${t.color}55`:''}`; }
+  renderVals(){
+    const s=this.state, self=this, TM=this.tierMeta();
+    const railItems=[['Library','❏','Library.dc.html'],['Story','✎','Play.dc.html'],['Personas','☙','Personas.dc.html'],['Lore','❦','Lorebook.dc.html'],['Settings','⚙','Settings.dc.html']]
+      .map(([label,glyph,href])=>({label,glyph,href,style:`display:flex;flex-direction:column;align-items:center;gap:3px;width:56px;padding:8px 0;border-radius:8px;color:#6E5F49`,iconStyle:'font-size:18px;color:#8A7A5c'}));
+
+    const chipDefs=[['default','Default'],['compare','Compare / replace'],['twohanded','Two-handed'],['requirement','Requirement not met'],['incompatible','Incompatible slot'],['unique','Unique conflict'],['copies','Copies owned'],['recent','Recently gained'],['fallen','Fallen'],['nostats','No Stats']];
+    const demoChips=chipDefs.map(([k,label])=>({label,onClick:()=>self.setState({demo:k, selected: k==='requirement'?'signet':(k==='twohanded'?'choirbreaker':s.selected)}),
+      style:`font-size:11px;padding:4px 9px;border-radius:5px;cursor:pointer;border:1px solid ${s.demo===k?'#4E827B':'#382E21'};background:${s.demo===k?'rgba(116,184,174,.12)':'transparent'};color:${s.demo===k?'#74B8AE':'#A08D6C'}`}));
+
+    const noStats=s.demo==='nostats', fallen=s.demo==='fallen';
+    const twohanded=s.demo==='twohanded';
+
+    // attributes 1-20 (MIG boosted by gear)
+    const attrs=[{abbrev:'MIG',score:'14',mod:'(+6)',changed:true},{abbrev:'AGI',score:'12',mod:'(+1)',changed:false},{abbrev:'WIT',score:'15',mod:'(+2)',changed:false},{abbrev:'RES',score:'10',mod:'(+0)',changed:false}];
+    const skills=[
+      {name:'Blade',rank:'expert',xp:'180/240',barStyle:'height:100%;width:75%;background:#4E827B;border-radius:3px'},
+      {name:'Persuasion',rank:'adept',xp:'60/120',barStyle:'height:100%;width:50%;background:#4E827B;border-radius:3px'},
+      {name:'Arcane Sight',rank:'novice',xp:'15/80',barStyle:'height:100%;width:19%;background:#4E827B;border-radius:3px'},
+    ];
+
+    // slot builder
+    const slot=(name,def)=>({slot:name,...def});
+    const equippedBody=fallen?{effectColor:'#6E5F49',dim:true}:{};
+    const slotBox=(sel,accent)=>`background:#231C15;border:1px solid ${accent};border-radius:11px;padding:11px 12px;cursor:pointer;min-height:96px;${sel?'box-shadow:0 0 0 1px '+accent:''}${fallen?';opacity:.5;filter:saturate(.5)':''}`;
+
+    const eff=(tier,name,effect,flag,flagKind,sel)=>{
+      const t=TM[tier];
+      const flagStyles={active:`margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:#8FB573;border:1px solid #8FB57355;border-radius:3px;padding:1px 6px;display:inline-block`,
+        conditional:`margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:#6E5F49;border:1px dashed #6E5F49;border-radius:3px;padding:1px 6px;display:inline-block`,
+        gained:`margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:#F5CE6E;border:1px solid #F5CE6E66;border-radius:3px;padding:1px 6px;display:inline-block`,
+        changed:`margin-top:6px;font-family:'IBM Plex Mono',monospace;font-size:9.5px;color:#F5CE6E;border:1px solid #F5CE6E66;border-radius:3px;padding:1px 6px;display:inline-block`};
+      return {tier,tierMark:t.mark,tierStyle:self.tierPill(tier, tier==='Mythical'),item:name,nameColor:fallen?'#8A8175':'#EADCBE',effect,effectColor:fallen?'#6E5F49':(effect&&effect.indexOf('inactive')>=0?'#6E5F49':'#8FB573'),flag,flagStyle:flagStyles[flagKind]||flagStyles.active,style:slotBox(sel,fallen?'#382E21':(sel?'#4E827B':(tier==='Mythical'?'#B5442F55':'#382E21')))+((tier==='Mythical'&&!fallen)?';animation:mt-glow 3s infinite':''),onClick:()=>self.setState({selected: name==='Choirbreaker'?'choirbreaker':(name==='Warden\u2019s Signet'?'signet':'other')})};
+    };
+    const emptySlot=(name,text,incompatible)=>({slot:name,empty:true,emptyText:text,item:null,style:slotBox(false, incompatible?'#C96F5755':'#2C241B')+';border-style:dashed',onClick:()=>{}});
+
+    let slots;
+    if(twohanded){
+      slots=[
+        eff('Mythical','Choirbreaker','+2 Blade · two-handed','OCCUPIES PRIMARY + SECONDARY','active',s.selected==='choirbreaker'),
+        {slot:'SECONDARY',empty:true,emptyText:'— held by Choirbreaker (two-handed) —',item:null,style:`background:#1B1611;border:1px dashed #4E827B55;border-radius:11px;padding:11px 12px;min-height:96px;opacity:.7`,onClick:()=>{}},
+        eff('Rare','Warden Helm','+1 Resolve','EFFECT ACTIVE','active',false),
+        eff('Uncommon','Oil-treated cloak','Utility · rain & cold','EFFECT ACTIVE','active',false),
+        eff('Common','Climbing kit','enables action “Scale”','CONDITIONAL · needs a wall','conditional',false),
+        emptySlot('ACCESSORY I','Empty — a compatible ring is in inventory'),
+        eff('Legendary','Vow-band','+8 max Stamina','RECENTLY GAINED','gained',false),
+      ];
+    } else if(s.demo==='incompatible'){
+      slots=[
+        eff('Rare','Vale saber','+1 Blade','EFFECT ACTIVE','active',false),
+        eff('Common','Buckler','+1 to parry rulings','EFFECT ACTIVE','active',false),
+        emptySlot('HEAD','Can\u2019t place a saber here — wrong slot','incompatible'),
+        eff('Uncommon','Scout\u2019s leathers','+1 Agility','EFFECT ACTIVE','active',false),
+        eff('Common','Climbing kit','enables action “Scale”','CONDITIONAL · needs a wall','conditional',false),
+        emptySlot('ACCESSORY I','Empty'),
+        emptySlot('ACCESSORY II','Empty'),
+      ];
+    } else {
+      slots=[
+        eff('Rare','Vale saber','+1 Blade','EFFECT ACTIVE','active',s.selected==='other'),
+        eff('Common','Buckler','+1 to parry rulings','EFFECT ACTIVE','active',false),
+        eff('Rare','Warden Helm','+1 Resolve','EFFECT ACTIVE','active',false),
+        eff('Uncommon','Scout\u2019s leathers','+1 Agility','EFFECT ACTIVE','active',false),
+        eff('Common','Climbing kit','enables “Scale” · inactive here','CONDITIONAL · needs a wall','conditional',false),
+        eff('Legendary','Warden\u2019s Signet','+1 Persuasion vs guards','RECENTLY GAINED','gained',s.selected==='signet'),
+        emptySlot('ACCESSORY II','Empty — nothing equipped'),
+      ];
+    }
+
+    // inventory
+    const inv=(name,tier,meta,badge,badgeColor)=>({name,meta,tierMark:TM[tier].mark,tierStyle:`font-size:14px;color:${TM[tier].color};flex:0 0 auto`,badge,badgeStyle:badge?`font-family:'IBM Plex Mono',monospace;font-size:9px;color:${badgeColor};border:1px solid ${badgeColor}55;border-radius:3px;padding:1px 6px`:'',onClick:()=>self.setState({selected: name==='Choirbreaker'?'choirbreaker':'other'})});
+    let inventory=[
+      inv('Waybread','Common','Consumable ×2','',''),
+      inv('Iron ring of the Vale','Uncommon','Accessory','FITS ACC','#8FB573'),
+      inv('Reliquary key','Common','Quest object','KEY','#6E5F49'),
+      inv('31 silver marks','Common','Currency','',''),
+    ];
+    if(s.demo==='unique') inventory=[inv('Warden\u2019s Signet','Legendary','Unique','ALREADY EQUIPPED','#C9A15a'),...inventory.slice(0,3)];
+    if(s.demo==='copies') inventory=[inv('Iron ring of the Vale','Uncommon','Accessory ×1','1 OWNED','#C9A15a'),...inventory.slice(0,3)];
+
+    // tier legend
+    const tiers=['Common','Uncommon','Rare','Legendary','Mythical'].map(name=>({name,mark:TM[name].mark,style:self.tierPill(name,name==='Mythical')+';font-size:11px;padding:4px 9px'}));
+
+    // item detail
+    const details={
+      choirbreaker:{name:'Choirbreaker',tier:'Mythical',desc:'A saber quenched in cathedral-silence. Wounds it deals do not close by ordinary means. God-tier; almost never seen.',
+        effects:[{kind:'SKILL MOD',color:'#8FB573',text:'+2 Blade'},{kind:'ENABLES',color:'#74B8AE',text:'Action “Silence the Choir” — sever a foe\u2019s magic mid-cast'},{kind:'ATTR MOD',color:'#D9A648',text:'+2 Might (rare attribute boost)'},{kind:'CONDITIONAL',color:'#C9A15a',text:'Two-handed — occupies Primary and Secondary'}],
+        req:null, primary:'Equip (two-handed)'},
+      signet:{name:'Warden\u2019s Signet',tier:'Legendary',desc:'A signet that opens Warden-sealed doors and marks the bearer as a captain of the watch.',
+        effects:[{kind:'ENABLES',color:'#74B8AE',text:'Action “Command the Watch”'},{kind:'BOOST',color:'#8FB573',text:'+1 Persuasion vs guards (conditional)'},{kind:'UTILITY',color:'#A08D6C',text:'Opens Warden-sealed doors'}],
+        req: s.demo==='requirement'?'Requirement not met: needs Persuasion at Adept. Can be stored now and equipped once you rank up — it won\u2019t grant effects until then.':null,
+        primary: s.demo==='requirement'?'Requirement not met':'Equip to Accessory'},
+      other:{name:'Vale saber',tier:'Rare',desc:'A courier\u2019s working blade, balanced for the road. Reliable if unremarkable.',
+        effects:[{kind:'SKILL MOD',color:'#8FB573',text:'+1 Blade'},{kind:'RESTRICTION',color:'#C9A15a',text:'One-handed only'}],
+        req:null, primary:'Equipped'},
+    };
+    const d=details[s.selected]||details.choirbreaker;
+    const dt=TM[d.tier];
+    const detailEffects=d.effects;
+
+    // banner (state-level)
+    let banner='',bannerStyle='';
+    const bpill=(c)=>`font-family:'IBM Plex Mono',monospace;font-size:10px;color:${c};border:1px solid ${c}55;border-radius:4px;padding:3px 8px`;
+    if(s.demo==='unique'){ banner='Unique item already equipped'; bannerStyle=bpill('#C9A15a'); }
+    if(s.demo==='copies'){ banner='Can\u2019t equip more copies than owned'; bannerStyle=bpill('#C9A15a'); }
+    if(s.demo==='incompatible'){ banner='Incompatible slot'; bannerStyle=bpill('#C96F57'); }
+    if(fallen){ banner='Character fallen — loadout locked'; bannerStyle=bpill('#8A8175'); }
+
+    const statusBadge = fallen?'FALLEN':'PLAYER';
+    return {
+      railItems, demoChips, noStats, fullStats:!noStats,
+      cardStyle:`position:relative;overflow:hidden;background:linear-gradient(160deg,#231C15,#1B1611);border:1px solid ${fallen?'#382E21':'rgba(216,170,90,.18)'};border-radius:13px;padding:16px;${fallen?'opacity:.75':''}`,
+      cardStripe: fallen?'#8A8175':'linear-gradient(90deg,#D9A648,transparent)',
+      statusBadge, statusBadgeStyle:`font-size:9px;font-family:'IBM Plex Mono',monospace;color:${fallen?'#8A8175':'#74B8AE'};border:1px solid ${fallen?'#8A8175':'#4E827B'};border-radius:4px;padding:2px 5px`,
+      fallen, hp:fallen?'0':'19', hpPct:fallen?'0%':'79%', hpColor:fallen?'#8A8175':'#8FB573',
+      attrs, skills, slots, inventory, tiers,
+      banner, bannerStyle,
+      detailName:d.name, detailDesc:d.desc, detailTier:d.tier, detailTierMark:dt.mark, detailTierColor:dt.color,
+      detailTierBadge:self.tierPill(d.tier, d.tier==='Mythical'),
+      detailEffects, detailReq:d.req,
+      detailPrimary:d.primary, detailPrimaryStyle:`background:${(d.primary.indexOf('not met')>=0||d.primary==='Equipped')?'#2C241B':'#D9A648'};color:${(d.primary.indexOf('not met')>=0||d.primary==='Equipped')?'#6E5F49':'#1B1611'};border:0;border-radius:8px;padding:10px;font-size:12.5px;font-weight:600;cursor:${(d.primary.indexOf('not met')>=0)?'not-allowed':'pointer'}`,
+      compare:s.demo==='compare',
+    };
+  }
+}
+</script>
+</body>
+</html>

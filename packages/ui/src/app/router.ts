@@ -11,6 +11,7 @@ import { create } from "zustand";
 /** The routes, one per screen file. `story` is not a route — `play` is the story default. */
 export const ROUTES = [
   "library",
+  "setup",
   "play",
   "overview",
   "characters",
@@ -37,6 +38,10 @@ export interface RouteParams {
   entryId?: string;
   /** Character Dossier scopes to one character within the story. */
   characterId?: string;
+  /** Route to resume after the provider/model setup flow completes. */
+  returnTo?: Route;
+  /** Context shown by setup when a model-dependent action was intercepted. */
+  setupReason?: string;
 }
 
 /** True for the four surfaces that require an open story (drive the header's sub-tabs). */
@@ -66,6 +71,8 @@ function parseHash(hash: string): { route: Route; params: RouteParams } {
     else if (k === "personaId") params.personaId = value;
     else if (k === "entryId") params.entryId = value;
     else if (k === "characterId") params.characterId = value;
+    else if (k === "returnTo" && isRoute(value)) params.returnTo = value;
+    else if (k === "setupReason") params.setupReason = value;
   }
   return { route, params };
 }

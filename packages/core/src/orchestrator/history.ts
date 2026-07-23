@@ -96,58 +96,71 @@ export async function swipeLastTurn(
   const priorVariants = narrator.variants ?? [narrator.content];
   const priorActive = narrator.activeVariant ?? 0;
   const states = await loadVariantStates(store, narrator.id);
-  states[priorActive] = await captureVariantState(store, storyId);
+  const priorState = await captureVariantState(store, storyId);
+  states[priorActive] = priorState;
 
-  // (2) Roll soft/world back to the pre-image so the analyzer re-reads from the same start the
-  //     original turn did. Hard state + rulings are deliberately NOT touched.
-  if (checkpoint) await restoreSoftWorld(store, checkpoint);
+  try {
+    // (2) Roll soft/world back to the pre-image so the analyzer re-reads from the same start the
+    //     original turn did. Hard state + rulings are deliberately NOT touched.
+    if (checkpoint) await restoreSoftWorld(store, checkpoint);
 
-  // Rebuild the SAME context the turn used: committed rulings inline as authoritative facts.
-  const rulingRecords = await store.rulings.listByMessage(narrator.id);
-  const rulings: Ruling[] = rulingRecords.map((r) => r.ruling);
-  const roster = await store.characters.listByStory(storyId);
-  const presentIds = roster.map((c) => c.id);
-  const styleInputs = blueprintToStyleInputs(story.blueprint);
-  const context = await assembleContext(store, {
-    storyId,
-    schema,
-    rulings,
-    presentIds,
-    playerText,
-    styleInputs,
-    ...(opts.personaBlock ? { personaBlock: opts.personaBlock } : {}),
-  });
+    // Rebuild the SAME context the turn used: committed rulings inline as authoritative facts.
+    const rulingRecords = await store.rulings.listByMessage(narrator.id);
+    const rulings: Ruling[] = rulingRecords.map((r) => r.ruling);
+    const roster = await store.characters.listByStory(storyId);
+    const presentIds = roster.map((c) => c.id);
+    const styleInputs = blueprintToStyleInputs(story.blueprint);
+    const context = await assembleContext(store, {
+      storyId,
+      schema,
+      rulings,
+      presentIds,
+      playerText,
+      styleInputs,
+      ...(opts.personaBlock ? { personaBlock: opts.personaBlock } : {}),
+    });
 
-  // (3) Regenerate prose.
-  const response = await router.stream(
-    "narrator",
-    { system: context.system, user: context.user },
-    opts.onDelta ?? (() => {}),
-    { ...(opts.signal ? { signal: opts.signal } : {}) }
-  );
+    // (3) Regenerate prose.
+    const response = await router.stream(
+      "narrator",
+      { system: context.system, user: context.user },
+      opts.onDelta ?? (() => {}),
+      { ...(opts.signal ? { signal: opts.signal } : {}) }
+    );
 
-  // (4) Re-run the analyzer on the NEW prose (it applies its own soft/world patch).
-  const nameById = new Map(roster.map((c) => [c.id, c.name]));
-  const presentSoft = roster
-    .map((c) => c.soft)
-    .filter((s): s is NonNullable<typeof s> => s !== undefined);
-  await runAnalyzer(router, store, {
-    storyId,
-    turnIdx: narrator.idx,
-    playerText,
-    narratorText: response.content,
-    presentSoft,
-    nameFor: (id) => nameById.get(id),
-    ...(opts.signal ? { signal: opts.signal } : {}),
-  });
+    // (4) Re-run the analyzer on the NEW prose (it applies its own soft/world patch).
+    const nameById = new Map(roster.map((c) => [c.id, c.name]));
+    const presentSoft = roster
+      .map((c) => c.soft)
+      .filter((s): s is NonNullable<typeof s> => s !== undefined);
+    if (schema.statMode === "full") {
+      await runAnalyzer(router, store, {
+        storyId,
+        turnIdx: narrator.idx,
+        playerText,
+        narratorText: response.content,
+        presentSoft,
+        nameFor: (id) => nameById.get(id),
+        ...(opts.signal ? { signal: opts.signal } : {}),
+      });
+    }
 
-  // (5) Snapshot the new variant's post-analyzer state; make it active.
-  const variants = [...priorVariants, response.content];
-  const activeVariant = variants.length - 1;
-  states[activeVariant] = await captureVariantState(store, storyId);
-  await store.messages.setVariants(narrator.id, variants, activeVariant);
-  await store.messages.setVariantStatesJson(narrator.id, JSON.stringify(states));
-  return { variants, activeVariant };
+    // (5) Snapshot the new variant's post-analyzer state; make it active. Persist the message and
+    //     its parallel state array atomically so a storage failure cannot leave them out of sync.
+    const variants = [...priorVariants, response.content];
+    const activeVariant = variants.length - 1;
+    states[activeVariant] = await captureVariantState(store, storyId);
+    await store.transaction(async () => {
+      await store.messages.setVariants(narrator.id, variants, activeVariant);
+      await store.messages.setVariantStatesJson(narrator.id, JSON.stringify(states));
+    });
+    return { variants, activeVariant };
+  } catch (err) {
+    // The swipe is externally all-or-nothing: if narration, analysis, or persistence fails, put
+    // soft/world back exactly as the still-active variant expects and leave the message unchanged.
+    await applyVariantState(store, storyId, priorState);
+    throw err;
+  }
 }
 
 /**
@@ -232,11 +245,41 @@ export async function deleteLastTurn(store: Store, storyId: string): Promise<voi
  * checkpoint whose turnIndex ≥ fromIdx (its snapshot predates that turn's commits). If none exists
  * at or after fromIdx, there is nothing to roll back — only truncation runs.
  */
-export async function rewindTo(store: Store, storyId: string, fromIdx: number): Promise<void> {
+export async function rewindTo(store: Store, storyId: string, selectedIdx: number): Promise<void> {
+  const selected = await store.messages.getByIndex(storyId, selectedIdx);
+  if (!selected) return;
+  // Rewind keeps the selected exchange. A player line owns the narrator line immediately after it;
+  // a narrator line is already the end of its exchange. "Delete from here" remains a separate op.
+  const fromIdx = selected.role === "player" ? selectedIdx + 2 : selectedIdx + 1;
   const checkpoints = await store.checkpoints.listByStory(storyId); // ordered by turnIndex
   const target = checkpoints.find((c) => c.turnIndex >= fromIdx);
   await store.transaction(async () => {
     if (target) await applyRestore(store, target);
+    await store.rulings.deleteFromIdx(storyId, fromIdx);
+    await store.messages.deleteFrom(storyId, fromIdx);
+    await store.checkpoints.deleteFrom(storyId, fromIdx);
+    await invalidateSummariesFrom(store, storyId, fromIdx);
+  });
+}
+
+/** Delete the selected exchange itself plus every later exchange, restoring its pre-turn state. */
+export async function deleteFromExchange(store: Store, storyId: string, selectedIdx: number): Promise<void> {
+  const selected = await store.messages.getByIndex(storyId, selectedIdx);
+  if (!selected) return;
+  const narrator = selected.role === "narrator"
+    ? selected
+    : selected.role === "player"
+      ? await store.messages.getByIndex(storyId, selectedIdx + 1)
+      : undefined;
+  if (!narrator || narrator.role !== "narrator") {
+    throw new Error("deleteFromExchange: selected message is not part of a completed exchange.");
+  }
+  const previous = await store.messages.getByIndex(storyId, narrator.idx - 1);
+  const fromIdx = previous?.role === "player" ? previous.idx : narrator.idx;
+  const checkpoint = await store.checkpoints.getByMessage(narrator.id);
+
+  await store.transaction(async () => {
+    if (checkpoint) await applyRestore(store, checkpoint);
     await store.rulings.deleteFromIdx(storyId, fromIdx);
     await store.messages.deleteFrom(storyId, fromIdx);
     await store.checkpoints.deleteFrom(storyId, fromIdx);

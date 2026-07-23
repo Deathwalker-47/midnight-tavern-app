@@ -1,26 +1,11 @@
-/**
- * RoleMatrix — the standalone model-configuration screen (low-level-plan-v2 §1/§5/§8;
- * Design/handoff-v2/screens/RoleMatrix.dc.html).
- *
- * The same five-role editor embedded inside Settings and the Wizard, openable on its own for
- * review. Each of the five roles (Narrator, Classifier, Analyzer, Summarizer, Story AI) picks a
- * provider→model (role-aware dropdown, recommended entries first) and exposes its full sampler
- * panel. Selecting a role opens its SamplerPanel below the grid; presets set a whole profile,
- * "Reset to recommended" clears the manual-override bit.
- *
- * All state flows through the settings store (`roleMap`, `knownModels`, `providerIds`, `setRoleMap`)
- * — never core directly. The screen is presentational glue: it maps the RoleMap to the row/panel
- * props and writes changes back.
- *
- * Guardrail (§8): samplers are ALWAYS per-role — there is no global creativity control. Assigning a
- * recommended model applies its role's default profile unless the role's samplers are dirty.
- */
 import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
 import type { ScreenProps } from "./registry.js";
-import { useSettingsStore } from "../state/settingsStore.js";
+import { roleConfigurationIssues, useSettingsStore } from "../state/settingsStore.js";
+import { useStoriesStore } from "../state/storiesStore.js";
 import type { RoleBinding, Samplers } from "../bridge/core.js";
 import {
+  Button,
   EmptyState,
   InlineNotice,
   RoleMatrixRow,
@@ -31,7 +16,6 @@ import {
   type SamplerPreset,
 } from "../components/index.js";
 
-// Story AI is the user-facing name for the `bootstrapper` role (low-level-plan-v2 role rename).
 const ROLE_DESCRIPTION: Record<ModelRole, string> = {
   narrator: "Writes the prose",
   classifier: "Decides when to roll",
@@ -41,17 +25,36 @@ const ROLE_DESCRIPTION: Record<ModelRole, string> = {
 };
 
 const ROLE_ORDER: ModelRole[] = ["narrator", "classifier", "analyzer", "summarizer", "bootstrapper"];
+const STRUCTURED_ROLES: ReadonlySet<ModelRole> = new Set(["classifier", "analyzer", "bootstrapper"]);
 
-/** The shipped per-role sampler recommendation (low-level-plan-v2 §8 "Default profiles by role"). */
-const ROLE_DEFAULT_SAMPLERS: Record<ModelRole, Samplers> = {
-  classifier: { temperature: 0.0, topP: 1.0, maxTokens: 500 },
-  analyzer: { temperature: 0.2, topP: 1.0, maxTokens: 800 },
-  bootstrapper: { temperature: 0.4, topP: 0.95, maxTokens: 3000 },
-  summarizer: { temperature: 0.5, topP: 0.95, maxTokens: 1200 },
-  narrator: { temperature: 0.8, topP: 0.95, presencePenalty: 0.3, frequencyPenalty: 0.3, maxTokens: 1200 },
+const PROVIDER_LABELS: Record<string, string> = {
+  openrouter: "OpenRouter",
+  electronhub: "Electron Hub",
+  nanogpt: "NanoGPT",
+  openai: "OpenAI",
+  anthropic: "Anthropic",
+  google: "Google",
+  mistral: "Mistral",
+  deepseek: "DeepSeek",
+  xai: "xAI",
+  groq: "Groq",
+  custom: "Custom endpoint",
 };
 
-/** Which preset a role's default profile corresponds to, for the SamplerPanel's active-preset pill. */
+const ROLE_DEFAULT_SAMPLERS: Record<ModelRole, Samplers> = {
+  classifier: { temperature: 0, topP: 1, maxTokens: 500 },
+  analyzer: { temperature: 0.2, topP: 1, maxTokens: 800 },
+  bootstrapper: { temperature: 0.4, topP: 0.95, maxTokens: 8000 },
+  summarizer: { temperature: 0.5, topP: 0.95, maxTokens: 1200 },
+  narrator: {
+    temperature: 0.8,
+    topP: 0.95,
+    presencePenalty: 0.3,
+    frequencyPenalty: 0.3,
+    maxTokens: 1200,
+  },
+};
+
 const ROLE_PRESET: Record<ModelRole, SamplerPreset> = {
   classifier: "Precise",
   analyzer: "Precise",
@@ -61,184 +64,319 @@ const ROLE_PRESET: Record<ModelRole, SamplerPreset> = {
 };
 
 const PRESET_BASE: Record<SamplerPreset, Samplers> = {
-  Precise: { temperature: 0.2, topP: 1.0 },
+  Precise: { temperature: 0.2, topP: 1 },
   Balanced: { temperature: 0.5, topP: 0.95 },
   Creative: { temperature: 0.8, topP: 0.95, presencePenalty: 0.3, frequencyPenalty: 0.3 },
 };
 
-function optionValue(provider: string, model: string): string {
-  return `${provider}::${model}`;
-}
-function decodeOption(value: string): { provider: string; model: string } {
-  const [provider, ...rest] = value.split("::");
-  return { provider: provider ?? "", model: rest.join("::") };
-}
-
-/** Build the SamplerPanel field list from a binding's samplers, falling back to the role default. */
 function samplerFields(role: ModelRole, samplers: Samplers | undefined): SamplerField[] {
-  const s = { ...ROLE_DEFAULT_SAMPLERS[role], ...(samplers ?? {}) };
+  const values = { ...ROLE_DEFAULT_SAMPLERS[role], ...(samplers ?? {}) };
   return [
-    { key: "temperature", label: "Temperature", value: s.temperature ?? 0.7, min: 0, max: 2, step: 0.05 },
-    { key: "topP", label: "Top-p", value: s.topP ?? 1, min: 0, max: 1, step: 0.05 },
-    { key: "topK", label: "Top-k", value: s.topK ?? 0, min: 0, max: 100, step: 1 },
-    { key: "minP", label: "Min-p", value: s.minP ?? 0, min: 0, max: 1, step: 0.01 },
-    { key: "frequencyPenalty", label: "Frequency penalty", value: s.frequencyPenalty ?? 0, min: -2, max: 2, step: 0.1 },
-    { key: "presencePenalty", label: "Presence penalty", value: s.presencePenalty ?? 0, min: -2, max: 2, step: 0.1 },
-    { key: "maxTokens", label: "Max tokens", value: s.maxTokens ?? 1200, min: 100, max: 4000, step: 100 },
+    { key: "temperature", label: "Temperature", value: values.temperature ?? 0.7, min: 0, max: 2, step: 0.05 },
+    { key: "topP", label: "Top-p", value: values.topP ?? 1, min: 0, max: 1, step: 0.05 },
+    { key: "topK", label: "Top-k", value: values.topK ?? 0, min: 0, max: 100, step: 1 },
+    { key: "minP", label: "Min-p", value: values.minP ?? 0, min: 0, max: 1, step: 0.01 },
+    { key: "frequencyPenalty", label: "Frequency penalty", value: values.frequencyPenalty ?? 0, min: -2, max: 2, step: 0.1 },
+    { key: "presencePenalty", label: "Presence penalty", value: values.presencePenalty ?? 0, min: -2, max: 2, step: 0.1 },
+    { key: "maxTokens", label: "Max tokens", value: values.maxTokens ?? 1200, min: 100, max: role === "bootstrapper" ? 16000 : 4000, step: 100 },
   ];
 }
 
-const H1: CSSProperties = { fontFamily: "var(--font-display)", fontWeight: 600, fontSize: 30, color: "var(--prose)", margin: "0 0 4px" };
-const LEAD: CSSProperties = { fontFamily: "var(--font-ui)", fontSize: 13.5, color: "var(--secondary)", lineHeight: 1.6, margin: "0 0 22px", maxWidth: 620 };
+type RoleMatrixEditorProps = {
+  showHeading?: boolean;
+  confirmLabel?: string;
+  onConfirm?: () => Promise<void> | void;
+};
 
-export function RoleMatrix(_props: ScreenProps): JSX.Element {
-  const { roleMap, knownModels, providerIds, loaded, load, setRoleMap } = useSettingsStore();
-  const [loadError, setLoadError] = useState<string | undefined>(undefined);
+/** Shared five-role editor used by Settings, onboarding, and the standalone route. */
+export function RoleMatrixEditor({
+  showHeading = true,
+  confirmLabel,
+  onConfirm,
+}: RoleMatrixEditorProps): JSX.Element {
+  const {
+    roleMap,
+    providerIds,
+    providerConfigs,
+    providerModels,
+    modelStates,
+    loaded,
+    load,
+    setRoleMap,
+    refreshModels,
+    modelsForRole,
+  } = useSettingsStore();
+  const [loadError, setLoadError] = useState<string>();
   const [openRole, setOpenRole] = useState<ModelRole | null>(null);
+  const [confirming, setConfirming] = useState(false);
+  const [confirmError, setConfirmError] = useState<string>();
 
   useEffect(() => {
+    if (loaded) return;
     let cancelled = false;
-    setLoadError(undefined);
     void load().catch((err: unknown) => {
       if (!cancelled) setLoadError(err instanceof Error ? err.message : "Couldn't reach the settings store.");
     });
     return () => {
       cancelled = true;
     };
-  }, [load]);
+  }, [loaded, load]);
 
-  // Role-aware options: the model's own provider's models, recommended tier first.
-  const modelOptions = useMemo<RoleModelOption[]>(
-    () =>
-      knownModels.map((m) => ({
-        value: optionValue(m.provider, m.model),
-        label: m.tier === "advanced" ? `${m.label} · advanced` : m.label,
-      })),
-    [knownModels]
+  const providerOptions = useMemo<RoleModelOption[]>(() => {
+    const configured = providerIds.filter((id) => Boolean(providerConfigs[id]?.apiKey));
+    const ids = configured.length > 0 ? configured : providerIds;
+    return ids.map((id) => ({ value: id, label: `${PROVIDER_LABELS[id] ?? id} · provider` }));
+  }, [providerIds, providerConfigs]);
+
+  const confirmationIssues = useMemo(
+    () => roleConfigurationIssues(roleMap, providerConfigs, providerModels, modelStates),
+    [roleMap, providerConfigs, providerModels, modelStates]
   );
 
-  function onChangeRole(role: ModelRole, encoded: string): void {
+  async function confirmSelection(): Promise<void> {
+    if (!onConfirm || confirmationIssues.length > 0) return;
+    setConfirming(true);
+    setConfirmError(undefined);
+    try {
+      await onConfirm();
+    } catch (error) {
+      setConfirmError(error instanceof Error ? error.message : "Couldn't save the role matrix.");
+    } finally {
+      setConfirming(false);
+    }
+  }
+
+  function changeProvider(role: ModelRole, provider: RoleBinding["provider"]): void {
     if (!roleMap) return;
-    const { provider, model } = decodeOption(encoded);
-    const known = knownModels.find((m) => m.provider === provider && m.model === model);
-    // Assigning a recommended model applies its role default profile UNLESS the user has dirtied it.
     const existing = roleMap[role];
-    const applyDefaults = known?.tier === "recommended" && !existing.samplersDirty;
-    const nextBinding: RoleBinding = {
-      ...existing,
-      provider: provider as RoleBinding["provider"],
-      model,
-      source: known?.tier === "recommended" ? "recommended" : "custom",
-      ...(applyDefaults ? { samplers: ROLE_DEFAULT_SAMPLERS[role] } : {}),
-    };
-    void setRoleMap({ ...roleMap, [role]: nextBinding });
+    const first = modelsForRole(role, provider)[0];
+    const model = first?.id ?? existing.model;
+    const applyDefaults = first?.tier === "recommended" && !existing.samplersDirty;
+    void setRoleMap({
+      ...roleMap,
+      [role]: {
+        ...existing,
+        provider,
+        model,
+        source: first?.tier === "recommended" ? "recommended" : "custom",
+        ...(applyDefaults ? { samplers: ROLE_DEFAULT_SAMPLERS[role] } : {}),
+      },
+    });
+    void refreshModels(provider);
   }
 
-  function onFieldChange(role: ModelRole, key: string, value: number): void {
-    if (!roleMap) return;
-    const binding = roleMap[role];
-    const nextSamplers: Samplers = { ...(binding.samplers ?? ROLE_DEFAULT_SAMPLERS[role]), [key]: value };
-    void setRoleMap({ ...roleMap, [role]: { ...binding, samplers: nextSamplers, samplersDirty: true } });
+  function changeModel(role: ModelRole, model: string): void {
+    if (!roleMap || !model) return;
+    const existing = roleMap[role];
+    const selected = modelsForRole(role, existing.provider).find((candidate) => candidate.id === model);
+    const applyDefaults = selected?.tier === "recommended" && !existing.samplersDirty;
+    void setRoleMap({
+      ...roleMap,
+      [role]: {
+        ...existing,
+        model,
+        source: selected?.tier === "recommended" ? "recommended" : "custom",
+        ...(applyDefaults ? { samplers: ROLE_DEFAULT_SAMPLERS[role] } : {}),
+      },
+    });
   }
 
-  function onPreset(role: ModelRole, preset: SamplerPreset): void {
+  function changeSampler(role: ModelRole, key: string, value: number): void {
     if (!roleMap) return;
     const binding = roleMap[role];
-    const merged: Samplers = { ...ROLE_DEFAULT_SAMPLERS[role], ...PRESET_BASE[preset] };
-    void setRoleMap({ ...roleMap, [role]: { ...binding, samplers: merged, samplersDirty: true } });
+    const samplers: Samplers = { ...(binding.samplers ?? ROLE_DEFAULT_SAMPLERS[role]), [key]: value };
+    void setRoleMap({ ...roleMap, [role]: { ...binding, samplers, samplersDirty: true } });
   }
 
-  function onReset(role: ModelRole): void {
+  function applyPreset(role: ModelRole, preset: SamplerPreset): void {
     if (!roleMap) return;
     const binding = roleMap[role];
-    void setRoleMap({ ...roleMap, [role]: { ...binding, samplers: ROLE_DEFAULT_SAMPLERS[role], samplersDirty: false } });
+    const samplers = { ...ROLE_DEFAULT_SAMPLERS[role], ...PRESET_BASE[preset] };
+    void setRoleMap({ ...roleMap, [role]: { ...binding, samplers, samplersDirty: true } });
+  }
+
+  function resetSamplers(role: ModelRole): void {
+    if (!roleMap) return;
+    const binding = roleMap[role];
+    void setRoleMap({
+      ...roleMap,
+      [role]: { ...binding, samplers: ROLE_DEFAULT_SAMPLERS[role], samplersDirty: false },
+    });
   }
 
   if (!loaded && !loadError) {
-    return (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: 80 }}>
-        <span
-          data-testid="rolematrix-loading"
-          aria-label="Loading role matrix"
-          className="mt-sweep"
-          style={{ width: 22, height: 22, borderRadius: "50%", border: "2px solid var(--hairline)", borderTopColor: "var(--brass)", animationDuration: "0.8s" }}
-        />
-      </div>
-    );
+    return <div data-testid="rolematrix-loading" aria-label="Loading role matrix" style={{ padding: 60, textAlign: "center", color: "var(--muted)" }}>Loading models…</div>;
   }
-
   if (loadError) {
-    return (
-      <div style={{ padding: "34px 42px", maxWidth: 760 }}>
-        <InlineNotice severity="error" title="Couldn't load the role matrix" detail={loadError} />
-      </div>
-    );
+    return <InlineNotice severity="error" title="Couldn't load the role matrix" detail={loadError} />;
   }
 
   return (
-    <div style={{ padding: "34px 42px 90px" }}>
-      <div style={{ maxWidth: 780, margin: "0 auto" }}>
-        <h1 style={H1}>Role matrix</h1>
-        <p style={LEAD}>
-          Five jobs, five models. Each role picks its own provider and model — recommended models are badged — and carries its own
-          sampler profile. Structured roles run cold; the narrator runs warm.
-        </p>
+    <div>
+      {showHeading ? (
+        <>
+          <h1 style={H1}>Role matrix</h1>
+          <p style={LEAD}>
+            Five jobs, five models. Provider inventories are fetched live; Midnight Tavern adds
+            role-fit and structured-output guidance without replacing the provider's list.
+          </p>
+        </>
+      ) : null}
 
-        {roleMap ? (
-          <>
-            <div style={{ border: "1px solid var(--hairline)", borderRadius: "var(--radius-card)", padding: "4px 16px" }}>
-              {ROLE_ORDER.map((role) => {
-                const binding = roleMap[role];
-                const known = knownModels.find((m) => m.provider === binding.provider && m.model === binding.model);
-                const fit = known?.tier === "advanced" ? "advanced" : known ? "recommended" : "advanced";
-                return (
-                  <div key={role}>
-                    <RoleMatrixRow
-                      role={role}
-                      description={ROLE_DESCRIPTION[role]}
-                      options={modelOptions}
-                      value={optionValue(binding.provider, binding.model)}
-                      onChange={(v) => onChangeRole(role, v)}
-                      fit={fit}
-                    />
-                    <div style={{ display: "flex", justifyContent: "flex-end", padding: "2px 0 8px" }}>
-                      <button
-                        type="button"
-                        onClick={() => setOpenRole((cur) => (cur === role ? null : role))}
-                        aria-expanded={openRole === role}
-                        style={{ background: "transparent", border: "none", color: "var(--teal)", fontSize: 11.5, cursor: "pointer", fontFamily: "var(--font-mono)" }}
-                      >
-                        {openRole === role ? "▾ Hide samplers" : "▸ Samplers"}
-                      </button>
-                    </div>
-                    {openRole === role ? (
-                      <div style={{ paddingBottom: 12 }}>
-                        <SamplerPanel
-                          fields={samplerFields(role, binding.samplers)}
-                          activePreset={binding.samplersDirty ? undefined : ROLE_PRESET[role]}
-                          dirty={binding.samplersDirty ?? false}
-                          onPreset={(p) => onPreset(role, p)}
-                          onFieldChange={(k, v) => onFieldChange(role, k, v)}
-                          onResetToRecommended={() => onReset(role)}
-                        />
-                      </div>
-                    ) : null}
+      {roleMap ? (
+        <>
+          <div style={{ border: "1px solid var(--hairline)", borderRadius: "var(--radius-card)", padding: "4px 16px" }}>
+            {ROLE_ORDER.map((role) => {
+              const binding = roleMap[role];
+              const live = providerModels[binding.provider] ?? [];
+              const ranked = modelsForRole(role, binding.provider);
+              const modelState = modelStates[binding.provider];
+              const options = ranked.map((model) => {
+                const liveModel = live.find((candidate) => candidate.id === model.id);
+                const tags = [
+                  model.recommendedForRole ? "recommended for this role" : "",
+                  model.supportsJsonMode ? "JSON-ready" : "",
+                ].filter(Boolean);
+                return {
+                  value: model.id,
+                  label: `${liveModel?.label ?? model.label}${tags.length ? ` · ${tags.join(" · ")}` : ""}`,
+                };
+              });
+              if (!options.some((option) => option.value === binding.model)) {
+                options.unshift({ value: binding.model, label: `${binding.model} · saved selection` });
+              }
+              const selected = ranked.find((candidate) => candidate.id === binding.model);
+              const jsonRisk = STRUCTURED_ROLES.has(role) && selected?.supportsJsonMode === false;
+              const liveSelected = live.find((candidate) => candidate.id === binding.model);
+              return (
+                <div key={role}>
+                  <RoleMatrixRow
+                    role={role}
+                    description={ROLE_DESCRIPTION[role]}
+                    providerOptions={providerOptions}
+                    providerValue={binding.provider}
+                    onProviderChange={(provider) => changeProvider(role, provider as RoleBinding["provider"])}
+                    options={options}
+                    value={binding.model}
+                    onChange={(model) => changeModel(role, model)}
+                    fit={selected?.tier === "recommended" ? "recommended" : "advanced"}
+                    modelState={modelState?.state ?? "idle"}
+                    onRefreshModels={() => void refreshModels(binding.provider)}
+                  />
+                  <div style={{ padding: "0 0 8px 32px", color: "var(--muted)", fontFamily: "var(--font-ui)", fontSize: 11.5 }}>
+                    {liveSelected?.contextLength
+                      ? `Live provider model · ${liveSelected.contextLength.toLocaleString()} token context`
+                      : "Live provider model · capability tags are curated when known"}
                   </div>
-                );
-              })}
-            </div>
-            {providerIds.length === 0 ? (
-              <p style={{ fontFamily: "var(--font-ui)", fontSize: 12, color: "var(--muted)", marginTop: 14 }}>
-                Add a provider key in Settings to populate the model dropdowns.
-              </p>
-            ) : null}
-          </>
-        ) : (
-          <EmptyState glyph="✦" title="No role map yet" body="Add a provider key and the recommended roles fill in." />
-        )}
+                  {modelState?.state === "error" ? (
+                    <div style={{ padding: "0 0 8px" }}>
+                      <InlineNotice
+                        severity="warn"
+                        title="Live model list unavailable"
+                        detail={modelState.reason}
+                      />
+                    </div>
+                  ) : null}
+                  {jsonRisk ? (
+                    <div style={{ padding: "0 0 8px" }} data-testid={`json-risk-${role}`}>
+                      <InlineNotice
+                        severity="warn"
+                        title="This model may return invalid structured output"
+                        detail="This role must emit strict JSON. You can keep this model, but expect retries or skipped updates."
+                      />
+                    </div>
+                  ) : null}
+                  <div style={{ display: "flex", justifyContent: "flex-end", padding: "2px 0 8px" }}>
+                    <button
+                      type="button"
+                      onClick={() => setOpenRole((current) => (current === role ? null : role))}
+                      aria-expanded={openRole === role}
+                      style={{ background: "transparent", border: 0, color: "var(--teal)", cursor: "pointer", fontFamily: "var(--font-mono)", fontSize: 11.5 }}
+                    >
+                      {openRole === role ? "▾ Hide samplers" : "▸ Samplers"}
+                    </button>
+                  </div>
+                  {openRole === role ? (
+                    <div style={{ paddingBottom: 12 }}>
+                      <SamplerPanel
+                        fields={samplerFields(role, binding.samplers)}
+                        activePreset={binding.samplersDirty ? undefined : ROLE_PRESET[role]}
+                        dirty={binding.samplersDirty ?? false}
+                        onPreset={(preset) => applyPreset(role, preset)}
+                        onFieldChange={(key, value) => changeSampler(role, key, value)}
+                        onResetToRecommended={() => resetSamplers(role)}
+                      />
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+          {confirmLabel && onConfirm ? (
+            <>
+              {confirmationIssues.length > 0 ? (
+                <div style={{ marginTop: 18 }}>
+                  <InlineNotice
+                    severity="warn"
+                    title="Finish configuring the model roles"
+                    detail={`${confirmationIssues.map((issue) => ROLE_DESCRIPTION[issue.role]).join(", ")} still need a configured provider and live model.`}
+                  />
+                </div>
+              ) : null}
+              {confirmError ? <div style={{ marginTop: 18 }}><InlineNotice severity="error" title="Couldn't confirm models" detail={confirmError} /></div> : null}
+              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 18 }}>
+                <Button
+                  variant="primary"
+                  disabled={confirming || confirmationIssues.length > 0}
+                  onClick={() => void confirmSelection()}
+                >
+                  {confirming ? "Saving…" : confirmLabel}
+                </Button>
+              </div>
+            </>
+          ) : null}
+        </>
+      ) : (
+        <EmptyState glyph="✦" title="No role map yet" body="Connect a provider and the recommended roles fill in." />
+      )}
+    </div>
+  );
+}
+
+export function RoleMatrix(_props: ScreenProps): JSX.Element {
+  const current = useStoriesStore((state) => state.current);
+  return (
+    <div style={{ padding: "34px 42px 90px" }}>
+      <div style={{ maxWidth: 980, margin: "0 auto" }}>
+        {current?.schema.statMode === "none" ? (
+          <div style={{ marginBottom: 16 }}>
+            <InlineNotice
+              severity="info"
+              title="Only Narrator is active in the open No Stats story"
+              detail="Classifier, analyzer, summarizer, and Story AI assignments are saved globally but receive no requests, retries, or background calls until a Full Stats story is active."
+            />
+          </div>
+        ) : null}
+        <RoleMatrixEditor />
       </div>
     </div>
   );
 }
+
+const H1: CSSProperties = {
+  fontFamily: "var(--font-display)",
+  fontWeight: 600,
+  fontSize: 30,
+  color: "var(--prose)",
+  margin: "0 0 4px",
+};
+const LEAD: CSSProperties = {
+  fontFamily: "var(--font-ui)",
+  fontSize: 13.5,
+  color: "var(--secondary)",
+  lineHeight: 1.6,
+  margin: "0 0 22px",
+  maxWidth: 720,
+};
 
 export default RoleMatrix;

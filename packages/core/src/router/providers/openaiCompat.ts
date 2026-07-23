@@ -15,6 +15,7 @@ import type {
   FetchLike,
   Provider,
   ProviderConfig,
+  ProviderModel,
   StreamHandler,
 } from "./types.js";
 
@@ -32,6 +33,8 @@ export interface ProviderSpec {
   auth: "bearer" | "x-api-key";
   /** Extra static headers (e.g. Anthropic's `anthropic-version`). */
   extraHeaders?: Record<string, string>;
+  /** Authenticated GET path used when the public model list cannot validate a key. */
+  credentialProbePath?: string;
 }
 
 /** Raised when a provider returns a non-2xx HTTP status. Carries the status for the router. */
@@ -62,6 +65,29 @@ function buildHeaders(spec: ProviderSpec, config: ProviderConfig): Record<string
   return headers;
 }
 
+function extractModels(json: unknown): ProviderModel[] {
+  const data = (json as { data?: unknown })?.data;
+  const rows = Array.isArray(data) ? data : Array.isArray(json) ? json : [];
+  const seen = new Set<string>();
+  const models: ProviderModel[] = [];
+  for (const row of rows) {
+    if (!row || typeof row !== "object") continue;
+    const value = row as Record<string, unknown>;
+    const id = typeof value["id"] === "string" ? value["id"].trim() : "";
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    const name = typeof value["name"] === "string" ? value["name"].trim() : "";
+    const contextLength =
+      typeof value["context_length"] === "number"
+        ? value["context_length"]
+        : typeof value["context_window"] === "number"
+          ? value["context_window"]
+          : undefined;
+    models.push({ id, label: name || id, ...(contextLength ? { contextLength } : {}) });
+  }
+  return models.sort((a, b) => a.label.localeCompare(b.label));
+}
+
 /** Translate our neutral ChatRequest into the OpenAI request body. */
 function buildBody(req: ChatRequest, spec: ProviderSpec, stream: boolean): Record<string, unknown> {
   const body: Record<string, unknown> = {
@@ -80,6 +106,7 @@ function buildBody(req: ChatRequest, spec: ProviderSpec, stream: boolean): Recor
   if (req.seed !== undefined) body["seed"] = req.seed;
   if (req.stop && req.stop.length > 0) body["stop"] = req.stop;
   if (req.jsonMode && spec.supportsJsonMode) body["response_format"] = { type: "json_object" };
+  if (req.jsonMode && spec.id === "electronhub") body["reasoning"] = { exclude: true };
   return body;
 }
 
@@ -87,7 +114,22 @@ function buildBody(req: ChatRequest, spec: ProviderSpec, stream: boolean): Recor
 function extractContent(json: unknown): string {
   const choice = (json as { choices?: { message?: { content?: unknown } }[] })?.choices?.[0];
   const content = choice?.message?.content;
-  return typeof content === "string" ? content : "";
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  return content
+    .map((block) => {
+      if (typeof block === "string") return block;
+      if (!block || typeof block !== "object") return "";
+      const candidate = block as { text?: unknown; content?: unknown };
+      if (typeof candidate.text === "string") return candidate.text;
+      return typeof candidate.content === "string" ? candidate.content : "";
+    })
+    .join("");
+}
+
+function extractFinishReason(json: unknown): string | undefined {
+  const reason = (json as { choices?: { finish_reason?: unknown }[] })?.choices?.[0]?.finish_reason;
+  return typeof reason === "string" ? reason : undefined;
 }
 
 function extractUsage(json: unknown): ChatResponse["usage"] {
@@ -173,11 +215,43 @@ export function makeOpenAiCompatProvider(spec: ProviderSpec, fetchImpl: FetchLik
     id: spec.id,
     supportsJsonMode: spec.supportsJsonMode,
 
+    ...(spec.credentialProbePath
+      ? {
+          async validateConfig(config: ProviderConfig, signal?: AbortSignal) {
+            const url = `${resolveBaseUrl(spec, config)}${spec.credentialProbePath}`;
+            const headers = buildHeaders(spec, config);
+            delete headers["content-type"];
+            const res = await fetchImpl(url, { method: "GET", headers, ...(signal ? { signal } : {}) });
+            if (!res.ok) {
+              const body = await res.text().catch(() => "");
+              throw new ProviderHttpError(spec.id, res.status, body);
+            }
+          },
+        }
+      : {}),
+
+    async listModels(config, signal) {
+      const url = `${resolveBaseUrl(spec, config)}/models`;
+      const headers = buildHeaders(spec, config);
+      delete headers["content-type"];
+      const res = await fetchImpl(url, { method: "GET", headers, ...(signal ? { signal } : {}) });
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        throw new ProviderHttpError(spec.id, res.status, body);
+      }
+      return extractModels(await res.json());
+    },
+
     async chat(req, config) {
       const res = await post(req, config, false);
       const json = await res.json();
       const usage = extractUsage(json);
-      return usage ? { content: extractContent(json), usage } : { content: extractContent(json) };
+      const finishReason = extractFinishReason(json);
+      return {
+        content: extractContent(json),
+        ...(usage ? { usage } : {}),
+        ...(finishReason ? { finishReason } : {}),
+      };
     },
 
     async chatStream(req, config, onDelta) {

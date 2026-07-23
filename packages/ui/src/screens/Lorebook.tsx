@@ -11,7 +11,7 @@
  * word-count, and section labels are SYSTEM (mono, teal). Tokens only; honors reduced-motion and
  * the ~900px narrow layout (list stacks above the editor).
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, KeyboardEvent } from "react";
 import { getBridge } from "../bridge/core";
 import type { LorebookEntry, LorebookLibraryEntry } from "../bridge/core";
@@ -80,6 +80,59 @@ function emptyEntry(): LorebookEntry {
     priority: 0,
     insertionOrder: 0,
   };
+}
+
+interface ImportedLorebook {
+  name: string;
+  entries: LorebookEntry[];
+}
+
+function strings(value: unknown): string[] {
+  if (Array.isArray(value)) return value.filter((item): item is string => typeof item === "string").map((item) => item.trim()).filter(Boolean);
+  if (typeof value === "string") return value.split(",").map((item) => item.trim()).filter(Boolean);
+  return [];
+}
+
+/** Accepts SillyTavern World Info, character-book, and Midnight Tavern entry JSON. */
+export function parseLorebookJson(text: string, fallbackName: string): ImportedLorebook {
+  const raw = JSON.parse(text) as unknown;
+  const parsed = raw && typeof raw === "object" && !Array.isArray(raw)
+    ? raw as Record<string, unknown>
+    : {};
+  const characterBook = parsed.character_book && typeof parsed.character_book === "object"
+    ? parsed.character_book as Record<string, unknown>
+    : undefined;
+  const entrySource = Array.isArray(raw) ? raw : characterBook?.entries ?? parsed.entries;
+  const rows = Array.isArray(entrySource)
+    ? entrySource
+    : entrySource && typeof entrySource === "object"
+      ? Object.values(entrySource as Record<string, unknown>)
+      : [];
+  const entries = rows.flatMap((row, index): LorebookEntry[] => {
+    if (!row || typeof row !== "object") return [];
+    const source = row as Record<string, unknown>;
+    const content = typeof source.content === "string" ? source.content.trim() : "";
+    if (!content) return [];
+    const keys = [...strings(source.keys ?? source.key), ...strings(source.secondary_keys ?? source.keysecondary)];
+    const disabled = source.disable === true || source.enabled === false;
+    const priority = typeof source.priority === "number"
+      ? source.priority
+      : typeof source.order === "number" ? source.order : 0;
+    return [{
+      id: newId(),
+      lorebookId: "",
+      keys: [...new Set(keys)],
+      content,
+      enabled: !disabled,
+      alwaysOn: source.constant === true || source.alwaysOn === true || source.always_on === true,
+      priority,
+      insertionOrder: typeof source.insertionOrder === "number" ? source.insertionOrder : index,
+    }];
+  });
+  if (entries.length === 0) throw new Error("This JSON does not contain any lorebook entries with content.");
+  const rawName = characterBook?.name ?? parsed.name;
+  const name = typeof rawName === "string" && rawName.trim() ? rawName.trim() : fallbackName;
+  return { name, entries };
 }
 
 export function Lorebook(props: ScreenProps): JSX.Element {
@@ -657,6 +710,9 @@ function GlobalLorebookLibrary(): JSX.Element {
   const [openBook, setOpenBook] = useState<LorebookLibraryEntry | null>(null);
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState<string>();
+  const importInput = useRef<HTMLInputElement>(null);
 
   const loadBooks = useCallback(async () => {
     setStatus("loading");
@@ -681,6 +737,25 @@ function GlobalLorebookLibrary(): JSX.Element {
     await loadBooks();
   }
 
+  async function onImport(file: File): Promise<void> {
+    setImporting(true);
+    setImportError(undefined);
+    try {
+      const fallbackName = file.name.replace(/\.json$/i, "") || "Imported lorebook";
+      const imported = parseLorebookJson(await file.text(), fallbackName);
+      const book = await getBridge().createLorebook(imported.name, `Imported from ${file.name}`);
+      await Promise.all(imported.entries.map((entry) =>
+        getBridge().saveLorebookEntryIn(book.id, { ...entry, lorebookId: book.id })
+      ));
+      await loadBooks();
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : "Couldn't import that lorebook.");
+    } finally {
+      setImporting(false);
+      if (importInput.current) importInput.current.value = "";
+    }
+  }
+
   if (openBook) {
     return (
       <BookEntryEditor
@@ -695,16 +770,36 @@ function GlobalLorebookLibrary(): JSX.Element {
 
   return (
     <div style={styles.screen} data-testid="lorebook-screen" data-nostory="true">
+      <input
+        ref={importInput}
+        type="file"
+        accept=".json,application/json"
+        hidden
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          if (file) void onImport(file);
+        }}
+      />
       <div style={styles.subHeader}>
         <p style={styles.subtitle}>
           Lorebooks are shared world-fact collections. Build them here, then attach them to any story from its Story Settings.
         </p>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <Button variant="secondary" onClick={() => importInput.current?.click()} disabled={importing} data-testid="import-lorebook">
+            {importing ? "Importing…" : "⇧ Import JSON"}
+          </Button>
         <Button variant="primary" onClick={() => setCreating(true)} data-testid="new-lorebook">
           ＋ New lorebook
         </Button>
+        </div>
       </div>
 
       <div style={styles.body}>
+        {importError ? (
+          <div style={{ marginBottom: 16 }}>
+            <InlineNotice severity="error" title="Couldn't import lorebook" detail={importError} />
+          </div>
+        ) : null}
         {creating ? (
           <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 20, maxWidth: 480 }}>
             <input

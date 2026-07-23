@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:#14100C;color:#EADCBE;font-family:"IBM Plex Sans",sans-serif;-webkit-font-smoothing:antialiased}
+  ::selection{background:rgba(217,166,72,.25)}
+  a{color:#D9A648;text-decoration:none}a:hover{color:#F2C56B}
+  ::-webkit-scrollbar{width:11px}::-webkit-scrollbar-thumb{background:#382E21;border-radius:6px;border:3px solid #14100C}
+  input,textarea{font-family:inherit}textarea{resize:vertical}
+  @keyframes mt-fade{from{opacity:0}to{opacity:1}}
+  @media (prefers-reduced-motion: reduce){*{animation-duration:.001s!important}}
+</style>
+</helmet>
+<div style="display:flex;height:100vh;width:100vw;overflow:hidden;background:#14100C">
+  <nav style="width:72px;flex:0 0 72px;background:#1B1611;border-right:1px solid #382E21;display:flex;flex-direction:column;align-items:center;padding:14px 0;gap:4px">
+    <div style="width:40px;height:40px;border-radius:9px;background:linear-gradient(145deg,#2C241B,#1B1611);border:1px solid rgba(216,170,90,.25);display:flex;align-items:center;justify-content:center;font-family:'Cormorant Garamond',serif;font-weight:700;font-size:24px;color:#D9A648;margin-bottom:14px">M</div>
+    <sc-for list="{{ railItems }}" as="it" hint-placeholder-count="5">
+      <a href="{{ it.href }}" title="{{ it.label }}" style="{{ it.style }}"><span style="{{ it.iconStyle }}">{{ it.glyph }}</span><span style="font-size:9px">{{ it.label }}</span></a>
+    </sc-for>
+  </nav>
+
+  <div style="flex:1;display:flex;flex-direction:column;min-width:0">
+    <header style="flex:0 0 auto;padding:16px 30px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #382E21">
+      <div style="display:flex;align-items:center;gap:12px">
+        <a href="Personas.dc.html" style="color:#A08D6C;font-size:20px">←</a>
+        <div>
+          <div style="font-family:'Cormorant Garamond',serif;font-size:23px;font-weight:600;color:#EADCBE;line-height:1.1">{{ headerTitle }}</div>
+          <div style="font-size:12px;color:#6E5F49">Who you play — the world builds your sheet around it</div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="display:flex;gap:5px;margin-right:6px">
+          <sc-for list="{{ demoChips }}" as="c" hint-placeholder-count="3"><button onClick="{{ c.onClick }}" style="{{ c.style }}">{{ c.label }}</button></sc-for>
+        </div>
+        <a href="Personas.dc.html" style="font-size:13px;color:#A08D6C;border:1px solid #382E21;border-radius:8px;padding:9px 15px">Cancel</a>
+        <button style="{{ saveStyle }}">Save persona</button>
+      </div>
+    </header>
+
+    <div style="flex:1;display:flex;min-height:0">
+      <!-- FORM (deliberately short — a persona is light) -->
+      <div style="flex:1;overflow-y:auto;padding:30px 34px 70px;border-right:1px solid #382E21">
+        <div style="max-width:520px">
+          <div style="display:flex;gap:18px;margin-bottom:20px">
+            <div style="flex:0 0 auto;text-align:center">
+              <div style="width:92px;height:92px;border-radius:14px;background:#1B1611;border:1px dashed #4a3d2c;display:flex;align-items:center;justify-content:center"><span style="font-size:20px;color:#6E5F49">☙</span></div>
+              <div style="font-size:10px;color:#6E5F49;margin-top:6px;max-width:92px">Drop a portrait<br>or click</div>
+            </div>
+            <div style="flex:1">
+              <label style="display:block;font-size:12px;color:#A08D6C;margin-bottom:6px">Name <span style="color:#C96F57">*</span></label>
+              <input value="{{ name }}" onInput="{{ onName }}" placeholder="e.g. Kestrel Vane" style="{{ nameFieldStyle }}" />
+              <sc-if value="{{ nameError }}" hint-placeholder-val="{{ false }}"><div style="font-size:11px;color:#C96F57;margin-top:5px">A persona needs a name before it can be saved.</div></sc-if>
+              <label style="display:block;font-size:12px;color:#A08D6C;margin:14px 0 6px">Short role <span style="color:#6E5F49">· a line under the name</span></label>
+              <input value="{{ tagline }}" onInput="{{ onTagline }}" placeholder="Sellsword courier" style="width:100%;background:#1B1611;border:1px solid #382E21;border-radius:8px;padding:9px 13px;color:#D6C9AB;font-size:14px;outline:none" />
+            </div>
+          </div>
+
+          <label style="display:block;font-size:12px;color:#A08D6C;margin-bottom:6px">Description <span style="color:#6E5F49">· who they are, in a few lines</span></label>
+          <textarea onInput="{{ onDesc }}" value="{{ desc }}" placeholder="A courier who takes the roads no one else will. Loyal to the contract — and, lately, to more than that." style="width:100%;height:120px;background:#1B1611;border:1px solid #382E21;border-radius:8px;padding:12px 14px;color:#EADCBE;font-family:'Source Serif 4',serif;font-size:15px;line-height:1.6;outline:none;margin-bottom:16px"></textarea>
+
+          <label style="display:block;font-size:12px;color:#A08D6C;margin-bottom:6px">Voice &amp; quirks <span style="color:#6E5F49">· optional</span></label>
+          <input value="{{ voice }}" onInput="{{ onVoice }}" placeholder="Clipped, dry; trusts actions over words" style="width:100%;background:#1B1611;border:1px solid #382E21;border-radius:8px;padding:9px 13px;color:#D6C9AB;font-size:14px;outline:none;margin-bottom:20px" />
+
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:13px 15px;background:#1B1611;border:1px solid #382E21;border-radius:9px">
+            <div><div style="font-size:13px;color:#D6C9AB">Default persona</div><div style="font-size:11px;color:#6E5F49">Pre-selected when you start a new story</div></div>
+            <div onClick="{{ toggleDefault }}" style="{{ toggleStyle }}"><span style="{{ knobStyle }}"></span></div>
+          </div>
+
+          <div style="margin-top:22px;padding:13px 15px;background:rgba(116,184,174,.06);border:1px solid #4E827B55;border-radius:9px;display:flex;gap:10px;align-items:flex-start">
+            <span style="color:#74B8AE;font-size:14px">⚙</span>
+            <div style="font-size:12.5px;color:#A08D6C;line-height:1.55">A persona is just who you are. HP, skills, and gear aren’t set here — each story’s rules generate your sheet when you begin. To author a whole world, use a <a href="StoryBlueprint.dc.html">Story Blueprint</a> instead.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- LIVE PREVIEW -->
+      <div style="flex:0 0 340px;background:#181410;padding:24px 22px;overflow-y:auto">
+        <div style="font-size:11px;font-family:'IBM Plex Mono',monospace;letter-spacing:.14em;color:#74B8AE;margin-bottom:14px">LIVE PREVIEW</div>
+        <div style="background:#231C15;border:1px solid rgba(216,170,90,.18);border-radius:12px;padding:18px;position:relative;overflow:hidden">
+          <div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#D9A648,transparent)"></div>
+          <div style="display:flex;gap:13px;align-items:center">
+            <div style="width:52px;height:52px;flex:0 0 52px;border-radius:12px;background:#2C241B;border:1px solid #D9A64866;display:flex;align-items:center;justify-content:center;font-family:'Cormorant Garamond',serif;font-weight:700;font-size:22px;color:#D9A648">{{ initials }}</div>
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;align-items:center;gap:7px"><span style="font-family:'Cormorant Garamond',serif;font-size:21px;font-weight:600;color:#EADCBE;line-height:1.1">{{ previewName }}</span><span style="{{ defBadgeStyle }}">DEFAULT</span></div>
+              <div style="font-size:12px;color:#A08D6C">{{ previewTagline }}</div>
+            </div>
+          </div>
+          <div style="font-family:'Source Serif 4',serif;font-size:14px;color:#D6C9AB;line-height:1.6;margin-top:14px">{{ previewDesc }}</div>
+          <sc-if value="{{ hasVoice }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:12px;padding-top:11px;border-top:1px solid #382E21;font-size:12.5px;color:#A08D6C;font-style:italic;font-family:'Source Serif 4',serif">“{{ voice }}”</div>
+          </sc-if>
+        </div>
+        <div style="font-size:11px;color:#6E5F49;line-height:1.6;margin-top:14px;text-align:center">This is who you step into when a story begins.</div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  constructor(props){ super(props); this.state=this.fresh('new'); }
+  fresh(demo){
+    if(demo==='editing') return { demo, name:'Kestrel Vane', tagline:'Sellsword courier', desc:'A courier who takes the roads no one else will. Loyal to the contract — and, lately, to more than that.', voice:'Clipped, dry; trusts actions over words', isDefault:true };
+    if(demo==='invalid') return { demo, name:'', tagline:'Hedge-witch’s apprentice', desc:'More nerve than training.', voice:'', isDefault:false };
+    return { demo:'new', name:'', tagline:'', desc:'', voice:'', isDefault:false };
+  }
+  set(k){ return (e)=>this.setState({[k]:e.target.value}); }
+  renderVals(){
+    const s=this.state, self=this;
+    const railItems=[
+      {label:'Library',glyph:'❏',href:'Library.dc.html',active:false},
+      {label:'Story',glyph:'✎',href:'Play.dc.html',active:false},
+      {label:'Personas',glyph:'☙',href:'Personas.dc.html',active:true},
+      {label:'Lore',glyph:'❦',href:'Lorebook.dc.html',active:false},
+      {label:'Settings',glyph:'⚙',href:'Settings.dc.html',active:false},
+    ].map(it=>({...it,style:`display:flex;flex-direction:column;align-items:center;gap:3px;width:56px;padding:8px 0;border-radius:8px;color:${it.active?'#EADCBE':'#6E5F49'};background:${it.active?'#2C241B':'transparent'};border:1px solid ${it.active?'rgba(216,170,90,.2)':'transparent'}`,iconStyle:`font-size:18px;color:${it.active?'#D9A648':'#8A7A5c'}`}));
+
+    const demoChips=[['new','New'],['editing','Editing'],['invalid','Missing name']].map(([k,label])=>({label,onClick:()=>self.setState(self.fresh(k)),
+      style:`font-size:11px;padding:4px 9px;border-radius:5px;cursor:pointer;border:1px solid ${s.demo===k?'#4E827B':'#382E21'};background:${s.demo===k?'rgba(116,184,174,.12)':'transparent'};color:${s.demo===k?'#74B8AE':'#A08D6C'}`}));
+
+    const nameEmpty=!s.name.trim();
+    const nameError=s.demo==='invalid' && nameEmpty;
+    const initials=(s.name.trim()?s.name.trim().split(/\s+/).map(w=>w[0]).slice(0,2).join(''):'?').toUpperCase();
+
+    return { railItems, demoChips,
+      headerTitle: s.demo==='editing' ? 'Edit persona' : 'New persona',
+      name:s.name, tagline:s.tagline, desc:s.desc, voice:s.voice,
+      onName:self.set('name'), onTagline:self.set('tagline'), onDesc:self.set('desc'), onVoice:self.set('voice'),
+      nameError,
+      nameFieldStyle:`width:100%;background:#1B1611;border:1px solid ${nameError?'#C96F57':'#382E21'};border-radius:8px;padding:11px 13px;color:#EADCBE;font-family:'Cormorant Garamond',serif;font-size:22px;outline:none`,
+      saveStyle:`border:0;border-radius:8px;padding:9px 18px;font-weight:600;font-size:13px;cursor:${nameEmpty?'not-allowed':'pointer'};background:${nameEmpty?'#2C241B':'#D9A648'};color:${nameEmpty?'#6E5F49':'#1B1611'}`,
+      toggleDefault:()=>self.setState(st=>({isDefault:!st.isDefault})),
+      toggleStyle:`width:40px;height:22px;border-radius:12px;padding:2px;cursor:pointer;background:${s.isDefault?'#D9A648':'#382E21'};display:flex;justify-content:${s.isDefault?'flex-end':'flex-start'}`,
+      knobStyle:`width:18px;height:18px;border-radius:50%;background:${s.isDefault?'#1B1611':'#6E5F49'};display:block`,
+      initials, previewName:s.name.trim()||'Unnamed', previewTagline:s.tagline.trim()||'no role yet',
+      previewDesc:s.desc.trim()||'Describe who they are and it will show here.',
+      hasVoice:!!s.voice.trim(),
+      defBadgeStyle:s.isDefault?"font-size:8px;font-family:'IBM Plex Mono',monospace;color:#8FB573;border:1px solid #8FB573;border-radius:3px;padding:1px 5px":'display:none' };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,85 +1,62 @@
-// Midnight Tavern desktop shell — Tauri v2 app library.
+// Midnight Tavern desktop shell - Tauri v2 app library.
 //
-// This is deliberately minimal: the native shell only hosts the built UI and
-// registers the plugins the UI needs (updater, sql, fs, dialog). All game logic
-// lives in packages/core (TypeScript), reached through the UI façade.
+// The native shell hosts the built UI and registers the plugins it needs. All game
+// logic lives in packages/core (TypeScript), reached through the UI facade.
 //
-// Tauri v2 mobile-ready layout: the app lives in this lib as `run()`, and the
-// desktop `main.rs` is a thin shim that calls it. A future mobile target reuses
-// the same `run()` via the `mobile_entry_point` attribute.
-//
-// PRIVACY / v1 POLICY (low-level-plan §M12.4): crash and error logging is
-// LOCAL FILE ONLY. There is NO telemetry and NO network reporting of crashes.
-// The only outbound network calls the shell makes are the updater's manifest
-// check (to the configured static host) and whatever the UI itself does.
+// PRIVACY: crash and error logging is local-file-only. There is no telemetry and no
+// network reporting of logs. The log plugin keeps a bounded set of rotated files.
 
-use std::fs::{create_dir_all, OpenOptions};
-use std::io::Write;
+use std::fs::create_dir_all;
 use std::panic;
-use std::path::PathBuf;
 
 use tauri::Manager;
+use tauri_plugin_log::{RotationStrategy, Target, TargetKind, TimezoneStrategy};
 
 mod db;
 
-/// Resolve the per-user app data directory and ensure a `logs/` folder exists
-/// inside it. Returns the path to the crash log file. Falls back to the OS temp
-/// dir if the app data dir can't be resolved, so logging never itself panics.
-fn crash_log_path(app: &tauri::AppHandle) -> PathBuf {
-    let base = app
-        .path()
-        .app_log_dir()
-        .or_else(|_| app.path().app_data_dir())
-        .unwrap_or_else(|_| std::env::temp_dir());
-    // Best effort: if the dir can't be created we still return the path and the
-    // later OpenOptions call will surface the error to stderr only.
-    let _ = create_dir_all(&base);
-    base.join("crash.log")
-}
-
-/// Append a line to the local crash log. Local file only — no telemetry.
-fn append_crash_log(path: &PathBuf, message: &str) {
-    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) {
-        // RFC3339-ish timestamp without pulling a time crate: use the plugin log's
-        // formatting if present, else a monotonic-ish marker. Keep deps minimal.
-        let _ = writeln!(file, "[panic] {message}");
-    }
-}
-
-/// Install a panic hook that writes to the local crash log in addition to the
-/// default (stderr) behavior. Registered once, after the app data dir is known.
-fn install_local_crash_logger(app: &tauri::AppHandle) {
-    let log_path = crash_log_path(app);
-    // Preserve the default hook so panics still print to stderr in dev.
+/// Install a panic hook that writes through the bounded local logger while preserving
+/// Rust's default stderr output. No panic details are sent over the network.
+fn install_local_crash_logger() {
     let default_hook = panic::take_hook();
     panic::set_hook(Box::new(move |info| {
         let location = info
             .location()
-            .map(|l| format!("{}:{}", l.file(), l.line()))
+            .map(|location| format!("{}:{}", location.file(), location.line()))
             .unwrap_or_else(|| "unknown".to_string());
         let payload = info
             .payload()
             .downcast_ref::<&str>()
-            .map(|s| s.to_string())
+            .map(|message| message.to_string())
             .or_else(|| info.payload().downcast_ref::<String>().cloned())
             .unwrap_or_else(|| "<non-string panic payload>".to_string());
-        append_crash_log(&log_path, &format!("at {location}: {payload}"));
+        log::error!(target: "crash", "event=rust.panic location={location} message={payload}");
         default_hook(info);
     }));
 }
 
-/// The shared app builder. Named `run` (not `main`) so a future mobile target
-/// can call it too — standard Tauri v2 layout.
+/// Build and run the shared desktop application.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        // --- Plugins the UI window is granted access to (see capabilities/default.json) ---
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                .targets([
+                    Target::new(TargetKind::Stdout),
+                    Target::new(TargetKind::LogDir {
+                        file_name: Some("midnight-tavern".into()),
+                    }),
+                ])
+                .level(log::LevelFilter::Info)
+                .max_file_size(5_000_000)
+                .rotation_strategy(RotationStrategy::KeepSome(3))
+                .timezone_strategy(TimezoneStrategy::UseLocal)
+                .build(),
+        )
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_sql::Builder::new().build())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
-        // Storage driver commands (see src/db.rs). core reaches these through the UI's
-        // sqliteDriver, which satisfies core's async SqlDriver seam.
+        .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             db::db_exec,
             db::db_select,
@@ -92,22 +69,29 @@ pub fn run() {
             db::tx_rollback,
         ])
         .setup(|app| {
-            // Install the local-file crash logger as early as we have an AppHandle.
-            install_local_crash_logger(app.handle());
+            install_local_crash_logger();
+            log::info!(
+                target: "app",
+                "event=app.start version={}",
+                app.package_info().version
+            );
 
-            // Open the SQLite database in the per-user app data dir and manage it as state,
-            // so the storage commands can reach one shared pool. Blocking here is fine: it
-            // runs once during setup, before the window loads the UI. A failure to open the
-            // DB is fatal — the app cannot function without storage.
-            let db_path = app
-                .path()
-                .app_data_dir()
-                .map_err(|e| format!("no app data dir: {e}"))?;
-            create_dir_all(&db_path).map_err(|e| format!("create app data dir: {e}"))?;
+            let db_path = app.path().app_data_dir().map_err(|error| {
+                log::error!(target: "storage", "event=db.path.error error={error}");
+                format!("no app data dir: {error}")
+            })?;
+            create_dir_all(&db_path).map_err(|error| {
+                log::error!(target: "storage", "event=db.directory.error error={error}");
+                format!("create app data dir: {error}")
+            })?;
             let db_file = db_path.join("midnight-tavern.db");
-            let state = tauri::async_runtime::block_on(db::DbState::open(&db_file))
-                .map_err(|e| format!("open database: {e}"))?;
+            let state =
+                tauri::async_runtime::block_on(db::DbState::open(&db_file)).map_err(|error| {
+                    log::error!(target: "storage", "event=db.open.error error={error}");
+                    format!("open database: {error}")
+                })?;
             app.manage(state);
+            log::info!(target: "storage", "event=db.open.success");
 
             Ok(())
         })

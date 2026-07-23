@@ -84,6 +84,7 @@ async function seedStore(): Promise<{ store: Store; storyId: string }> {
       characterId: "wight",
       isPlayer: false,
       templateId: "wight",
+      attributes: {},
       resources: { hp: { current: 12, max: 12 } },
       skills: [{ skillId: "blade", rank: "adept", successCount: 0 }],
       inventory: [{ itemId: "sword", qty: 1 }],
@@ -168,5 +169,39 @@ describe("submitTurn — pipeline order & transaction", () => {
     expect((await store.messages.listByStory(storyId)).map((m) => m.role)).toEqual(["player", "narrator"]);
     // No ruling ⇒ no state change.
     expect((await store.characters.get("wight"))!.hard.resources.hp!.current).toBe(before);
+  });
+
+  it("calls only the narrator and writes no mechanics in No Stats mode", async () => {
+    const current = (await store.stories.get(storyId))!;
+    await store.stories.update({
+      ...current,
+      schema: {
+        ...current.schema,
+        statMode: "none",
+        attributes: [],
+        resources: [],
+        skills: [],
+        actions: [],
+        items: [],
+        npcTemplates: [],
+        startingState: { attributes: {}, resources: {}, skills: [], inventory: [] },
+      },
+    });
+    const router = new ScriptedRouter({
+      classified: {
+        playerIntents: [{ actorId: "kestrel", actionId: "attack_melee", confidence: 1 }],
+        npcIntents: [],
+        freeText: "",
+      },
+      narratorProse: "The argument dissolves into laughter.",
+    });
+
+    const result = await submitTurn(router, store, storyId, "I tell a terrible joke.");
+    await result.background;
+
+    expect(router.calls).toEqual(["narrator"]);
+    expect(result.rulings).toEqual([]);
+    expect(await store.rulings.listByStory(storyId)).toEqual([]);
+    expect((await store.characters.get("wight"))!.hard.resources.hp!.current).toBe(12);
   });
 });

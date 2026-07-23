@@ -43,6 +43,7 @@ function cardFromCastMember(m: CastMember): CoreLivingCardView {
     name: m.name,
     isPlayer: m.isPlayer,
     alive: m.alive,
+    attributes: [],
     resources: m.hp ? [{ id: "hp", label: m.hp.label, current: m.hp.current, max: m.hp.max, playerVisible: true }] : [],
     inventory: [],
     skills: [],

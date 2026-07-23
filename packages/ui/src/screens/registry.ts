@@ -20,6 +20,7 @@ export interface ScreenProps {
 type ScreenComponent = ComponentType<ScreenProps> | LazyExoticComponent<ComponentType<ScreenProps>>;
 
 const Library = lazy(() => import("./Library.js").then((m) => ({ default: m.Library })));
+const SetupWizard = lazy(() => import("./SetupWizard.js").then((m) => ({ default: m.SetupWizard })));
 const Play = lazy(() => import("./Play.js").then((m) => ({ default: m.Play })));
 const Overview = lazy(() => import("./Overview.js").then((m) => ({ default: m.Overview })));
 const Characters = lazy(() => import("./Characters.js").then((m) => ({ default: m.Characters })));
@@ -45,6 +46,7 @@ const DesignSystem = lazy(() =>
 /** route → screen component. */
 export const registry: Record<Route, ScreenComponent> = {
   library: Library,
+  setup: SetupWizard,
   play: Play,
   overview: Overview,
   characters: Characters,

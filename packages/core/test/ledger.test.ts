@@ -44,6 +44,30 @@ describe("commit — resources", () => {
   });
 });
 
+describe("commit — attributes", () => {
+  it("uses schema defaults and clamps attribute deltas to the supported range", () => {
+    const story = makeStory();
+    story.attributes = [
+      { id: "might", name: "Might", abbrev: "MIG", description: "Physical power", defaultScore: 10 },
+    ];
+    const p = makePlayer({ attributes: {} });
+
+    commit(
+      story,
+      [{ kind: "attributeDelta", characterId: "kestrel", attributeId: "might", delta: 50 }],
+      mapOf(p)
+    );
+    expect(p.attributes.might).toBe(30);
+
+    commit(
+      story,
+      [{ kind: "attributeDelta", characterId: "kestrel", attributeId: "might", delta: -100 }],
+      mapOf(p)
+    );
+    expect(p.attributes.might).toBe(1);
+  });
+});
+
 describe("commit — inventory", () => {
   it("grants a new item stack", () => {
     const p = makePlayer({ inventory: [] });

@@ -16,6 +16,7 @@ import {
   submitTurn,
   swipeLastTurn,
   deleteLastTurn,
+  deleteFromExchange,
   rewindTo,
   selectVariant,
 } from "../../src/orchestrator/index.js";
@@ -87,6 +88,7 @@ async function seedStore(): Promise<{ store: Store; storyId: string }> {
       characterId: "wight",
       isPlayer: false,
       templateId: "wight",
+      attributes: {},
       resources: { hp: { current: 12, max: 12 } },
       skills: [{ skillId: "blade", rank: "adept", successCount: 0 }],
       inventory: [{ itemId: "sword", qty: 1 }],
@@ -176,7 +178,7 @@ describe("history ops — swipe / delete / rewind (§6)", () => {
     expect(await store.rulings.listByStory(storyId)).toHaveLength(0);
   });
 
-  it("rewindTo restores an earlier checkpoint and truncates everything after", async () => {
+  it("rewindTo keeps the selected exchange and truncates later exchanges", async () => {
     await strike(router, store, storyId, "strike one"); // wight 12 → 2
     expect(await wightHp(store)).toBe(2);
 
@@ -185,17 +187,33 @@ describe("history ops — swipe / delete / rewind (§6)", () => {
     const msgs = await store.messages.listByStory(storyId);
     expect(msgs).toHaveLength(4); // player, narrator, player, narrator
     const secondNarratorIdx = msgs[3]!.idx;
-    const secondPlayerIdx = msgs[2]!.idx;
+    const firstPlayerIdx = msgs[0]!.idx;
 
-    // Rewind to just before the SECOND turn's player message.
-    await rewindTo(store, storyId, secondPlayerIdx);
+    // Rewind to the first exchange: the selected player+narrator pair stays intact.
+    await rewindTo(store, storyId, firstPlayerIdx);
 
     // State restored to the second turn's pre-image (hp=2), transcript truncated to turn one.
     expect(await wightHp(store)).toBe(2);
     const after = await store.messages.listByStory(storyId);
     expect(after).toHaveLength(2);
     expect(after.every((m) => m.idx < secondNarratorIdx)).toBe(true);
-    // The rewound turn's checkpoint + ruling are gone; turn one's remain.
+    // Later turn checkpoint + ruling are gone; the selected exchange's remain.
+    expect(await store.checkpoints.listByStory(storyId)).toHaveLength(1);
+    expect(await store.rulings.listByStory(storyId)).toHaveLength(1);
+  });
+
+  it("deleteFromExchange removes the selected exchange and restores its pre-turn state", async () => {
+    await strike(router, store, storyId, "strike one");
+    await strike(router, store, storyId, "strike two");
+    const messages = await store.messages.listByStory(storyId);
+
+    await deleteFromExchange(store, storyId, messages[3]!.idx);
+
+    expect(await wightHp(store)).toBe(2);
+    expect((await store.messages.listByStory(storyId)).map((message) => message.content)).toEqual([
+      "strike one",
+      "First telling.",
+    ]);
     expect(await store.checkpoints.listByStory(storyId)).toHaveLength(1);
     expect(await store.rulings.listByStory(storyId)).toHaveLength(1);
   });
@@ -240,6 +258,40 @@ describe("history ops — swipe / delete / rewind (§6)", () => {
     await selectVariant(store, storyId, narratorIdx, 0);
     expect(analyzerCalls).toBe(0);
     expect((await store.characters.get("wight"))!.soft?.current.mood).toBe("First telling.");
+  });
+
+  it("failed swipe restores the active variant's soft state and leaves variants unchanged", async () => {
+    const moodRouter = new ScriptedRouter({ classified: strikeIntent, narratorProse: "First telling." });
+    moodRouter.complete = async (role: Role) => {
+      if (role === "classifier") return { content: JSON.stringify(strikeIntent) };
+      if (role === "analyzer") {
+        return {
+          content: JSON.stringify({
+            characterOps: [
+              { characterId: "wight", ops: [{ op: "set", path: "mood", value: "First telling." }] },
+            ],
+            worldOps: [],
+          }),
+        };
+      }
+      return { content: "" };
+    };
+
+    await strike(moodRouter, store, storyId, "I strike");
+    expect((await store.characters.get("wight"))!.soft?.current.mood).toBe("First telling.");
+    const hpAfterTurn = await wightHp(store);
+
+    moodRouter.stream = async () => {
+      throw new Error("network down");
+    };
+    await expect(swipeLastTurn(moodRouter, store, storyId)).rejects.toThrow("network down");
+
+    expect((await store.characters.get("wight"))!.soft?.current.mood).toBe("First telling.");
+    expect(await wightHp(store)).toBe(hpAfterTurn);
+    const narratorIdx = (await store.messages.nextIdx(storyId)) - 1;
+    const narrator = await store.messages.getByIndex(storyId, narratorIdx);
+    expect(narrator!.variants).toEqual(["First telling."]);
+    expect(narrator!.activeVariant).toBe(0);
   });
 
   it("deleteLastTurn invalidates chapters/arcs built from the removed messages", async () => {
@@ -295,7 +347,7 @@ describe("history ops — swipe / delete / rewind (§6)", () => {
       storyId,
       name: "Pale ghost",
       isPlayer: false,
-      hard: { characterId: "ghost", isPlayer: false, resources: {}, skills: [], inventory: [], flags: {}, alive: true },
+      hard: { characterId: "ghost", isPlayer: false, attributes: {}, resources: {}, skills: [], inventory: [], flags: {}, alive: true },
     });
     await store.worldSoft.set(storyId, {
       overview: "A world that appeared this turn.",

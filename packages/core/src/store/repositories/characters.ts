@@ -43,7 +43,7 @@ function toRecord(row: Row): CharacterRecord {
     storyId: row.story_id,
     name: row.name,
     isPlayer: toBool(row.is_player),
-    hard: decodeJson(CharacterHardStateSchema, row.hard_json),
+    hard: decodeJson(CharacterHardStateSchema, row.hard_json) as CharacterHardState,
   };
   if (row.soft_json !== null) record.soft = decodeJson(CharacterSoftStateSchema, row.soft_json);
   if (row.soft_tier !== null) record.softTier = SoftTierSchema.parse(row.soft_tier);

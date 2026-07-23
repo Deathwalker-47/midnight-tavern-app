@@ -132,6 +132,12 @@ describe("canAfford", () => {
 });
 
 describe("conditionHolds", () => {
+  it("attribute uses the stored score and falls back to 10 when absent", () => {
+    expect(conditionHolds(makePlayer({ attributes: { might: 14 } }), { type: "attribute", attributeId: "might", min: 14 })).toBe(true);
+    expect(conditionHolds(makePlayer({ attributes: { might: 13 } }), { type: "attribute", attributeId: "might", min: 14 })).toBe(false);
+    expect(conditionHolds(makePlayer({ attributes: {} }), { type: "attribute", attributeId: "might", min: 10 })).toBe(true);
+  });
+
   it("skill without minRank", () => {
     expect(conditionHolds(makePlayer(), { type: "skill", skillId: "blade" })).toBe(true);
     expect(conditionHolds(makePlayer({ skills: [] }), { type: "skill", skillId: "blade" })).toBe(false);

@@ -61,8 +61,16 @@ export {
   type RankedModel,
 } from "./recommend.js";
 export {
+  SetupStateSchema,
+  DEFAULT_SETUP_STATE,
+  SETUP_STATE_SETTING_KEY,
+  isSetupComplete,
+  type SetupState,
+} from "./setup.js";
+export {
   makeRouter,
   MissingCredentialsError,
+  ProviderTimeoutError,
   ProviderConfigSchema,
   ProviderConfigsSchema,
   PROVIDER_CONFIGS_SETTING_KEY,
@@ -71,6 +79,11 @@ export {
   type RolePrompt,
   type ProviderConfigs,
 } from "./router.js";
+export {
+  NOOP_DIAGNOSTIC_LOGGER,
+  type DiagnosticData,
+  type DiagnosticLogger,
+} from "../observability/logger.js";
 export {
   callStructured,
   extractJson,

@@ -34,6 +34,7 @@ export const CharacterHardStateSchema = z.object({
   characterId: z.string(),
   isPlayer: z.boolean(),
   templateId: z.string().optional(), // for NPCs instantiated from an NpcTemplate
+  attributes: z.record(z.string(), z.number().int().min(1).max(30)).default({}),
   resources: z.record(z.string(), ResourceStateSchema),
   skills: z.array(LearnedSkillSchema),
   inventory: z.array(InventoryEntrySchema),

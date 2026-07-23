@@ -25,6 +25,13 @@ use std::str::FromStr;
 use tauri::async_runtime::Mutex;
 use tauri::State;
 
+/// Record a storage failure without logging SQL text or bound values, then return the
+/// original message to the invoking webview.
+fn storage_error(operation: &str, error: impl std::fmt::Display) -> String {
+    log::error!(target: "storage", "event={operation}.failed error={error}");
+    error.to_string()
+}
+
 /// Side-effect result mirrored to core's `RunResult` (`{ changes }`).
 #[derive(serde::Serialize)]
 pub struct RunResult {
@@ -142,7 +149,7 @@ pub async fn db_exec(
     let res = build_query(&sql, params)
         .execute(&state.pool)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|error| storage_error("db.exec", error))?;
     Ok(RunResult {
         changes: res.rows_affected() as i64,
     })
@@ -157,7 +164,7 @@ pub async fn db_select(
     let rows = build_query(&sql, params)
         .fetch_all(&state.pool)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|error| storage_error("db.select", error))?;
     Ok(rows.iter().map(row_to_object).collect())
 }
 
@@ -168,7 +175,8 @@ pub async fn db_batch(state: State<'_, DbState>, sql: String) -> Result<(), Stri
         .pool
         .execute(sql.as_str())
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|error| storage_error("db.batch", error))?;
+    log::info!(target: "storage", "event=db.migrations.completed");
     Ok(())
 }
 
@@ -178,7 +186,11 @@ pub async fn db_batch(state: State<'_, DbState>, sql: String) -> Result<(), Stri
 /// guarantees at most one transaction is live at a time, but slots are reused defensively.
 #[tauri::command]
 pub async fn tx_begin(state: State<'_, DbState>) -> Result<usize, String> {
-    let tx = state.pool.begin().await.map_err(|e| e.to_string())?;
+    let tx = state
+        .pool
+        .begin()
+        .await
+        .map_err(|error| storage_error("db.transaction.begin", error))?;
     let mut txs = state.txs.lock().await;
     if let Some(idx) = txs.iter().position(|t| t.is_none()) {
         txs[idx] = Some(tx);
@@ -204,7 +216,7 @@ pub async fn tx_exec(
     let res = build_query(&sql, params)
         .execute(&mut **tx)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|error| storage_error("db.transaction.exec", error))?;
     Ok(RunResult {
         changes: res.rows_affected() as i64,
     })
@@ -225,7 +237,7 @@ pub async fn tx_select(
     let rows = build_query(&sql, params)
         .fetch_all(&mut **tx)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|error| storage_error("db.transaction.select", error))?;
     Ok(rows.iter().map(row_to_object).collect())
 }
 
@@ -239,7 +251,7 @@ pub async fn tx_batch(state: State<'_, DbState>, id: usize, sql: String) -> Resu
     (&mut **tx)
         .execute(sql.as_str())
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|error| storage_error("db.transaction.batch", error))?;
     Ok(())
 }
 
@@ -250,7 +262,11 @@ pub async fn tx_commit(state: State<'_, DbState>, id: usize) -> Result<(), Strin
         .get_mut(id)
         .and_then(|t| t.take())
         .ok_or_else(|| format!("no open transaction with id {id}"))?;
-    tx.commit().await.map_err(|e| e.to_string())
+    tx.commit()
+        .await
+        .map_err(|error| storage_error("db.transaction.commit", error))?;
+    log::info!(target: "storage", "event=db.transaction.committed");
+    Ok(())
 }
 
 #[tauri::command]
@@ -258,7 +274,10 @@ pub async fn tx_rollback(state: State<'_, DbState>, id: usize) -> Result<(), Str
     let mut txs = state.txs.lock().await;
     // Rollback is best-effort cleanup: if the slot is already empty, treat it as done.
     if let Some(tx) = txs.get_mut(id).and_then(|t| t.take()) {
-        tx.rollback().await.map_err(|e| e.to_string())?;
+        tx.rollback()
+            .await
+            .map_err(|error| storage_error("db.transaction.rollback", error))?;
+        log::warn!(target: "storage", "event=db.transaction.rolled_back");
     }
     Ok(())
 }

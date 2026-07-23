@@ -26,6 +26,7 @@ import {
 import type { CharacterHardState, LearnedSkill } from "../types/index.js";
 import type { Ruling, MechanicalIntent, Outcome, RollRecord } from "../types/index.js";
 import { rollD20, type Rng } from "./dice.js";
+import { attrScore, scoreToMod } from "./attributes.js";
 import { checkGate } from "./gate.js";
 import type { StagedMutation } from "./ledger.js";
 
@@ -94,6 +95,18 @@ function stageEffect(
     }
   }
 
+  if (effect.attributeDeltaSelf) {
+    for (const [attributeId, delta] of Object.entries(effect.attributeDeltaSelf)) {
+      muts.push({ kind: "attributeDelta", characterId: actorId, attributeId, delta });
+    }
+  }
+
+  if (effect.attributeDeltaTarget && targetId) {
+    for (const [attributeId, delta] of Object.entries(effect.attributeDeltaTarget)) {
+      muts.push({ kind: "attributeDelta", characterId: targetId, attributeId, delta });
+    }
+  }
+
   if (effect.grantItem) {
     muts.push({
       kind: "grantItem",
@@ -144,10 +157,12 @@ export function resolve(
   rng: Rng
 ): ResolveResult {
   const turnId = intent.actorId + ":" + intent.actionId;
+  const catalogAction = schema.actions.find((action) => action.id === intent.actionId);
   const baseRuling = {
     turnId,
     actorId: actor.characterId,
     actionId: intent.actionId,
+    ...(catalogAction ? { actionLabel: catalogAction.label } : {}),
     ...(intent.targetId ? { targetId: intent.targetId } : {}),
   };
 
@@ -158,14 +173,17 @@ export function resolve(
   }
 
   // Gate passed ⇒ the action exists in the catalog.
-  const action = schema.actions.find((a) => a.id === intent.actionId)!;
+  const action = catalogAction!;
 
   // 2. costs on attempt.
   const mutations: StagedMutation[] = stageCosts(action, actor.characterId);
 
   // 3. modifier.
   const skill = skillFor(actor, action);
-  const modifier = modifierFor(skill);
+  const masteryModifier = modifierFor(skill);
+  const attributeScore = attrScore(actor, action.governingAttribute, schema);
+  const attributeModifier = action.governingAttribute ? scoreToMod(attributeScore) : 0;
+  const modifier = attributeModifier + masteryModifier;
 
   // 4. roll + outcome.
   const d20 = rollD20(rng);
@@ -175,6 +193,9 @@ export function resolve(
   let opposedD20: number | undefined;
   let opposedModifier: number | undefined;
   let opposedTotal: number | undefined;
+  let opposedAttributeScore: number | undefined;
+  let opposedAttributeModifier: number | undefined;
+  let opposedMasteryModifier: number | undefined;
 
   if (d20 === 20) {
     outcome = "crit_success";
@@ -183,7 +204,10 @@ export function resolve(
   } else if (action.opposed && target) {
     // Opposed contest: the defender rolls with its own relevant skill modifier.
     opposedD20 = rollD20(rng);
-    opposedModifier = modifierFor(skillFor(target, action));
+    opposedAttributeScore = attrScore(target, action.governingAttribute, schema);
+    opposedAttributeModifier = action.governingAttribute ? scoreToMod(opposedAttributeScore) : 0;
+    opposedMasteryModifier = modifierFor(skillFor(target, action));
+    opposedModifier = opposedAttributeModifier + opposedMasteryModifier;
     opposedTotal = opposedD20 + opposedModifier;
     outcome = total > opposedTotal ? "success" : "failure"; // ties defend
   } else {
@@ -193,11 +217,25 @@ export function resolve(
   const roll: RollRecord = {
     d20,
     modifier,
+    ...(action.governingAttribute
+      ? { attributeId: action.governingAttribute, attributeScore, attributeModifier }
+      : {}),
+    ...(action.requiresSkill
+      ? { masterySkillId: action.requiresSkill, masteryModifier }
+      : {}),
     total,
     dc: action.dc,
     outcome,
     ...(opposedD20 !== undefined
-      ? { opposedD20, opposedModifier: opposedModifier!, opposedTotal: opposedTotal! }
+      ? {
+          opposedD20,
+          opposedModifier: opposedModifier!,
+          opposedTotal: opposedTotal!,
+          ...(action.governingAttribute
+            ? { opposedAttributeScore, opposedAttributeModifier }
+            : {}),
+          ...(action.requiresSkill ? { opposedMasteryModifier } : {}),
+        }
       : {}),
   };
 

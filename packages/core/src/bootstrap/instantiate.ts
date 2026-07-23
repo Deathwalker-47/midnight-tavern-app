@@ -42,11 +42,25 @@ function inventory(entries: readonly { itemId: string; qty: number }[]): Invento
   return entries.map((e) => ({ itemId: e.itemId, qty: e.qty }));
 }
 
+function attributeScores(
+  schema: StorySchema,
+  values: Record<string, number>
+): CharacterHardState["attributes"] {
+  if (schema.statMode === "none") return {};
+  return Object.fromEntries(
+    schema.attributes.map((definition) => [
+      definition.id,
+      values[definition.id] ?? definition.defaultScore,
+    ])
+  );
+}
+
 /** Instantiate the player's hard state from the frozen schema's starting state. */
 export function instantiatePlayer(schema: StorySchema, characterId: string): CharacterHardState {
   return {
     characterId,
     isPlayer: true,
+    attributes: attributeScores(schema, schema.startingState.attributes),
     resources: resourceStates(schema, schema.startingState.resources),
     skills: learnedSkills(schema.startingState.skills),
     inventory: inventory(schema.startingState.inventory),
@@ -65,6 +79,7 @@ export function instantiateFromTemplate(
     characterId,
     isPlayer: false,
     templateId: template.templateId,
+    attributes: attributeScores(schema, template.attributes),
     resources: resourceStates(schema, template.resources),
     skills: learnedSkills(template.skills),
     inventory: inventory(template.inventory),
@@ -95,6 +110,7 @@ export function instantiateGeneric(schema: StorySchema, characterId: string): Ch
   return {
     characterId,
     isPlayer: false,
+    attributes: {},
     resources,
     skills: [],
     inventory: [],

@@ -9,10 +9,12 @@
  */
 import type { StorySchema, MasteryRank } from "../types/index.js";
 import type { CharacterHardState } from "../types/index.js";
+import { attrScore, clampAttribute } from "./attributes.js";
 
 /** A single staged change to one character's hard state. */
 export type StagedMutation =
   | { kind: "resourceDelta"; characterId: string; resourceId: string; delta: number }
+  | { kind: "attributeDelta"; characterId: string; attributeId: string; delta: number }
   | { kind: "grantItem"; characterId: string; itemId: string; qty: number }
   | { kind: "removeItem"; characterId: string; itemId: string; qty: number }
   | { kind: "setFlag"; characterId: string; flagId: string; value: boolean }
@@ -70,6 +72,11 @@ export function commit(
     if (!actor) continue; // unknown character: skip defensively (orchestrator ensures presence)
 
     switch (m.kind) {
+      case "attributeDelta":
+        actor.attributes[m.attributeId] = clampAttribute(
+          attrScore(actor, m.attributeId, schema) + m.delta
+        );
+        break;
       case "resourceDelta": {
         const res = actor.resources[m.resourceId];
         if (res) res.current = clamp(res.current + m.delta, res.max);

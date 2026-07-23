@@ -12,13 +12,14 @@
  * Wiring: `useStoriesStore` for the shelf + create/rename/remove, `useSettingsStore().entitlement`
  * for the creation gate. Talks to core only through the stores. Token variables only.
  */
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { CSSProperties } from "react";
-import { useStoriesStore } from "../state/storiesStore";
-import { useSettingsStore } from "../state/settingsStore";
+import { EMPTY_STORY_DRAFT, useStoriesStore } from "../state/storiesStore";
+import { setupIsComplete, useSettingsStore } from "../state/settingsStore";
 import { useUiStore, useRoute } from "../state/uiStore";
 import { Button, StoryCard, EmptyState, InlineNotice, ConfirmDialog } from "../components";
 import type { ScreenProps } from "./registry";
+import { getBridge, type CardImportResult } from "../bridge/core";
 
 /** Deterministic spine color per story id (two registers stay apart — spines are decorative). */
 const SPINES = ["var(--brass)", "var(--teal)", "var(--dead)", "var(--brass-bright)", "var(--success)"];
@@ -35,6 +36,21 @@ function metaFor(messageCount: number): string {
   return `${chapters} ch · ${messageCount} msgs`;
 }
 
+function readFileBytes(file: File): Promise<Uint8Array> {
+  if (typeof file.arrayBuffer === "function") {
+    return file.arrayBuffer().then((buffer) => new Uint8Array(buffer));
+  }
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error ?? new Error("Couldn't read the selected file."));
+    reader.onload = () => {
+      if (reader.result instanceof ArrayBuffer) resolve(new Uint8Array(reader.result));
+      else reject(new Error("The selected file did not contain binary data."));
+    };
+    reader.readAsArrayBuffer(file);
+  });
+}
+
 export function Library(_props: ScreenProps): JSX.Element {
   const stories = useStoriesStore((s) => s.stories);
   const status = useStoriesStore((s) => s.status);
@@ -43,35 +59,100 @@ export function Library(_props: ScreenProps): JSX.Element {
   const openStory = useStoriesStore((s) => s.openStory);
   const rename = useStoriesStore((s) => s.rename);
   const remove = useStoriesStore((s) => s.remove);
+  const setDraft = useStoriesStore((s) => s.setDraft);
 
   const entitlement = useSettingsStore((s) => s.entitlement);
+  const setupState = useSettingsStore((s) => s.setupState);
   const pushToast = useUiStore((s) => s.pushToast);
   const { navigate } = useRoute();
 
   const [deleteId, setDeleteId] = useState<string | undefined>(undefined);
   const [renameId, setRenameId] = useState<string | undefined>(undefined);
   const [renameText, setRenameText] = useState("");
+  const [importOpen, setImportOpen] = useState(false);
+  const [importBusy, setImportBusy] = useState(false);
+  const [importError, setImportError] = useState<string>();
+  const [importResult, setImportResult] = useState<CardImportResult>();
+  const [importUrl, setImportUrl] = useState("");
+  const fileInput = useRef<HTMLInputElement>(null);
 
   // Default to allowing creation while entitlement is still loading; only an expired trial gates.
   const canCreate = entitlement ? entitlement.canCreateStory : true;
   const loading = status === "idle" || status === "loading";
+  const setupComplete = setupIsComplete(setupState);
 
-  const startNewStory = (): void => {
+  const preferredPlayerName = async (): Promise<string> => {
+    try {
+      const personas = await getBridge().listPersonas();
+      return personas.find((persona) => persona.isDefault)?.name ?? personas[0]?.name ?? "";
+    } catch {
+      return "";
+    }
+  };
+
+  const startNewStory = async (): Promise<void> => {
     if (!canCreate) {
       pushToast({ kind: "warn", title: "Your trial has ended", body: "Enter a license to forge new stories." });
       return;
     }
-    navigate("wizard");
+    setDraft({ ...EMPTY_STORY_DRAFT, playerName: await preferredPlayerName() });
+    if (!setupComplete) {
+      navigate("setup", { returnTo: "blueprint", setupReason: "new-story" });
+      return;
+    }
+    navigate("blueprint");
   };
 
   const importCard = (): void => {
-    // The in-memory stub can't read cards; the real importer arrives with the desktop sidecar.
-    pushToast({
-      kind: "info",
-      title: "Character card import",
-      body: "Card import runs through the local desktop build — .png or .json, Chara Card V2 / V3.",
-    });
+    setImportOpen(true);
+    setImportError(undefined);
+    setImportResult(undefined);
+    fileInput.current?.click();
   };
+
+  async function importFile(file: File): Promise<void> {
+    setImportBusy(true);
+    setImportError(undefined);
+    try {
+      const result = await getBridge().importCardFromBytes(await readFileBytes(file));
+      setImportResult(result);
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : "Couldn't read that character card.");
+    } finally {
+      setImportBusy(false);
+    }
+  }
+
+  async function importFromUrl(): Promise<void> {
+    if (!importUrl.trim()) return;
+    setImportBusy(true);
+    setImportError(undefined);
+    try {
+      setImportResult(await getBridge().importCardFromUrl(importUrl.trim()));
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : "Couldn't import from that URL.");
+    } finally {
+      setImportBusy(false);
+    }
+  }
+
+  async function useImportedCard(): Promise<void> {
+    if (!importResult) return;
+    const mapped = importResult.mapped;
+    setDraft({
+      title: mapped.name,
+      playerName: await preferredPlayerName(),
+      premise: mapped.premise,
+      blueprint: {
+        ...mapped.blueprint,
+        firstMessage: mapped.openings[0] ?? mapped.blueprint.firstMessage,
+      },
+      selectedOpening: mapped.openings[0],
+      importedCard: mapped,
+    });
+    setImportOpen(false);
+    navigate("blueprint");
+  }
 
   const openRename = (id: string, title: string): void => {
     setRenameId(id);
@@ -93,6 +174,18 @@ export function Library(_props: ScreenProps): JSX.Element {
 
   return (
     <div style={styles.screen}>
+      <input
+        ref={fileInput}
+        type="file"
+        accept=".png,.json,image/png,application/json"
+        aria-label="Choose a character card file"
+        style={{ display: "none" }}
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          event.target.value = "";
+          if (file) void importFile(file);
+        }}
+      />
       {/* Screen toolbar — subtitle + primary actions (the shell renders the "Library" title). */}
       <div style={styles.toolbar}>
         <div style={styles.subtitle}>Every tale is kept on this machine. Nothing leaves without you.</div>
@@ -243,6 +336,52 @@ export function Library(_props: ScreenProps): JSX.Element {
           </div>
         </div>
       ) : null}
+
+      {importOpen ? (
+        <div style={styles.scrim} onClick={() => setImportOpen(false)}>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Import character card"
+            style={styles.importDialog}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div style={styles.renameTitle}>Import character card</div>
+            <p style={styles.importCopy}>Choose a Chara Card V2/V3 PNG or JSON file. You can review every mapped field before creating a story.</p>
+            <Button variant="secondary" disabled={importBusy} onClick={() => fileInput.current?.click()}>
+              {importBusy ? "Reading card…" : "Choose PNG or JSON…"}
+            </Button>
+            <div style={styles.urlRow}>
+              <input
+                aria-label="Character card URL"
+                value={importUrl}
+                onChange={(event) => setImportUrl(event.target.value)}
+                placeholder="Or paste a direct card URL"
+                style={styles.renameInput}
+              />
+              <Button variant="ghost" disabled={importBusy || !importUrl.trim()} onClick={() => void importFromUrl()}>
+                Import URL
+              </Button>
+            </div>
+            {importError ? <InlineNotice severity="error" title="Couldn't import this card" detail={importError} /> : null}
+            {importResult ? (
+              <div style={styles.importPreview}>
+                <div className="mono" style={styles.sectionLabel}>{importResult.spec.toUpperCase()}</div>
+                <div style={styles.previewName}>{importResult.mapped.name}</div>
+                <p style={styles.previewPremise}>{importResult.mapped.premise || "No premise supplied."}</p>
+                <div style={styles.previewMeta}>
+                  {importResult.mapped.openings.length} opening{importResult.mapped.openings.length === 1 ? "" : "s"} ·{" "}
+                  {importResult.mapped.lorebook.length} lore entr{importResult.mapped.lorebook.length === 1 ? "y" : "ies"}
+                </div>
+              </div>
+            ) : null}
+            <div style={styles.renameActions}>
+              <Button variant="ghost" onClick={() => setImportOpen(false)}>Cancel</Button>
+              <Button variant="primary" disabled={!importResult} onClick={useImportedCard}>Use this card →</Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -290,6 +429,22 @@ const styles: Record<string, CSSProperties> = {
   errorGlyph: { fontSize: 40, color: "var(--failure)" },
   errorDetail: { fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--muted)", marginTop: 10 },
   path: { color: "var(--teal)" },
+  importDialog: {
+    width: "min(620px, calc(100vw - 48px))",
+    maxHeight: "calc(100vh - 70px)",
+    overflow: "auto",
+    background: "var(--bg1-panel)",
+    border: "1px solid var(--hairline)",
+    borderRadius: "var(--radius-card)",
+    padding: "22px",
+    boxShadow: "var(--elevation)",
+  },
+  importCopy: { color: "var(--secondary)", fontFamily: "var(--font-ui)", fontSize: 13, lineHeight: 1.55 },
+  urlRow: { display: "flex", gap: 8, alignItems: "center", margin: "14px 0" },
+  importPreview: { margin: "16px 0", padding: "16px", background: "var(--bg2-card)", border: "1px solid var(--hairline)", borderRadius: "var(--radius-chip)" },
+  previewName: { color: "var(--prose)", fontFamily: "var(--font-display)", fontSize: 22 },
+  previewPremise: { maxHeight: 150, overflow: "auto", whiteSpace: "pre-wrap", color: "var(--secondary)", fontSize: 12.5, lineHeight: 1.55 },
+  previewMeta: { color: "var(--teal)", fontFamily: "var(--font-mono)", fontSize: 11 },
   trialBanner: {
     display: "flex",
     gap: 14,
