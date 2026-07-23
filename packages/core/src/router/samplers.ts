@@ -12,6 +12,7 @@
 import { z } from "zod";
 import type { Role } from "./roles.js";
 import type { ProviderId } from "./providers/registry.js";
+import { MODEL_RECOMMENDATION_CONFIG } from "./modelConfig.js";
 
 /**
  * One role's full sampler profile. Only `temperature`/`topP`/`maxTokens` are universally
@@ -33,66 +34,35 @@ export const SamplerProfileSchema = z.object({
 export type SamplerProfile = z.infer<typeof SamplerProfileSchema>;
 
 /** The named presets the UI offers as one-tap profiles. */
-export type PresetName = "Precise" | "Balanced" | "Creative";
+export type PresetName = keyof typeof MODEL_RECOMMENDATION_CONFIG.samplerPresets;
 
 /**
  * The three named presets. Values follow the v2 prototype's sampler panel: Precise is cold and
  * penalty-free for deterministic JSON; Creative is warm with light penalties for prose.
  */
-export const SAMPLER_PRESETS: Record<PresetName, SamplerProfile> = {
-  Precise: {
-    temperature: 0,
-    topP: 1,
-    topK: 0,
-    minP: 0,
-    frequencyPenalty: 0,
-    presencePenalty: 0,
-    repetitionPenalty: 1,
-    maxTokens: 800,
-  },
-  Balanced: {
-    temperature: 0.5,
-    topP: 0.95,
-    topK: 40,
-    minP: 0.02,
-    frequencyPenalty: 0,
-    presencePenalty: 0,
-    repetitionPenalty: 1.05,
-    maxTokens: 1200,
-  },
-  Creative: {
-    temperature: 0.8,
-    topP: 0.98,
-    topK: 60,
-    minP: 0.05,
-    frequencyPenalty: 0.2,
-    presencePenalty: 0.2,
-    repetitionPenalty: 1.1,
-    maxTokens: 1600,
-  },
-};
+export const SAMPLER_PRESETS: Record<PresetName, SamplerProfile> = Object.fromEntries(
+  Object.entries(MODEL_RECOMMENDATION_CONFIG.samplerPresets).map(([name, profile]) => [
+    name,
+    SamplerProfileSchema.parse(profile),
+  ])
+) as Record<PresetName, SamplerProfile>;
 
 /**
  * The shipped default profile per role (low-level-plan-v2 §8 "Default profiles by role").
  * Structured roles run cold; the narrator runs warm with light presence/frequency penalties.
  * These are what the wizard lands on and what "reset to recommended" restores.
  */
-export const DEFAULT_SAMPLER_PROFILES: Record<Role, SamplerProfile> = {
-  classifier: { temperature: 0, topP: 1, maxTokens: 500 },
-  analyzer: { temperature: 0.2, topP: 1, maxTokens: 800 },
-  bootstrapper: { temperature: 0.4, topP: 0.95, maxTokens: 3000 },
-  summarizer: { temperature: 0.5, topP: 0.95, maxTokens: 1200 },
-  narrator: { temperature: 0.8, topP: 0.95, presencePenalty: 0.3, frequencyPenalty: 0.3, maxTokens: 1200 },
-};
+export const DEFAULT_SAMPLER_PROFILES: Record<Role, SamplerProfile> = Object.fromEntries(
+  Object.entries(MODEL_RECOMMENDATION_CONFIG.defaultRoleMap).map(([role, binding]) => [
+    role,
+    SamplerProfileSchema.parse(binding.samplers),
+  ])
+) as Record<Role, SamplerProfile>;
 
 /** The preset a role's default profile is closest to (drives the UI's initial preset chip). */
 export const DEFAULT_PRESET_FOR_ROLE: Record<Role, PresetName> = {
-  classifier: "Precise",
-  analyzer: "Precise",
-  bootstrapper: "Balanced",
-  summarizer: "Balanced",
-  narrator: "Creative",
-};
+  ...MODEL_RECOMMENDATION_CONFIG.defaultPresetForRole,
+} as Record<Role, PresetName>;
 
 /**
  * Which sampler fields each provider honors. Fields a provider doesn't support are rendered
@@ -100,12 +70,16 @@ export const DEFAULT_PRESET_FOR_ROLE: Record<Role, PresetName> = {
  * `topP`, `maxTokens`, `stop`, and `seed` are assumed universal; only the contested extras are
  * listed. A provider absent here (e.g. `custom`) is treated as supporting everything.
  */
-export const SUPPORTED_SAMPLERS: Partial<Record<ProviderId, ReadonlySet<keyof SamplerProfile>>> = {
-  // OpenAI's chat API has no top_k / min_p / repetition_penalty (it uses frequency/presence).
-  openai: new Set(["temperature", "topP", "frequencyPenalty", "presencePenalty", "maxTokens", "stop", "seed"]),
-  // Anthropic's OpenAI-compat layer omits penalties and min_p; top_k is supported.
-  anthropic: new Set(["temperature", "topP", "topK", "maxTokens", "stop"]),
-};
+export const SUPPORTED_SAMPLERS: Partial<
+  Record<ProviderId, ReadonlySet<keyof SamplerProfile>>
+> = Object.fromEntries(
+  Object.entries(MODEL_RECOMMENDATION_CONFIG.providerSamplerSupport).map(
+    ([provider, fields]) => [
+      provider,
+      new Set(fields as Array<keyof SamplerProfile>),
+    ]
+  )
+) as Partial<Record<ProviderId, ReadonlySet<keyof SamplerProfile>>>;
 
 /** True if `provider` honors sampler `field` (unknown providers support everything). */
 export function providerSupportsSampler(provider: ProviderId, field: keyof SamplerProfile): boolean {

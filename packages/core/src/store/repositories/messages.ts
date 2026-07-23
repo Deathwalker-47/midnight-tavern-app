@@ -7,7 +7,14 @@
  */
 import { z } from "zod";
 import type { Db } from "../db.js";
-import { MessageRecordSchema, MessageRoleSchema, type MessageRecord } from "../../types/index.js";
+import {
+  MessageRecordSchema,
+  MessageRoleSchema,
+  StoredNarratorVariantSchema,
+  variantProse,
+  type MessageRecord,
+  type StoredNarratorVariant,
+} from "../../types/index.js";
 
 interface Row {
   id: string;
@@ -21,7 +28,7 @@ interface Row {
   variant_states_json: string | null;
 }
 
-const VariantsSchema = z.array(z.string());
+const VariantsSchema = z.array(StoredNarratorVariantSchema);
 
 function toRecord(row: Row): MessageRecord {
   return MessageRecordSchema.parse({
@@ -51,7 +58,11 @@ export interface MessageRepo {
    * Replace a narrator message's prose variants + active pointer (swipe, §6). `content` mirrors the
    * active variant so existing readers that ignore variants still render the shown prose.
    */
-  setVariants(id: string, variants: string[], activeVariant: number): Promise<void>;
+  setVariants(
+    id: string,
+    variants: StoredNarratorVariant[],
+    activeVariant: number
+  ): Promise<void>;
   /**
    * Per-variant soft/world snapshot storage (swipe §6 step 5). Opaque JSON parallel to `variants` —
    * element K is the post-analyzer soft+world state matching variant K, so cycling ‹ › restores the
@@ -120,7 +131,8 @@ export function makeMessageRepo(db: Db): MessageRepo {
     },
 
     async setVariants(id, variants, activeVariant) {
-      const shown = variants[activeVariant] ?? variants[variants.length - 1] ?? "";
+      const selected = variants[activeVariant] ?? variants[variants.length - 1] ?? "";
+      const shown = variantProse(selected);
       const info = await db.run(
         "UPDATE messages SET variants_json = ?, active_variant = ?, content = ? WHERE id = ?",
         JSON.stringify(variants),

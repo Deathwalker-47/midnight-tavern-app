@@ -37,7 +37,15 @@ export function rankAtLeast(rank: MasteryRank, min: MasteryRank): boolean {
 }
 
 /** Item / equipment kind. */
-export const ItemKindSchema = z.enum(["weapon", "armor", "consumable", "tool", "key", "misc"]);
+export const ItemKindSchema = z.enum([
+  "weapon",
+  "armor",
+  "accessory",
+  "consumable",
+  "tool",
+  "key",
+  "misc",
+]);
 export type ItemKind = z.infer<typeof ItemKindSchema>;
 
 /** What an attempt costs (paid on attempt, win or lose). */

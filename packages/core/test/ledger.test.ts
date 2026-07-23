@@ -57,7 +57,7 @@ describe("commit — attributes", () => {
       [{ kind: "attributeDelta", characterId: "kestrel", attributeId: "might", delta: 50 }],
       mapOf(p)
     );
-    expect(p.attributes.might).toBe(30);
+    expect(p.attributes.might).toBe(20);
 
     commit(
       story,
@@ -65,6 +65,28 @@ describe("commit — attributes", () => {
       mapOf(p)
     );
     expect(p.attributes.might).toBe(1);
+  });
+
+  it("permits a declared superhuman ceiling above 20", () => {
+    const story = makeStory();
+    story.attributes = [
+      {
+        id: "might",
+        name: "Might",
+        abbrev: "MIG",
+        description: "Superhuman power",
+        defaultScore: 21,
+        superhuman: true,
+        maximumScore: 30,
+      },
+    ];
+    const p = makePlayer({ attributes: { might: 21 } });
+    commit(
+      story,
+      [{ kind: "attributeDelta", characterId: "kestrel", attributeId: "might", delta: 50 }],
+      mapOf(p)
+    );
+    expect(p.attributes.might).toBe(30);
   });
 });
 

@@ -1,0 +1,230 @@
+{
+  "configVersion": 1,
+  "defaultProvider": "openrouter",
+  "models": [
+    {
+      "id": "anthropic/claude-sonnet-4",
+      "provider": "openrouter",
+      "label": "Claude Sonnet 4",
+      "recommendedFor": ["narrator", "bootstrapper"],
+      "tier": "recommended",
+      "contextTokens": 200000,
+      "supportsJsonMode": true,
+      "notes": "Strong prose and reliable structured output."
+    },
+    {
+      "id": "anthropic/claude-opus-4",
+      "provider": "openrouter",
+      "label": "Claude Opus 4",
+      "recommendedFor": ["narrator", "bootstrapper"],
+      "tier": "recommended",
+      "contextTokens": 200000,
+      "supportsJsonMode": true,
+      "notes": "Highest-quality prose; higher cost."
+    },
+    {
+      "id": "openai/gpt-4o",
+      "provider": "openrouter",
+      "label": "GPT-4o",
+      "recommendedFor": ["narrator", "summarizer", "bootstrapper"],
+      "tier": "recommended",
+      "contextTokens": 128000,
+      "supportsJsonMode": true
+    },
+    {
+      "id": "openai/gpt-4o-mini",
+      "provider": "openrouter",
+      "label": "GPT-4o mini",
+      "recommendedFor": ["classifier", "analyzer", "summarizer"],
+      "tier": "recommended",
+      "contextTokens": 128000,
+      "supportsJsonMode": true
+    },
+    {
+      "id": "google/gemini-2.0-flash-001",
+      "provider": "openrouter",
+      "label": "Gemini 2.0 Flash",
+      "recommendedFor": ["classifier", "analyzer", "summarizer"],
+      "tier": "recommended",
+      "contextTokens": 1000000,
+      "supportsJsonMode": true
+    },
+    {
+      "id": "google/gemini-2.5-pro",
+      "provider": "openrouter",
+      "label": "Gemini 2.5 Pro",
+      "recommendedFor": ["narrator", "bootstrapper"],
+      "tier": "recommended",
+      "contextTokens": 1000000,
+      "supportsJsonMode": true
+    },
+    {
+      "id": "deepseek/deepseek-chat",
+      "provider": "openrouter",
+      "label": "DeepSeek V3",
+      "recommendedFor": ["bootstrapper", "analyzer"],
+      "tier": "advanced",
+      "contextTokens": 64000,
+      "supportsJsonMode": true
+    },
+    {
+      "id": "meta-llama/llama-3.3-70b-instruct",
+      "provider": "openrouter",
+      "label": "Llama 3.3 70B",
+      "recommendedFor": ["classifier"],
+      "tier": "advanced",
+      "contextTokens": 131000,
+      "supportsJsonMode": true
+    },
+    {
+      "id": "meta-llama/llama-3.1-8b-instruct",
+      "provider": "openrouter",
+      "label": "Llama 3.1 8B",
+      "recommendedFor": ["classifier"],
+      "tier": "advanced",
+      "contextTokens": 131000,
+      "supportsJsonMode": false,
+      "notes": "Fast and inexpensive, but not guaranteed to return valid JSON."
+    },
+    {
+      "id": "gpt-4o",
+      "provider": "openai",
+      "label": "GPT-4o (direct)",
+      "recommendedFor": ["narrator", "summarizer", "bootstrapper"],
+      "tier": "recommended",
+      "contextTokens": 128000,
+      "supportsJsonMode": true
+    },
+    {
+      "id": "gpt-4o-mini",
+      "provider": "openai",
+      "label": "GPT-4o mini (direct)",
+      "recommendedFor": ["classifier", "analyzer"],
+      "tier": "recommended",
+      "contextTokens": 128000,
+      "supportsJsonMode": true
+    },
+    {
+      "id": "claude-sonnet-4-20250514",
+      "provider": "anthropic",
+      "label": "Claude Sonnet 4 (direct)",
+      "recommendedFor": ["narrator", "bootstrapper"],
+      "tier": "recommended",
+      "contextTokens": 200000,
+      "supportsJsonMode": false,
+      "notes": "Anthropic's OpenAI-compatible endpoint may not expose JSON mode."
+    },
+    {
+      "id": "gemini-2.0-flash-001",
+      "provider": "google",
+      "label": "Gemini 2.0 Flash (direct)",
+      "recommendedFor": ["classifier", "analyzer", "summarizer"],
+      "tier": "recommended",
+      "contextTokens": 1000000,
+      "supportsJsonMode": true
+    },
+    {
+      "id": "deepseek-chat",
+      "provider": "deepseek",
+      "label": "DeepSeek V3 (direct)",
+      "recommendedFor": ["bootstrapper", "analyzer"],
+      "tier": "advanced",
+      "contextTokens": 64000,
+      "supportsJsonMode": true
+    }
+  ],
+  "samplerPresets": {
+    "Precise": {
+      "temperature": 0,
+      "topP": 1,
+      "topK": 0,
+      "minP": 0,
+      "frequencyPenalty": 0,
+      "presencePenalty": 0,
+      "repetitionPenalty": 1,
+      "maxTokens": 800
+    },
+    "Balanced": {
+      "temperature": 0.5,
+      "topP": 0.95,
+      "topK": 40,
+      "minP": 0.02,
+      "frequencyPenalty": 0,
+      "presencePenalty": 0,
+      "repetitionPenalty": 1.05,
+      "maxTokens": 1200
+    },
+    "Creative": {
+      "temperature": 0.8,
+      "topP": 0.98,
+      "topK": 60,
+      "minP": 0.05,
+      "frequencyPenalty": 0.2,
+      "presencePenalty": 0.2,
+      "repetitionPenalty": 1.1,
+      "maxTokens": 1600
+    }
+  },
+  "defaultRoleMap": {
+    "narrator": {
+      "provider": "openrouter",
+      "model": "anthropic/claude-sonnet-4",
+      "samplers": {
+        "temperature": 0.8,
+        "topP": 0.95,
+        "presencePenalty": 0.3,
+        "frequencyPenalty": 0.3,
+        "maxTokens": 1200
+      },
+      "source": "recommended",
+      "samplersDirty": false
+    },
+    "classifier": {
+      "provider": "openrouter",
+      "model": "openai/gpt-4o-mini",
+      "samplers": { "temperature": 0, "topP": 1, "maxTokens": 500 },
+      "source": "recommended",
+      "samplersDirty": false
+    },
+    "analyzer": {
+      "provider": "openrouter",
+      "model": "openai/gpt-4o-mini",
+      "samplers": { "temperature": 0.2, "topP": 1, "maxTokens": 800 },
+      "source": "recommended",
+      "samplersDirty": false
+    },
+    "summarizer": {
+      "provider": "openrouter",
+      "model": "openai/gpt-4o",
+      "samplers": { "temperature": 0.5, "topP": 0.95, "maxTokens": 1200 },
+      "source": "recommended",
+      "samplersDirty": false
+    },
+    "bootstrapper": {
+      "provider": "openrouter",
+      "model": "anthropic/claude-sonnet-4",
+      "samplers": { "temperature": 0.4, "topP": 0.95, "maxTokens": 8000 },
+      "source": "recommended",
+      "samplersDirty": false
+    }
+  },
+  "defaultPresetForRole": {
+    "classifier": "Precise",
+    "analyzer": "Precise",
+    "bootstrapper": "Balanced",
+    "summarizer": "Balanced",
+    "narrator": "Creative"
+  },
+  "providerSamplerSupport": {
+    "openai": [
+      "temperature",
+      "topP",
+      "frequencyPenalty",
+      "presencePenalty",
+      "maxTokens",
+      "stop",
+      "seed"
+    ],
+    "anthropic": ["temperature", "topP", "topK", "maxTokens", "stop"]
+  }
+}

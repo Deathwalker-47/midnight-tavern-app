@@ -6,8 +6,8 @@
  * so parsing tolerates junk while `mapToSchema` only reads the handful of fields we map. A
  * malformed `character_book.entries` entry is dropped rather than failing the whole import.
  *
- * This schema deliberately captures ONLY narrative/presentation fields. Nothing here can
- * carry mechanics: the card seeds the bootstrapper's premise and the soft/lorebook layers,
+ * Narrative fields are captured explicitly while unknown extension keys remain available
+ * for the typed-mechanics extractor. Narrative prose itself never carries mechanics;
  * and the bootstrapper alone produces the mechanical StorySchema (the wall, §M9.4).
  */
 import { z } from "zod";
@@ -40,6 +40,14 @@ export const CardDataSchema = z
     mes_example: z.string().default(""),
     creator_notes: z.string().optional(),
     system_prompt: z.string().optional(),
+    post_history_instructions: z.string().optional(),
+    depth_prompt: z
+      .union([
+        z.string(),
+        z.object({ prompt: z.string().default("") }).passthrough(),
+      ])
+      .optional(),
+    extensions: z.record(z.string(), z.unknown()).optional(),
     tags: z.array(z.string()).catch([]).default([]),
     creator: z.string().optional(),
     character_version: z.string().optional(),

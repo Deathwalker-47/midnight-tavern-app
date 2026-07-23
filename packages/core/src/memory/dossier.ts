@@ -15,6 +15,7 @@
  * ledger, soft only from the analyzer). Returns undefined only when the character id is unknown.
  */
 import type { Store } from "../store/index.js";
+import type { StoryEvent } from "../store/repositories/storyEvents.js";
 import type {
   CharacterHardState,
   CharacterSoftState,
@@ -22,6 +23,7 @@ import type {
   StorySchema,
 } from "../types/index.js";
 import { scoreToMod } from "../engine/attributes.js";
+import { EQUIPMENT_LOOT_CONFIG, PROGRESSION_CONFIG } from "../config/index.js";
 
 /** An outgoing relationship edge: this character → someone (name resolved for display). §7. */
 export interface DossierOutgoingEdge {
@@ -45,10 +47,36 @@ export interface DossierIncomingEdge {
 export interface DossierSkill {
   skillId: string;
   name: string;
+  /** Frozen rulebook definition; absent only for a legacy hard-state row with no schema entry. */
+  definition?: string;
+  tier?: string;
   rank: string;
   successCount: number;
-  /** Successes still needed to rank up, or null at master (no next rank). */
+  /** Cumulative V7 XP; zero for legacy rows until their next awarded action. */
+  xp: number;
+  /** XP still needed to rank up, or null at master (no next rank). */
   toNext: number | null;
+  nextRankXp: number | null;
+  /** Advanced uses declared by the frozen skill definition. */
+  permits?: string[];
+  /** Frozen actions for which this learned skill is a gate. */
+  linkedActions?: {
+    actionId: string;
+    label: string;
+    category: string;
+    description?: string;
+    minRank?: string;
+    governingAttribute?: string;
+  }[];
+  /** Display name when every linked action uses the same governing attribute. */
+  linkedAttribute?: string;
+  /** Newest persisted XP event for this skill. */
+  latestAward?: {
+    xp: number;
+    reason: string;
+    turnIdx: number;
+    rankUp?: { from: string; to: string };
+  };
 }
 
 /** The full read-only dossier for one character. */
@@ -81,6 +109,25 @@ export interface Dossier {
     /** Observation timeline, oldest → newest (the analyzer's capped FIFO order). */
     observations: { turnIdx: number; text: string }[];
   };
+  storySoFar?: {
+    summary?: string;
+    keyEvents: {
+      turnIdx: number;
+      chapter?: number;
+      title: string;
+      detail?: string;
+      recent?: boolean;
+      provenance?: string;
+    }[];
+  };
+  history?: {
+    turnIdx: number;
+    chapter?: number;
+    text: string;
+    kind?: string;
+    recent?: boolean;
+    provenance?: string;
+  }[];
   relationships: {
     outgoing: DossierOutgoingEdge[];
     /** Reverse-resolved: edges from other characters that point at this one. */
@@ -99,9 +146,35 @@ export interface Dossier {
     }[];
     resources: { id: string; label: string; current: number; max: number }[];
     skills: DossierSkill[];
-    inventory: { itemId: string; name: string; qty: number; kind: string }[];
+    inventory: {
+      itemId: string;
+      name: string;
+      qty: number;
+      kind: string;
+      tier?: string;
+      runtime?: boolean;
+      equippedSlots?: string[];
+    }[];
     alive: boolean;
   };
+  equipment?: {
+    slots: {
+      slot: string;
+      itemName?: string;
+      tier?: string;
+      effects?: string[];
+      recent?: boolean;
+    }[];
+    activeEffects: { label: string; source: string; active: boolean; reason?: string }[];
+  };
+  progressionHistory?: {
+    skillName: string;
+    xp: number;
+    reason: string;
+    turnIdx: number;
+    rankUp?: string;
+    rewound?: boolean;
+  }[];
   /** World threads that name this character (unresolved only). */
   involvedThreads: { title: string; note: string }[];
 }
@@ -114,9 +187,53 @@ function whatTheyAreFrom(soft: CharacterSoftState | undefined): string {
   return firstClause.length > 60 ? `${firstClause.slice(0, 59)}…` : firstClause;
 }
 
+type ProjectedXpAward = NonNullable<DossierSkill["latestAward"]> & { skillId: string };
+
+/** Read only the validated fields needed by the dossier from a persisted XP event payload. */
+function projectXpAward(event: StoryEvent): ProjectedXpAward | undefined {
+  if (event.kind !== "xp") return undefined;
+  const award = event.payload["award"];
+  if (!award || typeof award !== "object") return undefined;
+  const record = award as Record<string, unknown>;
+  const skillId = record["skillId"];
+  const amount = record["amount"];
+  const reason = record["reason"];
+  if (typeof skillId !== "string" || typeof amount !== "number" || typeof reason !== "string") {
+    return undefined;
+  }
+  const rankBefore = record["rankBefore"];
+  const rankAfter = record["rankAfter"];
+  return {
+    skillId,
+    xp: amount,
+    reason,
+    turnIdx: event.turnIndex,
+    ...(typeof rankBefore === "string" &&
+    typeof rankAfter === "string" &&
+    rankBefore !== rankAfter
+      ? { rankUp: { from: rankBefore, to: rankAfter } }
+      : {}),
+  };
+}
+
+function latestXpAwardBySkill(events: StoryEvent[]): Map<string, ProjectedXpAward> {
+  const latest = new Map<string, ProjectedXpAward>();
+  for (const event of events) {
+    const award = projectXpAward(event);
+    if (award) latest.set(award.skillId, award);
+  }
+  return latest;
+}
+
 /** Project the hard sheet (resources/skills/inventory), resolving display names via the schema. */
-function buildSheet(schema: StorySchema, hard: CharacterHardState, itemsById: Map<string, ItemDef>) {
+function buildSheet(
+  schema: StorySchema,
+  hard: CharacterHardState,
+  itemsById: Map<string, ItemDef>,
+  latestAwards: Map<string, ProjectedXpAward>
+): Dossier["sheet"] {
   const skillDefs = new Map(schema.skills.map((s) => [s.id, s]));
+  const attributeNames = new Map(schema.attributes.map((attribute) => [attribute.id, attribute.name]));
   const attributes: Dossier["sheet"]["attributes"] = schema.attributes.map((definition) => {
     const score = hard.attributes[definition.id] ?? definition.defaultScore;
     return {
@@ -135,14 +252,61 @@ function buildSheet(schema: StorySchema, hard: CharacterHardState, itemsById: Ma
   }
   const skills: DossierSkill[] = hard.skills.map((s) => {
     const def = skillDefs.get(s.skillId);
-    const perRank = def?.masteryAdvance.successesPerRank;
-    const atMaster = s.rank === "master";
+    const xp = s.xp ?? 0;
+    const rankIndex = PROGRESSION_CONFIG.ranks.findIndex((entry) => entry.rank === s.rank);
+    const nextRank = PROGRESSION_CONFIG.ranks[rankIndex + 1];
+    const linkedActions = schema.actions
+      .filter((action) => action.requiresSkill === s.skillId)
+      .map((action) => ({
+        actionId: action.id,
+        label: action.label,
+        category: action.category,
+        ...(action.description !== undefined ? { description: action.description } : {}),
+        ...(action.minRank !== undefined ? { minRank: action.minRank } : {}),
+        ...(action.governingAttribute !== undefined
+          ? {
+              governingAttribute:
+                attributeNames.get(action.governingAttribute) ?? action.governingAttribute,
+            }
+          : {}),
+      }));
+    const governingAttributes = [
+      ...new Set(
+        linkedActions
+          .map((action) => action.governingAttribute)
+          .filter((attribute): attribute is string => attribute !== undefined)
+      ),
+    ];
+    const latestAward = latestAwards.get(s.skillId);
     return {
       skillId: s.skillId,
       name: def?.name ?? s.skillId,
+      ...(def?.description !== undefined ? { definition: def.description } : {}),
+      ...(def?.tier !== undefined ? { tier: def.tier } : {}),
       rank: s.rank,
       successCount: s.successCount,
-      toNext: atMaster || perRank === undefined ? null : Math.max(0, perRank - s.successCount),
+      xp,
+      toNext: nextRank ? Math.max(0, nextRank.minimumXp - xp) : null,
+      nextRankXp: nextRank?.minimumXp ?? null,
+      ...(def?.advancedUses?.length
+        ? {
+            permits: def.advancedUses.map(
+              (use) => `${use.minRank[0]!.toUpperCase()}${use.minRank.slice(1)}+: ${use.description}`
+            ),
+          }
+        : {}),
+      ...(linkedActions.length ? { linkedActions } : {}),
+      ...(governingAttributes.length === 1 ? { linkedAttribute: governingAttributes[0]! } : {}),
+      ...(latestAward
+        ? {
+            latestAward: {
+              xp: latestAward.xp,
+              reason: latestAward.reason,
+              turnIdx: latestAward.turnIdx,
+              ...(latestAward.rankUp ? { rankUp: latestAward.rankUp } : {}),
+            },
+          }
+        : {}),
     };
   });
   const inventory = hard.inventory
@@ -171,6 +335,21 @@ export async function getCharacterDossier(
   const nameById = new Map(roster.map((c) => [c.id, c.name]));
   const playerId = roster.find((c) => c.isPlayer)?.id;
   const itemsById = new Map(schema.items.map((i) => [i.id, i]));
+  const [
+    runtimeDefinitions,
+    runtimeInstances,
+    runtimeAssignments,
+    characterEvents,
+    chapters,
+    arcs,
+  ] = await Promise.all([
+    store.runtimeItems.listDefinitions(schema.storyId),
+    store.runtimeItems.listInventory(characterId),
+    store.runtimeItems.listLoadout(characterId),
+    store.events.listByStory(schema.storyId, { actorId: characterId, limit: 500 }),
+    store.chapters.listByStory(schema.storyId),
+    store.arcs.listByStory(schema.storyId),
+  ]);
   const soft = self.soft;
 
   // Outgoing: this character's own edges. Reverse (incoming): every OTHER character's edge whose
@@ -225,6 +404,92 @@ export async function getCharacterDossier(
     )
     .map((t) => ({ title: t.title, note: t.note }));
 
+  const sheet = buildSheet(
+    schema,
+    self.hard,
+    itemsById,
+    latestXpAwardBySkill(characterEvents)
+  );
+  const runtimeDefinitionById = new Map(
+    runtimeDefinitions.map((definition) => [definition.id, definition])
+  );
+  for (const instance of runtimeInstances) {
+    const definition = runtimeDefinitionById.get(instance.definitionId);
+    if (!definition || instance.quantity < 1) continue;
+    sheet.inventory.push({
+      itemId: instance.id,
+      name: definition.name,
+      qty: instance.quantity,
+      kind: definition.kind,
+      tier: definition.tier,
+      runtime: true,
+      equippedSlots: runtimeAssignments
+        .filter((assignment) => assignment.itemInstanceId === instance.id)
+        .map((assignment) => assignment.slot),
+    });
+  }
+  const instanceById = new Map(runtimeInstances.map((instance) => [instance.id, instance]));
+  const equipmentSlots: NonNullable<Dossier["equipment"]>["slots"] =
+    EQUIPMENT_LOOT_CONFIG.slots.map((slot) => {
+      const assignment = runtimeAssignments.find((candidate) => candidate.slot === slot);
+      const instance = assignment ? instanceById.get(assignment.itemInstanceId) : undefined;
+      const definition = instance ? runtimeDefinitionById.get(instance.definitionId) : undefined;
+      const recentlyChanged = characterEvents.some(
+        (event) =>
+          event.kind === "equipment_changed" &&
+          event.payload["slot"] === slot &&
+          event === characterEvents[characterEvents.length - 1]
+      );
+      return {
+        slot,
+        ...(definition
+          ? {
+              itemName: definition.name,
+              tier: definition.tier,
+              effects: definition.effects.map((effect) => JSON.stringify(effect)),
+            }
+          : {}),
+        ...(recentlyChanged ? { recent: true } : {}),
+      };
+    });
+  const activeEffects = equipmentSlots.flatMap((slot) =>
+    (slot.effects ?? []).map((effect) => ({
+      label: effect,
+      source: slot.itemName ?? slot.slot,
+      active: true,
+    }))
+  );
+  const latestArc = arcs[arcs.length - 1];
+  const chapterSummary = chapters
+    .slice(-3)
+    .map((chapter) => chapter.summary)
+    .join("\n\n");
+  const storySummary = latestArc?.doc.plotSummary || chapterSummary || soft?.identity.backstory;
+  const keyEvents = observations.slice(-8).map((observation, index, selected) => ({
+    turnIdx: observation.turnIdx,
+    title: observation.text.split(/[.!?]/)[0]?.trim() || "Observed event",
+    detail: observation.text,
+    recent: index === selected.length - 1,
+    provenance: `Turn ${observation.turnIdx}`,
+  }));
+  const skillNameById = new Map(schema.skills.map((skill) => [skill.id, skill.name]));
+  const progressionHistory = characterEvents.flatMap((event) => {
+    if (event.kind !== "xp" && event.kind !== "rank_up") return [];
+    const award = event.payload["award"];
+    if (!award || typeof award !== "object") return [];
+    const record = award as Record<string, unknown>;
+    const skillId = typeof record["skillId"] === "string" ? record["skillId"] : "skill";
+    return [{
+      skillName: skillNameById.get(skillId) ?? skillId,
+      xp: typeof record["amount"] === "number" ? record["amount"] : 0,
+      reason: typeof record["reason"] === "string" ? record["reason"] : "DM ruling",
+      turnIdx: event.turnIndex,
+      ...(event.kind === "rank_up" && typeof record["rankAfter"] === "string"
+        ? { rankUp: record["rankAfter"] }
+        : {}),
+    }];
+  });
+
   return {
     characterId: self.id,
     isPlayer: self.isPlayer,
@@ -253,12 +518,29 @@ export async function getCharacterDossier(
       ...(soft?.identity.backstory !== undefined ? { backstory: soft.identity.backstory } : {}),
       observations: observations.map((o) => ({ turnIdx: o.turnIdx, text: o.text })),
     },
+    storySoFar: {
+      ...(storySummary ? { summary: storySummary } : {}),
+      keyEvents,
+    },
+    history: observations.map((observation, index) => ({
+      turnIdx: observation.turnIdx,
+      text: observation.text,
+      kind: "observation",
+      recent: index === observations.length - 1,
+      provenance: `Analyzer observation from turn ${observation.turnIdx}`,
+    })),
     relationships: {
       outgoing,
       incoming,
       ...(toPlayer ? { toPlayer } : {}),
     },
-    sheet: buildSheet(schema, self.hard, itemsById),
+    sheet,
+    ...(schema.statMode === "full"
+      ? {
+          equipment: { slots: equipmentSlots, activeEffects },
+          progressionHistory,
+        }
+      : {}),
     involvedThreads,
   };
 }

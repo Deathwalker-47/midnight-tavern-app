@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "slots": ["primary", "secondary", "head", "body", "utility", "accessory_1", "accessory_2"],
+  "tiers": {
+    "common": { "maximumEffects": 1, "maximumCheckBonus": 0, "maximumAttributeBonus": 0, "requiresMilestone": false },
+    "uncommon": { "maximumEffects": 1, "maximumCheckBonus": 1, "maximumAttributeBonus": 0, "requiresMilestone": false },
+    "rare": { "maximumEffects": 2, "maximumCheckBonus": 2, "maximumAttributeBonus": 1, "requiresMilestone": false },
+    "legendary": { "maximumEffects": 3, "maximumCheckBonus": 3, "maximumAttributeBonus": 2, "requiresMilestone": true },
+    "mythical": { "maximumEffects": 4, "maximumCheckBonus": 4, "maximumAttributeBonus": 3, "requiresMilestone": true }
+  },
+  "loot": {
+    "maximumItemsPerEncounter": 3,
+    "routineMaximumTier": {
+      "combat": "rare",
+      "non_combat": "rare",
+      "milestone": "legendary",
+      "quest": "legendary"
+    },
+    "mythicalRequiresExplicitAuthorization": true
+  }
+}

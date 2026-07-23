@@ -6,6 +6,7 @@
  */
 import { z } from "zod";
 import { MasteryRankSchema } from "./schema.js";
+import { EquipmentAssignmentSchema } from "./equipment.js";
 
 /** A single tracked resource's current value and ceiling. */
 export const ResourceStateSchema = z.object({
@@ -19,12 +20,16 @@ export const LearnedSkillSchema = z.object({
   skillId: z.string(),
   rank: MasteryRankSchema,
   successCount: z.number().int().nonnegative(), // resets on rank-up
+  /** Cumulative XP; absent on legacy hard-state rows and treated as zero. */
+  xp: z.number().int().nonnegative().optional(),
 });
 export type LearnedSkill = z.infer<typeof LearnedSkillSchema>;
 
 /** A stack of one item kind in inventory. */
 export const InventoryEntrySchema = z.object({
   itemId: z.string(),
+  /** Present for runtime loot instances; absent on legacy catalog stacks. */
+  instanceId: z.string().optional(),
   qty: z.number().int().nonnegative(),
 });
 export type InventoryEntry = z.infer<typeof InventoryEntrySchema>;
@@ -34,10 +39,11 @@ export const CharacterHardStateSchema = z.object({
   characterId: z.string(),
   isPlayer: z.boolean(),
   templateId: z.string().optional(), // for NPCs instantiated from an NpcTemplate
-  attributes: z.record(z.string(), z.number().int().min(1).max(30)).default({}),
+  attributes: z.record(z.string(), z.number().int().min(0)).default({}),
   resources: z.record(z.string(), ResourceStateSchema),
   skills: z.array(LearnedSkillSchema),
   inventory: z.array(InventoryEntrySchema),
+  equipment: z.array(EquipmentAssignmentSchema).optional(),
   flags: z.record(z.string(), z.boolean()),
   alive: z.boolean(),
 });

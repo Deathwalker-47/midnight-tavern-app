@@ -27,6 +27,10 @@ const Characters = lazy(() => import("./Characters.js").then((m) => ({ default: 
 const CharacterDossier = lazy(() =>
   import("./CharacterDossier.js").then((m) => ({ default: m.CharacterDossier }))
 );
+const CharacterLoadout = lazy(() =>
+  import("./CharacterLoadout.js").then((m) => ({ default: m.CharacterLoadout }))
+);
+const Journal = lazy(() => import("./Journal.js").then((m) => ({ default: m.Journal })));
 const StorySettings = lazy(() =>
   import("./StorySettings.js").then((m) => ({ default: m.StorySettings }))
 );
@@ -51,6 +55,8 @@ export const registry: Record<Route, ScreenComponent> = {
   overview: Overview,
   characters: Characters,
   dossier: CharacterDossier,
+  loadout: CharacterLoadout,
+  journal: Journal,
   storysettings: StorySettings,
   blueprint: StoryBlueprint,
   settings: Settings,

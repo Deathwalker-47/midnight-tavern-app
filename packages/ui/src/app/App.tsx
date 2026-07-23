@@ -48,6 +48,7 @@ const SUB_TABS: { label: string; route: Route }[] = [
   { label: "Play", route: "play" },
   { label: "Overview", route: "overview" },
   { label: "Characters", route: "characters" },
+  { label: "Journal", route: "journal" },
   { label: "Story Settings", route: "storysettings" },
 ];
 
@@ -211,7 +212,7 @@ function Header(props: {
   const current = useStoriesStore((s) => s.current);
   const messageCount = usePlayMessageCount();
 
-  const title = storyOpen ? current!.title : screenTitle(route);
+  const title = storyOpen ? current?.title ?? "Opening story…" : screenTitle(route);
   const chapterLabel = storyOpen ? chapterLabelFor(messageCount) : undefined;
 
   return (
@@ -234,7 +235,7 @@ function Header(props: {
       </div>
       {storyOpen && (
         <div style={styles.subTabs} role="tablist">
-          {SUB_TABS.map((tab) => {
+          {SUB_TABS.filter((tab) => tab.route !== "journal" || current?.schema.statMode === "full").map((tab) => {
             const active = route === tab.route;
             return (
               <button
@@ -283,6 +284,8 @@ function screenTitle(route: Route): string {
     overview: "Overview",
     characters: "Characters",
     dossier: "Character",
+    loadout: "Loadout",
+    journal: "Mechanical Journal",
     storysettings: "Story Settings",
     blueprint: "Story Blueprint",
     settings: "Settings",

@@ -13,7 +13,12 @@
  * stub faked (per-phase bootstrap progress, provider-key balance), the divergence is called out
  * inline rather than papered over.
  */
-import type { Role, Store } from "@midnight-tavern/core";
+import type {
+  BootstrapPhase,
+  Role,
+  Store,
+  TurnOperationState,
+} from "@midnight-tavern/core";
 import type {
   CastMember,
   CardImportResult,
@@ -25,8 +30,11 @@ import type {
   StorySummary,
   SubmitTurnArgs,
   SubmitTurnOutcome,
+  TurnOperationPhase,
 } from "./core.js";
 import { diagnosticError, diagnosticsLogger } from "../observability/logger.js";
+
+const PRIMARY_PROVIDER_SETTING_KEY = "primaryProvider";
 
 /**
  * Build the real bridge over an already-opened, migrated {@link Store}. `core` is the live core
@@ -37,6 +45,13 @@ export function buildSqliteBridge(
   store: Store,
   core: typeof import("@midnight-tavern/core")
 ): CoreBridge {
+  const toUiPhase = (phase: TurnOperationState): TurnOperationPhase => {
+    if (phase === "classifier_error") return "classifier-recovery";
+    if (phase === "generating_loot") return "generating-loot";
+    if (phase === "timed_out") return "timed-out";
+    return phase;
+  };
+
   // Router deps come from stored settings. We rebuild the router per operation that needs it
   // (createStory / submitTurn / validateProviderKey) rather than caching, so a settings change
   // mid-session is picked up without a bridge reload. Reads are cheap (two settings rows).
@@ -125,7 +140,19 @@ export function buildSqliteBridge(
         const result = await core.bootstrapStory(
           router,
           store,
-          { storyId, title: args.title, premise: args.premise, statMode: args.statMode ?? "full" },
+          {
+            storyId,
+            title: args.title,
+            premise: args.premise,
+            statMode: args.statMode ?? "full",
+            actionBudget: args.actionBudget ?? 2,
+            ...(args.persona ? { persona: args.persona } : {}),
+            ...(args.sourceCard ? { sourceCard: args.sourceCard } : {}),
+            ...(args.importedMechanics ? { importedMechanics: args.importedMechanics } : {}),
+            ...(args.acceptImportedMechanics !== undefined
+              ? { acceptImportedMechanics: args.acceptImportedMechanics }
+              : {}),
+          },
           { name: args.playerName },
           {
             ...(args.signal ? { signal: args.signal } : {}),
@@ -133,11 +160,17 @@ export function buildSqliteBridge(
               diagnosticsLogger.info("story.forge.progress", { operationId: storyId, phase });
               args.onProgress?.(phase);
             },
+            ...(args.onProgressDetail ? { onProgressDetail: args.onProgressDetail } : {}),
+            ...(args.onCheckpoint ? { onCheckpoint: args.onCheckpoint } : {}),
+            ...(args.resume ? { resume: args.resume } : {}),
           }
         );
         if (args.blueprint) {
           await store.stories.setBlueprint(storyId, args.blueprint);
           result.story.blueprint = args.blueprint;
+        }
+        if (args.difficulty) {
+          result.story = await core.setStoryDifficulty(store, storyId, args.difficulty);
         }
         if (args.openingMessage?.trim()) {
           await store.messages.insert({
@@ -208,6 +241,35 @@ export function buildSqliteBridge(
       });
     },
 
+    async previewRulebookRegenerationImpact(storyId) {
+      return core.previewRulebookRegenerationImpact(store, storyId);
+    },
+
+    async regenerateRulebook(args) {
+      const target = args.statMode ?? (await requireStory(args.storyId)).schema.statMode;
+      const router = await currentRouter(target === "none" ? ["narrator"] : core.ROLES);
+      const options = {
+        ...(args.statMode ? { statMode: args.statMode } : {}),
+        ...(args.actionBudget ? { actionBudget: args.actionBudget } : {}),
+        ...(args.persona ? { persona: args.persona } : {}),
+        ...(args.signal ? { signal: args.signal } : {}),
+        ...(args.resume ? { resume: args.resume } : {}),
+        onProgress: (phase: BootstrapPhase) => args.onProgress?.(phase),
+        ...(args.onProgressDetail ? { onProgressDetail: args.onProgressDetail } : {}),
+        ...(args.onCheckpoint ? { onCheckpoint: args.onCheckpoint } : {}),
+      };
+      return args.mode === "in-place"
+        ? core.regenerateRulebook(router, store, args.storyId, {
+            ...options,
+            confirmMechanicalReset: args.confirmMechanicalReset,
+          })
+        : core.duplicateAndRegenerateRulebook(router, store, args.storyId, options);
+    },
+
+    async setStoryDifficulty(storyId, difficulty) {
+      return core.setStoryDifficulty(store, storyId, difficulty);
+    },
+
     async getBlueprint(id) {
       return (await requireStory(id)).blueprint;
     },
@@ -232,6 +294,9 @@ export function buildSqliteBridge(
         const result = await core.submitTurn(router, store, args.storyId, args.playerText, {
           ...(args.onDelta ? { onDelta: args.onDelta } : {}),
           ...(args.personaBlock ? { personaBlock: args.personaBlock } : {}),
+          ...(args.onPhase
+            ? { onPhase: (phase: TurnOperationState) => args.onPhase!(toUiPhase(phase)) }
+            : {}),
           ...(args.signal ? { signal: args.signal } : {}),
         });
         diagnosticsLogger.info("turn.submit.completed", {
@@ -248,7 +313,17 @@ export function buildSqliteBridge(
             error: diagnosticError(error),
           })
         );
-        return { prose: result.prose, rulings: result.rulings, narratorIdx: result.narratorIdx };
+        return {
+          prose: result.prose,
+          rulings: result.rulings,
+          narratorIdx: result.narratorIdx,
+          classifierRecovered: result.classifierRecovered,
+          ...(result.classifierRecovery
+            ? { classifierRecovery: result.classifierRecovery }
+            : {}),
+          refusedActionCount: result.refusedActionCount,
+          usedNarratorFallback: result.usedNarratorFallback,
+        };
       } catch (error) {
         diagnosticsLogger.error("turn.submit.failed", {
           operationId: args.storyId,
@@ -258,6 +333,54 @@ export function buildSqliteBridge(
         });
         throw error;
       }
+    },
+
+    async inspectTurnRecovery(storyId) {
+      return core.inspectTurnOperationRecovery(store, storyId);
+    },
+
+    async retryTurnOperation(args) {
+      const operation = await store.turnOperations.get(args.operationId);
+      if (!operation) {
+        throw new core.TurnOperationRecoveryError("operation_not_found");
+      }
+      const story = await requireStory(operation.storyId);
+      const router = await currentRouter(
+        story.schema.statMode === "none" ? ["narrator"] : core.ROLES
+      );
+      const result = await core.retryTurnOperation(router, store, args.operationId, {
+        ...(args.onDelta ? { onDelta: args.onDelta } : {}),
+        ...(args.personaBlock ? { personaBlock: args.personaBlock } : {}),
+        ...(args.onPhase
+          ? {
+              onPhase: (phase: TurnOperationState) =>
+                args.onPhase!(toUiPhase(phase)),
+            }
+          : {}),
+        ...(args.signal ? { signal: args.signal } : {}),
+      });
+      void result.background.then(
+        () =>
+          diagnosticsLogger.info("turn.background.completed", {
+            operationId: args.operationId,
+          }),
+        (error: unknown) =>
+          diagnosticsLogger.error("turn.background.failed", {
+            operationId: args.operationId,
+            error: diagnosticError(error),
+          })
+      );
+      return {
+        prose: result.prose,
+        rulings: result.rulings,
+        narratorIdx: result.narratorIdx,
+        classifierRecovered: result.classifierRecovered,
+        ...(result.classifierRecovery
+          ? { classifierRecovery: result.classifierRecovery }
+          : {}),
+        refusedActionCount: result.refusedActionCount,
+        usedNarratorFallback: result.usedNarratorFallback,
+      };
     },
 
     async listPresentCast(storyId): Promise<CastMember[]> {
@@ -303,6 +426,7 @@ export function buildSqliteBridge(
       return core.swipeLastTurn(router, store, args.storyId, {
         ...(args.onDelta ? { onDelta: args.onDelta } : {}),
         ...(args.personaBlock ? { personaBlock: args.personaBlock } : {}),
+        ...(args.feedback ? { feedback: args.feedback } : {}),
         ...(args.signal ? { signal: args.signal } : {}),
       });
     },
@@ -328,6 +452,39 @@ export function buildSqliteBridge(
       return records.map((r) => ({ ...r.ruling, messageId: r.messageId }));
     },
 
+    async suggestActions(storyId, signal) {
+      const router = await currentRouter(["classifier"]);
+      return core.suggestPlayerActions(router, store, storyId, signal);
+    },
+
+    async listStoryJournal(storyId, query) {
+      return core.listStoryJournal(store, storyId, query);
+    },
+
+    async exportStoryJournal(storyId, format = "markdown") {
+      return core.exportStoryJournal(store, storyId, format);
+    },
+
+    async universalActionsConfig() {
+      return structuredClone(core.UNIVERSAL_ACTIONS_CONFIG);
+    },
+
+    async equipmentLootConfig() {
+      return structuredClone(core.EQUIPMENT_LOOT_CONFIG);
+    },
+
+    async getCharacterInventory(characterId) {
+      return core.getCharacterInventory(store, characterId);
+    },
+
+    async equipItem(characterId, itemInstanceId, slot) {
+      return core.equipRuntimeItem(store, characterId, itemInstanceId, slot);
+    },
+
+    async unequipSlot(characterId, slot) {
+      return core.unequipRuntimeSlot(store, characterId, slot);
+    },
+
     async listChapters(storyId) {
       return store.chapters.listByStory(storyId);
     },
@@ -345,13 +502,33 @@ export function buildSqliteBridge(
         (await store.settings.get(core.PROVIDER_CONFIGS_SETTING_KEY, core.ProviderConfigsSchema)) ?? {};
       configs[provider] = { apiKey: config.apiKey, ...(config.baseUrl ? { baseUrl: config.baseUrl } : {}) };
       await store.settings.set(core.PROVIDER_CONFIGS_SETTING_KEY, core.ProviderConfigsSchema, configs);
+      const primary = await store.settings.get(
+        PRIMARY_PROVIDER_SETTING_KEY,
+        core.ProviderIdSchema
+      );
+      if (!primary || !configs[primary]?.apiKey) {
+        await store.settings.set(PRIMARY_PROVIDER_SETTING_KEY, core.ProviderIdSchema, provider);
+      }
     },
 
     async removeProviderConfig(provider) {
       const configs =
         (await store.settings.get(core.PROVIDER_CONFIGS_SETTING_KEY, core.ProviderConfigsSchema)) ?? {};
+      const primary = await store.settings.get(
+        PRIMARY_PROVIDER_SETTING_KEY,
+        core.ProviderIdSchema
+      );
+      const remaining = (Object.keys(configs) as Array<keyof typeof configs>).filter(
+        (candidate) => candidate !== provider && Boolean(configs[candidate]?.apiKey)
+      );
+      if (primary === provider && remaining.length > 0) {
+        throw new Error("Choose a replacement Primary provider before disconnecting this one.");
+      }
       delete configs[provider];
       await store.settings.set(core.PROVIDER_CONFIGS_SETTING_KEY, core.ProviderConfigsSchema, configs);
+      if (primary === provider || (primary && !configs[primary]?.apiKey)) {
+        await store.settings.delete(PRIMARY_PROVIDER_SETTING_KEY);
+      }
       if (core.SETUP_STATE_SETTING_KEY && core.SetupStateSchema) {
         const setup =
           (await store.settings.get(core.SETUP_STATE_SETTING_KEY, core.SetupStateSchema)) ??
@@ -362,6 +539,34 @@ export function buildSqliteBridge(
           validatedProviders: setup.validatedProviders.filter((id) => id !== provider),
         });
       }
+    },
+
+    async getPrimaryProvider() {
+      const configs =
+        (await store.settings.get(core.PROVIDER_CONFIGS_SETTING_KEY, core.ProviderConfigsSchema)) ?? {};
+      const saved = await store.settings.get(
+        PRIMARY_PROVIDER_SETTING_KEY,
+        core.ProviderIdSchema
+      );
+      if (saved && configs[saved]?.apiKey) return saved;
+      const fallback = (Object.keys(configs) as Array<keyof typeof configs>).find((provider) =>
+        Boolean(configs[provider]?.apiKey)
+      );
+      if (fallback) {
+        await store.settings.set(PRIMARY_PROVIDER_SETTING_KEY, core.ProviderIdSchema, fallback);
+        return fallback;
+      }
+      if (saved) await store.settings.delete(PRIMARY_PROVIDER_SETTING_KEY);
+      return undefined;
+    },
+
+    async setPrimaryProvider(provider) {
+      const configs =
+        (await store.settings.get(core.PROVIDER_CONFIGS_SETTING_KEY, core.ProviderConfigsSchema)) ?? {};
+      if (!configs[provider]?.apiKey) {
+        throw new Error("Connect and validate this provider before making it Primary.");
+      }
+      await store.settings.set(PRIMARY_PROVIDER_SETTING_KEY, core.ProviderIdSchema, provider);
     },
 
     async getRoleMap() {
@@ -584,6 +789,28 @@ export function buildSqliteBridge(
 
     defaultAssignmentFor(role) {
       return core.defaultAssignmentFor(role);
+    },
+
+    modelRecommendationConfig() {
+      return {
+        version: core.MODEL_RECOMMENDATION_CONFIG_VERSION,
+        samplerPresets: structuredClone(core.SAMPLER_PRESETS),
+        defaultPresetForRole: { ...core.DEFAULT_PRESET_FOR_ROLE },
+        providerSamplerSupport: Object.fromEntries(
+          Object.entries(core.SUPPORTED_SAMPLERS).map(([provider, fields]) => [
+            provider,
+            [...(fields ?? [])],
+          ])
+        ),
+      };
+    },
+
+    recommendedSamplerProfile(role, modelId) {
+      return { ...core.samplerProfileFor(role, modelId) };
+    },
+
+    providerSupportsSampler(provider, field) {
+      return core.providerSupportsSampler(provider, field);
     },
 
     // ── Importer ───────────────────────────────────────────────────────────────────────────────

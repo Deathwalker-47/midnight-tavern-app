@@ -84,6 +84,48 @@ describe("Characters screen", () => {
     await waitFor(() => expect(screen.getByText("No one has entered the story yet")).toBeInTheDocument());
   });
 
+  it("renders XP thresholds and the latest award from the living-card projection", async () => {
+    const kestrel = card({
+      characterId: "p1",
+      name: "Kestrel Vane",
+      isPlayer: true,
+      skills: [
+        {
+          skillId: "blade",
+          name: "Blade",
+          definition: "Swordplay.",
+          rank: "adept",
+          successCount: 99,
+          xp: 145,
+          nextRankXp: 300,
+          toNext: 155,
+          latestAward: {
+            xp: 15,
+            reason: "Critical success against a difficult foe.",
+            turnIdx: 12,
+            rankUp: { from: "novice", to: "adept" },
+          },
+        },
+      ],
+    });
+    setBridge(
+      fakeBridge(
+        [{ characterId: "p1", name: "Kestrel Vane", isPlayer: true, alive: true }],
+        new Map([["p1", kestrel]])
+      )
+    );
+
+    render(<Characters storyId="s-xp" />);
+
+    expect(await screen.findByText("145 / 300 XP · 155 to next rank")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "+15 XP · Critical success against a difficult foe. · T12 · NOVICE → ADEPT"
+      )
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/99 successes/)).not.toBeInTheDocument();
+  });
+
   it("surfaces a load failure as an error notice", async () => {
     const bridge = {
       async listPresentCast() {

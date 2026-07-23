@@ -8,6 +8,7 @@
  * them into the per-turn pipeline (§7).
  */
 export * from "./types/index.js";
+export * from "./config/index.js";
 export * from "./engine/index.js";
 export * from "./store/index.js";
 export * from "./router/index.js";
@@ -16,5 +17,6 @@ export * from "./bootstrap/index.js";
 export * from "./memory/index.js";
 export * from "./summarizer/index.js";
 export * from "./importer/index.js";
+export * from "./macros/index.js";
 export * from "./orchestrator/index.js";
 export * from "./licensing/index.js";

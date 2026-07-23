@@ -19,6 +19,7 @@ import {
   deleteFromExchange,
   rewindTo,
   selectVariant,
+  setStoryDifficulty,
 } from "../../src/orchestrator/index.js";
 import { d20Sequence } from "../../src/engine/dice.js";
 import type {
@@ -38,13 +39,20 @@ interface Script {
 }
 
 class ScriptedRouter implements Router {
+  lastNarratorPrompt?: RolePrompt;
   constructor(public script: Script) {}
   bindingFor(_role: Role): RoleBinding {
     return { provider: "openrouter", model: "test", source: "recommended", samplersDirty: false };
   }
-  async complete(role: Role, _prompt: RolePrompt): Promise<ChatResponse> {
+  async complete(role: Role, prompt: RolePrompt): Promise<ChatResponse> {
     switch (role) {
       case "classifier":
+        if (prompt.system.includes("strict consistency auditor")) {
+          return { content: JSON.stringify({ obeysRulings: true, contradictions: [] }) };
+        }
+        if (prompt.system.includes("DM loot adjudicator")) {
+          return { content: JSON.stringify({ award: false, reason: "No completed encounter." }) };
+        }
         return { content: JSON.stringify(this.script.classified) };
       case "analyzer":
         return { content: JSON.stringify({ characterOps: [], worldOps: [] }) };
@@ -52,7 +60,8 @@ class ScriptedRouter implements Router {
         return { content: "" };
     }
   }
-  async stream(_role: Role, _prompt: RolePrompt, onDelta: StreamHandler): Promise<ChatResponse> {
+  async stream(_role: Role, prompt: RolePrompt, onDelta: StreamHandler): Promise<ChatResponse> {
+    this.lastNarratorPrompt = prompt;
     onDelta(this.script.narratorProse);
     return { content: this.script.narratorProse };
   }
@@ -148,7 +157,11 @@ describe("history ops — swipe / delete / rewind (§6)", () => {
     // Persisted message carries both variants with the new one active.
     const msgs = await store.messages.listByStory(storyId);
     const narrator = msgs.find((m) => m.role === "narrator")!;
-    expect(narrator.variants).toEqual(["First telling.", "Second telling."]);
+    expect(
+      narrator.variants?.map((variant) =>
+        typeof variant === "string" ? variant : variant.prose
+      )
+    ).toEqual(["First telling.", "Second telling."]);
     expect(narrator.activeVariant).toBe(1);
   });
 
@@ -164,10 +177,32 @@ describe("history ops — swipe / delete / rewind (§6)", () => {
     expect(msg!.activeVariant).toBe(0);
   });
 
+  it("feedback steers only the retelling, stays before authority, and rejects oversized notes", async () => {
+    await strike(router, store, storyId, "I strike");
+    router.script.narratorProse = "A tighter telling.";
+    const feedback = "Tell this more concisely.";
+    await swipeLastTurn(router, store, storyId, { feedback });
+
+    const system = router.lastNarratorPrompt!.system;
+    expect(system).toContain(feedback);
+    expect(system.indexOf(feedback)).toBeLessThan(system.lastIndexOf("AUTHORITY:"));
+    const narrator = (await store.messages.listByStory(storyId)).find(
+      (message) => message.role === "narrator"
+    )!;
+    const active = narrator.variants?.[narrator.activeVariant ?? 0];
+    expect(typeof active === "string" ? undefined : active?.feedback).toBe(feedback);
+    expect(narrator.content).not.toContain(feedback);
+
+    await expect(
+      swipeLastTurn(router, store, storyId, { feedback: "x".repeat(301) })
+    ).rejects.toThrow("300 characters or fewer");
+  });
+
   it("deleteLastTurn rolls state back to the checkpoint and drops the exchange", async () => {
     await strike(router, store, storyId, "I strike");
     expect(await wightHp(store)).toBe(2);
     expect(await store.messages.listByStory(storyId)).toHaveLength(2);
+    expect((await store.events.listByStory(storyId)).length).toBeGreaterThan(0);
 
     await deleteLastTurn(store, storyId);
 
@@ -176,6 +211,7 @@ describe("history ops — swipe / delete / rewind (§6)", () => {
     expect(await store.messages.listByStory(storyId)).toHaveLength(0);
     expect(await store.checkpoints.listByStory(storyId)).toHaveLength(0);
     expect(await store.rulings.listByStory(storyId)).toHaveLength(0);
+    expect(await store.events.listByStory(storyId)).toHaveLength(0);
   });
 
   it("rewindTo keeps the selected exchange and truncates later exchanges", async () => {
@@ -200,6 +236,27 @@ describe("history ops — swipe / delete / rewind (§6)", () => {
     // Later turn checkpoint + ruling are gone; the selected exchange's remain.
     expect(await store.checkpoints.listByStory(storyId)).toHaveLength(1);
     expect(await store.rulings.listByStory(storyId)).toHaveLength(1);
+    expect((await store.events.listByStory(storyId)).every((event) => event.turnIndex < 2)).toBe(true);
+  });
+
+  it("rewind restores the difficulty that preceded the truncated timeline", async () => {
+    await strike(router, store, storyId, "strike one");
+    await setStoryDifficulty(store, storyId, {
+      preset: "hard",
+      dcOffset: 2,
+      damageTakenMultiplier: 1.3,
+      damageDealtMultiplier: 0.9,
+    });
+    await strike(router, store, storyId, "strike two");
+
+    await rewindTo(store, storyId, 0);
+
+    expect((await store.stories.get(storyId))?.difficulty?.preset).toBe("standard");
+    expect(
+      (await store.events.listByStory(storyId)).some(
+        (event) => event.kind === "difficulty_changed"
+      )
+    ).toBe(false);
   });
 
   it("deleteFromExchange removes the selected exchange and restores its pre-turn state", async () => {
@@ -216,6 +273,7 @@ describe("history ops — swipe / delete / rewind (§6)", () => {
     ]);
     expect(await store.checkpoints.listByStory(storyId)).toHaveLength(1);
     expect(await store.rulings.listByStory(storyId)).toHaveLength(1);
+    expect((await store.events.listByStory(storyId)).every((event) => event.turnIndex < 2)).toBe(true);
   });
 
   // ── V2 §6 blocking tests: swipe re-runs analyzer + per-variant soft state; summary invalidation ──
@@ -223,7 +281,13 @@ describe("history ops — swipe / delete / rewind (§6)", () => {
   it("swipe re-runs the analyzer per variant and cycling restores that variant's soft state", async () => {
     // Analyzer writes the wight's mood = current narrator prose, so each variant yields distinct soft.
     const moodRouter = new ScriptedRouter({ classified: strikeIntent, narratorProse: "First telling." });
-    moodRouter.complete = async (role: Role) => {
+    moodRouter.complete = async (role: Role, prompt: RolePrompt) => {
+      if (role === "classifier" && prompt.system.includes("strict consistency auditor")) {
+        return { content: JSON.stringify({ obeysRulings: true, contradictions: [] }) };
+      }
+      if (role === "classifier" && prompt.system.includes("DM loot adjudicator")) {
+        return { content: JSON.stringify({ award: false, reason: "No completed encounter." }) };
+      }
       if (role === "classifier") return { content: JSON.stringify(strikeIntent) };
       if (role === "analyzer") {
         return {
@@ -262,7 +326,13 @@ describe("history ops — swipe / delete / rewind (§6)", () => {
 
   it("failed swipe restores the active variant's soft state and leaves variants unchanged", async () => {
     const moodRouter = new ScriptedRouter({ classified: strikeIntent, narratorProse: "First telling." });
-    moodRouter.complete = async (role: Role) => {
+    moodRouter.complete = async (role: Role, prompt: RolePrompt) => {
+      if (role === "classifier" && prompt.system.includes("strict consistency auditor")) {
+        return { content: JSON.stringify({ obeysRulings: true, contradictions: [] }) };
+      }
+      if (role === "classifier" && prompt.system.includes("DM loot adjudicator")) {
+        return { content: JSON.stringify({ award: false, reason: "No completed encounter." }) };
+      }
       if (role === "classifier") return { content: JSON.stringify(strikeIntent) };
       if (role === "analyzer") {
         return {

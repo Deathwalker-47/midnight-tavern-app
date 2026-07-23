@@ -6,9 +6,17 @@
  */
 export {
   submitTurn,
+  inspectTurnOperationRecovery,
+  retryTurnOperation,
+  TurnOperationRecoveryError,
+  DEFAULT_TURN_OPERATION_STALE_MS,
   ensureHardState,
   type SubmitTurnOptions,
   type SubmitTurnResult,
+  type InspectTurnOperationOptions,
+  type RetryTurnOperationOptions,
+  type TurnOperationRecoveryInspection,
+  type TurnOperationRecoveryReason,
 } from "./turn.js";
 export {
   assembleContext,
@@ -29,6 +37,7 @@ export {
   deleteLastTurn,
   deleteFromExchange,
   rewindTo,
+  FEEDBACK_PRESETS,
   type SwipeOptions,
   type SwipeResult,
 } from "./history.js";
@@ -38,3 +47,43 @@ export {
   decodeSnapshot,
   type CheckpointSnapshot,
 } from "./checkpoint.js";
+export {
+  generateGuardedNarration,
+  type GuardedNarrationOptions,
+  type GuardedNarrationResult,
+} from "./authorityGuard.js";
+export {
+  determineLootAwards,
+  type PendingLootAward,
+} from "./loot.js";
+export {
+  SuggestedActionSchema,
+  suggestPlayerActions,
+  type SuggestedAction,
+} from "./suggestions.js";
+export {
+  getCharacterInventory,
+  equipRuntimeItem,
+  unequipRuntimeSlot,
+  type CharacterInventoryView,
+} from "./loadout.js";
+export {
+  listStoryJournal,
+  listCompleteStoryJournal,
+  summarizeStoryEvent,
+  exportStoryJournal,
+  exportStoryJournalMarkdown,
+  exportStoryJournalCsv,
+  type JournalExportFormat,
+  type StoryJournalPage,
+  type StoryJournalQuery,
+} from "./journal.js";
+export {
+  regenerateRulebook,
+  duplicateAndRegenerateRulebook,
+  previewRulebookRegenerationImpact,
+  setStoryDifficulty,
+  type RulebookRegenerationImpact,
+  type RegenerateRulebookOptions,
+  type DuplicateAndRegenerateOptions,
+} from "./rulebook.js";

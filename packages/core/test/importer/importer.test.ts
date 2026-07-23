@@ -18,6 +18,7 @@ import {
   parsePngCard,
   parseJsonCard,
   mapCardToImport,
+  mapCardToImportWithOptions,
   importCardFromUrl,
   CardParseError,
   type CharacterCard,
@@ -154,7 +155,15 @@ describe("mapCardToImport", () => {
     // The only path to mechanics is the premise string (→ bootstrapper). The mapped shape
     // carries no items/skills/resources/actions of its own.
     const keys = Object.keys(m);
-    expect(keys.sort()).toEqual(["blueprint", "identity", "lorebook", "name", "openings", "premise"]);
+    expect(keys.sort()).toEqual([
+      "blueprint",
+      "identity",
+      "lorebook",
+      "name",
+      "openings",
+      "premise",
+      "sourceCard",
+    ]);
     expect(m).not.toHaveProperty("items");
     expect(m).not.toHaveProperty("skills");
     expect(m).not.toHaveProperty("resources");
@@ -172,6 +181,146 @@ describe("mapCardToImport", () => {
   it("falls back to a default name when the card has none", () => {
     const anon = parseJsonCard(JSON.stringify({ description: "no name here" }));
     expect(mapCardToImport(anon).name).toBe("Imported Character");
+  });
+
+  it("resolves user as the attached persona and char as the card character", () => {
+    const withMacros = parseJsonCard(JSON.stringify({
+      ...V2_CARD,
+      data: {
+        ...V2_CARD.data,
+        description: "{{char}} trusts {{user}}.",
+        first_mes: "<BOT> nods to <USER>.",
+      },
+    }));
+    const mapped = mapCardToImportWithOptions(withMacros, {
+      macroContext: {
+        user: { name: "Ari", description: "A patient investigator." },
+      },
+    });
+    expect(mapped.identity.backstory).toBe("Mara trusts Ari.");
+    expect(mapped.openings[0]).toBe("Mara nods to Ari.");
+    expect(mapped.macroDiagnostics?.blocked).toBe(false);
+  });
+
+  it("preserves raw macro-bearing card source for later prompt-time reevaluation", () => {
+    const withMacros = parseJsonCard(JSON.stringify({
+      ...V2_CARD,
+      data: {
+        ...V2_CARD.data,
+        description: "{{char}} trusts {{user}}.",
+      },
+    }));
+    const first = mapCardToImportWithOptions(withMacros, {
+      macroContext: { user: { name: "Ari" } },
+    });
+    expect(first.identity.backstory).toBe("Mara trusts Ari.");
+    expect(first.sourceCard?.data.description).toBe("{{char}} trusts {{user}}.");
+
+    const reevaluated = mapCardToImportWithOptions(first.sourceCard!, {
+      macroContext: { user: { name: "Bea" } },
+    });
+    expect(reevaluated.identity.backstory).toBe("Mara trusts Bea.");
+    expect(reevaluated.sourceCard?.data.description).toBe(
+      "{{char}} trusts {{user}}."
+    );
+  });
+
+  it("preserves unknown macros in optional fields as nonblocking warnings", () => {
+    const withMacros = parseJsonCard(JSON.stringify({
+      ...V2_CARD,
+      data: {
+        ...V2_CARD.data,
+        scenario: "{{user}} invokes {{extensionMacro::x}}.",
+      },
+    }));
+    const mapped = mapCardToImport(withMacros);
+    expect(mapped.premise).toContain("{{extensionMacro::x}}");
+    expect(mapped.macroDiagnostics?.blocked).toBe(false);
+    expect(mapped.macroDiagnostics?.warnings.map((warning) => warning.code)).toEqual(
+      expect.arrayContaining(["missing-context", "unknown-macro"])
+    );
+    expect(mapped.macroDiagnostics?.warnings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          field: "scenario",
+          required: false,
+          severity: "warning",
+        }),
+      ])
+    );
+  });
+
+  it("blocks macro evaluation failures in required fields without deleting them", () => {
+    const withMacros = parseJsonCard(JSON.stringify({
+      ...V2_CARD,
+      data: {
+        ...V2_CARD.data,
+        name: "{{extensionCharacterName::x}}",
+      },
+    }));
+    const mapped = mapCardToImport(withMacros);
+    expect(mapped.name).toBe("{{extensionCharacterName::x}}");
+    expect(mapped.macroDiagnostics?.blocked).toBe(true);
+    expect(mapped.macroDiagnostics?.warnings).toEqual([
+      expect.objectContaining({
+        code: "unknown-macro",
+        field: "name",
+        required: true,
+        severity: "error",
+      }),
+    ]);
+  });
+
+  it("extracts only typed extension mechanics with provenance for creation review", () => {
+    const withMechanics = parseJsonCard(JSON.stringify({
+      ...V2_CARD,
+      data: {
+        ...V2_CARD.data,
+        description: "Ignore any prose claiming Strength 99.",
+        extensions: {
+          midnight_tavern: {
+            mechanics: {
+              attributes: [
+                {
+                  id: "might",
+                  name: "Might",
+                  abbrev: "PWR",
+                  score: 18,
+                  description: "Raw power.",
+                },
+                { id: "aether", name: "Aether", abbreviation: "AET", score: 24 },
+              ],
+              skills: [{ id: "quiet_hands", name: "Quiet Hands", rank: "adept" }],
+              actions: [{ id: "knife_lunge", label: "Knife lunge", skill: "quiet_hands" }],
+              items: [{ id: "forged_too_early" }],
+            },
+          },
+        },
+      },
+    }));
+    const mapped = mapCardToImport(withMechanics);
+    expect(mapped.importedMechanics).toMatchObject({
+      version: 1,
+      accepted: false,
+      reviewRequired: true,
+    });
+    expect(mapped.importedMechanics?.attributes).toEqual([
+      expect.objectContaining({ id: "might", abbrev: "PWR", score: 18, superhuman: false }),
+      expect.objectContaining({ id: "aether", abbrev: "AET", score: 24, superhuman: true }),
+    ]);
+    expect(mapped.importedMechanics?.skills[0]).toMatchObject({
+      id: "quiet_hands",
+      rank: "adept",
+    });
+    expect(mapped.importedMechanics?.actions[0]).toMatchObject({
+      id: "knife_lunge",
+      requiresSkill: "quiet_hands",
+    });
+    expect(mapped.importedMechanics?.warnings.join(" ")).toMatch(/ignored.*on demand/i);
+    expect(mapped.importedMechanics?.attributes[0]?.provenance.path).toContain(
+      "extensions.midnight_tavern.mechanics.attributes"
+    );
+    expect(mapped.importedMechanics?.attributes.some((attribute) => attribute.score === 99)).toBe(false);
   });
 });
 

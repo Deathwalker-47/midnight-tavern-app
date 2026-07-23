@@ -96,4 +96,25 @@ describe("Settings screen", () => {
 
     await waitFor(() => expect(screen.getByText("That key was rejected")).toBeInTheDocument(), { timeout: 2000 });
   });
+
+  it("requires and persists an explicit Primary replacement before disconnecting", async () => {
+    const bridge = makeMemoryBridge();
+    await bridge.setProviderConfig("openrouter", { apiKey: "sk-or-connected" });
+    await bridge.setProviderConfig("openai", { apiKey: "sk-openai-connected" });
+    setBridge(bridge);
+
+    render(<Settings />);
+    const openRouterCard = (await screen.findByText("OpenRouter")).closest("section")!;
+    const openAiCard = screen.getByText("OpenAI").closest("section")!;
+    await waitFor(() => expect(within(openRouterCard).getByText("PRIMARY")).toBeInTheDocument());
+
+    fireEvent.click(within(openRouterCard).getByRole("button", { name: "Disconnect" }));
+    expect(screen.getByTestId("primary-replacement-openrouter")).toBeInTheDocument();
+    expect(screen.getByLabelText("Replacement Primary provider")).toHaveValue("openai");
+
+    fireEvent.click(screen.getByRole("button", { name: "Replace & disconnect" }));
+    await waitFor(() => expect(within(openAiCard).getByText("PRIMARY")).toBeInTheDocument());
+    expect(await bridge.getPrimaryProvider()).toBe("openai");
+    expect((await bridge.getProviderConfigs()).openrouter).toBeUndefined();
+  });
 });

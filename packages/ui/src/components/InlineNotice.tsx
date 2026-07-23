@@ -5,7 +5,7 @@
  */
 import type { CSSProperties, ReactNode } from "react";
 
-export type NoticeSeverity = "info" | "warn" | "error";
+export type NoticeSeverity = "info" | "success" | "warn" | "error";
 
 export interface InlineNoticeProps {
   severity?: NoticeSeverity;
@@ -34,6 +34,13 @@ export function noticeTone(severity: NoticeSeverity): NoticeTone {
       };
     case "warn":
       return { glyph: "⚠", accent: "var(--brass)", bg: "var(--bg1-panel)", border: "var(--hairline)" };
+    case "success":
+      return {
+        glyph: "✓",
+        accent: "var(--success)",
+        bg: "color-mix(in srgb, var(--success) 9%, transparent)",
+        border: "color-mix(in srgb, var(--success) 35%, transparent)",
+      };
     case "info":
       return { glyph: "ℹ", accent: "var(--teal)", bg: "var(--teal-tint)", border: "var(--teal-dim)" };
   }

@@ -46,6 +46,10 @@ export {
   type PresetName,
 } from "./samplers.js";
 export {
+  MODEL_RECOMMENDATION_CONFIG,
+  MODEL_RECOMMENDATION_CONFIG_VERSION,
+} from "./modelConfig.js";
+export {
   CatalogModelSchema,
   MODEL_CATALOG,
   allCatalogModels,

@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "ranks": [
+    { "rank": "novice", "minimumXp": 0, "modifier": 1 },
+    { "rank": "adept", "minimumXp": 100, "modifier": 3 },
+    { "rank": "expert", "minimumXp": 300, "modifier": 5 },
+    { "rank": "master", "minimumXp": 700, "modifier": 7 }
+  ],
+  "outcomeBaseXp": {
+    "crit_failure": 4,
+    "failure": 6,
+    "success": 10,
+    "crit_success": 15
+  },
+  "challengeBands": [
+    { "maximumDc": 9, "multiplier": 0.75 },
+    { "maximumDc": 14, "multiplier": 1 },
+    { "maximumDc": 19, "multiplier": 1.25 },
+    { "maximumDc": 25, "multiplier": 1.5 }
+  ],
+  "repetitionWindowTurns": 5,
+  "repetitionMultipliers": [1, 0.5, 0.25, 0],
+  "maximumAward": 20
+}

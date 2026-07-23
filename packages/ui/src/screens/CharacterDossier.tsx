@@ -24,21 +24,27 @@ import type { ScreenProps } from "./registry.js";
 import { getBridge } from "../bridge/core.js";
 import type { Dossier } from "../bridge/core.js";
 import { useRoute } from "../app/router.js";
-import { useReducedMotion, EmptyState, InlineNotice, MasteryPips } from "../components/index.js";
-import type { MasteryPipsProps } from "../components/index.js";
-
-type MasteryRank = MasteryPipsProps["rank"];
-const MASTERY_RANKS: readonly string[] = ["novice", "adept", "expert", "master"];
-/** Narrow the dossier's free-string rank to the MasteryPips union, defaulting to novice. */
-function asMasteryRank(rank: string): MasteryRank {
-  return (MASTERY_RANKS.includes(rank) ? rank : "novice") as MasteryRank;
-}
+import { useReducedMotion, EmptyState, InlineNotice, Button, SkillProgress } from "../components/index.js";
 
 type LoadState =
   | { phase: "no-target" }
   | { phase: "loading" }
   | { phase: "error"; message: string }
   | { phase: "ready"; dossier: Dossier; statMode: "none" | "full" };
+
+interface V7DossierExtras {
+  appearance?: string;
+  storySoFar?: {
+    summary?: string;
+    keyEvents?: Array<{ turnIdx: number; chapter?: number; title: string; detail?: string; recent?: boolean; provenance?: string }>;
+  };
+  history?: Array<{ turnIdx: number; chapter?: number; text: string; kind?: string; recent?: boolean; provenance?: string }>;
+  equipment?: {
+    slots?: Array<{ slot: string; itemName?: string; tier?: string; effects?: string[]; recent?: boolean }>;
+    activeEffects?: Array<{ label: string; source: string; active: boolean; reason?: string }>;
+  };
+  progressionHistory?: Array<{ skillName: string; xp: number; reason: string; turnIdx: number; rankUp?: string; rewound?: boolean }>;
+}
 
 const MONO_LABEL: CSSProperties = {
   fontFamily: "var(--font-mono)",
@@ -144,6 +150,7 @@ export function CharacterDossier(props: ScreenProps): JSX.Element {
       trust: r.trust,
       power: r.power,
       isPlayer: false,
+      recentChange: (r as typeof r & { recentChange?: string }).recentChange,
     }));
     const inc = d.relationships.incoming.map((r) => ({
       key: `in:${r.fromCharacterId}`,
@@ -152,6 +159,7 @@ export function CharacterDossier(props: ScreenProps): JSX.Element {
       trust: r.trust,
       power: r.power,
       isPlayer: false,
+      recentChange: (r as typeof r & { recentChange?: string }).recentChange,
     }));
     const toPlayer = d.relationships.toPlayer
       ? [
@@ -162,6 +170,7 @@ export function CharacterDossier(props: ScreenProps): JSX.Element {
             trust: d.relationships.toPlayer.trust,
             power: d.relationships.toPlayer.power,
             isPlayer: true,
+            recentChange: (d.relationships.toPlayer as typeof d.relationships.toPlayer & { recentChange?: string }).recentChange,
           },
         ]
       : [];
@@ -216,6 +225,7 @@ export function CharacterDossier(props: ScreenProps): JSX.Element {
   }
 
   const d = state.dossier;
+  const v7 = d as typeof d & V7DossierExtras;
   const fullStats = state.statMode === "full";
   const fallen = !d.sheet.alive;
   const short = d.identity.name.split(/\s+/)[0] ?? d.identity.name;
@@ -225,6 +235,7 @@ export function CharacterDossier(props: ScreenProps): JSX.Element {
     { k: fallen ? "STATE" : "MOOD", v: fallen ? "Fallen" : d.currentState.mood ?? "—" },
     { k: "LOCATION", v: d.currentState.location ?? "—" },
     { k: fallen ? "LAST GOAL" : "GOAL", v: d.currentState.goal ?? "—" },
+    { k: "STATUS", v: (d.currentState as typeof d.currentState & { status?: string }).status ?? (fallen ? "No longer active" : "Active") },
   ];
 
   const sparse = d.past.observations.length === 0;
@@ -317,6 +328,11 @@ export function CharacterDossier(props: ScreenProps): JSX.Element {
             {d.identity.whatTheyAre ? (
               <div style={{ fontFamily: "var(--font-body)", fontSize: 17, color: "var(--secondary)", marginTop: 8, fontStyle: "italic" }}>
                 {d.identity.whatTheyAre}
+              </div>
+            ) : null}
+            {v7.appearance ? (
+              <div style={{ fontFamily: "var(--font-body)", fontSize: 13.5, color: "var(--secondary)", marginTop: 8, lineHeight: 1.55 }}>
+                <span style={SUB_LABEL}>APPEARANCE · </span>{v7.appearance}
               </div>
             ) : null}
             <div style={{ display: "flex", gap: 10, marginTop: 14, flexWrap: "wrap" }}>
@@ -412,6 +428,35 @@ export function CharacterDossier(props: ScreenProps): JSX.Element {
               ) : null}
             </section>
 
+            {/* Story so far + key events */}
+            <section>
+              <SectionRule label="STORY SO FAR" />
+              {v7.storySoFar?.summary ? (
+                <p style={{ fontFamily: "var(--font-body)", fontSize: 16, lineHeight: 1.75, color: "var(--ui-text)", margin: "0 0 16px", maxWidth: "60ch" }}>
+                  {v7.storySoFar.summary}
+                </p>
+              ) : (
+                <div style={{ fontFamily: "var(--font-body)", fontStyle: "italic", fontSize: 14, color: "var(--muted)", marginBottom: 12 }}>
+                  No chapter summary has been written for {short} yet.
+                </div>
+              )}
+              {v7.storySoFar?.keyEvents?.length ? (
+                <div style={{ display: "grid", gap: 8 }}>
+                  {v7.storySoFar.keyEvents.map((event, index) => (
+                    <div key={`${event.turnIdx}:${event.title}:${index}`} style={{ padding: "10px 12px", background: "var(--bg2-card)", border: `1px solid ${event.recent ? "var(--brass-dim)" : "var(--hairline)"}`, borderRadius: 8 }}>
+                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                        <span style={{ fontFamily: "var(--font-mono)", color: "var(--teal)", fontSize: 9 }}>CH{event.chapter ?? "—"} · T{event.turnIdx}</span>
+                        <strong style={{ color: "var(--ui-text)", fontSize: 13 }}>{event.title}</strong>
+                        {event.recent ? <span style={{ marginLeft: "auto", color: "var(--brass)", fontFamily: "var(--font-mono)", fontSize: 9 }}>RECENTLY CHANGED</span> : null}
+                      </div>
+                      {event.detail ? <div style={{ color: "var(--secondary)", fontSize: 12, lineHeight: 1.5, marginTop: 4 }}>{event.detail}</div> : null}
+                      {event.provenance ? <div style={{ color: "var(--muted)", fontFamily: "var(--font-mono)", fontSize: 9, marginTop: 4 }}>SOURCE · {event.provenance}</div> : null}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </section>
+
             {/* Past */}
             <section>
               <SectionRule label="PAST" />
@@ -453,6 +498,22 @@ export function CharacterDossier(props: ScreenProps): JSX.Element {
                   })}
                 </div>
               )}
+              {v7.history?.length ? (
+                <>
+                  <div style={{ ...SUB_LABEL, margin: "18px 0 12px" }}>CHRONOLOGICAL HISTORY</div>
+                  <div style={{ display: "grid", gap: 7 }}>
+                    {v7.history.map((event, index) => (
+                      <div key={`${event.turnIdx}:${index}`} style={{ display: "grid", gridTemplateColumns: "82px 1fr", gap: 10, padding: "8px 10px", background: event.recent ? "var(--brass-tint)" : "transparent", borderLeft: `2px solid ${event.recent ? "var(--brass)" : "var(--hairline)"}` }}>
+                        <span style={{ fontFamily: "var(--font-mono)", fontSize: 9.5, color: "var(--teal)" }}>CH{event.chapter ?? "—"} · T{event.turnIdx}</span>
+                        <span style={{ color: "var(--secondary)", fontSize: 12.5, lineHeight: 1.5 }}>
+                          {event.text}
+                          {event.provenance ? <small style={{ display: "block", color: "var(--muted)", marginTop: 2 }}>SOURCE · {event.provenance}</small> : null}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : null}
             </section>
 
             {/* Relationships */}
@@ -483,6 +544,7 @@ export function CharacterDossier(props: ScreenProps): JSX.Element {
                             </span>
                           ) : null}
                         </div>
+                        {r.recentChange ? <div style={{ marginTop: 7, color: "var(--brass)", fontFamily: "var(--font-mono)", fontSize: 9.5 }}>RECENT CHANGE · {r.recentChange}</div> : null}
                         <div style={{ display: "flex", gap: 16, marginTop: 9, flexWrap: "wrap" }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
                             <span style={SUB_LABEL}>TRUST</span>
@@ -582,27 +644,40 @@ export function CharacterDossier(props: ScreenProps): JSX.Element {
                 {d.sheet.skills.length > 0 ? (
                   <>
                     <div style={{ ...SUB_LABEL, margin: "16px 0 9px" }}>SKILLS</div>
-                    {d.sheet.skills.map((sk) => (
-                      <div key={sk.skillId} style={{ marginBottom: 12 }}>
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                          <span style={{ fontSize: 13, color: "var(--ui-text)" }}>{sk.name}</span>
-                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <span style={{ fontSize: 9, fontFamily: "var(--font-mono)", color: "var(--teal)", textTransform: "uppercase" }}>{sk.rank}</span>
-                            <MasteryPips rank={asMasteryRank(sk.rank)} />
-                          </div>
-                        </div>
-                        {sk.toNext !== null && sk.toNext > 0 ? (
-                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 5 }}>
-                            <div style={{ flex: 1, height: 4, background: "var(--bg1-base)", borderRadius: 3, overflow: "hidden" }}>
-                              <div style={{ height: "100%", width: `${Math.round((sk.successCount / (sk.successCount + sk.toNext)) * 100)}%`, background: "var(--teal-dim)", borderRadius: 3 }} />
-                            </div>
-                            <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--muted)", whiteSpace: "nowrap" }}>
-                              {sk.successCount} successes · {sk.toNext} to next
-                            </span>
-                          </div>
-                        ) : null}
-                      </div>
-                    ))}
+                    <div style={{ display: "grid", gap: 8 }}>
+                      {d.sheet.skills.map((sk) => {
+                        const linkedActionPermits = (sk.linkedActions ?? []).map((action) => {
+                          const rank = action.minRank
+                            ? `${action.minRank[0]!.toUpperCase()}${action.minRank.slice(1)}+: `
+                            : "";
+                          const detail = action.description ? ` — ${action.description}` : "";
+                          return `${rank}${action.label}${detail}`;
+                        });
+                        const permits = [...(sk.permits ?? []), ...linkedActionPermits];
+                        return (
+                          <SkillProgress
+                            key={sk.skillId}
+                            name={sk.name}
+                            definition={sk.definition ?? "Definition unavailable in this legacy rulebook."}
+                            rank={sk.rank}
+                            currentXp={sk.xp}
+                            nextThreshold={sk.nextRankXp}
+                            {...(sk.linkedAttribute ? { linkedAttribute: sk.linkedAttribute } : {})}
+                            {...(permits.length ? { permits } : {})}
+                            {...(sk.latestAward
+                              ? {
+                                  latestAward: {
+                                    xp: sk.latestAward.xp,
+                                    reason: sk.latestAward.reason,
+                                    rulingRef: `Turn ${sk.latestAward.turnIdx}`,
+                                  },
+                                }
+                              : {})}
+                            {...(sk.latestAward?.rankUp ? { rankUp: sk.latestAward.rankUp } : {})}
+                          />
+                        );
+                      })}
+                    </div>
                   </>
                 ) : null}
 
@@ -615,6 +690,57 @@ export function CharacterDossier(props: ScreenProps): JSX.Element {
                         <div key={iv.itemId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontFamily: "var(--font-mono)", fontSize: 12 }}>
                           <span style={{ color: "var(--ui-text)" }}>{iv.name}</span>
                           <span style={{ color: "var(--muted)" }}>×{iv.qty}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : null}
+
+                {/* Equipped loadout and item effects are distinct from stored inventory. */}
+                <>
+                  <div style={{ ...SUB_LABEL, margin: "16px 0 9px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <span>EQUIPPED LOADOUT · 7 SLOTS</span>
+                    {storyId && characterId ? (
+                      <Button variant="ghost" onClick={() => useRoute.getState().navigate("loadout", { storyId, characterId })} style={{ padding: "4px 7px", fontSize: 10 }}>
+                        Open loadout →
+                      </Button>
+                    ) : null}
+                  </div>
+                  {v7.equipment?.slots?.length ? (
+                    <div style={{ display: "grid", gap: 6 }}>
+                      {v7.equipment.slots.map((slot) => (
+                        <div key={slot.slot} style={{ display: "grid", gridTemplateColumns: "80px 1fr", gap: 8, padding: "7px 9px", background: "var(--bg2-card)", border: `1px solid ${slot.recent ? "var(--brass-dim)" : "var(--hairline)"}`, borderRadius: 6 }}>
+                          <span style={{ color: "var(--muted)", fontFamily: "var(--font-mono)", fontSize: 9 }}>{slot.slot.toUpperCase()}</span>
+                          <span style={{ color: slot.itemName ? "var(--ui-text)" : "var(--muted)", fontSize: 11.5 }}>
+                            {slot.itemName ?? "Empty"}{slot.tier ? ` · ${slot.tier}` : ""}
+                            {slot.recent ? <small style={{ marginLeft: 6, color: "var(--brass)" }}>RECENTLY CHANGED</small> : null}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{ color: "var(--muted)", fontSize: 11.5, lineHeight: 1.5 }}>No equipment is currently assigned. Items are granted on demand by validated DM Rulings, never pregenerated at story creation.</div>
+                  )}
+                  {v7.equipment?.activeEffects?.length ? (
+                    <>
+                      <div style={{ ...SUB_LABEL, margin: "14px 0 7px" }}>ITEM EFFECTS</div>
+                      <div style={{ display: "grid", gap: 5 }}>{v7.equipment.activeEffects.map((effect, index) => (
+                        <div key={`${effect.source}:${effect.label}:${index}`} style={{ color: effect.active ? "var(--success)" : "var(--muted)", fontFamily: "var(--font-mono)", fontSize: 10.5 }}>
+                          {effect.active ? "ACTIVE" : "CONDITIONAL"} · {effect.label} <span style={{ color: "var(--secondary)" }}>from {effect.source}{effect.reason ? ` · ${effect.reason}` : ""}</span>
+                        </div>
+                      ))}</div>
+                    </>
+                  ) : null}
+                </>
+
+                {v7.progressionHistory?.length ? (
+                  <>
+                    <div style={{ ...SUB_LABEL, margin: "16px 0 8px" }}>PROGRESSION HISTORY</div>
+                    <div style={{ display: "grid", gap: 5 }}>
+                      {v7.progressionHistory.map((entry, index) => (
+                        <div key={`${entry.turnIdx}:${entry.skillName}:${index}`} style={{ display: "grid", gridTemplateColumns: "45px 1fr", gap: 7, color: entry.rewound ? "var(--muted)" : "var(--secondary)", fontFamily: "var(--font-mono)", fontSize: 9.5 }}>
+                          <span>T{entry.turnIdx}</span>
+                          <span>{entry.rewound ? "REWOUND" : `+${entry.xp} XP`} · {entry.skillName} · {entry.reason}{entry.rankUp ? ` · RANK UP ${entry.rankUp}` : ""}</span>
                         </div>
                       ))}
                     </div>

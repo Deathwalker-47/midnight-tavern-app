@@ -19,14 +19,18 @@ import type { Router } from "../router/index.js";
 import type { Store } from "../store/index.js";
 import {
   blueprintToStyleInputs,
+  variantProse,
   type Ruling,
   type CharacterSoftState,
+  type StoredNarratorVariant,
   type WorldSoftState,
+  normalizeDifficultyConfig,
 } from "../types/index.js";
-import { assembleContext } from "./context.js";
+import { assembleContext, AUTHORITY_CLAUSE, NO_STATS_CLAUSE } from "./context.js";
 import { applyRestore, restoreSoftWorld } from "./checkpoint.js";
 import { requireStory } from "./turn.js";
 import { runAnalyzer } from "../memory/analyzer.js";
+import { generateGuardedNarration } from "./authorityGuard.js";
 
 /** Per-variant soft/world snapshot: the post-analyzer state that matches one narrator variant (§6). */
 interface VariantState {
@@ -48,6 +52,8 @@ export interface SwipeOptions {
   /** Live narrator deltas for the regenerated prose. */
   onDelta?: (delta: string) => void;
   personaBlock?: string;
+  /** Optional reader feedback that explains what should change in this alternate telling. */
+  feedback?: string;
   signal?: AbortSignal;
 }
 
@@ -56,6 +62,39 @@ export interface SwipeResult {
   variants: string[];
   /** Index of the active variant. */
   activeVariant: number;
+}
+
+export const FEEDBACK_PRESETS = [
+  { id: "shorter", label: "Shorter", text: "Tell this more concisely." },
+  { id: "longer", label: "More detail", text: "Expand this with more sensory detail." },
+  { id: "tension", label: "More tension", text: "Raise the tension; make the stakes feel sharper." },
+  { id: "plainer", label: "Less flowery", text: "Use plainer, more direct prose." },
+  {
+    id: "different",
+    label: "Different take",
+    text: "Take a noticeably different approach to narrating this.",
+  },
+] as const;
+
+function validateFeedback(feedback: string | undefined): string | undefined {
+  const normalized = feedback?.trim();
+  if (!normalized) return undefined;
+  if (normalized.length > 300) {
+    throw new Error("Regeneration feedback must be 300 characters or fewer.");
+  }
+  return normalized;
+}
+
+function addFeedbackDirection(system: string, feedback: string, statMode: "full" | "none"): string {
+  const finalClause = statMode === "none" ? NO_STATS_CLAUSE : AUTHORITY_CLAUSE;
+  const clauseAt = system.lastIndexOf(finalClause);
+  const direction = [
+    "[DIRECTION FOR THIS RETELLING - style and emphasis only; it does not change any outcome below]",
+    feedback,
+  ].join("\n");
+  if (clauseAt < 0) return `${system}\n\n${direction}`;
+  const before = system.slice(0, clauseAt).trimEnd();
+  return `${before}\n\n${direction}\n\n${finalClause}`;
 }
 
 /**
@@ -79,6 +118,7 @@ export async function swipeLastTurn(
 ): Promise<SwipeResult> {
   const story = await requireStory(store, storyId);
   const schema = story.schema;
+  const feedback = validateFeedback(opts.feedback);
 
   const lastIdx = (await store.messages.nextIdx(storyId)) - 1;
   const narrator = await store.messages.getByIndex(storyId, lastIdx);
@@ -121,11 +161,17 @@ export async function swipeLastTurn(
     });
 
     // (3) Regenerate prose.
-    const response = await router.stream(
-      "narrator",
-      { system: context.system, user: context.user },
-      opts.onDelta ?? (() => {}),
-      { ...(opts.signal ? { signal: opts.signal } : {}) }
+    const narratorSystem = feedback
+      ? addFeedbackDirection(context.system, feedback, schema.statMode)
+      : context.system;
+    const response = await generateGuardedNarration(
+      router,
+      { system: narratorSystem, user: context.user },
+      rulings,
+      {
+        ...(opts.onDelta ? { onDelta: opts.onDelta } : {}),
+        ...(opts.signal ? { signal: opts.signal } : {}),
+      }
     );
 
     // (4) Re-run the analyzer on the NEW prose (it applies its own soft/world patch).
@@ -138,7 +184,7 @@ export async function swipeLastTurn(
         storyId,
         turnIdx: narrator.idx,
         playerText,
-        narratorText: response.content,
+        narratorText: response.prose,
         presentSoft,
         nameFor: (id) => nameById.get(id),
         ...(opts.signal ? { signal: opts.signal } : {}),
@@ -147,14 +193,22 @@ export async function swipeLastTurn(
 
     // (5) Snapshot the new variant's post-analyzer state; make it active. Persist the message and
     //     its parallel state array atomically so a storage failure cannot leave them out of sync.
-    const variants = [...priorVariants, response.content];
+    const variants: StoredNarratorVariant[] = [
+      ...priorVariants,
+      {
+        index: priorVariants.length,
+        prose: response.prose,
+        ...(feedback ? { feedback } : {}),
+        createdAt: Date.now(),
+      },
+    ];
     const activeVariant = variants.length - 1;
     states[activeVariant] = await captureVariantState(store, storyId);
     await store.transaction(async () => {
       await store.messages.setVariants(narrator.id, variants, activeVariant);
       await store.messages.setVariantStatesJson(narrator.id, JSON.stringify(states));
     });
-    return { variants, activeVariant };
+    return { variants: variants.map(variantProse), activeVariant };
   } catch (err) {
     // The swipe is externally all-or-nothing: if narration, analysis, or persistence fails, put
     // soft/world back exactly as the still-active variant expects and leave the message unchanged.
@@ -183,7 +237,7 @@ export async function selectVariant(
   const target = states[clamped];
   if (target) await applyVariantState(store, storyId, target);
   await store.messages.setVariants(msg.id, variants, clamped);
-  return { variants, activeVariant: clamped };
+  return { variants: variants.map(variantProse), activeVariant: clamped };
 }
 
 /** Load the parallel per-variant soft/world snapshots for a message (empty array if none stored). */
@@ -204,6 +258,53 @@ async function applyVariantState(store: Store, storyId: string, state: VariantSt
     }
     if (state.world) await store.worldSoft.set(storyId, state.world);
     else await store.worldSoft.clear(storyId);
+  });
+}
+
+/** Remove on-demand loot whose awarding exchange is about to be truncated. */
+async function removeRuntimeLootFromIdx(
+  store: Store,
+  storyId: string,
+  fromIdx: number
+): Promise<void> {
+  const messages = await store.messages.listByStory(storyId);
+  const narratorIds = messages
+    .filter((message) => message.role === "narrator" && message.idx >= fromIdx)
+    .map((message) => message.id);
+  const instanceIds = new Set<string>();
+  for (const messageId of narratorIds) {
+    const rulings = await store.rulings.listByMessage(messageId);
+    for (const record of rulings) {
+      for (const award of record.ruling.loot ?? []) instanceIds.add(award.itemInstanceId);
+    }
+  }
+  for (const instanceId of instanceIds) {
+    await store.runtimeItems.deleteInstanceAndOrphanDefinition(instanceId);
+  }
+}
+
+/** Restore the difficulty that was active immediately before the truncated timeline. */
+async function restoreDifficultyBeforeIdx(
+  store: Store,
+  storyId: string,
+  fromIdx: number
+): Promise<void> {
+  const removedChanges = (
+    await store.events.listByStory(storyId, {
+      kinds: ["difficulty_changed"],
+      limit: 500,
+    })
+  ).filter((event) => event.turnIndex >= fromIdx);
+  const earliest = removedChanges[0];
+  if (!earliest) return;
+  const previous = earliest.payload["previous"];
+  if (!previous || typeof previous !== "object") return;
+  const story = await requireStory(store, storyId);
+  await store.stories.setRuntimeConfig(storyId, {
+    difficulty: normalizeDifficultyConfig(previous),
+    actionBudget: story.actionBudget,
+    rulebookVersion: story.rulebookVersion,
+    configSnapshot: story.configSnapshot,
   });
 }
 
@@ -228,6 +329,9 @@ export async function deleteLastTurn(store: Store, storyId: string): Promise<voi
   // rollback aborts, so state and transcript can never disagree.
   await store.transaction(async () => {
     if (checkpoint) await applyRestore(store, checkpoint);
+    await removeRuntimeLootFromIdx(store, storyId, fromIdx);
+    await restoreDifficultyBeforeIdx(store, storyId, fromIdx);
+    await store.events.deleteFromTurn(storyId, fromIdx);
     await store.rulings.deleteFromIdx(storyId, fromIdx);
     await store.messages.deleteFrom(storyId, fromIdx);
     await store.checkpoints.deleteFrom(storyId, fromIdx);
@@ -255,6 +359,9 @@ export async function rewindTo(store: Store, storyId: string, selectedIdx: numbe
   const target = checkpoints.find((c) => c.turnIndex >= fromIdx);
   await store.transaction(async () => {
     if (target) await applyRestore(store, target);
+    await removeRuntimeLootFromIdx(store, storyId, fromIdx);
+    await restoreDifficultyBeforeIdx(store, storyId, fromIdx);
+    await store.events.deleteFromTurn(storyId, fromIdx);
     await store.rulings.deleteFromIdx(storyId, fromIdx);
     await store.messages.deleteFrom(storyId, fromIdx);
     await store.checkpoints.deleteFrom(storyId, fromIdx);
@@ -280,6 +387,9 @@ export async function deleteFromExchange(store: Store, storyId: string, selected
 
   await store.transaction(async () => {
     if (checkpoint) await applyRestore(store, checkpoint);
+    await removeRuntimeLootFromIdx(store, storyId, fromIdx);
+    await restoreDifficultyBeforeIdx(store, storyId, fromIdx);
+    await store.events.deleteFromTurn(storyId, fromIdx);
     await store.rulings.deleteFromIdx(storyId, fromIdx);
     await store.messages.deleteFrom(storyId, fromIdx);
     await store.checkpoints.deleteFrom(storyId, fromIdx);

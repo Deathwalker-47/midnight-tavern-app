@@ -9,6 +9,7 @@
  * fields empty); the two sides never merge into one blob, preserving the wall even in view.
  */
 import type { Store } from "../store/index.js";
+import type { StoryEvent } from "../store/repositories/storyEvents.js";
 import type {
   CharacterHardState,
   CharacterSoftState,
@@ -16,6 +17,7 @@ import type {
   StorySchema,
 } from "../types/index.js";
 import { scoreToMod } from "../engine/attributes.js";
+import { PROGRESSION_CONFIG } from "../config/index.js";
 
 /** One resource bar as the UI shows it (label from schema, values from hard state). */
 export interface ResourceBar {
@@ -37,9 +39,20 @@ export interface InventoryLine {
 export interface SkillLine {
   skillId: string;
   name: string;
+  definition?: string;
+  tier?: string;
   rank: string;
   successCount?: number;
+  /** Cumulative XP from hard state. Optional only for older bridge fixtures. */
+  xp?: number;
   toNext?: number | null;
+  nextRankXp?: number | null;
+  latestAward?: {
+    xp: number;
+    reason: string;
+    turnIdx: number;
+    rankUp?: { from: string; to: string };
+  };
 }
 
 export interface AttributeLine {
@@ -102,18 +115,76 @@ function inventoryLines(itemsById: Map<string, ItemDef>, hard: CharacterHardStat
     .map((e) => ({ itemId: e.itemId, name: itemsById.get(e.itemId)?.name ?? e.itemId, qty: e.qty }));
 }
 
-/** Resolve learned skill ids to display names via the schema skill table. */
-function skillLines(schema: StorySchema, hard: CharacterHardState): SkillLine[] {
+type ProjectedXpAward = NonNullable<SkillLine["latestAward"]> & { skillId: string };
+
+function projectXpAward(event: StoryEvent): ProjectedXpAward | undefined {
+  if (event.kind !== "xp") return undefined;
+  const award = event.payload["award"];
+  if (!award || typeof award !== "object") return undefined;
+  const record = award as Record<string, unknown>;
+  const skillId = record["skillId"];
+  const amount = record["amount"];
+  const reason = record["reason"];
+  if (typeof skillId !== "string" || typeof amount !== "number" || typeof reason !== "string") {
+    return undefined;
+  }
+  const rankBefore = record["rankBefore"];
+  const rankAfter = record["rankAfter"];
+  return {
+    skillId,
+    xp: amount,
+    reason,
+    turnIdx: event.turnIndex,
+    ...(typeof rankBefore === "string" &&
+    typeof rankAfter === "string" &&
+    rankBefore !== rankAfter
+      ? { rankUp: { from: rankBefore, to: rankAfter } }
+      : {}),
+  };
+}
+
+function latestXpAwardBySkill(events: StoryEvent[]): Map<string, ProjectedXpAward> {
+  const latest = new Map<string, ProjectedXpAward>();
+  for (const event of events) {
+    const award = projectXpAward(event);
+    if (award) latest.set(award.skillId, award);
+  }
+  return latest;
+}
+
+/** Resolve learned skill ids and configured XP thresholds via the frozen schema. */
+function skillLines(
+  schema: StorySchema,
+  hard: CharacterHardState,
+  latestAwards: Map<string, ProjectedXpAward>
+): SkillLine[] {
   const byId = new Map(schema.skills.map((s) => [s.id, s]));
   return hard.skills.map((s) => {
     const definition = byId.get(s.skillId);
-    const perRank = definition?.masteryAdvance.successesPerRank;
+    const xp = s.xp ?? 0;
+    const rankIndex = PROGRESSION_CONFIG.ranks.findIndex((entry) => entry.rank === s.rank);
+    const nextRank = PROGRESSION_CONFIG.ranks[rankIndex + 1];
+    const latestAward = latestAwards.get(s.skillId);
     return {
       skillId: s.skillId,
       name: definition?.name ?? s.skillId,
+      ...(definition?.description !== undefined ? { definition: definition.description } : {}),
+      ...(definition?.tier !== undefined ? { tier: definition.tier } : {}),
       rank: s.rank,
       successCount: s.successCount,
-      toNext: s.rank === "master" || perRank === undefined ? null : Math.max(0, perRank - s.successCount),
+      xp,
+      toNext: nextRank ? Math.max(0, nextRank.minimumXp - xp) : null,
+      nextRankXp: nextRank?.minimumXp ?? null,
+      ...(latestAward
+        ? {
+            latestAward: {
+              xp: latestAward.xp,
+              reason: latestAward.reason,
+              turnIdx: latestAward.turnIdx,
+              ...(latestAward.rankUp ? { rankUp: latestAward.rankUp } : {}),
+            },
+          }
+        : {}),
     };
   });
 }
@@ -162,6 +233,14 @@ export async function getLivingCard(
   const record = await store.characters.get(characterId);
   if (!record) return undefined;
 
+  const events =
+    schema.statMode === "full"
+      ? await store.events.listByStory(schema.storyId, {
+          actorId: characterId,
+          kinds: ["xp"],
+          limit: 500,
+        })
+      : [];
   const itemsById = new Map(schema.items.map((i) => [i.id, i]));
   const card: LivingCardView = {
     characterId: record.id,
@@ -171,7 +250,10 @@ export async function getLivingCard(
     attributes: schema.statMode === "full" ? attributeLines(schema, record.hard) : [],
     resources: schema.statMode === "full" ? resourceBars(schema, record.hard) : [],
     inventory: schema.statMode === "full" ? inventoryLines(itemsById, record.hard) : [],
-    skills: schema.statMode === "full" ? skillLines(schema, record.hard) : [],
+    skills:
+      schema.statMode === "full"
+        ? skillLines(schema, record.hard, latestXpAwardBySkill(events))
+        : [],
   };
   if (record.soft) card.soft = softSlice(record.soft, recentObservations);
   return card;

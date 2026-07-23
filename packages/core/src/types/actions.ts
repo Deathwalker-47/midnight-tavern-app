@@ -8,6 +8,7 @@
  */
 import { z } from "zod";
 import { CostSpecSchema, ItemKindSchema, MasteryRankSchema } from "./primitives.js";
+import { ConditionWithReasonSchema } from "./conditions.js";
 
 export const ActionCategorySchema = z.enum([
   "combat",
@@ -21,6 +22,9 @@ export type ActionCategory = z.infer<typeof ActionCategorySchema>;
 /** The four graded outcomes of a resolved action. */
 export const OutcomeSchema = z.enum(["crit_success", "success", "failure", "crit_failure"]);
 export type Outcome = z.infer<typeof OutcomeSchema>;
+
+export const RollModeSchema = z.enum(["normal", "advantage", "disadvantage"]);
+export type RollMode = z.infer<typeof RollModeSchema>;
 
 /**
  * A deterministic outcome effect. The narrationHint guides the narrator but is
@@ -52,12 +56,22 @@ export const ActionDefSchema = z.object({
   id: z.string(), // "attack_melee", "persuade", "pick_lock", "craft_item", ...
   category: ActionCategorySchema,
   label: z.string(),
+  /** Player- and classifier-facing definition of the action's exact meaning. */
+  description: z.string().optional(),
+  /** Natural-language spellings which map to this frozen action. */
+  aliases: z.array(z.string()).optional(),
+  /** Stable universal family specialized by this story action. */
+  universalFamily: z.string().optional(),
   governingAttribute: z.string().optional(),
   requiresSkill: z.string().optional(), // gate: must be learned
   minRank: MasteryRankSchema.optional(), // gate: advanced-use threshold
   requiresItemKind: ItemKindSchema.optional(), // e.g. attack_melee needs a weapon
+  /** Action exists in the rulebook but remains gated until equipped gear enables it. */
+  requiresEquipmentEnabler: z.boolean().optional(),
   dc: z.number().int(), // D2: pre-assigned difficulty (5–25 scale)
   opposed: z.boolean().optional(), // if true, contest vs target's roll instead of flat DC
+  advantageWhen: z.array(ConditionWithReasonSchema).max(2).optional(),
+  disadvantageWhen: z.array(ConditionWithReasonSchema).max(2).optional(),
   costs: CostSpecSchema.optional(), // paid on ATTEMPT (win or lose)
   effects: OutcomeEffectsSchema, // deterministic outcome table
 });

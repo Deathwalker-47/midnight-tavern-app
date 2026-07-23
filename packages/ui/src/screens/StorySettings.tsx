@@ -15,15 +15,34 @@
  * method exists, point the picker's onChange at it. Rename → `useStoriesStore.rename`; delete →
  * `useStoriesStore.remove`.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { useStoriesStore } from "../state/storiesStore";
 import { useSettingsStore } from "../state/settingsStore";
 import { useRoute } from "../state/uiStore";
 import { getBridge } from "../bridge/core";
-import type { AttachedLorebook, LorebookLibraryEntry, PersonaRecord } from "../bridge/core";
-import { Button, EmptyState, InlineNotice, ConfirmDialog, AttachRow, PersonaPickerRow } from "../components";
-import type { AttachSourceTag } from "../components";
+import type {
+  AttachedLorebook,
+  BootstrapPhase,
+  BootstrapResumeState,
+  EquipmentLootConfig,
+  LorebookLibraryEntry,
+  PersonaRecord,
+  RulebookRegenerationImpact,
+  UniversalActionConfig,
+} from "../bridge/core";
+import {
+  Button,
+  EmptyState,
+  InlineNotice,
+  ConfirmDialog,
+  AttachRow,
+  PersonaPickerRow,
+  DifficultyPicker,
+  STANDARD_DIFFICULTY,
+  ForgingInterstitial,
+} from "../components";
+import type { AttachSourceTag, DifficultyValue, ForgeOperationState, ForgeStep } from "../components";
 import type { ScreenProps } from "./registry";
 
 export function StorySettings(props: ScreenProps): JSX.Element {
@@ -46,6 +65,51 @@ export function StorySettings(props: ScreenProps): JSX.Element {
   const [switchingMode, setSwitchingMode] = useState(false);
   const [switchProgress, setSwitchProgress] = useState<string>();
   const [switchError, setSwitchError] = useState<string>();
+  const [difficultyDraft, setDifficultyDraft] = useState<DifficultyValue>();
+  const [difficultyConfirming, setDifficultyConfirming] = useState(false);
+  const [difficultySaved, setDifficultySaved] = useState(false);
+  const [regeneration, setRegeneration] = useState<"closed" | "choose" | "confirm-in-place" | "running" | "cancelled" | "success" | "failed">("closed");
+  const [regenTyped, setRegenTyped] = useState("");
+  const [regenMode, setRegenMode] = useState<"duplicate" | "in-place">("duplicate");
+  const [regenError, setRegenError] = useState<string>();
+  const [regenProgress, setRegenProgress] = useState<{ phase?: string; message?: string }>({});
+  const [regenImpact, setRegenImpact] =
+    useState<RulebookRegenerationImpact>();
+  const regenAbort = useRef<AbortController>();
+  const regenCheckpoint = useRef<BootstrapResumeState>();
+  const [catalogSearch, setCatalogSearch] = useState("");
+  const [universalActions, setUniversalActions] = useState<
+    UniversalActionConfig["actions"]
+  >([]);
+  const [equipmentLoot, setEquipmentLoot] = useState<EquipmentLootConfig>();
+
+  useEffect(() => {
+    let cancelled = false;
+    void Promise.all([
+      getBridge().universalActionsConfig(),
+      getBridge().equipmentLootConfig(),
+    ]).then(([actions, equipment]) => {
+      if (!cancelled) {
+        setUniversalActions(actions.actions);
+        setEquipmentLoot(equipment);
+      }
+    }).catch(() => {
+      if (!cancelled) {
+        setUniversalActions([]);
+        setEquipmentLoot(undefined);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(
+    () => () => {
+      regenAbort.current?.abort();
+    },
+    []
+  );
 
   // Sync the local title once the story record loads (deeplink / tab-switch).
   const effectiveTitle = title ?? current?.title ?? "";
@@ -101,6 +165,22 @@ export function StorySettings(props: ScreenProps): JSX.Element {
 
   const story = current;
   const schema = story.schema;
+  const extendedStory = story as typeof story & {
+    difficulty?: DifficultyValue;
+    actionBudget?: number;
+    rulebookVersion?: number;
+  };
+  const extendedSchema = schema as typeof schema & {
+    difficulty?: DifficultyValue;
+    actionBudget?: number;
+  };
+  const currentDifficulty = difficultyDraft ?? extendedStory.difficulty ?? extendedSchema.difficulty ?? STANDARD_DIFFICULTY;
+  const actionBudget = extendedStory.actionBudget ?? extendedSchema.actionBudget ?? 2;
+  const resources = schema.resources ?? [];
+  const visibleUniversalActions = universalActions.filter((action) => {
+    const needle = catalogSearch.trim().toLowerCase();
+    return !needle || `${action.label} ${action.description} ${action.aliases?.join(" ") ?? ""}`.toLowerCase().includes(needle);
+  });
   const messageCount = 0; // transcript length isn't on the record; the locked banner keys off `locked`.
 
   const commitRename = async (): Promise<void> => {
@@ -143,11 +223,88 @@ export function StorySettings(props: ScreenProps): JSX.Element {
       setSwitchProgress(undefined);
     }
   };
+  const commitDifficulty = async (): Promise<void> => {
+    setDifficultyConfirming(false);
+    setDifficultySaved(false);
+    try {
+      await getBridge().setStoryDifficulty(storyId, currentDifficulty);
+      setDifficultySaved(true);
+      await openStory(storyId);
+    } catch (err) {
+      setSwitchError(err instanceof Error ? err.message : "Couldn't save difficulty.");
+    }
+  };
+  const runRegeneration = async (mode: "duplicate" | "in-place"): Promise<void> => {
+    regenAbort.current?.abort();
+    const controller = new AbortController();
+    regenAbort.current = controller;
+    setRegenMode(mode);
+    setRegeneration("running");
+    setRegenError(undefined);
+    setRegenProgress({ phase: "phase-a", message: "Regeneration request accepted; current rulebook retained" });
+    try {
+      const result = await getBridge().regenerateRulebook({
+        storyId,
+        mode,
+        confirmMechanicalReset: true,
+        signal: controller.signal,
+        ...(regenCheckpoint.current
+          ? { resume: regenCheckpoint.current }
+          : {}),
+        onCheckpoint: (checkpoint) => {
+          regenCheckpoint.current = checkpoint;
+        },
+        onProgress: (phase) =>
+          setRegenProgress({ phase, message: regenerationMessage(phase) }),
+        onProgressDetail: (event) =>
+          setRegenProgress({ phase: event.phase, message: event.message }),
+      });
+      regenCheckpoint.current = undefined;
+      regenAbort.current = undefined;
+      setRegeneration("success");
+      if (mode === "duplicate") navigate("storysettings", { storyId: result.id });
+      else await openStory(storyId);
+    } catch (err) {
+      regenAbort.current = undefined;
+      const cancelled =
+        controller.signal.aborted ||
+        (err instanceof Error && /abort|cancel/i.test(`${err.name} ${err.message}`));
+      setRegenError(
+        cancelled
+          ? "Regeneration cancelled safely. The current story was not changed; completed fragments were retained for resume."
+          : err instanceof Error
+            ? err.message
+            : "The replacement rulebook failed validation."
+      );
+      setRegeneration(cancelled ? "cancelled" : "failed");
+    }
+  };
+  const cancelRegeneration = (): void => {
+    regenAbort.current?.abort();
+  };
+  const openRegeneration = async (): Promise<void> => {
+    regenAbort.current?.abort();
+    regenCheckpoint.current = undefined;
+    setRegeneration("choose");
+    setRegenImpact(undefined);
+    setRegenError(undefined);
+    try {
+      setRegenImpact(
+        await getBridge().previewRulebookRegenerationImpact(storyId)
+      );
+    } catch (reason) {
+      setRegenError(
+        reason instanceof Error
+          ? reason.message
+          : "Couldn't calculate the regeneration impact."
+      );
+    }
+  };
 
   return (
     <div style={styles.screen}>
       <div style={styles.body}>
-        {/* Locked banner — the rulebook is sealed once a story is frozen (§ post-play state). */}
+        {/* A sealed rulebook is immutable during play, but may be deliberately regenerated. */}
         {current.locked ? (
           <div style={styles.lockedBanner} data-testid="storysettings-locked">
             <span style={styles.lockGlyph} aria-hidden="true">
@@ -156,12 +313,12 @@ export function StorySettings(props: ScreenProps): JSX.Element {
             <div style={{ flex: 1 }}>
               <div style={styles.lockedTitle}>The rulebook is sealed</div>
               <div style={styles.lockedBody}>
-                Regenerating would orphan learned skills and inventory, so it&rsquo;s locked for this story. You can
-                still rename the story and change its model below.
+                Version {extendedStory.rulebookVersion ?? 1} is immutable during play. You may regenerate it with a full
+                impact review; the existing rulebook remains available until the replacement validates atomically.
               </div>
             </div>
-            <Button variant="disabled" disabled title="Locked once a story is forged">
-              ↻ Regenerate (locked)
+            <Button variant="secondary" onClick={() => void openRegeneration()}>
+              ↻ Regenerate rulebook
             </Button>
           </div>
         ) : null}
@@ -225,13 +382,44 @@ export function StorySettings(props: ScreenProps): JSX.Element {
           {switchError ? <div style={{ marginTop: 12 }}><InlineNotice severity="error" title="Couldn't change stat system" detail={switchError} /></div> : null}
         </Section>
 
+        {schema.statMode === "full" ? (
+          <>
+            <Section kicker="§ DIFFICULTY" heading="Mechanical difficulty">
+              <DifficultyPicker
+                value={currentDifficulty}
+                onChange={(next) => {
+                  setDifficultyDraft(next);
+                  setDifficultySaved(false);
+                }}
+                showEffectiveTiming
+              />
+              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 12 }}>
+                <Button variant="system" disabled={!difficultyDraft} onClick={() => setDifficultyConfirming(true)}>
+                  Apply from next turn
+                </Button>
+              </div>
+              {difficultySaved ? <div style={{ marginTop: 10 }}><InlineNotice severity="success" title="Difficulty updated" detail="The new values begin with the next player turn. Existing rulings remain unchanged." /></div> : null}
+            </Section>
+
+            <Section kicker="§ ACTION BUDGET" heading="Actions per player turn">
+              <div style={styles.factGrid}>
+                <Fact k="MAXIMUM" v={String(actionBudget)} note="Configured when this rulebook was forged" />
+                <Fact k="OVERFLOW" v="Refused" note="No roll, XP, loot, cost, or consequence" />
+              </div>
+              <div style={{ ...styles.sectionNote, marginTop: 10 }}>
+                Combat, movement, item use, and consequential dialogue attempts count. This value is read-only because changing it alters the rulebook contract; use regeneration instead.
+              </div>
+            </Section>
+          </>
+        ) : null}
+
         {/* CORE — read-only frozen rulebook facts. */}
         <Section kicker="§ CORE" heading="System of play">
           <div style={styles.factGrid}>
             <Fact k="STAT MODE" v={statModeLabel(schema.statMode)} note="How checks resolve" />
             <Fact k="DICE" v="d20" note="Roll + modifier vs DC" />
-            <Fact k="DC RANGE" v="5 – 25" note="Trivial to near-impossible" />
-            <Fact k="MASTERY" v="4 ranks" note="novice → adept → expert → master" />
+            <Fact k="ATTRIBUTES" v="1 – 20" note="Above 20 only with explicit superhuman provenance" />
+            <Fact k="MASTERY" v="XP · 4 ranks" note="novice → adept → expert → master" />
           </div>
         </Section>
 
@@ -279,6 +467,38 @@ export function StorySettings(props: ScreenProps): JSX.Element {
           )}
         </Section>
 
+        <Section kicker="§ UNIVERSAL ACTIONS" heading="Universal action reference" aside={`${universalActions.length} configured`}>
+          <div style={styles.sectionNote}>
+            Versioned, application-wide action families that story actions specialize. This list has no fixed size and is intentionally read-only here.
+          </div>
+          <input
+            type="search"
+            value={catalogSearch}
+            onChange={(event) => setCatalogSearch(event.target.value)}
+            placeholder="Search universal actions and aliases…"
+            aria-label="Search universal actions"
+            style={{ ...styles.titleInput, fontFamily: "var(--font-ui)", fontSize: 13, marginBottom: 10 }}
+          />
+          {visibleUniversalActions.length === 0 ? (
+            <div style={styles.sectionNote}>{universalActions.length === 0 ? "No universal actions are installed in this rulebook version." : "No universal actions match this search."}</div>
+          ) : (
+            <div style={styles.list}>
+              {visibleUniversalActions.map((action) => (
+                <div key={action.id} style={styles.listRow}>
+                  <div style={{ flex: "0 0 170px" }}>
+                    <div style={styles.rowName}>{action.label}</div>
+                    <div className="mono" style={styles.rowMeta}>{action.id}{action.category ? ` · ${action.category}` : ""}</div>
+                  </div>
+                  <div style={styles.rowDesc}>
+                    {action.description}
+                    {action.aliases?.length ? <div className="mono" style={{ ...styles.rowMeta, marginTop: 4 }}>ALIASES · {action.aliases.join(" · ")}</div> : null}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Section>
+
         {/* ACTIONS — read-only catalog; DC values shown (editable once the override API lands). */}
         <Section kicker="§ ACTIONS" heading="Action catalog" aside={`${schema.actions.length} actions`}>
           {schema.actions.length === 0 ? (
@@ -295,15 +515,102 @@ export function StorySettings(props: ScreenProps): JSX.Element {
                 ].filter(Boolean);
                 return (
                   <div key={a.id} style={styles.actionRow}>
-                    <div style={styles.rowName}>{a.label}</div>
+                    <div>
+                      <div style={styles.rowName}>{a.label}</div>
+                      <div className="mono" style={styles.rowMeta}>
+                        {(a as typeof a & { universalBase?: string; description?: string }).universalBase ? `BASE · ${(a as typeof a & { universalBase?: string }).universalBase}` : "STORY-SPECIFIC"}
+                      </div>
+                    </div>
                     <div style={styles.rowCat}>{a.category}</div>
                     <div className="mono" style={styles.rowDc}>{a.opposed ? "OPPOSED" : `DC ${a.dc}`}</div>
-                    <div style={styles.rowReq}>{terms.length ? terms.join(" · ") : "—"}</div>
+                    <div style={styles.rowReq}>
+                      {terms.length ? terms.join(" · ") : "—"}
+                      {(a as typeof a & { description?: string }).description ? <div style={{ marginTop: 3 }}>{(a as typeof a & { description?: string }).description}</div> : null}
+                    </div>
                   </div>
                 );
               })}
             </div>
           )}
+        </Section>
+
+        <Section kicker="§ RESOURCES" heading="Resource catalog" aside={`${resources.length} resources`}>
+          {resources.length === 0 ? (
+            <div style={styles.sectionNote}>This story defines no tracked resources.</div>
+          ) : (
+            <div style={styles.list}>
+              {resources.map((resource) => (
+                <div key={resource.id} style={styles.listRow}>
+                  <div style={{ flex: "0 0 170px" }}>
+                    <div style={styles.rowName}>{resource.label}</div>
+                    <div className="mono" style={styles.rowMeta}>{resource.id}</div>
+                  </div>
+                  <div style={styles.rowDesc}>
+                    Starts at {resource.start}; maximum {resource.max}.
+                    {resource.regenPerScene
+                      ? ` Recovers ${resource.regenPerScene} per scene.`
+                      : " No passive scene recovery."}
+                    {resource.lethal
+                      ? " Reaching zero is lethal."
+                      : " Reaching zero is not inherently lethal."}
+                    {!resource.playerVisible ? " Hidden from the player." : ""}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Section>
+
+        <Section
+          kicker="§ EQUIPMENT"
+          heading="Universal slots and tier policy"
+          aside={equipmentLoot ? `${equipmentLoot.slots.length} slots · config v${equipmentLoot.version}` : "Loading policy"}
+        >
+          <div style={styles.sectionNote}>
+            Items are not pregenerated with the rulebook. The DM Ruling creates deserved
+            rewards on demand, and only equipped items grant their active effects.
+          </div>
+          {equipmentLoot ? (
+            <>
+              <div className="mono" style={{ ...styles.rowMeta, marginTop: 10 }}>
+                SLOTS · {equipmentLoot.slots.map((slot) => slot.replaceAll("_", " ")).join(" · ")}
+              </div>
+              <div style={{ ...styles.list, marginTop: 10 }}>
+                {Object.entries(equipmentLoot.tiers).map(([tier, policy]) => (
+                  <div key={tier} style={styles.listRow}>
+                    <div style={{ flex: "0 0 170px" }}>
+                      <div style={styles.rowName}>{tier[0]!.toUpperCase() + tier.slice(1)}</div>
+                      <div className="mono" style={styles.rowMeta}>
+                        {policy.requiresMilestone ? "MILESTONE-GATED" : "ROUTINE-ELIGIBLE"}
+                      </div>
+                    </div>
+                    <div style={styles.rowDesc}>
+                      Up to {policy.maximumEffects} effect{policy.maximumEffects === 1 ? "" : "s"};
+                      check bonus +{policy.maximumCheckBonus}; attribute bonus +{policy.maximumAttributeBonus}.
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <div style={{ ...styles.sectionNote, marginTop: 10 }}>Loading the versioned equipment policy…</div>
+          )}
+        </Section>
+
+        <Section kicker="§ LOOT POLICY" heading="On-demand reward eligibility">
+          <div style={styles.factGrid}>
+            <Fact k="SOURCE" v="DM Ruling" note="Combat and non-combat encounters" />
+            <Fact k="GENERATION" v="On demand" note="No item catalog is created during forging" />
+            <Fact k="VALIDATION" v="Engine-gated" note="Tier, effect budget, provenance, and requirements" />
+            <Fact
+              k="PLAYER CHOICE"
+              v="Equip or store"
+              note={`Up to ${equipmentLoot?.loot.maximumItemsPerEncounter ?? 3} deserved awards per encounter`}
+            />
+          </div>
+          <div style={{ ...styles.sectionNote, marginTop: 10 }}>
+            The Narrator cannot invent or grant equipment. An eligible reward is proposed only after a resolved encounter, validated by the rules engine, and committed with its ruling and journal event.
+          </div>
         </Section>
 
         </> : null}
@@ -347,9 +654,150 @@ export function StorySettings(props: ScreenProps): JSX.Element {
         onConfirm={() => void commitModeChange()}
         onCancel={() => setPendingMode(undefined)}
       />
+      <ConfirmDialog
+        open={difficultyConfirming}
+        title={`Apply ${currentDifficulty.preset} difficulty from the next turn?`}
+        body="Committed rulings, XP, loot, equipment, journal events, and hard state stay unchanged. The player DC offset never changes opposed contests."
+        confirmLabel="Apply difficulty"
+        cancelLabel="Keep current difficulty"
+        onConfirm={() => void commitDifficulty()}
+        onCancel={() => setDifficultyConfirming(false)}
+      />
+      <RulebookRegenerationDialog
+        phase={regeneration}
+        typed={regenTyped}
+        mode={regenMode}
+        progress={regenProgress}
+        impact={regenImpact}
+        error={regenError}
+        storyTitle={current.title}
+        onTyped={setRegenTyped}
+        onClose={() => {
+          setRegeneration("closed");
+          setRegenTyped("");
+        }}
+        onChooseDuplicate={() => void runRegeneration("duplicate")}
+        onChooseInPlace={() => setRegeneration("confirm-in-place")}
+        onConfirmInPlace={() => void runRegeneration("in-place")}
+        onCancelRunning={cancelRegeneration}
+        onResume={() => void runRegeneration(regenMode)}
+        onRetry={() => void runRegeneration(regenMode)}
+      />
 
       {/* messageCount reserved for a future "N messages exist" refinement of the locked copy. */}
       <span hidden>{messageCount}</span>
+    </div>
+  );
+}
+
+function RulebookRegenerationDialog(props: {
+  phase: "closed" | "choose" | "confirm-in-place" | "running" | "cancelled" | "success" | "failed";
+  typed: string;
+  mode: "duplicate" | "in-place";
+  progress: { phase?: string; message?: string };
+  impact?: RulebookRegenerationImpact;
+  error?: string;
+  storyTitle: string;
+  onTyped: (value: string) => void;
+  onClose: () => void;
+  onChooseDuplicate: () => void;
+  onChooseInPlace: () => void;
+  onConfirmInPlace: () => void;
+  onCancelRunning: () => void;
+  onResume: () => void;
+  onRetry: () => void;
+}): JSX.Element | null {
+  if (props.phase === "closed") return null;
+  const phrase = `REGENERATE ${props.storyTitle}`.toUpperCase();
+  const steps: ForgeStep[] = [
+    { label: "Read preserved card, persona, blueprint, and lore", status: props.progress.phase === "phase-a" ? "active" : "done" },
+    { label: "Forge replacement mechanics without pregenerated items", status: props.progress.phase === "phase-b" ? "active" : props.progress.phase === "phase-a" ? "pending" : "done" },
+    { label: "Validate references and on-demand loot policy", status: props.progress.phase === "validate" ? "active" : ["phase-a", "phase-b"].includes(props.progress.phase ?? "") ? "pending" : "done" },
+    { label: "Create rollback snapshot and atomic version boundary", status: props.progress.phase === "freeze" || props.progress.phase === "install" ? "active" : "pending" },
+  ];
+  const operation: ForgeOperationState =
+    props.phase === "failed"
+      ? "failed"
+      : props.phase === "cancelled"
+        ? "resumable"
+        : props.phase === "success"
+          ? "completed"
+          : "running";
+  return (
+    <div style={styles.modalBackdrop} role="presentation">
+      <section role="dialog" aria-modal="true" aria-label="Regenerate rulebook" style={styles.regenDialog}>
+        {props.phase === "running" || props.phase === "cancelled" || props.phase === "failed" || props.phase === "success" ? (
+          <>
+            <ForgingInterstitial
+              title={props.mode === "duplicate" ? "Duplicating and regenerating" : "Regenerating this rulebook"}
+              steps={steps}
+              operationState={operation}
+              regeneration
+              lastEvent={props.progress.message}
+              onCancel={props.phase === "running" ? props.onCancelRunning : undefined}
+              onResume={props.phase === "cancelled" ? props.onResume : undefined}
+              onRetry={props.phase === "failed" ? props.onRetry : undefined}
+            />
+            {props.error ? <InlineNotice severity="error" title="Replacement rolled back" detail={`${props.error} The existing rulebook and story remain unchanged.`} /> : null}
+            {props.phase === "success" ? <InlineNotice severity="success" title="Rulebook replacement installed" detail="A version boundary and rollback snapshot were recorded." /> : null}
+            {props.phase !== "running" ? <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 12 }}><Button variant="secondary" onClick={props.onClose}>Close</Button></div> : null}
+          </>
+        ) : props.phase === "confirm-in-place" ? (
+          <>
+            <h2 style={styles.sectionHeading}>Regenerate this story in place?</h2>
+            <InlineNotice severity="error" title="This permanently resets mechanical history" detail="A rollback snapshot is retained, but the current story's mechanical timeline is replaced only after the new rulebook validates." />
+            <ImpactSummary impact={props.impact} />
+            <label style={{ display: "block", color: "var(--secondary)", fontSize: 12, marginTop: 14 }}>
+              Type <strong style={{ color: "var(--failure)" }}>{phrase}</strong>
+              <input value={props.typed} onChange={(event) => props.onTyped(event.target.value)} aria-label="Regeneration confirmation phrase" style={{ ...styles.titleInput, display: "block", width: "100%", boxSizing: "border-box", marginTop: 6, fontFamily: "var(--font-mono)", fontSize: 12 }} />
+            </label>
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 16 }}>
+              <Button variant="ghost" onClick={props.onClose}>Cancel</Button>
+              <Button variant="secondary" disabled={props.typed.trim().toUpperCase() !== phrase} onClick={props.onConfirmInPlace} style={styles.dangerBtn}>Regenerate in place</Button>
+            </div>
+          </>
+        ) : (
+          <>
+            <h2 style={styles.sectionHeading}>Regenerate the sealed rulebook</h2>
+            <p style={styles.sectionNote}>Narrative continuity is preserved, while the replacement mechanics are built as a separate draft. Nothing changes if generation or validation fails.</p>
+            {props.error ? <InlineNotice severity="error" title="Couldn't calculate exact impact" detail={props.error} /> : null}
+            <ImpactSummary impact={props.impact} />
+            <div style={{ display: "grid", gap: 9, marginTop: 14 }}>
+              <button type="button" onClick={props.onChooseDuplicate} style={styles.regenChoice}>
+                <strong>Duplicate & regenerate · recommended</strong>
+                <span>The current story remains intact. A new story copy receives the regenerated rulebook.</span>
+              </button>
+              <button type="button" onClick={props.onChooseInPlace} style={{ ...styles.regenChoice, borderColor: "color-mix(in srgb, var(--failure) 45%, var(--hairline))" }}>
+                <strong style={{ color: "var(--failure)" }}>Regenerate this story in place</strong>
+                <span>Requires a typed confirmation and creates a retained rollback snapshot.</span>
+              </button>
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 14 }}><Button variant="ghost" onClick={props.onClose}>Cancel</Button></div>
+          </>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function ImpactSummary(props: {
+  impact?: RulebookRegenerationImpact;
+}): JSX.Element {
+  const impact = props.impact;
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 9, marginTop: 12 }}>
+      <div style={{ padding: 11, background: "color-mix(in srgb, var(--failure) 6%, transparent)", border: "1px solid color-mix(in srgb, var(--failure) 30%, transparent)", borderRadius: 8 }}>
+        <div className="mono" style={{ color: "var(--failure)", fontSize: 10 }}>RESET</div>
+        <div style={{ color: "var(--secondary)", fontSize: 11.5, lineHeight: 1.55, marginTop: 4 }}>
+          {impact
+            ? `${impact.attributes} attributes · ${impact.skills} skills / ${impact.skillProgressions} character progress rows · ${impact.storyActions} story actions · ${impact.universalActions} universal-action references · ${impact.resources} resources · ${impact.flags} active flags · ${impact.runtimeItemDefinitions} runtime item definitions / ${impact.runtimeItemInstances} owned instances · ${impact.equippedSlots} equipped slots · budget ${impact.actionBudget} · ${impact.rulings} rulings · ${impact.journalEvents} journal events · ${impact.checkpoints} checkpoints · ${impact.characters} hard-state sheets`
+            : "Calculating exact persisted counts…"}
+        </div>
+      </div>
+      <div style={{ padding: 11, background: "var(--teal-tint)", border: "1px solid var(--teal-dim)", borderRadius: 8 }}>
+        <div className="mono" style={{ color: "var(--teal)", fontSize: 10 }}>PRESERVED</div>
+        <div style={{ color: "var(--secondary)", fontSize: 11.5, lineHeight: 1.55, marginTop: 4 }}>Narrative messages · imported card · persona · blueprint · lorebooks · authored identity · premise and opening · transcript text</div>
+      </div>
     </div>
   );
 }
@@ -555,6 +1003,23 @@ function isAttachSource(source: string | undefined): source is AttachSourceTag {
   return source === "user" || source === "imported_card" || source === "migrated";
 }
 
+function regenerationMessage(phase: BootstrapPhase): string {
+  switch (phase) {
+    case "phase-a":
+      return "Drafting attributes, skills, and rules.";
+    case "phase-b":
+      return "Creating actions and starting state without pregenerated items.";
+    case "repair":
+      return "Repairing model output against the rulebook contract.";
+    case "validate":
+      return "Cross-validating the replacement rulebook.";
+    case "freeze":
+      return "Sealing the validated replacement.";
+    case "install":
+      return "Installing the replacement atomically.";
+  }
+}
+
 function statModeLabel(mode: string): string {
   switch (mode) {
     case "full":
@@ -709,6 +1174,40 @@ const styles: Record<string, CSSProperties> = {
   },
   dangerTitle: { fontWeight: 600, fontSize: 14, color: "var(--ui-text)" },
   dangerBtn: { color: "var(--failure)", borderColor: "color-mix(in srgb, var(--failure) 50%, transparent)" },
+  modalBackdrop: {
+    position: "fixed",
+    inset: 0,
+    zIndex: 80,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
+    background: "rgba(0,0,0,.68)",
+  },
+  regenDialog: {
+    width: 720,
+    maxWidth: "100%",
+    maxHeight: "88vh",
+    overflowY: "auto",
+    padding: "22px 24px",
+    background: "var(--bg1-panel)",
+    border: "1px solid var(--hairline)",
+    borderRadius: "var(--radius-card)",
+    boxShadow: "var(--elevation)",
+  },
+  regenChoice: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 5,
+    padding: "13px 14px",
+    color: "var(--ui-text)",
+    background: "var(--bg2-card)",
+    border: "1px solid var(--teal-dim)",
+    borderRadius: 8,
+    textAlign: "left",
+    cursor: "pointer",
+    fontFamily: "var(--font-ui)",
+  },
 };
 
 export default StorySettings;

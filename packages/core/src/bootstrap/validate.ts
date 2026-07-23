@@ -19,14 +19,18 @@ import {
   type StorySchema,
   type ActionDef,
   type Condition,
+  type ConditionWithReason,
 } from "../types/index.js";
 
-/** Every flag id any action can set (the only way a flag comes into existence). */
-function definedFlagIds(actions: ActionDef[]): Set<string> {
-  const flags = new Set<string>();
+/** Every flag value an action can cause (the only way a true flag comes into existence). */
+function definedFlagValues(actions: ActionDef[]): Map<string, Set<boolean>> {
+  const flags = new Map<string, Set<boolean>>();
   for (const a of actions) {
     for (const outcome of Object.values(a.effects)) {
-      if (outcome.setFlag) flags.add(outcome.setFlag.flagId);
+      if (!outcome.setFlag) continue;
+      const values = flags.get(outcome.setFlag.flagId) ?? new Set<boolean>();
+      values.add(outcome.setFlag.value);
+      flags.set(outcome.setFlag.flagId, values);
     }
   }
   return flags;
@@ -39,36 +43,82 @@ function checkCondition(
     skills: Set<string>;
     resources: Set<string>;
     items: Set<string>;
-    flags: Set<string>;
+    flags: Map<string, Set<boolean>>;
     attributes: Set<string>;
+    runtimeItems: boolean;
   },
   where: string,
-  errors: string[]
+  errors: string[],
+  label: "prerequisite" | "condition" = "prerequisite"
 ): void {
   switch (cond.type) {
     case "skill":
       if (!ctx.skills.has(cond.skillId))
-        errors.push(`${where}: prerequisite references unknown skill "${cond.skillId}".`);
+        errors.push(`${where}: ${label} references unknown skill "${cond.skillId}".`);
       break;
     case "resource":
       if (!ctx.resources.has(cond.resourceId))
-        errors.push(`${where}: prerequisite references unknown resource "${cond.resourceId}".`);
+        errors.push(`${where}: ${label} references unknown resource "${cond.resourceId}".`);
       break;
     case "item":
-      if (!ctx.items.has(cond.itemId))
-        errors.push(`${where}: prerequisite references unknown item "${cond.itemId}".`);
-      break;
-    case "flag":
-      if (!ctx.flags.has(cond.flagId))
+      if (!ctx.items.has(cond.itemId)) {
         errors.push(
-          `${where}: prerequisite references flag "${cond.flagId}" that no action ever sets.`
+          ctx.runtimeItems
+            ? `${where}: ${label} references item "${cond.itemId}", but V7 item ids are created on demand and cannot be frozen into story actions; use requiresItemKind for equipment gating.`
+            : `${where}: ${label} references unknown item "${cond.itemId}".`
         );
-      break;
-    case "attribute":
-      if (!ctx.attributes.has(cond.attributeId)) {
-        errors.push(`${where}: prerequisite references unknown attribute "${cond.attributeId}".`);
       }
       break;
+    case "flag": {
+      const values = ctx.flags.get(cond.flagId);
+      if (!values) {
+        errors.push(
+          `${where}: ${label} references dead flag "${cond.flagId}" that no action ever sets.`
+        );
+      } else if (cond.value && !values.has(true)) {
+        errors.push(
+          `${where}: ${label} expects flag "${cond.flagId}"=true, but no action can set it true.`
+        );
+      }
+      break;
+    }
+    case "attribute":
+      if (!ctx.attributes.has(cond.attributeId)) {
+        errors.push(`${where}: ${label} references unknown attribute "${cond.attributeId}".`);
+      }
+      break;
+  }
+}
+
+function checkActionConditions(
+  action: ActionDef,
+  listName: "advantageWhen" | "disadvantageWhen",
+  entries: readonly ConditionWithReason[] | undefined,
+  ctx: {
+    skills: Set<string>;
+    resources: Set<string>;
+    items: Set<string>;
+    flags: Map<string, Set<boolean>>;
+    attributes: Set<string>;
+    runtimeItems: boolean;
+  },
+  errors: string[]
+): void {
+  if (!entries) return;
+  if (entries.length > 2) {
+    errors.push(
+      `Action "${action.id}" ${listName} has ${entries.length} entries; at most 2 are allowed.`
+    );
+  }
+  for (const [index, entry] of entries.entries()) {
+    const where = `Action "${action.id}" ${listName}[${index}]`;
+    const reason = entry.reason?.trim() ?? "";
+    if (reason.length === 0) {
+      errors.push(`${where}: reason must be a non-empty player-facing phrase.`);
+    } else if (reason.length > 40) {
+      errors.push(`${where}: reason exceeds 40 characters.`);
+    }
+    checkCondition(entry.condition, ctx, where, errors, "condition");
   }
 }
 
@@ -84,13 +134,14 @@ export function validateStorySchema(schema: StorySchema): string[] {
   const resourceIds = new Set(schema.resources.map((r) => r.id));
   const itemIds = new Set(schema.items.map((i) => i.id));
   const tierIds = new Set(schema.tiers.map((t) => t.id));
-  const flagIds = definedFlagIds(schema.actions);
+  const flagValues = definedFlagValues(schema.actions);
   const ctx = {
     skills: skillIds,
     resources: resourceIds,
     items: itemIds,
-    flags: flagIds,
+    flags: flagValues,
     attributes: attributeIds,
+    runtimeItems: schema.schemaVersion >= 2 && schema.items.length === 0,
   };
 
   if (schema.statMode === "none") {
@@ -135,6 +186,23 @@ export function validateStorySchema(schema: StorySchema): string[] {
       );
     }
   }
+  const conditionalActionCount = schema.actions.filter(
+    (action) =>
+      (action.advantageWhen?.length ?? 0) > 0 ||
+      (action.disadvantageWhen?.length ?? 0) > 0
+  ).length;
+  const minimumConditionalActions = Math.ceil(schema.actions.length * 0.25);
+  const maximumConditionalActions = Math.floor(schema.actions.length * 0.33);
+  if (conditionalActionCount < minimumConditionalActions) {
+    errors.push(
+      `Conditional action coverage is ${conditionalActionCount}/${schema.actions.length}; at least ${minimumConditionalActions} actions (25%) must define advantageWhen or disadvantageWhen.`
+    );
+  }
+  if (conditionalActionCount > maximumConditionalActions) {
+    errors.push(
+      `Conditional action coverage is ${conditionalActionCount}/${schema.actions.length}; at most ${maximumConditionalActions} actions (33%) may define advantageWhen or disadvantageWhen.`
+    );
+  }
 
   // --- Per-action checks: DC scale, references ---
   const exercisedSkills = new Set<string>();
@@ -154,6 +222,8 @@ export function validateStorySchema(schema: StorySchema): string[] {
         `Action "${a.id}" uses unknown governing attribute "${a.governingAttribute}".`
       );
     }
+    checkActionConditions(a, "advantageWhen", a.advantageWhen, ctx, errors);
+    checkActionConditions(a, "disadvantageWhen", a.disadvantageWhen, ctx, errors);
     // Effect references: resource deltas, granted items.
     for (const [outcome, eff] of Object.entries(a.effects)) {
       const at = `Action "${a.id}" (${outcome})`;
@@ -196,7 +266,7 @@ export function validateStorySchema(schema: StorySchema): string[] {
       if (path.method === "manual" && !itemIds.has(path.itemId)) {
         errors.push(`Skill "${s.id}": manual unlock references unknown item "${path.itemId}".`);
       }
-      if (path.method === "trial" && !flagIds.has(path.flagId)) {
+      if (path.method === "trial" && !flagValues.has(path.flagId)) {
         errors.push(
           `Skill "${s.id}": trial unlock references flag "${path.flagId}" that no action ever sets.`
         );

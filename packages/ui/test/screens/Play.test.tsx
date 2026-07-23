@@ -57,6 +57,21 @@ describe("Play — empty state", () => {
 });
 
 describe("Play — error states", () => {
+  it("shows structured classifier recovery without claiming a mechanical result", () => {
+    render(<Play storyId="s1" debugState="classifier-target" />);
+
+    expect(screen.getByTestId("classifier-recovery")).toHaveTextContent(
+      /unresolved target/i
+    );
+    expect(screen.getByText(/without a valid DM Ruling/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /retry saved turn/i })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /clarify target/i })
+    ).toBeInTheDocument();
+  });
+
   it("provider-auth names the fix and offers a Settings affordance", () => {
     render(<Play storyId="s1" debugState="error-provider-auth" />);
 

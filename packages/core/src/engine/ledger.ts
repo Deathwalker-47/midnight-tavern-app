@@ -7,13 +7,20 @@
  *
  * Nothing else in the codebase writes CharacterHardState. Prose never reaches here.
  */
-import type { StorySchema, MasteryRank } from "../types/index.js";
-import type { CharacterHardState } from "../types/index.js";
+import type { CharacterHardState, MasteryRank, StorySchema } from "../types/index.js";
+import { scaleDamageDelta } from "../types/index.js";
 import { attrScore, clampAttribute } from "./attributes.js";
 
 /** A single staged change to one character's hard state. */
 export type StagedMutation =
-  | { kind: "resourceDelta"; characterId: string; resourceId: string; delta: number }
+  | {
+      kind: "resourceDelta";
+      characterId: string;
+      resourceId: string;
+      delta: number;
+      /** Applies only to effect damage; costs and healing omit this field. */
+      difficultyMultiplier?: number;
+    }
   | { kind: "attributeDelta"; characterId: string; attributeId: string; delta: number }
   | { kind: "grantItem"; characterId: string; itemId: string; qty: number }
   | { kind: "removeItem"; characterId: string; itemId: string; qty: number }
@@ -24,6 +31,7 @@ export type StagedMutation =
       skillId: string;
       rank: MasteryRank;
       successCount: number;
+      xp?: number;
     };
 
 /** Clamp a value into [0, max]. */
@@ -72,14 +80,23 @@ export function commit(
     if (!actor) continue; // unknown character: skip defensively (orchestrator ensures presence)
 
     switch (m.kind) {
-      case "attributeDelta":
+      case "attributeDelta": {
+        const definition = schema.attributes.find(
+          (attribute) => attribute.id === m.attributeId
+        );
         actor.attributes[m.attributeId] = clampAttribute(
-          attrScore(actor, m.attributeId, schema) + m.delta
+          attrScore(actor, m.attributeId, schema) + m.delta,
+          definition
         );
         break;
+      }
       case "resourceDelta": {
         const res = actor.resources[m.resourceId];
-        if (res) res.current = clamp(res.current + m.delta, res.max);
+        const delta =
+          m.delta < 0 && m.difficultyMultiplier !== undefined
+            ? scaleDamageDelta(m.delta, m.difficultyMultiplier)
+            : m.delta;
+        if (res) res.current = clamp(res.current + delta, res.max);
         break;
       }
       case "grantItem":
@@ -96,8 +113,14 @@ export function commit(
         if (sk) {
           sk.rank = m.rank;
           sk.successCount = m.successCount;
+          if (m.xp !== undefined) sk.xp = m.xp;
         } else {
-          actor.skills.push({ skillId: m.skillId, rank: m.rank, successCount: m.successCount });
+          actor.skills.push({
+            skillId: m.skillId,
+            rank: m.rank,
+            successCount: m.successCount,
+            ...(m.xp !== undefined ? { xp: m.xp } : {}),
+          });
         }
         break;
       }

@@ -228,44 +228,48 @@ describe("resolve — opposed contests", () => {
     expect(r.ruling.roll?.outcome).toBe("failure");
   });
 
-  it("a natural 20 still crits even in an opposed action (no second roll needed)", () => {
-    const r = resolve(makeStory(), makePlayer(), makeEnemy(), intent({ actionId: "duel" }), d20Sequence([20]));
+  it("a natural 20 still crits while preserving the opponent's independent roll", () => {
+    const r = resolve(makeStory(), makePlayer(), makeEnemy(), intent({ actionId: "duel" }), d20Sequence([20, 10]));
     expect(r.ruling.roll?.outcome).toBe("crit_success");
-    expect(r.ruling.roll?.opposedTotal).toBeUndefined();
+    expect(r.ruling.roll?.opposedTotal).toBeDefined();
   });
 });
 
-describe("resolve — mastery advancement", () => {
-  it("advances rank after the configured number of successes", () => {
-    // blade advances every 3 successes; start at successCount 2 ⇒ this success ⇒ adept.
-    const p = makePlayer({ skills: [learned("blade", "novice", 2)] });
+describe("resolve — XP mastery advancement", () => {
+  it("advances rank when cumulative XP crosses the configured threshold", () => {
+    const p = makePlayer({
+      skills: [{ ...learned("blade", "novice", 2), xp: 95 }],
+    });
     const r = resolve(makeStory(), p, makeEnemy(), intent(), d20Sequence([11]));
     expect(r.ruling.masteryAdvance).toMatchObject({ skillId: "blade", fromRank: "novice", toRank: "adept" });
     const setSkill = r.mutations.find((m) => m.kind === "setSkill");
-    expect(setSkill).toMatchObject({ rank: "adept", successCount: 0 });
+    expect(setSkill).toMatchObject({ rank: "adept", successCount: 2 });
+    expect(r.ruling.xpAward?.amount).toBeGreaterThan(0);
   });
 
-  it("accumulates a success without ranking up when below the threshold", () => {
+  it("awards XP without incrementing the legacy success counter", () => {
     const p = makePlayer({ skills: [learned("blade", "novice", 0)] });
     const r = resolve(makeStory(), p, makeEnemy(), intent(), d20Sequence([11]));
     expect(r.ruling.masteryAdvance).toBeUndefined();
     const setSkill = r.mutations.find((m) => m.kind === "setSkill");
-    expect(setSkill).toMatchObject({ rank: "novice", successCount: 1 });
+    expect(setSkill).toMatchObject({ rank: "novice", successCount: 0 });
+    expect(r.ruling.xpAward?.newXp).toBeGreaterThan(0);
   });
 
-  it("does not advance on a failure", () => {
+  it("awards smaller practice XP on a failed allowed action", () => {
     const p = makePlayer({ skills: [learned("blade", "novice", 2)] });
     const r = resolve(makeStory(), p, makeEnemy(), intent(), d20Sequence([2]));
     expect(r.ruling.masteryAdvance).toBeUndefined();
-    expect(r.mutations.some((m) => m.kind === "setSkill")).toBe(false);
+    expect(r.ruling.xpAward?.amount).toBeGreaterThan(0);
+    expect(r.mutations.some((m) => m.kind === "setSkill")).toBe(true);
   });
 
   it("does not advance a master past the top rank", () => {
-    const p = makePlayer({ skills: [learned("blade", "master", 2)] });
+    const p = makePlayer({ skills: [{ ...learned("blade", "master", 2), xp: 700 }] });
     const r = resolve(makeStory(), p, makeEnemy(), intent(), d20Sequence([11]));
     expect(r.ruling.masteryAdvance).toBeUndefined();
-    // still records the success count climbing
     const setSkill = r.mutations.find((m) => m.kind === "setSkill");
-    expect(setSkill).toMatchObject({ rank: "master", successCount: 3 });
+    expect(setSkill).toMatchObject({ rank: "master", successCount: 2 });
+    expect(r.ruling.xpAward?.newXp).toBeGreaterThan(700);
   });
 });

@@ -19,22 +19,36 @@
  */
 import { randomUUID } from "../util/uuid.js";
 import type { Router } from "../router/index.js";
-import type { Store, CharacterRecord } from "../store/index.js";
-import { classify } from "../classifier/index.js";
-import { resolve, commit } from "../engine/index.js";
+import type {
+  Store,
+  CharacterRecord,
+  TurnOperation,
+  TurnOperationState,
+} from "../store/index.js";
+import {
+  classify,
+  classifyWithRecovery,
+  type ClassifierRecoveryMetadata,
+} from "../classifier/index.js";
+import { resolve, commit, enforceActionBudget } from "../engine/index.js";
 import { cryptoRng, type Rng } from "../engine/dice.js";
 import { runAnalyzer } from "../memory/index.js";
 import { maybeSummarizeChapter, maybeSummarizeArc } from "../summarizer/index.js";
 import { instantiateFromTemplate, instantiateGeneric } from "../bootstrap/instantiate.js";
-import { blueprintToStyleInputs } from "../types/index.js";
+import { blueprintToStyleInputs, STANDARD_DIFFICULTY } from "../types/index.js";
 import { assembleContext } from "./context.js";
 import { capture } from "./checkpoint.js";
+import { generateGuardedNarration } from "./authorityGuard.js";
+import { determineLootAwards, type PendingLootAward } from "./loot.js";
 import type {
+  ClassifiedTurn,
   CharacterHardState,
   MechanicalIntent,
+  MessageRecord,
   Ruling,
   StorySchema,
   StoryRecord,
+  DifficultyConfig,
 } from "../types/index.js";
 
 export interface SubmitTurnOptions {
@@ -47,6 +61,8 @@ export interface SubmitTurnOptions {
   personaBlock?: string;
   /** Called (never throwing) if async post-processing fails; for logging/telemetry. */
   onBackgroundError?: (err: unknown) => void;
+  /** Observable, persisted turn phase for the play-screen operation indicator. */
+  onPhase?: (phase: TurnOperationState) => void;
 }
 
 export interface SubmitTurnResult {
@@ -58,6 +74,14 @@ export interface SubmitTurnResult {
   narratorIdx: number;
   /** Resolves once background post-processing (analyzer + summaries) settles. */
   background: Promise<void>;
+  /** True when malformed/empty classifier output was safely demoted to narration-only. */
+  classifierRecovered: boolean;
+  /** Structured recovery details for UI error/recovery states. */
+  classifierRecovery?: ClassifierRecoveryMetadata;
+  /** Number of player actions visibly refused because they exceeded this story's turn budget. */
+  refusedActionCount: number;
+  /** Whether narrator generation used the deterministic ruling-summary fallback. */
+  usedNarratorFallback: boolean;
 }
 
 /** Fetch the story or throw — every turn needs its frozen schema. Shared with history ops (§6). */
@@ -125,17 +149,148 @@ export async function ensureHardState(
   return hard;
 }
 
+function operationErrorState(error: unknown, signal?: AbortSignal): TurnOperationState {
+  if (signal?.aborted) return "cancelled";
+  if (error instanceof Error && /timeout/i.test(`${error.name} ${error.message}`)) {
+    return "timed_out";
+  }
+  return "error";
+}
+
+function operationErrorKind(error: unknown): string {
+  return error instanceof Error ? error.name || "Error" : "UnknownError";
+}
+
+function budgetRefusalRuling(
+  schema: StorySchema,
+  intent: MechanicalIntent,
+  reason: string,
+  difficulty: DifficultyConfig
+): Ruling {
+  const action = schema.actions.find((candidate) => candidate.id === intent.actionId);
+  return {
+    turnId: `${intent.actorId}:${intent.actionId}:budget`,
+    actorId: intent.actorId,
+    actionId: intent.actionId,
+    ...(action ? { actionLabel: action.label } : {}),
+    ...(intent.targetId ? { targetId: intent.targetId } : {}),
+    gate: { allowed: false, reason },
+    effectsApplied: null,
+    difficulty,
+  };
+}
+
+async function recordRulingEvents(
+  store: Store,
+  story: StoryRecord,
+  messageId: string,
+  turnIndex: number,
+  ruling: Ruling
+): Promise<void> {
+  const common = {
+    storyId: story.id,
+    messageId,
+    turnIndex,
+    actorId: ruling.actorId,
+    rulebookVersion: story.rulebookVersion ?? 1,
+    createdAt: Date.now(),
+  };
+  await store.events.insert({
+    ...common,
+    id: randomUUID(),
+    kind: ruling.turnId.endsWith(":budget")
+      ? "action_budget_exceeded"
+      : ruling.roll
+        ? "roll"
+        : "denied",
+    payload: { ruling },
+  });
+  if (ruling.xpAward) {
+    await store.events.insert({
+      ...common,
+      id: randomUUID(),
+      kind: "xp",
+      payload: { award: ruling.xpAward },
+    });
+    if (ruling.xpAward.rankAfter !== ruling.xpAward.rankBefore) {
+      await store.events.insert({
+        ...common,
+        id: randomUUID(),
+        kind: "rank_up",
+        payload: { award: ruling.xpAward },
+      });
+    }
+  }
+  if (ruling.masteryAdvance && ruling.masteryAdvance.fromRank === "untrained") {
+    await store.events.insert({
+      ...common,
+      id: randomUUID(),
+      kind: "skill_unlocked",
+      payload: { advance: ruling.masteryAdvance },
+    });
+  }
+  for (const [attributeId, delta] of Object.entries(
+    ruling.effectsApplied?.attributeDeltaSelf ?? {}
+  )) {
+    await store.events.insert({
+      ...common,
+      id: randomUUID(),
+      kind: "attribute_changed",
+      payload: { characterId: ruling.actorId, attributeId, delta },
+    });
+  }
+  for (const [attributeId, delta] of Object.entries(
+    ruling.effectsApplied?.attributeDeltaTarget ?? {}
+  )) {
+    await store.events.insert({
+      ...common,
+      id: randomUUID(),
+      kind: "attribute_changed",
+      payload: { characterId: ruling.targetId, attributeId, delta },
+    });
+  }
+  if (ruling.effectsApplied?.grantItem) {
+    await store.events.insert({
+      ...common,
+      id: randomUUID(),
+      kind: "item_gained",
+      payload: {
+        characterId: ruling.actorId,
+        itemId: ruling.effectsApplied.grantItem.itemId,
+        quantity: ruling.effectsApplied.grantItem.qty,
+      },
+    });
+  }
+  for (const item of ruling.costsPaid?.items ?? []) {
+    await store.events.insert({
+      ...common,
+      id: randomUUID(),
+      kind: "item_lost",
+      payload: { characterId: ruling.actorId, itemId: item.itemId, quantity: item.qty },
+    });
+  }
+  for (const characterId of ruling.causedDeathOf ?? []) {
+    await store.events.insert({
+      ...common,
+      id: randomUUID(),
+      kind: "death",
+      actorId: characterId,
+      payload: { characterId, causeTurnId: ruling.turnId },
+    });
+  }
+}
+
 /**
  * Run one full turn. See the module header for the sequence; the numbered comments below map
  * to §7 steps exactly.
  */
-export async function submitTurn(
+async function submitTurnLegacy(
   router: Router,
   store: Store,
   storyId: string,
   playerText: string,
   opts: SubmitTurnOptions = {}
-): Promise<SubmitTurnResult> {
+) {
   const story = await requireStory(store, storyId);
   const schema = story.schema;
   if (schema.migrationPending) {
@@ -284,6 +439,579 @@ export async function submitTurn(
   return { prose, rulings, narratorIdx, background };
 }
 
+/**
+ * V7 turn pipeline. Unlike the legacy implementation above, this persists an explicit operation
+ * state machine, recovers empty classifier output, enforces the sealed player-action budget,
+ * resolves ordered actions against one in-memory ledger, and authority-checks narrator prose.
+ */
+interface ExistingTurnOperation {
+  playerMessage: MessageRecord;
+  operation: TurnOperation;
+}
+
+async function runTurnOperation(
+  router: Router,
+  store: Store,
+  storyId: string,
+  playerText: string,
+  opts: SubmitTurnOptions,
+  existing?: ExistingTurnOperation
+): Promise<SubmitTurnResult> {
+  const story = await requireStory(store, storyId);
+  const schema = story.schema;
+  if (schema.migrationPending) {
+    throw new Error(
+      "This legacy Light Rules story needs a one-time stat-system choice before play can continue."
+    );
+  }
+  const rng = opts.rng ?? cryptoRng;
+  const playerIdx = existing?.playerMessage.idx ?? (await store.messages.nextIdx(storyId));
+  const playerMessageId = existing?.playerMessage.id ?? randomUUID();
+  if (!existing) {
+    await store.messages.insert({
+      id: playerMessageId,
+      storyId,
+      idx: playerIdx,
+      role: "player",
+      content: playerText,
+      createdAt: Date.now(),
+    });
+  }
+
+  let operation: TurnOperation = existing
+    ? {
+        id: existing.operation.id,
+        storyId,
+        playerMessageId,
+        state: "classifying",
+        createdAt: existing.operation.createdAt,
+        updatedAt: existing.operation.updatedAt,
+      }
+    : {
+        id: randomUUID(),
+        storyId,
+        playerMessageId,
+        state: "classifying",
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+  const setPhase = async (
+    state: TurnOperationState,
+    patch: Partial<TurnOperation> = {}
+  ): Promise<void> => {
+    operation = { ...operation, ...patch, state, updatedAt: Date.now() };
+    await store.turnOperations.upsert(operation);
+    opts.onPhase?.(state);
+  };
+  await setPhase("classifying");
+
+  try {
+    const roster = await store.characters.listByStory(storyId);
+    const presentCharacters = roster.map((character) => ({
+      id: character.id,
+      name: character.name,
+      isPlayer: character.isPlayer,
+    }));
+    const rulings: Ruling[] = [];
+    const staged: { ruling: Ruling; mutations: ReturnType<typeof resolve>["mutations"] }[] = [];
+    const workingById = new Map<string, CharacterHardState>();
+    const equipmentDefinitions = await store.runtimeItems.listDefinitions(storyId);
+    const equipmentInstances: Awaited<
+      ReturnType<typeof store.runtimeItems.listInventory>
+    > = [];
+    const priorRulings = await store.rulings.listByStory(storyId);
+    let classified: ClassifiedTurn = { playerIntents: [], npcIntents: [], freeText: "" };
+    let classifierRecovered = false;
+    let classifierRecovery: ClassifierRecoveryMetadata | undefined;
+    let refusedActionCount = 0;
+    let lootAwards: PendingLootAward[] = [];
+
+    if (schema.statMode === "full") {
+      const recentMessages = await store.messages.recent(storyId, 6);
+      const recentNarration = recentMessages
+        .filter((message) => message.role === "narrator")
+        .map((message) => message.content);
+      const classifier = await classifyWithRecovery(
+        router,
+        schema,
+        { playerMessage: playerText, presentCharacters, recentNarration },
+        { signal: opts.signal }
+      );
+      classified = classifier.turn;
+      classifierRecovered = classifier.recovered;
+      classifierRecovery = classifier.recovery;
+
+      if (classifierRecovered) {
+        await setPhase("classifier_error", {
+          classified,
+          ...(classifierRecovery ? { classifierRecovery } : {}),
+          ...(classifier.errorKind ? { errorKind: classifier.errorKind } : {}),
+        });
+        await store.events.insert({
+          id: randomUUID(),
+          storyId,
+          messageId: playerMessageId,
+          turnIndex: playerIdx,
+          kind: "classifier_recovery",
+          payload: {
+            errorKind: classifier.errorKind ?? "ClassifierError",
+            ...(classifierRecovery ? { recovery: classifierRecovery } : {}),
+            policy: classifierRecovery?.policy ?? "narration_only",
+          },
+          rulebookVersion: story.rulebookVersion ?? 1,
+          createdAt: Date.now(),
+        });
+      }
+
+      await setPhase("ruling", { classified });
+      const budget = enforceActionBudget(classified.playerIntents, story.actionBudget ?? 2);
+      refusedActionCount = budget.refused.length;
+      const nameById = new Map(roster.map((character) => [character.id, character.name]));
+
+      const workingState = async (characterId: string): Promise<CharacterHardState> => {
+        const cached = workingById.get(characterId);
+        if (cached) return cached;
+        const hard = await ensureHardState(
+          store,
+          schema,
+          storyId,
+          characterId,
+          nameById.get(characterId)
+        );
+        const copy = structuredClone(hard);
+        const [ownedInstances, assignments] = await Promise.all([
+          store.runtimeItems.listInventory(characterId),
+          store.runtimeItems.listLoadout(characterId),
+        ]);
+        equipmentInstances.push(...ownedInstances);
+        copy.equipment = assignments;
+        workingById.set(characterId, copy);
+        return copy;
+      };
+
+      const intents: MechanicalIntent[] = [...budget.accepted, ...classified.npcIntents];
+      for (const intent of intents) {
+        const actorHard = await workingState(intent.actorId);
+        const targetHard = intent.targetId ? await workingState(intent.targetId) : undefined;
+        const recentSimilarUses = priorRulings
+          .slice(-5)
+          .filter(
+            (record) =>
+              record.ruling.actorId === intent.actorId &&
+              record.ruling.actionId === intent.actionId &&
+              record.ruling.targetId === intent.targetId
+          ).length;
+        const result = resolve(
+          schema,
+          actorHard,
+          targetHard,
+          intent,
+          rng,
+          {
+            ...(story.difficulty ? { difficulty: story.difficulty } : {}),
+            ...(equipmentDefinitions.length > 0
+              ? {
+                  equipment: {
+                    definitions: equipmentDefinitions,
+                    instances: equipmentInstances,
+                  },
+                }
+              : {}),
+            recentSimilarUses,
+          }
+        );
+        const died = commit(schema, result.mutations, workingById);
+        if (died.length) result.ruling.causedDeathOf = died;
+        rulings.push(result.ruling);
+        staged.push(result);
+      }
+
+      for (let index = 0; index < budget.refused.length; index++) {
+        const refusal = budget.refused[index]!;
+        const intent = classified.playerIntents[budget.accepted.length + index]!;
+        const ruling = budgetRefusalRuling(
+          schema,
+          intent,
+          refusal.reason,
+          story.difficulty ?? STANDARD_DIFFICULTY
+        );
+        rulings.push(ruling);
+        staged.push({ ruling, mutations: [] });
+      }
+
+      await setPhase("generating_loot", { rulings, staged });
+      lootAwards = await determineLootAwards(
+        router,
+        store,
+        story,
+        playerText,
+        rulings,
+        opts.signal
+      );
+      for (const award of lootAwards) {
+        const ruling = rulings[award.rulingIndex];
+        if (!ruling) continue;
+        ruling.loot = [
+          ...(ruling.loot ?? []),
+          {
+            itemInstanceId: award.instance.id,
+            itemDefinitionId: award.definition.id,
+            ownerCharacterId: award.instance.ownerCharacterId,
+            name: award.definition.name,
+            tier: award.definition.tier,
+            quantity: award.instance.quantity,
+            provenanceSummary: award.instance.provenance.eligibilityReasons.join("; "),
+            description: award.definition.description,
+            effects: award.definition.effects,
+            eligibleSlots: award.definition.slotCompatibility,
+            ...(award.definition.requiresSkill
+              ? { requirement: `Requires ${award.definition.requiresSkill}` }
+              : {}),
+          },
+        ];
+      }
+    }
+
+    const presentIds = presentCharacters.map((character) => character.id);
+    const styleInputs = blueprintToStyleInputs(story.blueprint);
+    const context = await assembleContext(store, {
+      storyId,
+      schema,
+      rulings,
+      presentIds,
+      playerText: classifierRecovered ? `${playerText}\n\n${classified.freeText}` : playerText,
+      styleInputs,
+      ...(opts.personaBlock ? { personaBlock: opts.personaBlock } : {}),
+    });
+
+    await setPhase("thinking", { classified, rulings, staged });
+    await setPhase("streaming");
+    const narration = await generateGuardedNarration(
+      router,
+      { system: context.system, user: context.user },
+      rulings,
+      {
+        ...(opts.signal ? { signal: opts.signal } : {}),
+        ...(opts.onDelta ? { onDelta: opts.onDelta } : {}),
+        auditWithoutRulings: classifierRecovered,
+      }
+    );
+    const prose = narration.prose;
+    const narratorIdx = playerIdx + 1;
+    const narratorMessageId = randomUUID();
+
+    await setPhase("saving", { prose, narratorMessageId });
+    await store.transaction(async () => {
+      const checkpoint = await capture(store, storyId, narratorMessageId, narratorIdx);
+      await store.messages.insert({
+        id: narratorMessageId,
+        storyId,
+        idx: narratorIdx,
+        role: "narrator",
+        content: prose,
+        createdAt: Date.now(),
+        variants: [prose],
+        activeVariant: 0,
+      });
+      await store.checkpoints.insert(checkpoint);
+
+      for (const stagedRuling of staged) {
+        stagedRuling.ruling.messageId = narratorMessageId;
+        await store.rulings.insert({
+          id: randomUUID(),
+          storyId,
+          messageId: narratorMessageId,
+          ruling: stagedRuling.ruling,
+        });
+        await recordRulingEvents(
+          store,
+          story,
+          narratorMessageId,
+          narratorIdx,
+          stagedRuling.ruling
+        );
+      }
+      let milestoneLogged = false;
+      for (const award of lootAwards) {
+        await store.runtimeItems.insertDefinition(award.definition);
+        await store.runtimeItems.insertInstance(award.instance);
+        const eventCommon = {
+          storyId,
+          messageId: narratorMessageId,
+          turnIndex: narratorIdx,
+          actorId: award.instance.ownerCharacterId,
+          rulebookVersion: story.rulebookVersion ?? 1,
+          createdAt: Date.now(),
+        };
+        await store.events.insert({
+          ...eventCommon,
+          id: randomUUID(),
+          kind: "item_created",
+          payload: { definition: award.definition },
+        });
+        await store.events.insert({
+          ...eventCommon,
+          id: randomUUID(),
+          kind: "item_gained",
+          payload: { instance: award.instance },
+        });
+        if (
+          !milestoneLogged &&
+          (award.instance.provenance.sourceType === "milestone" ||
+            award.instance.provenance.sourceType === "quest")
+        ) {
+          milestoneLogged = true;
+          await store.events.insert({
+            ...eventCommon,
+            id: randomUUID(),
+            kind: "milestone",
+            payload: {
+              sourceType: award.instance.provenance.sourceType,
+              sourceLabel: award.instance.provenance.sourceLabel,
+            },
+          });
+        }
+      }
+      for (const [characterId, hard] of workingById) {
+        await store.characters.updateHard(characterId, hard);
+      }
+    });
+    await setPhase("idle", {
+      prose,
+      narratorMessageId,
+      rulings,
+      staged: undefined,
+      errorKind: undefined,
+    });
+
+    const background =
+      schema.statMode === "full"
+        ? runBackground(router, store, {
+            storyId,
+            turnIdx: narratorIdx,
+            playerText,
+            narratorText: prose,
+            ...(opts.onBackgroundError ? { onError: opts.onBackgroundError } : {}),
+          })
+        : Promise.resolve();
+
+    return {
+      prose,
+      rulings,
+      narratorIdx,
+      background,
+      classifierRecovered,
+      ...(classifierRecovery ? { classifierRecovery } : {}),
+      refusedActionCount,
+      usedNarratorFallback: narration.usedSafeFallback,
+    };
+  } catch (error) {
+    const state = operationErrorState(error, opts.signal);
+    await setPhase(state, { errorKind: operationErrorKind(error) }).catch(() => {});
+    throw error;
+  }
+}
+
+/** Start a new turn by persisting exactly one player message and one operation record. */
+export async function submitTurn(
+  router: Router,
+  store: Store,
+  storyId: string,
+  playerText: string,
+  opts: SubmitTurnOptions = {}
+): Promise<SubmitTurnResult> {
+  return runTurnOperation(router, store, storyId, playerText, opts);
+}
+
+export const DEFAULT_TURN_OPERATION_STALE_MS = 120_000;
+
+export type TurnOperationRecoveryReason =
+  | "missing_player_message"
+  | "player_message_mismatch"
+  | "narrator_already_persisted"
+  | "transcript_advanced"
+  | "operation_active"
+  | "retry_claim_lost";
+
+export interface TurnOperationRecoveryInspection {
+  operation: TurnOperation;
+  /** Original text is returned so recovery UI never has to reconstruct or reinsert it. */
+  playerText?: string;
+  playerMessageIdx?: number;
+  stale: boolean;
+  recoverable: boolean;
+  reason?: TurnOperationRecoveryReason;
+}
+
+export interface InspectTurnOperationOptions {
+  staleAfterMs?: number;
+  /** Injectable clock for deterministic consumers/tests. */
+  now?: number;
+}
+
+export interface RetryTurnOperationOptions
+  extends SubmitTurnOptions,
+    InspectTurnOperationOptions {}
+
+export class TurnOperationRecoveryError extends Error {
+  constructor(readonly reason: TurnOperationRecoveryReason | "operation_not_found") {
+    super(`Turn operation cannot be recovered: ${reason}.`);
+    this.name = "TurnOperationRecoveryError";
+  }
+}
+
+interface InspectedOperation {
+  inspection: TurnOperationRecoveryInspection;
+  playerMessage?: MessageRecord;
+}
+
+const IMMEDIATELY_RETRYABLE_STATES = new Set<TurnOperationState>([
+  "error",
+  "cancelled",
+  "timed_out",
+]);
+
+async function inspectStoredOperation(
+  store: Store,
+  operation: TurnOperation,
+  opts: InspectTurnOperationOptions
+): Promise<InspectedOperation> {
+  const now = opts.now ?? Date.now();
+  const staleAfterMs = Math.max(0, opts.staleAfterMs ?? DEFAULT_TURN_OPERATION_STALE_MS);
+  const stale = now - operation.updatedAt >= staleAfterMs;
+  const playerMessage = await store.messages.get(operation.playerMessageId);
+  const base = { operation, stale };
+
+  if (!playerMessage) {
+    return {
+      inspection: {
+        ...base,
+        recoverable: false,
+        reason: "missing_player_message",
+      },
+    };
+  }
+  if (playerMessage.storyId !== operation.storyId || playerMessage.role !== "player") {
+    return {
+      inspection: {
+        ...base,
+        playerText: playerMessage.content,
+        playerMessageIdx: playerMessage.idx,
+        recoverable: false,
+        reason: "player_message_mismatch",
+      },
+      playerMessage,
+    };
+  }
+
+  const narratorById = operation.narratorMessageId
+    ? await store.messages.get(operation.narratorMessageId)
+    : undefined;
+  if (narratorById?.role === "narrator") {
+    return {
+      inspection: {
+        ...base,
+        playerText: playerMessage.content,
+        playerMessageIdx: playerMessage.idx,
+        recoverable: false,
+        reason: "narrator_already_persisted",
+      },
+      playerMessage,
+    };
+  }
+
+  const nextMessage = await store.messages.getByIndex(operation.storyId, playerMessage.idx + 1);
+  if (nextMessage) {
+    return {
+      inspection: {
+        ...base,
+        playerText: playerMessage.content,
+        playerMessageIdx: playerMessage.idx,
+        recoverable: false,
+        reason:
+          nextMessage.role === "narrator"
+            ? "narrator_already_persisted"
+            : "transcript_advanced",
+      },
+      playerMessage,
+    };
+  }
+
+  const recoverable = IMMEDIATELY_RETRYABLE_STATES.has(operation.state) || stale;
+  return {
+    inspection: {
+      ...base,
+      playerText: playerMessage.content,
+      playerMessageIdx: playerMessage.idx,
+      recoverable,
+      ...(recoverable ? {} : { reason: "operation_active" as const }),
+    },
+    playerMessage,
+  };
+}
+
+/**
+ * Inspect the latest failed or non-terminal operation for a story. This is read-only and safe to
+ * call on app startup. Fresh active work is reported but not recoverable until it becomes stale.
+ */
+export async function inspectTurnOperationRecovery(
+  store: Store,
+  storyId: string,
+  opts: InspectTurnOperationOptions = {}
+): Promise<TurnOperationRecoveryInspection | undefined> {
+  const operation = await store.turnOperations.latestRecoverable(storyId);
+  if (!operation) return undefined;
+  return (await inspectStoredOperation(store, operation, opts)).inspection;
+}
+
+/**
+ * Retry a failed/stale turn using its already-persisted player message. A compare-and-set claim
+ * prevents two windows from retrying the same operation, and transcript checks prevent a second
+ * narrator message after a prior save succeeded.
+ */
+export async function retryTurnOperation(
+  router: Router,
+  store: Store,
+  operationId: string,
+  opts: RetryTurnOperationOptions = {}
+): Promise<SubmitTurnResult> {
+  const operation = await store.turnOperations.get(operationId);
+  if (!operation) throw new TurnOperationRecoveryError("operation_not_found");
+
+  const { staleAfterMs, now, ...submitOpts } = opts;
+  const inspected = await inspectStoredOperation(store, operation, {
+    ...(staleAfterMs === undefined ? {} : { staleAfterMs }),
+    ...(now === undefined ? {} : { now }),
+  });
+  if (!inspected.inspection.recoverable || !inspected.playerMessage) {
+    throw new TurnOperationRecoveryError(
+      inspected.inspection.reason ?? "operation_active"
+    );
+  }
+
+  const claimedAt = Math.max(now ?? Date.now(), operation.updatedAt + 1);
+  const claimed = await store.turnOperations.claimRetry(
+    operation.id,
+    operation.updatedAt,
+    claimedAt
+  );
+  if (!claimed) throw new TurnOperationRecoveryError("retry_claim_lost");
+  const claimedOperation = await store.turnOperations.get(operation.id);
+  if (!claimedOperation) throw new TurnOperationRecoveryError("operation_not_found");
+
+  return runTurnOperation(
+    router,
+    store,
+    operation.storyId,
+    inspected.playerMessage.content,
+    submitOpts,
+    {
+      playerMessage: inspected.playerMessage,
+      operation: claimedOperation,
+    }
+  );
+}
+
 interface BackgroundArgs {
   storyId: string;
   turnIdx: number;
@@ -326,8 +1054,38 @@ async function runBackground(router: Router, store: Store, args: BackgroundArgs)
 
   // Summaries are independent; each swallows its own errors, but guard anyway.
   try {
-    await maybeSummarizeChapter(router, store, storyId, onError ? { onError } : {});
-    await maybeSummarizeArc(router, store, storyId, onError ? { onError } : {});
+    const story = await requireStory(store, storyId);
+    const chapter = await maybeSummarizeChapter(
+      router,
+      store,
+      storyId,
+      onError ? { onError } : {}
+    );
+    if (chapter) {
+      await store.events.insert({
+        id: randomUUID(),
+        storyId,
+        turnIndex: chapter.msgFrom,
+        chapterIndex: chapter.idx,
+        kind: "chapter_started",
+        payload: { chapterId: chapter.id, index: chapter.idx, title: chapter.title },
+        rulebookVersion: story.rulebookVersion ?? 1,
+        createdAt: Date.now(),
+      });
+    }
+    const arc = await maybeSummarizeArc(router, store, storyId, onError ? { onError } : {});
+    if (arc) {
+      await store.events.insert({
+        id: randomUUID(),
+        storyId,
+        turnIndex: chapter?.msgTo ?? args.turnIdx,
+        chapterIndex: arc.chapterTo,
+        kind: "arc_completed",
+        payload: { arcId: arc.id, index: arc.idx, title: arc.title },
+        rulebookVersion: story.rulebookVersion ?? 1,
+        createdAt: Date.now(),
+      });
+    }
   } catch (err) {
     onError?.(err);
   }

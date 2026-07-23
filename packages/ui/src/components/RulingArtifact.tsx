@@ -25,15 +25,34 @@ export interface RulingRoll {
   title?: string;
   outcome: RollOutcome;
   d20: number;
+  /** One or two raw dice. With advantage/disadvantage, usedIndex identifies the authoritative die. */
+  dice?: number[];
+  usedIndex?: number;
+  rollMode?: "normal" | "advantage" | "disadvantage";
+  advantageSources?: string[];
+  disadvantageSources?: string[];
   modifier: number;
   /** Named modifier terms, so players can see where the total came from. */
   modifierTerms?: Array<{ label: string; value: number }>;
   total: number;
   dc: number;
+  dcBase?: number;
+  dcEffective?: number;
+  difficultyName?: string;
+  damageMultiplier?: number;
   /** Override the default stamp text (SUCCESS / FAILURE / CRITICAL / CRIT FAIL). */
   stamp?: string;
   /** For opposed contests: label each side instead of the flat `d20 X + mod` line. */
-  opposed?: { attacker: string; defender: string; attackerFormula?: string; defenderFormula?: string };
+  opposed?: {
+    attacker: string;
+    defender: string;
+    attackerFormula?: string;
+    defenderFormula?: string;
+    dice?: number[];
+    usedIndex?: number;
+    rollMode?: "normal" | "advantage" | "disadvantage";
+    reasons?: string[];
+  };
 }
 
 export type RulingArtifactVariant =
@@ -44,7 +63,10 @@ export type RulingArtifactVariant =
   | "opposed"
   | "npc"
   | "stacked"
-  | "denied";
+  | "denied"
+  | "budget-exceeded"
+  | "unresolved"
+  | "classifier-unavailable";
 
 export interface RulingArtifactProps {
   variant: RulingArtifactVariant;
@@ -62,6 +84,10 @@ export interface RulingArtifactProps {
   resultLine?: string;
   /** Optional mastery / effect line, e.g. "Lockpicking → adept" or "12 damage dealt". */
   effectLine?: string;
+  detailRows?: Array<{ label: string; value: string }>;
+  /** Restores the original player text to the composer; never sends automatically. */
+  onEditRetry?: () => void;
+  editRetryLabel?: string;
   /** Disable the reveal animation; render final values immediately. Default true (animate). */
   animate?: boolean;
   className?: string;
@@ -77,11 +103,14 @@ const LABEL_BY_VARIANT: Record<RulingArtifactVariant, string> = {
   npc: "RULING · NPC",
   stacked: "RULING · EXCHANGE",
   denied: "RULING · DENIED",
+  "budget-exceeded": "DM RULING · ACTION BUDGET",
+  unresolved: "DM RULING · NEEDS CLARIFICATION",
+  "classifier-unavailable": "DM RULING · CLASSIFIER UNAVAILABLE",
 };
 
 /** Resolve the accent color that carries the left border + bg tint. */
 function accentFor(props: RulingArtifactProps): string {
-  if (props.variant === "denied") return "var(--dead)";
+  if (props.variant === "denied" || props.variant === "budget-exceeded" || props.variant === "unresolved" || props.variant === "classifier-unavailable") return "var(--dead)";
   if (props.variant === "opposed" || props.variant === "npc") return "var(--teal)";
   if (props.variant === "stacked") {
     // The exchange takes its color from the final (second) roll's outcome.
@@ -124,10 +153,15 @@ function DieBlock(props: {
     position: "relative",
     ...(play ? { ...anim("mt-die", "0s", "0.35s", reduced), animationTimingFunction: "var(--ease-settle)" } : {}),
   };
+  const dice = roll.dice?.length ? roll.dice : [roll.d20];
   return (
-    <div style={dieStyle} data-testid="ruling-die">
-      {roll.d20}
-      {crit && play ? (
+    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+      {dice.map((die, index) => {
+        const used = dice.length === 1 || index === (roll.usedIndex ?? 0);
+        return (
+        <div key={index} style={{ ...dieStyle, opacity: used ? 1 : 0.42, textDecoration: used ? "none" : "line-through", borderStyle: used ? "solid" : "dashed" }} data-testid={used ? "ruling-die" : "ruling-die-discarded"} aria-label={`${die}${used ? " used" : " discarded"}`}>
+          {die}
+          {crit && used && play ? (
         <span
           aria-hidden="true"
           style={{
@@ -141,6 +175,8 @@ function DieBlock(props: {
           data-testid="ruling-ring"
         />
       ) : null}
+        </div>
+      )})}
     </div>
   );
 }
@@ -167,6 +203,15 @@ function MathBlock(props: {
       {roll.title ? (
         <div style={{ fontSize: 12, color: "var(--secondary)", marginBottom: 3 }}>{roll.title}</div>
       ) : null}
+      {roll.rollMode && roll.rollMode !== "normal" ? (
+        <div style={{ color: "var(--teal)", fontFamily: FONT.mono, fontSize: 10.5, marginBottom: 4 }}>
+          {roll.rollMode.toUpperCase()} · {(roll.rollMode === "advantage" ? roll.advantageSources : roll.disadvantageSources)?.join(" · ") || "rule condition"}
+        </div>
+      ) : roll.advantageSources?.length && roll.disadvantageSources?.length ? (
+        <div style={{ color: "var(--teal)", fontFamily: FONT.mono, fontSize: 10.5, marginBottom: 4 }}>
+          ADVANTAGE + DISADVANTAGE · CANCELLED TO NORMAL
+        </div>
+      ) : null}
       <div style={{ fontFamily: FONT.mono, fontSize: 13.5, color: "var(--ui-text)" }} data-testid="ruling-math">
         {roll.opposed ? (
           <>
@@ -185,7 +230,10 @@ function MathBlock(props: {
             <b style={{ color, fontSize: 15 }} data-testid="ruling-total">
               {total}
             </b>
-            <span style={{ color: "var(--muted)" }}>{`  vs DC ${roll.dc}`}</span>
+            <span style={{ color: "var(--muted)" }}>{`  vs DC ${roll.dcEffective ?? roll.dc}`}</span>
+            {roll.dcBase !== undefined && roll.dcEffective !== undefined && roll.dcBase !== roll.dcEffective ? (
+              <span style={{ color: "var(--teal)" }}>{`  (${roll.dcBase} → ${roll.dcEffective} ${roll.difficultyName ?? ""})`}</span>
+            ) : null}
             {termText ? (
               <div style={{ color: "var(--muted)", fontSize: 11.5, marginTop: 3 }} data-testid="ruling-breakdown">
                 {termText}
@@ -267,7 +315,7 @@ export function RulingArtifact(props: RulingArtifactProps): ReactNode {
   );
 
   let body: ReactNode;
-  if (variant === "denied") {
+  if (variant === "denied" || variant === "budget-exceeded" || variant === "unresolved" || variant === "classifier-unavailable") {
     body = (
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
         <div
@@ -289,7 +337,9 @@ export function RulingArtifact(props: RulingArtifactProps): ReactNode {
           ⊘
         </div>
         <div>
-          <div style={{ fontFamily: FONT.mono, fontWeight: 600, fontSize: 15, color: "var(--dead)" }}>DENIED</div>
+          <div style={{ fontFamily: FONT.mono, fontWeight: 600, fontSize: 15, color: "var(--dead)" }}>
+            {variant === "budget-exceeded" ? "REFUSED" : variant === "unresolved" ? "UNRESOLVED" : variant === "classifier-unavailable" ? "UNAVAILABLE" : "DENIED"}
+          </div>
           {props.reason ? (
             <div style={{ fontSize: 12.5, color: "var(--secondary)", marginTop: 2 }} data-testid="ruling-reason">
               {props.reason}
@@ -337,6 +387,37 @@ export function RulingArtifact(props: RulingArtifactProps): ReactNode {
         >
           {props.effectLine}
         </div>
+      ) : null}
+      {props.detailRows?.length ? (
+        <details style={{ marginTop: 9 }}>
+          <summary style={{ color: "var(--teal)", fontFamily: FONT.mono, fontSize: 10.5, cursor: "pointer" }}>Full ruling details</summary>
+          <dl style={{ display: "grid", gap: 5, margin: "8px 0 0", paddingTop: 8, borderTop: "1px solid var(--hairline)", fontFamily: FONT.mono, fontSize: 10.5 }}>
+            {props.detailRows.map((row, index) => (
+              <div key={`${row.label}:${index}`} style={{ display: "grid", gridTemplateColumns: "130px 1fr", gap: 9 }}>
+                <dt style={{ color: "var(--muted)" }}>{row.label}</dt><dd style={{ margin: 0, color: "var(--secondary)" }}>{row.value}</dd>
+              </div>
+            ))}
+          </dl>
+        </details>
+      ) : null}
+      {props.onEditRetry ? (
+        <button
+          type="button"
+          onClick={props.onEditRetry}
+          style={{
+            marginTop: 10,
+            border: "1px solid var(--hairline)",
+            borderRadius: 7,
+            padding: "6px 9px",
+            background: "transparent",
+            color: "var(--teal)",
+            fontFamily: FONT.mono,
+            fontSize: 10.5,
+            cursor: "pointer",
+          }}
+        >
+          {props.editRetryLabel ?? "Edit original turn"}
+        </button>
       ) : null}
     </div>
   );

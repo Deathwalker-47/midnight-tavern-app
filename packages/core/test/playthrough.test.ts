@@ -45,8 +45,8 @@ describe("50-turn scripted playthrough", () => {
   it("plays 50 turns with correct gating, mastery advancement, and death", () => {
     const story = makeStory();
     const player = makePlayer({
-      // Fresh blade novice at 0 successes so we can watch it rank up.
-      skills: [learned("blade", "novice", 0)],
+      // Start near the cumulative V7 threshold so the harness observes a rank-up.
+      skills: [{ ...learned("blade", "novice", 0), xp: 70 }],
       inventory: [{ itemId: "sword", qty: 1 }],
       resources: { hp: { current: 20, max: 20 }, stamina: { current: 40, max: 40 } },
     });

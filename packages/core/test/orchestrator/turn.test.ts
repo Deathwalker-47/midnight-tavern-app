@@ -5,7 +5,7 @@
  *
  * A `ScriptedRouter` returns canned role outputs with zero network: the classifier yields a
  * chosen intent, the narrator yields fixed prose (deliberately claiming false mechanical
- * outcomes, to prove prose never touches the ledger), and analyzer/summarizer are stubbed.
+ * outcomes, to prove the authority guard rejects it), and analyzer/summarizer are stubbed.
  * We drive real `submitTurn` against a real in-memory store + frozen fixture schema and
  * assert the committed state matches the ENGINE's rulings, not the prose.
  */
@@ -40,10 +40,26 @@ class ScriptedRouter implements Router {
     return { provider: "openrouter", model: "test", source: "recommended", samplersDirty: false };
   }
 
-  async complete(role: Role, _prompt: RolePrompt): Promise<ChatResponse> {
+  async complete(role: Role, prompt: RolePrompt): Promise<ChatResponse> {
     this.calls.push(role);
     switch (role) {
       case "classifier":
+        if (prompt.system.includes("strict consistency auditor")) {
+          return {
+            content: JSON.stringify({
+              obeysRulings: false,
+              contradictions: [
+                {
+                  rulingIndex: 0,
+                  reason: "The draft reverses the successful strike and invents loot.",
+                },
+              ],
+            }),
+          };
+        }
+        if (prompt.system.includes("DM loot adjudicator")) {
+          return { content: JSON.stringify({ award: false, reason: "No completed encounter." }) };
+        }
         return { content: JSON.stringify(this.script.classified) };
       case "analyzer":
         return {
@@ -130,7 +146,9 @@ describe("submitTurn — pipeline order & transaction", () => {
     // Two messages persisted, in order.
     const msgs = await store.messages.listByStory(storyId);
     expect(msgs.map((m) => m.role)).toEqual(["player", "narrator"]);
-    expect(msgs[1]!.content).toContain("magic ring"); // prose stored verbatim
+    expect(msgs[1]!.content).not.toContain("magic ring");
+    expect(msgs[1]!.content).toContain("DM resolves");
+    expect(result.usedNarratorFallback).toBe(true);
 
     // The engine's ruling — not the prose — decided the outcome.
     expect(result.rulings).toHaveLength(1);

@@ -16,6 +16,8 @@ export const ROUTES = [
   "overview",
   "characters",
   "dossier",
+  "loadout",
+  "journal",
   "storysettings",
   "blueprint",
   "settings",
@@ -45,7 +47,7 @@ export interface RouteParams {
 }
 
 /** True for the four surfaces that require an open story (drive the header's sub-tabs). */
-export const STORY_ROUTES: readonly Route[] = ["play", "overview", "characters", "storysettings"];
+export const STORY_ROUTES: readonly Route[] = ["play", "overview", "characters", "dossier", "loadout", "journal", "storysettings"];
 
 export function isRoute(value: string): value is Route {
   return (ROUTES as readonly string[]).includes(value);

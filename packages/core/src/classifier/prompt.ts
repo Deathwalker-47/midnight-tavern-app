@@ -75,6 +75,9 @@ export function buildClassifierSchema(
 function renderCatalog(schema: StorySchema): string {
   const lines = schema.actions.map((a) => {
     const parts = [`${a.id} [${a.category}]`, a.label];
+    if (a.description) parts.push(`means:${a.description}`);
+    if (a.aliases?.length) parts.push(`aliases:${a.aliases.join(", ")}`);
+    if (a.universalFamily) parts.push(`universal:${a.universalFamily}`);
     if (a.requiresSkill) parts.push(`requires:${a.requiresSkill}`);
     return "- " + parts.join(" · ");
   });
@@ -88,6 +91,7 @@ export const CLASSIFIER_SYSTEM = [
   "Map the player's message onto zero or more actions from the provided catalog.",
   "Rules:",
   "- Use ONLY action ids from the catalog. Never invent an id.",
+  "- Match by meaning and aliases, not merely exact wording. A concrete attack such as a knife lunge maps to the closest valid attack action.",
   "- Prefer narration (empty intents) over guessing. If no clear mechanical action is attempted, return empty playerIntents.",
   "- Extract npcIntents ONLY when the recent narration clearly commits an NPC to a catalog action.",
   "- Set confidence honestly in [0,1]. Use < 0.6 when the mapping is uncertain.",

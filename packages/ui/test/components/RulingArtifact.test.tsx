@@ -2,8 +2,8 @@
  * RulingArtifact state tests. Animation is disabled (`animate={false}`) so final values render
  * immediately and are assertable without fake timers.
  */
-import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { RulingArtifact } from "../../src/components/RulingArtifact";
 import type { RulingRoll } from "../../src/components/RulingArtifact";
 
@@ -114,5 +114,19 @@ describe("RulingArtifact", () => {
     expect(screen.getByTestId("ruling-label")).toHaveTextContent("RULING · SUCCESS");
     expect(screen.getByTestId("ruling-result")).toHaveTextContent("steps aside");
     expect(screen.getByTestId("ruling-effect")).toHaveTextContent("adept");
+  });
+
+  it("offers a non-sending edit route for an action-budget refusal", () => {
+    const onEditRetry = vi.fn();
+    render(
+      <RulingArtifact
+        variant="budget-exceeded"
+        reason="This turn allows 2 actions; the extra action was refused."
+        onEditRetry={onEditRetry}
+        animate={false}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Edit original turn" }));
+    expect(onEditRetry).toHaveBeenCalledOnce();
   });
 });

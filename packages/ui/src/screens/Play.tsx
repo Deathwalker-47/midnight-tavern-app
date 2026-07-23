@@ -22,21 +22,34 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, 
 import {
   PartyStrip,
   RulingArtifact,
-  ThinkingIndicator,
   LivingCard,
   EmptyState,
   InlineNotice,
   Button,
   MessageActions,
   ConfirmDialog,
+  ActionSuggestions,
+  OperationStatus,
+  LootAward,
   fromCoreOutcome,
+  type ActionSuggestion,
+  type SuggestionsState,
+  type TurnOperationPhase,
+  type LootAwardItem,
   type RulingRoll,
   type RulingArtifactVariant,
 } from "../components";
 import { usePlayStore, type TurnError, type TurnErrorKind } from "../state/playStore";
 import { useUiStore, useRoute } from "../state/uiStore";
 import { getBridge } from "../bridge/core";
-import type { MessageRecord, Ruling, CastMember, LivingCardView } from "../bridge/core";
+import type {
+  CastMember,
+  ClassifierRecoveryMetadata,
+  LivingCardView,
+  MessageRecord,
+  Ruling,
+  StoryRecord,
+} from "../bridge/core";
 import type { ScreenProps } from "./registry";
 
 // ── View state ──────────────────────────────────────────────────────────────────────────────
@@ -48,6 +61,19 @@ export type PlayViewState =
   | "normal"
   | "thinking"
   | "ruling"
+  | "disadvantage"
+  | "advantage-cancelled"
+  | "opposed"
+  | "budget-exceeded"
+  | "loot"
+  | "classifier-no-content"
+  | "classifier-timeout"
+  | "classifier-low-confidence"
+  | "classifier-target"
+  | "stream-saving"
+  | "stream-error"
+  | "stream-cancelled"
+  | "stream-timed-out"
   | "error-provider-auth"
   | "error-model-output"
   | "error-network"
@@ -62,6 +88,12 @@ export interface PlayProps extends ScreenProps {
    * path so each design state is reviewable without a live backend.
    */
   debugState?: PlayViewState;
+}
+
+interface PlayStoryMeta {
+  statMode: "none" | "full";
+  actionBudget: number;
+  difficultyName: string;
 }
 
 // ── Small helpers ─────────────────────────────────────────────────────────────────────────────
@@ -106,6 +138,7 @@ interface RulingArtifactVM {
   reason?: string;
   resultLine?: string;
   effectLine?: string;
+  detailRows?: Array<{ label: string; value: string }>;
 }
 
 /**
@@ -116,7 +149,16 @@ interface RulingArtifactVM {
  */
 function rulingToArtifact(r: Ruling, nameOf: (id: string) => string): RulingArtifactVM | undefined {
   if (!r.gate.allowed) {
-    return { variant: "denied", ...(r.gate.reason ? { reason: r.gate.reason } : {}) };
+    const reason = r.gate.reason ?? "The action was refused by the rules engine.";
+    return {
+      variant: /action budget|actions per turn|overflow/i.test(reason) ? "budget-exceeded" : /target|clarif/i.test(reason) ? "unresolved" : "denied",
+      reason,
+      detailRows: [
+        { label: "ACTION", value: r.actionLabel ?? humanize(r.actionId) },
+        ...(r.targetId ? [{ label: "TARGET", value: nameOf(r.targetId) }] : []),
+        { label: "CONSEQUENCE", value: "No roll, cost, XP, loot, equipment change, or mechanical consequence." },
+      ],
+    };
   }
   const roll = r.roll;
   if (!roll) return undefined;
@@ -129,9 +171,17 @@ function rulingToArtifact(r: Ruling, nameOf: (id: string) => string): RulingArti
     title: `${nameOf(r.actorId)} · ${r.actionLabel ?? humanize(r.actionId)}`,
     outcome,
     d20: roll.d20,
+    ...(roll.dice ? { dice: roll.dice } : {}),
+    ...(roll.usedIndex !== undefined ? { usedIndex: roll.usedIndex } : {}),
+    ...(roll.rollMode ? { rollMode: roll.rollMode } : {}),
+    ...(roll.advantageSources ? { advantageSources: roll.advantageSources } : {}),
+    ...(roll.disadvantageSources ? { disadvantageSources: roll.disadvantageSources } : {}),
     modifier: roll.modifier,
     total: roll.total,
     dc: roll.dc,
+    ...(roll.dcBase !== undefined ? { dcBase: roll.dcBase } : {}),
+    ...(roll.dcEffective !== undefined ? { dcEffective: roll.dcEffective } : {}),
+    ...(r.difficulty?.preset ? { difficultyName: r.difficulty.preset } : {}),
     modifierTerms: [
       ...(roll.attributeId && roll.attributeModifier !== undefined
         ? [{ label: humanize(roll.attributeId), value: roll.attributeModifier }]
@@ -149,20 +199,42 @@ function rulingToArtifact(r: Ruling, nameOf: (id: string) => string): RulingArti
       defenderFormula: roll.opposedD20 !== undefined && roll.opposedModifier !== undefined
         ? `d20 ${roll.opposedD20} ${roll.opposedModifier >= 0 ? "+" : "−"} ${Math.abs(roll.opposedModifier)}`
         : undefined,
+      ...(roll.opposedDice ? { dice: roll.opposedDice } : {}),
+      ...(roll.opposedUsedIndex !== undefined ? { usedIndex: roll.opposedUsedIndex } : {}),
+      ...(roll.opposedRollMode ? { rollMode: roll.opposedRollMode } : {}),
+      reasons: [...(roll.opposedAdvantageSources ?? []), ...(roll.opposedDisadvantageSources ?? [])],
     };
   }
 
-  const effectLine = r.masteryAdvance
+  const effectParts = [
+    r.xpAward ? `${humanize(r.xpAward.skillId)} +${r.xpAward.amount} XP${r.xpAward.rankAfter !== r.xpAward.rankBefore ? ` · RANK UP ${r.xpAward.rankAfter.toUpperCase()}` : ""}` : undefined,
+    ...(r.damageAdjustments ?? []).map((adjustment) => `${Math.abs(adjustment.scaledDelta)} ${humanize(adjustment.resourceId)} ×${adjustment.multiplier} ${r.difficulty?.preset ?? ""}`),
+    r.causedDeathOf?.length ? `Death · ${r.causedDeathOf.map(nameOf).join(", ")}` : undefined,
+  ].filter((part): part is string => Boolean(part));
+  const effectLine = effectParts.join(" · ") || (r.masteryAdvance
     ? `${humanize(r.masteryAdvance.skillId)} → ${r.masteryAdvance.toRank.toUpperCase()}`
-    : undefined;
+    : undefined);
   const resultLine = r.effectsApplied?.narrationHint;
+  const detailRows = [
+    { label: "ACTION", value: r.actionLabel ?? humanize(r.actionId) },
+    ...(r.targetId ? [{ label: "TARGET", value: nameOf(r.targetId) }] : []),
+    ...(roll.attributeId ? [{ label: "ATTRIBUTE", value: `${humanize(roll.attributeId)} · score ${roll.attributeScore ?? "—"} · modifier ${signed(roll.attributeModifier ?? 0)}` }] : []),
+    ...(roll.masterySkillId ? [{ label: "SKILL", value: `${humanize(roll.masterySkillId)} · modifier ${signed(roll.masteryModifier ?? 0)}` }] : []),
+    ...(r.xpAward ? [{ label: "XP", value: `+${r.xpAward.amount} · ${r.xpAward.reason} · ${r.xpAward.previousXp} → ${r.xpAward.newXp}` }] : []),
+    ...(r.loot?.length ? [{ label: "LOOT", value: r.loot.map((loot) => `${loot.name} · ${loot.tier}`).join(", ") }] : []),
+  ];
 
   return {
     variant,
     roll: rollVM,
     ...(resultLine ? { resultLine } : {}),
     ...(effectLine ? { effectLine } : {}),
+    detailRows,
   };
+}
+
+function signed(value: number): string {
+  return value >= 0 ? `+${value}` : String(value);
 }
 
 /** Interleave rulings into the transcript: each ruling renders after the message whose id is its
@@ -356,6 +428,7 @@ export function Play(props: PlayProps): JSX.Element {
   // Store slices.
   const load = usePlayStore((s) => s.load);
   const submit = usePlayStore((s) => s.submit);
+  const retryRecovered = usePlayStore((s) => s.retryRecovered);
   const clearError = usePlayStore((s) => s.clearError);
   const swipeLast = usePlayStore((s) => s.swipeLast);
   const selectVariant = usePlayStore((s) => s.selectVariant);
@@ -366,8 +439,11 @@ export function Play(props: PlayProps): JSX.Element {
   const storeCast = usePlayStore((s) => s.cast);
   const storeLoading = usePlayStore((s) => s.loading);
   const storeThinking = usePlayStore((s) => s.thinking);
+  const storeOperationPhase = usePlayStore((s) => s.operationPhase);
   const storeProse = usePlayStore((s) => s.proseBuffer);
   const storeError = usePlayStore((s) => s.turnError);
+  const storeClassifierRecovery = usePlayStore((s) => s.classifierRecovery);
+  const storeRecoveryInspection = usePlayStore((s) => s.recoveryInspection);
 
   // UI store.
   const drawerCharacterId = useUiStore((s) => s.drawerCharacterId);
@@ -376,11 +452,33 @@ export function Play(props: PlayProps): JSX.Element {
   const reducedMotion = useUiStore((s) => s.reducedMotion);
 
   const mediaNarrow = useMediaQuery("(max-width: 900px)");
+  const [storyMeta, setStoryMeta] = useState<PlayStoryMeta>({ statMode: "full", actionBudget: 2, difficultyName: "standard" });
+  const [storyRecord, setStoryRecord] = useState<StoryRecord>();
+  const [suggestionsState, setSuggestionsState] = useState<SuggestionsState>("closed");
+  const [suggestions, setSuggestions] = useState<ActionSuggestion[]>([]);
+  const [feedbackState, setFeedbackState] = useState<"idle" | "generating" | "completed" | "validation-error" | "provider-error">("idle");
+  const turnAbort = useRef<AbortController>();
 
   // Load the story's transcript when the id changes (mount + route/tab switch).
   useEffect(() => {
     if (storyId) void load(storyId);
   }, [storyId, load]);
+
+  useEffect(() => {
+    if (!storyId) return;
+    let cancelled = false;
+    void getBridge().getStory(storyId).then((story) => {
+      if (cancelled || !story) return;
+      const record = story as StoryRecord & { actionBudget?: number; difficulty?: { preset?: string } };
+      setStoryRecord(story);
+      setStoryMeta({
+        statMode: story.schema.statMode === "full" ? "full" : "none",
+        actionBudget: record.actionBudget ?? (story.schema as typeof story.schema & { actionBudget?: number }).actionBudget ?? 2,
+        difficultyName: record.difficulty?.preset ?? "standard",
+      });
+    });
+    return () => { cancelled = true; };
+  }, [storyId]);
 
   // ── Resolve effective render inputs (store, then debug override) ────────────────────────────
   let messages = storeMessages;
@@ -388,8 +486,11 @@ export function Play(props: PlayProps): JSX.Element {
   let cast = storeCast;
   let loading = storeLoading;
   let thinking = storeThinking;
+  let operationPhase: TurnOperationPhase = storeOperationPhase;
   let proseBuffer = storeProse;
   let turnError: TurnError | undefined = storeError;
+  let classifierRecovery = storeClassifierRecovery;
+  let canRetryPersistedTurn = Boolean(storeRecoveryInspection?.recoverable);
   let narrow = mediaNarrow;
   let reduced = reducedMotion;
 
@@ -397,7 +498,10 @@ export function Play(props: PlayProps): JSX.Element {
     // Reset to a clean slate, then paint the requested state with demo data.
     loading = false;
     thinking = false;
+    operationPhase = "idle";
     turnError = undefined;
+    classifierRecovery = undefined;
+    canRetryPersistedTurn = false;
     proseBuffer = "";
     cast = DEMO_CAST;
     messages = DEMO_MESSAGES;
@@ -419,7 +523,60 @@ export function Play(props: PlayProps): JSX.Element {
         break;
       case "thinking":
         thinking = true;
+        operationPhase = "streaming";
         proseBuffer = "The lamp gutters as you speak, and the room leans in to listen. Somewhere below the floorboards, something old";
+        break;
+      case "stream-saving":
+        thinking = true;
+        operationPhase = "saving";
+        break;
+      case "stream-error":
+        operationPhase = "error";
+        break;
+      case "stream-cancelled":
+        operationPhase = "cancelled";
+        break;
+      case "stream-timed-out":
+        operationPhase = "timed-out";
+        break;
+      case "classifier-no-content":
+        classifierRecovery = {
+          policy: "narration_only",
+          issues: [{ kind: "no_content", message: "The classifier returned no content.", retryable: true }],
+        };
+        canRetryPersistedTurn = true;
+        operationPhase = "classifier-recovery";
+        break;
+      case "classifier-low-confidence":
+        classifierRecovery = {
+          policy: "narration_only",
+          issues: [{ kind: "low_confidence", message: "The intended action was below the confidence threshold.", retryable: true }],
+        };
+        canRetryPersistedTurn = true;
+        operationPhase = "classifier-recovery";
+        break;
+      case "classifier-target":
+        classifierRecovery = {
+          policy: "narration_only",
+          issues: [{ kind: "unresolved_target", message: "The action target could not be resolved.", retryable: true }],
+        };
+        canRetryPersistedTurn = true;
+        operationPhase = "classifier-recovery";
+        break;
+      case "classifier-timeout":
+        classifierRecovery = {
+          policy: "narration_only",
+          issues: [{ kind: "timeout", message: "The classifier request timed out.", retryable: true }],
+        };
+        canRetryPersistedTurn = true;
+        operationPhase = "timed-out";
+        break;
+      case "disadvantage":
+      case "advantage-cancelled":
+      case "opposed":
+      case "budget-exceeded":
+      case "loot":
+        rulings = DEMO_RULINGS;
         break;
       case "error-provider-auth":
         turnError = { kind: "provider-auth", role: "Narrator", message: "401 unauthorized" };
@@ -453,7 +610,8 @@ export function Play(props: PlayProps): JSX.Element {
   );
   const player = cast.find((c) => c.isPlayer);
   const playerName = player?.name ?? "you";
-  const busy = thinking || loading;
+  const operationBusy = !["idle", "error", "cancelled", "timed-out", "stale"].includes(operationPhase);
+  const busy = operationBusy || loading;
 
   const stream = useMemo(() => buildStream(messages, rulings), [messages, rulings]);
 
@@ -475,7 +633,7 @@ export function Play(props: PlayProps): JSX.Element {
   // Rewind confirmation: the design's confirm dialog names exactly what's removed.
   const [rewindTarget, setRewindTarget] = useState<number | undefined>(undefined);
   const [deleteTarget, setDeleteTarget] = useState<number | undefined>(undefined);
-  const historyBusy = thinking || loading;
+  const historyBusy = busy;
   const rewindLaterCount = rewindTarget === undefined
     ? 0
     : messages.filter((message) => message.role === "narrator" && message.idx > rewindTarget).length;
@@ -512,10 +670,15 @@ export function Play(props: PlayProps): JSX.Element {
   const [ambiguous, setAmbiguous] = useState<boolean>(false);
   const [lastTurn, setLastTurn] = useState<string>("");
 
+  useEffect(() => {
+    if (storeRecoveryInspection?.playerText) {
+      setLastTurn(storeRecoveryInspection.playerText);
+    }
+  }, [storeRecoveryInspection?.playerText]);
+
   const sendTurn = useCallback((): void => {
     const text = draft.trim();
     if (!text || busy) return;
-    // Prototype heuristic: a very short input is likely too vague to classify — nudge, don't send.
     if (text.length < 12) {
       setAmbiguous(true);
       return;
@@ -523,7 +686,9 @@ export function Play(props: PlayProps): JSX.Element {
     setAmbiguous(false);
     setLastTurn(text);
     setDraft("");
-    void submit(text);
+    const abort = new AbortController();
+    turnAbort.current = abort;
+    void submit(text, { signal: abort.signal });
   }, [draft, busy, submit]);
 
   const onComposerKey = useCallback(
@@ -539,9 +704,70 @@ export function Play(props: PlayProps): JSX.Element {
   );
 
   const retryTurn = useCallback((): void => {
+    if (storeRecoveryInspection?.recoverable) {
+      const abort = new AbortController();
+      turnAbort.current = abort;
+      void retryRecovered({ signal: abort.signal });
+      return;
+    }
     clearError();
-    if (lastTurn) void submit(lastTurn);
-  }, [clearError, lastTurn, submit]);
+    if (lastTurn) {
+      const abort = new AbortController();
+      turnAbort.current = abort;
+      void submit(lastTurn, { signal: abort.signal });
+    }
+  }, [
+    clearError,
+    lastTurn,
+    retryRecovered,
+    storeRecoveryInspection,
+    submit,
+  ]);
+
+  const editBudgetTurn = useCallback(
+    (ruling: Ruling): void => {
+      const narrator = ruling.messageId
+        ? messages.find((message) => message.id === ruling.messageId)
+        : undefined;
+      const original =
+        narrator === undefined
+          ? undefined
+          : [...messages]
+              .reverse()
+              .find(
+                (message) =>
+                  message.role === "player" && message.idx < narrator.idx
+              )?.content;
+      setDraft(original ?? lastTurn);
+      setAmbiguous(false);
+      turnAbort.current?.abort();
+    },
+    [lastTurn, messages]
+  );
+
+  const requestSuggestions = useCallback(async (): Promise<void> => {
+    if (!storyId) return;
+    setSuggestionsState("loading");
+    try {
+      const rows = await getBridge().suggestActions(storyId);
+      setSuggestions(rows.slice(0, 6));
+      setSuggestionsState(rows.length ? "ready" : "empty");
+    } catch {
+      setSuggestionsState("error");
+    }
+  }, [storyId, draft]);
+
+  const regenerateWithFeedback = useCallback(async (feedback: string): Promise<void> => {
+    if (!storyId || historyBusy) return;
+    setFeedbackState("generating");
+    try {
+      await getBridge().swipeLastTurn({ storyId, feedback });
+      await load(storyId);
+      setFeedbackState("completed");
+    } catch (reason) {
+      setFeedbackState(/feedback|max|300|valid/i.test(String(reason)) ? "validation-error" : "provider-error");
+    }
+  }, [storyId, historyBusy, load]);
 
   // ── Drawer (LivingCard) ─────────────────────────────────────────────────────────────────────
   const [card, setCard] = useState<LivingCardView | undefined>(undefined);
@@ -651,7 +877,16 @@ export function Play(props: PlayProps): JSX.Element {
                 <div role="log" aria-live="polite" aria-relevant="additions text">
                   {stream.map((item) => {
                     if (item.kind === "ruling") {
-                      return <RulingBlock key={item.key} ruling={item.ruling} nameOf={nameOf} animate={!reduced} />;
+                      return (
+                        <RulingBlock
+                          key={item.key}
+                          ruling={item.ruling}
+                          nameOf={nameOf}
+                          animate={!reduced}
+                          story={storyRecord}
+                          onEditRetry={() => editBudgetTurn(item.ruling)}
+                        />
+                      );
                     }
                     const m = item.message;
                     if (m.role !== "narrator") {
@@ -662,6 +897,7 @@ export function Play(props: PlayProps): JSX.Element {
                     const variantCount = Math.max(1, variants.length);
                     const variantIndex = (m.activeVariant ?? 0) + 1;
                     const isLatest = m.idx === latestNarratorIdx;
+                    const activeVariant = variants[m.activeVariant ?? 0];
                     return (
                       <div key={item.key}>
                         <MessageBlock message={m} nameOf={nameOf} />
@@ -679,26 +915,54 @@ export function Play(props: PlayProps): JSX.Element {
                           }}
                           onRewindToHere={() => setRewindTarget(m.idx)}
                           onDeleteFromHere={() => setDeleteTarget(m.idx)}
+                          onRegenerateWithFeedback={(feedback) => void regenerateWithFeedback(feedback)}
+                          activeFeedback={
+                            activeVariant && typeof activeVariant === "object"
+                              ? activeVariant.feedback
+                              : undefined
+                          }
+                          regenerationState={feedbackState}
                         />
                       </div>
                     );
                   })}
 
-                  {thinking && (
+                  {operationPhase !== "idle" && (
                     <div style={S.thinking} data-testid="play-thinking">
-                      {proseBuffer ? (
+                      {proseBuffer && (operationPhase === "streaming" || operationPhase === "saving") ? (
                         <p style={S.prose} data-testid="play-prose-buffer">
                           {proseBuffer}
                         </p>
                       ) : null}
-                      <div style={S.thinkingRow}>
-                        <span style={S.thinkingLabel}>The story continues</span>
-                        <ThinkingIndicator animate={!reduced} />
-                      </div>
+                      <OperationStatus
+                        phase={operationPhase}
+                        animate={!reduced}
+                        onResume={operationPhase === "stale" || operationPhase === "timed-out" ? retryTurn : undefined}
+                        onDismiss={["error", "cancelled", "timed-out", "stale"].includes(operationPhase) ? clearError : undefined}
+                      />
+                      {operationBusy ? (
+                        <button type="button" onClick={() => turnAbort.current?.abort()} style={{ marginTop: 5, color: "var(--muted)", background: "transparent", border: 0, cursor: "pointer", fontSize: 10.5 }}>
+                          Cancel generation
+                        </button>
+                      ) : null}
                     </div>
                   )}
 
-                  {turnError && (
+                  {classifierRecovery ? (
+                    <ClassifierRecovery
+                      recovery={classifierRecovery}
+                      canRetry={canRetryPersistedTurn}
+                      onRetry={retryTurn}
+                      onEdit={() => {
+                        setDraft(storeRecoveryInspection?.playerText ?? lastTurn);
+                        turnAbort.current?.abort();
+                      }}
+                      onConfigure={() => navigate("rolematrix", storyId ? { storyId } : {})}
+                      onDismiss={clearError}
+                    />
+                  ) : null}
+
+                  {turnError && !classifierRecovery && (
                     <ErrorBlock
                       error={turnError}
                       onSettings={() => navigate("settings", storyId ? { storyId } : {})}
@@ -726,6 +990,16 @@ export function Play(props: PlayProps): JSX.Element {
             busy={busy}
             playerName={playerName}
             ambiguous={ambiguous}
+            actionBudget={storyMeta.statMode === "full" ? storyMeta.actionBudget : undefined}
+            suggestionsState={suggestionsState}
+            suggestions={suggestions}
+            onOpenSuggestions={() => void requestSuggestions()}
+            onCloseSuggestions={() => setSuggestionsState("closed")}
+            onRegenerateSuggestions={() => void requestSuggestions()}
+            onInsertSuggestion={(text) => {
+              setDraft((current) => current.trim() ? `${current.trim()} ${text}` : text);
+              setSuggestionsState("closed");
+            }}
           />
         </section>
 
@@ -836,9 +1110,59 @@ function SafeStoryText(props: { text: string }): JSX.Element {
   );
 }
 
-function RulingBlock(props: { ruling: Ruling; nameOf: (id: string) => string; animate: boolean }): JSX.Element | null {
+function RulingBlock(props: {
+  ruling: Ruling;
+  nameOf: (id: string) => string;
+  animate: boolean;
+  story?: StoryRecord;
+  onEditRetry?: () => void;
+}): JSX.Element | null {
+  const { navigate } = useRoute();
   const vm = rulingToArtifact(props.ruling, props.nameOf);
   if (!vm) return null;
+  const action = props.story?.schema.actions.find((candidate) => candidate.id === props.ruling.actionId);
+  const skill = action?.requiresSkill ? props.story?.schema.skills.find((candidate) => candidate.id === action.requiresSkill) : undefined;
+  const attributeId = props.ruling.roll?.attributeId ?? action?.governingAttribute;
+  const attribute = attributeId
+    ? props.story?.schema.attributes.find((candidate) => candidate.id === attributeId)
+    : undefined;
+  const loot: LootAwardItem[] = (props.ruling.loot ?? []).map((item) => ({
+    id: item.itemInstanceId,
+    name: item.name,
+    tier: `${item.tier[0]?.toUpperCase() ?? ""}${item.tier.slice(1)}` as LootAwardItem["tier"],
+    quantity: item.quantity,
+    definition: item.description ?? item.provenanceSummary,
+    effects: (item.effects ?? []).map((effect) => JSON.stringify(effect)),
+    source: item.provenanceSummary,
+    eligibleSlots: item.eligibleSlots,
+  }));
+  const details = [
+    ...(vm.detailRows ?? []),
+    ...(action && typeof action.description === "string"
+      ? [
+          {
+            label: "ACTION DEFINITION",
+            value: `${action.label} — ${action.description}`,
+          },
+        ]
+      : []),
+    ...(attribute
+      ? [
+          {
+            label: "ATTRIBUTE DEFINITION",
+            value: `${attribute.name} (${attribute.abbrev}) — ${attribute.description}`,
+          },
+        ]
+      : []),
+    ...(skill
+      ? [
+          {
+            label: "SKILL DEFINITION",
+            value: `${skill.name} — ${skill.description}`,
+          },
+        ]
+      : []),
+  ];
   return (
     <div style={S.rulingWrap}>
       <RulingArtifact
@@ -847,7 +1171,101 @@ function RulingBlock(props: { ruling: Ruling; nameOf: (id: string) => string; an
         {...(vm.reason ? { reason: vm.reason } : {})}
         {...(vm.resultLine ? { resultLine: vm.resultLine } : {})}
         {...(vm.effectLine ? { effectLine: vm.effectLine } : {})}
+        detailRows={details}
+        {...(vm.variant === "budget-exceeded" && props.onEditRetry
+          ? {
+              onEditRetry: props.onEditRetry,
+              editRetryLabel: "Edit original turn",
+            }
+          : {})}
         animate={props.animate}
+      />
+      <LootAward
+        items={loot}
+        onEquip={(item) =>
+          navigate("loadout", {
+            storyId: props.story?.id,
+            characterId:
+              props.ruling.loot?.find((award) => award.itemInstanceId === item.id)
+                ?.ownerCharacterId ?? props.ruling.actorId,
+          })
+        }
+        onKeep={() => {
+          /* Loot is already stored atomically; this button is an explicit acknowledgement. */
+        }}
+        onView={(item) =>
+          navigate("loadout", {
+            storyId: props.story?.id,
+            characterId:
+              props.ruling.loot?.find((award) => award.itemInstanceId === item.id)
+                ?.ownerCharacterId ?? props.ruling.actorId,
+          })
+        }
+      />
+    </div>
+  );
+}
+
+function ClassifierRecovery(props: {
+  recovery: ClassifierRecoveryMetadata;
+  canRetry: boolean;
+  onRetry: () => void;
+  onEdit: () => void;
+  onConfigure: () => void;
+  onDismiss: () => void;
+}): JSX.Element {
+  const labels: Record<
+    ClassifierRecoveryMetadata["issues"][number]["kind"],
+    string
+  > = {
+    no_content: "No content",
+    invalid_output: "Invalid response",
+    timeout: "Timeout",
+    low_confidence: "Low confidence",
+    unresolved_action: "Unresolved action",
+    unresolved_target: "Unresolved target",
+    provider_error: "Provider error",
+  };
+  const primary = props.recovery.issues[0];
+  const kind = primary ? labels[primary.kind] : "Classifier unavailable";
+  const unresolvedTarget = props.recovery.issues.some(
+    (issue) => issue.kind === "unresolved_target"
+  );
+  return (
+    <div style={S.errorWrap} data-testid="classifier-recovery">
+      <InlineNotice
+        severity="warn"
+        title={`${
+          props.recovery.policy === "partial_mechanics"
+            ? "Some mechanics were limited"
+            : "Mechanics safely paused"
+        } · ${kind}`}
+        detail={
+          <div style={{ display: "grid", gap: 9 }}>
+            <span>
+              The player turn stays visible, but no unresolved attempt is shown
+              as successful without a valid DM Ruling.
+            </span>
+            {props.recovery.issues.map((issue, index) => (
+              <span key={`${issue.kind}:${index}`}>
+                <strong>{labels[issue.kind]}:</strong> {issue.message}
+                {issue.count ? ` (${issue.count})` : ""}
+              </span>
+            ))}
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
+              {props.canRetry ? (
+                <>
+                  <Button variant="system" onClick={props.onRetry}>Retry saved turn</Button>
+                  <Button variant="secondary" onClick={props.onEdit}>
+                    {unresolvedTarget ? "Clarify target" : "Edit saved turn"}
+                  </Button>
+                </>
+              ) : null}
+              <Button variant="ghost" onClick={props.onDismiss}>Dismiss</Button>
+              <Button variant="ghost" onClick={props.onConfigure}>Configure Classifier</Button>
+            </div>
+          </div>
+        }
       />
     </div>
   );
@@ -914,13 +1332,29 @@ function Composer(props: {
   busy: boolean;
   playerName: string;
   ambiguous: boolean;
+  actionBudget?: number;
+  suggestionsState: SuggestionsState;
+  suggestions: ActionSuggestion[];
+  onOpenSuggestions: () => void;
+  onCloseSuggestions: () => void;
+  onRegenerateSuggestions: () => void;
+  onInsertSuggestion: (text: string) => void;
 }): JSX.Element {
   const { value, onChange, onKeyDown, onSend, busy, playerName, ambiguous } = props;
   const canSend = value.trim().length > 0 && !busy;
   const placeholder = busy ? "The storyteller is writing…" : `What does ${playerName} do?`;
   return (
     <div style={S.composerOuter}>
-      <div style={S.composerInner}>
+      <div style={{ ...S.composerInner, position: "relative" }}>
+        <ActionSuggestions
+          state={props.suggestionsState}
+          suggestions={props.suggestions}
+          actionBudget={props.actionBudget}
+          onOpen={props.onOpenSuggestions}
+          onClose={props.onCloseSuggestions}
+          onRegenerate={props.onRegenerateSuggestions}
+          onInsert={props.onInsertSuggestion}
+        />
         {ambiguous && (
           <div style={S.ambiguity} data-testid="play-ambiguity">
             <span aria-hidden="true">◈</span>
@@ -945,6 +1379,7 @@ function Composer(props: {
         </div>
         <div style={S.composerFoot}>
           <div style={{ display: "flex", gap: 14 }}>
+            {props.actionBudget ? <span style={{ color: "var(--teal)" }}>Up to {props.actionBudget} actions this turn</span> : null}
             <span>
               <b style={S.key}>Enter</b> to send
             </span>

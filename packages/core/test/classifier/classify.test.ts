@@ -12,8 +12,16 @@
  * to. A live-model run of the same corpus is a manual/CI step (plan §10).
  */
 import { describe, it, expect } from "vitest";
-import { classify, buildClassifierSchema } from "../../src/classifier/index.js";
-import type { Router, RolePrompt } from "../../src/router/index.js";
+import {
+  classify,
+  classifyWithRecovery,
+  buildClassifierSchema,
+} from "../../src/classifier/index.js";
+import {
+  ProviderTimeoutError,
+  type Router,
+  type RolePrompt,
+} from "../../src/router/index.js";
 import type { ClassifiedTurn } from "../../src/index.js";
 import { makeStory } from "../fixtures.js";
 import { GOLDEN_CASES } from "./golden.js";
@@ -42,6 +50,23 @@ function scripted(responses: string[]): Router {
 
 function turn(t: Partial<ClassifiedTurn>): string {
   return JSON.stringify({ playerIntents: [], npcIntents: [], freeText: "", ...t });
+}
+
+function failing(error: Error): Router {
+  return {
+    bindingFor: () => ({
+      provider: "openrouter",
+      model: "test",
+      source: "recommended",
+      samplersDirty: false,
+    }),
+    async complete() {
+      throw error;
+    },
+    async stream() {
+      throw new Error("classifier never streams");
+    },
+  };
 }
 
 describe("buildClassifierSchema", () => {
@@ -157,6 +182,168 @@ describe("classify — behavior", () => {
       recentNarration: [],
     });
     expect(out.playerIntents[0]!.actionId).toBe("attack_wild");
+  });
+
+  it("recovers an empty classifier response as a conservative narration-only turn", async () => {
+    const out = await classifyWithRecovery(
+      scripted([""]),
+      story,
+      {
+        playerMessage: "I contemplate the wallpaper.",
+        presentCharacters: present,
+        recentNarration: [],
+      },
+      { maxRepairs: 0 }
+    );
+    expect(out.recovered).toBe(true);
+    expect(out.errorKind).toBe("ModelOutputError");
+    expect(out.recovery?.issues.map((issue) => issue.kind)).toEqual(["no_content"]);
+    expect(out.turn.playerIntents).toEqual([]);
+    expect(out.turn.freeText).toContain("do not claim any roll");
+  });
+
+  it("maps a clear knife lunge to the sealed universal melee action when the model emits no intents", async () => {
+    const out = await classifyWithRecovery(
+      scripted([turn({})]),
+      story,
+      {
+        playerMessage: "I lunge with my knife at the guard.",
+        presentCharacters: present,
+        recentNarration: [],
+      }
+    );
+    expect(out.recovered).toBe(false);
+    expect(out.turn.playerIntents).toEqual([
+      {
+        actorId: "player",
+        actionId: "attack_melee",
+        targetId: "guard",
+        confidence: 1,
+      },
+    ]);
+  });
+
+  it("recovers a clear universal action mechanically after an empty provider response", async () => {
+    const out = await classifyWithRecovery(
+      scripted([""]),
+      story,
+      {
+        playerMessage: "I stab the guard with my knife.",
+        presentCharacters: present,
+        recentNarration: [],
+      },
+      { maxRepairs: 0 }
+    );
+    expect(out.recovered).toBe(true);
+    expect(out.recovery?.policy).toBe("partial_mechanics");
+    expect(out.recovery?.issues.map((entry) => entry.kind)).toEqual(["no_content"]);
+    expect(out.turn.playerIntents[0]).toMatchObject({
+      actorId: "player",
+      actionId: "attack_melee",
+      targetId: "guard",
+    });
+    expect(out.turn.freeText).toContain("obey its DM ruling");
+  });
+
+  it("fails closed when a universal attack has an ambiguous target", async () => {
+    const out = await classifyWithRecovery(
+      scripted([turn({})]),
+      story,
+      {
+        playerMessage: "I stab with my knife.",
+        presentCharacters: [
+          ...present,
+          { id: "scout", name: "Scout", isPlayer: false },
+        ],
+        recentNarration: [],
+      }
+    );
+    expect(out.recovered).toBe(true);
+    expect(out.recovery?.issues.map((entry) => entry.kind)).toEqual([
+      "unresolved_target",
+    ]);
+    expect(out.turn.playerIntents).toEqual([]);
+  });
+
+  it("preserves low-confidence demotion as structured recovery metadata", async () => {
+    const out = await classifyWithRecovery(
+      scripted([
+        turn({
+          playerIntents: [
+            { actorId: "player", actionId: "pick_lock", confidence: 0.4 },
+          ],
+        }),
+      ]),
+      story,
+      {
+        playerMessage: "Maybe I try the lock.",
+        presentCharacters: present,
+        recentNarration: [],
+      }
+    );
+    expect(out.recovered).toBe(true);
+    expect(out.recovery).toMatchObject({
+      policy: "narration_only",
+      issues: [{ kind: "low_confidence", retryable: false, count: 1 }],
+    });
+  });
+
+  it.each([
+    {
+      label: "invalid output",
+      response: "not json",
+      expected: ["invalid_output"],
+    },
+    {
+      label: "unresolved action",
+      response: turn({
+        playerIntents: [
+          { actorId: "player", actionId: "invented_action", confidence: 1 },
+        ],
+      }),
+      expected: ["unresolved_action"],
+    },
+    {
+      label: "unresolved target",
+      response: turn({
+        playerIntents: [
+          {
+            actorId: "player",
+            actionId: "attack_melee",
+            targetId: "missing-character",
+            confidence: 1,
+          },
+        ],
+      }),
+      expected: ["unresolved_target"],
+    },
+  ])("preserves $label recovery metadata", async ({ response, expected }) => {
+    const out = await classifyWithRecovery(
+      scripted([response]),
+      story,
+      {
+        playerMessage: "I attempt it.",
+        presentCharacters: present,
+        recentNarration: [],
+      },
+      { maxRepairs: 0 }
+    );
+    expect(out.recovered).toBe(true);
+    expect(out.recovery?.issues.map((entry) => entry.kind)).toEqual(expected);
+  });
+
+  it("preserves provider timeout recovery metadata", async () => {
+    const out = await classifyWithRecovery(
+      failing(new ProviderTimeoutError("openrouter", "test", 1_000)),
+      story,
+      {
+        playerMessage: "I contemplate the wallpaper.",
+        presentCharacters: present,
+        recentNarration: [],
+      }
+    );
+    expect(out.recovered).toBe(true);
+    expect(out.recovery?.issues.map((entry) => entry.kind)).toEqual(["timeout"]);
   });
 });
 

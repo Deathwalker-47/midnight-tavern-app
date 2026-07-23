@@ -28,6 +28,14 @@ function storyRecord(id = "s1"): StoryRecord {
     createdAt: 1000,
     schema: makeStory({ storyId: id, locked: true }),
     locked: true,
+    difficulty: {
+      preset: "standard",
+      dcOffset: 0,
+      damageTakenMultiplier: 1,
+      damageDealtMultiplier: 1,
+    },
+    actionBudget: 2,
+    rulebookVersion: 1,
   };
 }
 

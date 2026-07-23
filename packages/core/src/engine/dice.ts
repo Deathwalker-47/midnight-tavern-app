@@ -5,8 +5,16 @@
  * rolls; the default uses crypto for real play.
  */
 
+import type { RollMode } from "../types/index.js";
+
 /** A source of randomness: returns a float in [0, 1). */
 export type Rng = () => number;
+
+export interface DiceRoll {
+  dice: number[];
+  usedIndex: number;
+  natural: number;
+}
 
 /** Default RNG backed by crypto.getRandomValues (uniform, not Math.random). */
 export const cryptoRng: Rng = () => {
@@ -19,6 +27,17 @@ export const cryptoRng: Rng = () => {
 /** Roll a d20 (1–20 inclusive) using the given RNG (defaults to crypto). */
 export function rollD20(rng: Rng = cryptoRng): number {
   return Math.floor(rng() * 20) + 1;
+}
+
+export function rollD20Mode(mode: RollMode, rng: Rng = cryptoRng): DiceRoll {
+  const first = rollD20(rng);
+  if (mode === "normal") return { dice: [first], usedIndex: 0, natural: first };
+  const second = rollD20(rng);
+  const useSecond =
+    mode === "advantage" ? second > first : second < first;
+  const usedIndex = useSecond ? 1 : 0;
+  const dice = [first, second];
+  return { dice, usedIndex, natural: dice[usedIndex]! };
 }
 
 /**

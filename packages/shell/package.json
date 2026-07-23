@@ -1,6 +1,6 @@
 {
   "name": "@midnight-tavern/shell",
-  "version": "0.1.3",
+  "version": "0.2.0",
   "private": true,
   "description": "Tauri v2 desktop shell for Midnight Tavern (M12). Hosts the built UI (packages/ui/dist) and provides native SQLite + filesystem. Packaging, code-signing, and auto-update config live here.",
   "scripts": {

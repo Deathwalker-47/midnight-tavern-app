@@ -4,6 +4,7 @@ import type { ScreenProps } from "./registry.js";
 import { RoleMatrixEditor } from "./RoleMatrix.js";
 import { useSettingsStore, type KeyState } from "../state/settingsStore.js";
 import type { ProviderId } from "../bridge/core.js";
+import { getBridge } from "../bridge/core.js";
 import {
   Button,
   Chip,
@@ -90,6 +91,7 @@ export function Settings(_props: ScreenProps): JSX.Element {
     loaded,
     load,
     validateKey,
+    removeProviderConfig,
     setRoleMap,
     validateLicense,
     clearLicense,
@@ -102,6 +104,11 @@ export function Settings(_props: ScreenProps): JSX.Element {
   const [diagnosticsPath, setDiagnosticsPath] = useState<string>();
   const [diagnosticsError, setDiagnosticsError] = useState<string>();
   const [diagnosticsBusy, setDiagnosticsBusy] = useState(false);
+  const [primaryProvider, setPrimaryProvider] = useState<ProviderId>();
+  const [primaryError, setPrimaryError] = useState<string>();
+  const [disconnectingProvider, setDisconnectingProvider] = useState<ProviderId>();
+  const [replacementProvider, setReplacementProvider] = useState<ProviderId>();
+  const [disconnectBusy, setDisconnectBusy] = useState(false);
 
   useEffect(() => {
     if (loaded) return;
@@ -131,6 +138,61 @@ export function Settings(_props: ScreenProps): JSX.Element {
       return next;
     });
   }, [loaded, providerIds, providerConfigs]);
+
+  useEffect(() => {
+    if (!loaded) return;
+    let cancelled = false;
+    const connected = providerIds.filter((id) => Boolean(providerConfigs[id]?.apiKey));
+    void getBridge().getPrimaryProvider().then((saved) => {
+      if (!cancelled) setPrimaryProvider(saved && connected.includes(saved) ? saved : undefined);
+    }).catch(() => {
+      if (!cancelled) setPrimaryError("Couldn't read the saved Primary provider.");
+    });
+    return () => { cancelled = true; };
+  }, [loaded, providerIds, providerConfigs]);
+
+  async function makePrimary(id: ProviderId): Promise<void> {
+    setPrimaryError(undefined);
+    try {
+      await getBridge().setPrimaryProvider(id);
+      setPrimaryProvider(id);
+    } catch (error) {
+      setPrimaryError(error instanceof Error ? error.message : "Couldn't change the Primary provider.");
+    }
+  }
+
+  function requestDisconnect(id: ProviderId): void {
+    const replacements = providerIds.filter(
+      (candidate) => candidate !== id && Boolean(providerConfigs[candidate]?.apiKey)
+    );
+    if (primaryProvider === id && replacements.length > 0) {
+      setDisconnectingProvider(id);
+      setReplacementProvider(replacements[0]);
+      return;
+    }
+    void disconnectProvider(id);
+  }
+
+  async function disconnectProvider(id: ProviderId, replacement?: ProviderId): Promise<void> {
+    setPrimaryError(undefined);
+    setDisconnectBusy(true);
+    try {
+      if (primaryProvider === id && replacement) {
+        await getBridge().setPrimaryProvider(replacement);
+        setPrimaryProvider(replacement);
+      }
+      await removeProviderConfig(id);
+      setDrafts((previous) => ({ ...previous, [id]: "" }));
+      setBaseUrls((previous) => ({ ...previous, [id]: "" }));
+      setDisconnectingProvider(undefined);
+      setReplacementProvider(undefined);
+      setPrimaryProvider(await getBridge().getPrimaryProvider());
+    } catch (error) {
+      setPrimaryError(error instanceof Error ? error.message : "Couldn't disconnect the provider.");
+    } finally {
+      setDisconnectBusy(false);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -212,17 +274,105 @@ export function Settings(_props: ScreenProps): JSX.Element {
         <section id="providers" style={SECTION}>
           <h2 style={H2}>Providers &amp; keys</h2>
           <p style={LEAD}>Keys stay on this machine. A provider is saved only after its live model endpoint accepts the credentials.</p>
+          {primaryError ? <div style={{ marginBottom: 12 }}><InlineNotice severity="error" title="Couldn't change Primary provider" detail={primaryError} /></div> : null}
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {providerIds.map((id) => {
               const meta = providerMeta(id);
               const state = keyStates[id];
-              const fieldState = keyFieldState(state);
+              const configured = Boolean(providerConfigs[id]?.apiKey);
+              const fieldState =
+                configured && (!state || state.state === "idle") ? "valid" : keyFieldState(state);
               const reason = state?.state === "rejected" ? state.reason : undefined;
               const balance = state?.state === "valid" ? state.balance : undefined;
               const busy = state?.state === "validating";
               return (
                 <ProviderCard key={id} name={meta.name} keyState={fieldState} subtitle={meta.desc}>
-                  {meta.recommended ? <div style={{ marginBottom: 10 }}><Chip tone="recommended">RECOMMENDED</Chip></div> : null}
+                  <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 10 }}>
+                    {meta.recommended ? <Chip tone="recommended">RECOMMENDED</Chip> : null}
+                    {primaryProvider === id ? <Chip tone="keyword">PRIMARY</Chip> : null}
+                    {fieldState === "valid" && primaryProvider !== id ? (
+                      <button type="button" onClick={() => void makePrimary(id)} style={{ marginLeft: "auto", color: "var(--teal)", background: "transparent", border: 0, cursor: "pointer", fontFamily: "var(--font-mono)", fontSize: 10.5 }}>
+                        Make primary
+                      </button>
+                    ) : null}
+                    {configured ? (
+                      <button
+                        type="button"
+                        disabled={disconnectBusy}
+                        onClick={() => requestDisconnect(id)}
+                        style={{
+                          marginLeft: primaryProvider === id ? "auto" : 0,
+                          color: "var(--muted)",
+                          background: "transparent",
+                          border: 0,
+                          cursor: disconnectBusy ? "default" : "pointer",
+                          fontFamily: "var(--font-mono)",
+                          fontSize: 10.5,
+                        }}
+                      >
+                        Disconnect
+                      </button>
+                    ) : null}
+                  </div>
+                  {disconnectingProvider === id ? (
+                    <div
+                      data-testid={`primary-replacement-${id}`}
+                      style={{
+                        display: "flex",
+                        alignItems: "flex-end",
+                        gap: 10,
+                        padding: "10px 12px",
+                        marginBottom: 12,
+                        background: "var(--bg2-card)",
+                        border: "1px solid var(--brass-dim)",
+                        borderRadius: "var(--radius-chip)",
+                      }}
+                    >
+                      <label style={{ ...FIELD_LABEL, flex: 1, marginBottom: 0 }}>
+                        Replacement Primary
+                        <select
+                          aria-label="Replacement Primary provider"
+                          value={replacementProvider ?? ""}
+                          onChange={(event) =>
+                            setReplacementProvider(event.target.value as ProviderId)
+                          }
+                          style={TEXT_INPUT}
+                        >
+                          {providerIds
+                            .filter(
+                              (candidate) =>
+                                candidate !== id && Boolean(providerConfigs[candidate]?.apiKey)
+                            )
+                            .map((candidate) => (
+                              <option key={candidate} value={candidate}>
+                                {providerMeta(candidate).name}
+                              </option>
+                            ))}
+                        </select>
+                      </label>
+                      <Button
+                        variant="system"
+                        disabled={disconnectBusy || !replacementProvider}
+                        onClick={() =>
+                          replacementProvider
+                            ? void disconnectProvider(id, replacementProvider)
+                            : undefined
+                        }
+                      >
+                        {disconnectBusy ? "Replacing…" : "Replace & disconnect"}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        disabled={disconnectBusy}
+                        onClick={() => {
+                          setDisconnectingProvider(undefined);
+                          setReplacementProvider(undefined);
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  ) : null}
                   {id === "custom" ? (
                     <label style={FIELD_LABEL}>
                       Base URL

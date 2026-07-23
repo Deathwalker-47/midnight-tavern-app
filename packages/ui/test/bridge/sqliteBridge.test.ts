@@ -22,6 +22,7 @@ function fakeCore(overrides: Record<string, unknown> = {}) {
     PROVIDER_CONFIGS_SETTING_KEY: "providerConfigs",
     ROLE_MAP_SETTING_KEY: "roleMap",
     ProviderConfigsSchema: {},
+    ProviderIdSchema: {},
     RoleMapSchema: {},
     DEFAULT_ROLE_MAP: { narrator: { provider: "openrouter", model: "m" } },
     ROLES: [],
@@ -53,6 +54,7 @@ function fakeStore(parts: Record<string, unknown> = {}) {
     settings: {
       get: vi.fn(async (key: string) => settingsData.get(key)),
       set: vi.fn(async (key: string, _schema: unknown, value: unknown) => void settingsData.set(key, value)),
+      delete: vi.fn(async (key: string) => void settingsData.delete(key)),
     },
     stories: { list: vi.fn(async () => []), get: vi.fn(), update: vi.fn(), delete: vi.fn() },
     messages: { listByStory: vi.fn(async () => []) },
@@ -109,7 +111,7 @@ describe("buildSqliteBridge", () => {
     expect(bootstrapStory).toHaveBeenCalledWith(
       expect.anything(),
       store,
-      { storyId: "s1", title: "T", premise: "P", statMode: "full" },
+      { storyId: "s1", title: "T", premise: "P", statMode: "full", actionBudget: 2 },
       { name: "Hero" },
       { onProgress: expect.any(Function) }
     );
@@ -196,6 +198,65 @@ describe("buildSqliteBridge", () => {
     expect(await bridge.getProviderConfigs()).toEqual({ openrouter: { apiKey: "k", baseUrl: "https://x" } });
     await bridge.removeProviderConfig("openrouter");
     expect(await bridge.getProviderConfigs()).toEqual({});
+  });
+
+  it("persists one Primary provider and requires explicit replacement before removal", async () => {
+    const bridge = buildSqliteBridge(fakeStore(), fakeCore());
+    await bridge.setProviderConfig("openrouter", { apiKey: "or-key" });
+    await bridge.setProviderConfig("openai", { apiKey: "ai-key" });
+
+    expect(await bridge.getPrimaryProvider()).toBe("openrouter");
+    await expect(bridge.removeProviderConfig("openrouter")).rejects.toThrow(
+      /replacement Primary/i
+    );
+
+    await bridge.setPrimaryProvider("openai");
+    await bridge.removeProviderConfig("openrouter");
+    expect(await bridge.getPrimaryProvider()).toBe("openai");
+    await expect(bridge.setPrimaryProvider("anthropic")).rejects.toThrow(/connect and validate/i);
+  });
+
+  it("exposes versioned recommendation parameters and provider capability masks", () => {
+    const samplerProfileFor = vi.fn(() => ({
+      temperature: 0.25,
+      topP: 1,
+      maxTokens: 700,
+    }));
+    const providerSupportsSampler = vi.fn(() => false);
+    const bridge = buildSqliteBridge(
+      fakeStore(),
+      fakeCore({
+        MODEL_RECOMMENDATION_CONFIG_VERSION: 7,
+        SAMPLER_PRESETS: {
+          Precise: { temperature: 0, topP: 1, maxTokens: 800 },
+          Balanced: { temperature: 0.5, topP: 0.95, maxTokens: 1200 },
+          Creative: { temperature: 0.8, topP: 0.98, maxTokens: 1600 },
+        },
+        DEFAULT_PRESET_FOR_ROLE: {
+          narrator: "Creative",
+          classifier: "Precise",
+          analyzer: "Precise",
+          summarizer: "Balanced",
+          bootstrapper: "Balanced",
+        },
+        SUPPORTED_SAMPLERS: { openai: new Set(["temperature", "topP", "maxTokens"]) },
+        samplerProfileFor,
+        providerSupportsSampler,
+      })
+    );
+
+    expect(bridge.modelRecommendationConfig()).toMatchObject({
+      version: 7,
+      defaultPresetForRole: { narrator: "Creative" },
+      providerSamplerSupport: { openai: ["temperature", "topP", "maxTokens"] },
+    });
+    expect(bridge.recommendedSamplerProfile("classifier", "model-x")).toEqual({
+      temperature: 0.25,
+      topP: 1,
+      maxTokens: 700,
+    });
+    expect(bridge.providerSupportsSampler("openai", "topK")).toBe(false);
+    expect(samplerProfileFor).toHaveBeenCalledWith("classifier", "model-x");
   });
 
   it("validateProviderKey: empty ⇒ rejected, chat success ⇒ valid, chat throw ⇒ rejected", async () => {

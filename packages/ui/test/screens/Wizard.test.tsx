@@ -26,14 +26,25 @@ describe("Wizard", () => {
     expect(screen.getByRole("button", { name: /ash-buried pilgrim road/i })).toBeInTheDocument();
   });
 
-  it("keeps Forge disabled until the premise is long enough", () => {
+  it("requires a sufficient premise and explicit persona review before Forge", () => {
     render(<Wizard />);
+    const review = screen.getByRole("button", { name: /review before forge/i });
+    expect(review).toBeDisabled();
+
+    // A seed chip fills a full premise → review enables.
+    fireEvent.click(screen.getByRole("button", { name: /drowned city returns/i }));
+    expect(review).not.toBeDisabled();
+    fireEvent.click(review);
+
+    // Persona context is a deliberate safeguard; the user must attach one or acknowledge absence.
     const forge = screen.getByRole("button", { name: /forge this world/i });
     expect(forge).toBeDisabled();
-
-    // A seed chip fills a full premise → forge enables.
-    fireEvent.click(screen.getByRole("button", { name: /drowned city returns/i }));
-    expect(screen.getByRole("button", { name: /forge this world/i })).not.toBeDisabled();
+    fireEvent.click(
+      screen.getByRole("checkbox", {
+        name: /continue without a persona/i,
+      })
+    );
+    expect(forge).not.toBeDisabled();
   });
 
   it("shows the trial-gate upsell instead of the form when creation is blocked", () => {

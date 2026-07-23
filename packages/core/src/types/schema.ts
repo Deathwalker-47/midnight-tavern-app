@@ -11,21 +11,13 @@
 import { z } from "zod";
 import { ActionDefSchema } from "./actions.js";
 import { MasteryRankSchema, CostSpecSchema, ItemKindSchema, StatModeSchema } from "./primitives.js";
+import { ConditionSchema } from "./conditions.js";
 
 // Re-export the shared leaf primitives so `StorySchema`'s module stays the one-stop
 // import for the frozen rule set (the actual definitions live in primitives.ts to
 // break the schema↔actions cycle).
 export * from "./primitives.js";
-
-/** A prerequisite condition that must hold to learn a skill or take an action. */
-export const ConditionSchema = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("skill"), skillId: z.string(), minRank: MasteryRankSchema.optional() }),
-  z.object({ type: z.literal("resource"), resourceId: z.string(), min: z.number() }),
-  z.object({ type: z.literal("item"), itemId: z.string() }),
-  z.object({ type: z.literal("flag"), flagId: z.string(), value: z.boolean() }),
-  z.object({ type: z.literal("attribute"), attributeId: z.string(), min: z.number() }),
-]);
-export type Condition = z.infer<typeof ConditionSchema>;
+export * from "./conditions.js";
 
 /** The only defined ways to acquire a skill. */
 export const UnlockPathSchema = z.discriminatedUnion("method", [
@@ -56,13 +48,67 @@ export const ResourceDefSchema = z.object({
 export type ResourceDef = z.infer<typeof ResourceDefSchema>;
 
 /** A genre-specific raw capability generated with a Full Stats rulebook. */
-export const AttributeDefSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  abbrev: z.string(),
-  description: z.string(),
-  defaultScore: z.number().int().min(1).max(30),
-});
+export const AttributeDefSchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    abbrev: z.string(),
+    description: z.string(),
+    /** Ordinary attributes are 1–20. Zero is reserved for explicitly locked attributes. */
+    defaultScore: z.number().int().min(0),
+    lockedAtZero: z.boolean().optional(),
+    /** Required to authorize values above the ordinary score cap. */
+    superhuman: z.boolean().optional(),
+    maximumScore: z.number().int().min(1).optional(),
+    provenance: z.enum(["generated", "imported", "rulebook", "boon", "equipment"]).optional(),
+  })
+  .superRefine((attribute, ctx) => {
+    if (attribute.defaultScore === 0 && attribute.lockedAtZero !== true) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["lockedAtZero"],
+        message: "A zero attribute must be explicitly lockedAtZero.",
+      });
+    }
+    if (attribute.lockedAtZero && attribute.defaultScore !== 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["defaultScore"],
+        message: "lockedAtZero attributes must have a default score of 0.",
+      });
+    }
+    if (attribute.defaultScore > 20 && attribute.superhuman !== true) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["superhuman"],
+        message: "Scores above 20 require explicit superhuman authorization.",
+      });
+    }
+    if (attribute.superhuman && attribute.maximumScore === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["maximumScore"],
+        message: "A superhuman attribute requires an explicit maximum score.",
+      });
+    }
+    if ((attribute.maximumScore ?? 20) > 20 && attribute.superhuman !== true) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["maximumScore"],
+        message: "A maximum above 20 requires explicit superhuman authorization.",
+      });
+    }
+    if (
+      attribute.maximumScore !== undefined &&
+      attribute.maximumScore < attribute.defaultScore
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["maximumScore"],
+        message: "The maximum score cannot be lower than the default score.",
+      });
+    }
+  });
 export type AttributeDef = z.infer<typeof AttributeDefSchema>;
 
 /** A learnable skill. Unlock is binary (the gate); a rank rides on top (D1). */
@@ -102,10 +148,10 @@ export type TierDef = z.infer<typeof TierDefSchema>;
 
 /** What the player begins with. */
 export const StartingStateSchema = z.object({
-  attributes: z.record(z.string(), z.number().int().min(1).max(30)).default({}),
+  attributes: z.record(z.string(), z.number().int().min(0)).default({}),
   resources: z.record(z.string(), z.number()),
   skills: z.array(z.object({ skillId: z.string(), rank: MasteryRankSchema })),
-  inventory: z.array(z.object({ itemId: z.string(), qty: z.number().int() })),
+  inventory: z.array(z.object({ itemId: z.string(), qty: z.number().int() })).default([]),
 });
 export type StartingState = z.infer<typeof StartingStateSchema>;
 
@@ -113,7 +159,7 @@ export type StartingState = z.infer<typeof StartingStateSchema>;
 export const NpcTemplateSchema = z.object({
   templateId: z.string(),
   name: z.string(),
-  attributes: z.record(z.string(), z.number().int().min(1).max(30)).default({}),
+  attributes: z.record(z.string(), z.number().int().min(0)).default({}),
   resources: z.record(z.string(), z.number()), // e.g. { hp: 40 }
   skills: z.array(z.object({ skillId: z.string(), rank: MasteryRankSchema })),
   inventory: z.array(z.object({ itemId: z.string(), qty: z.number().int() })),
@@ -122,7 +168,7 @@ export type NpcTemplate = z.infer<typeof NpcTemplateSchema>;
 
 /** The complete frozen story schema (persisted as `stories.schema_json`). */
 const StorySchemaObjectSchema = z.object({
-  schemaVersion: z.literal(1),
+  schemaVersion: z.union([z.literal(1), z.literal(2)]),
   storyId: z.string(),
   title: z.string(),
   premise: z.string(), // the user's input, preserved
@@ -130,15 +176,60 @@ const StorySchemaObjectSchema = z.object({
   attributes: z.array(AttributeDefSchema).default([]), // [] for No Stats
   resources: z.array(ResourceDefSchema), // [] when statMode === "none"
   skills: z.array(SkillDefSchema),
-  items: z.array(ItemDefSchema),
-  tiers: z.array(TierDefSchema),
+  /** Legacy forge-time catalog. New V7 stories emit none; runtime item tables own loot. */
+  items: z.array(ItemDefSchema).default([]),
+  tiers: z.array(TierDefSchema).default([]),
   actions: z.array(ActionDefSchema), // THE ACTION CATALOG (D3)
   startingState: StartingStateSchema,
   npcTemplates: z.array(NpcTemplateSchema),
   locked: z.boolean(), // set true at freeze; the gate refuses unlocked schemas
+  /** Sealed player consequential-action limit. */
+  actionBudget: z.number().int().min(1).max(5).optional(),
+  /** Mechanics assets snapshotted when the rulebook is frozen. */
+  mechanicsConfigVersions: z
+    .object({
+      universalActions: z.number().int().positive(),
+      progression: z.number().int().positive(),
+      equipmentLoot: z.number().int().positive(),
+    })
+    .optional(),
   /** Set only while a pre-v5 `light` story awaits the one-time destination choice. */
   legacyStatMode: z.literal("light").optional(),
   migrationPending: z.boolean().optional(),
+}).superRefine((story, ctx) => {
+  // V1 remains fully tolerant. These rules become part of the V2 frozen contract.
+  if (story.schemaVersion !== 2 || story.statMode === "none") return;
+  if (story.attributes.length < 3 || story.attributes.length > 6) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["attributes"],
+      message: "Full Stats V2 stories require 3–6 attributes.",
+    });
+  }
+  const definitions = new Map(story.attributes.map((attribute) => [attribute.id, attribute]));
+  const validateScores = (
+    scores: Record<string, number>,
+    path: Array<string | number>
+  ): void => {
+    for (const [attributeId, score] of Object.entries(scores)) {
+      const definition = definitions.get(attributeId);
+      if (!definition) continue;
+      const maximum = definition.superhuman ? (definition.maximumScore ?? 30) : 20;
+      if (definition.lockedAtZero ? score !== 0 : score < 1 || score > maximum) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [...path, attributeId],
+          message: definition.lockedAtZero
+            ? "A locked attribute must remain 0."
+            : `Attribute score must be between 1 and ${maximum}.`,
+        });
+      }
+    }
+  };
+  validateScores(story.startingState.attributes, ["startingState", "attributes"]);
+  story.npcTemplates.forEach((template, index) => {
+    validateScores(template.attributes, ["npcTemplates", index, "attributes"]);
+  });
 });
 
 function normalizeLegacyStorySchema(value: unknown): unknown {
@@ -148,6 +239,20 @@ function normalizeLegacyStorySchema(value: unknown): unknown {
     ...input,
     attributes: input.attributes ?? [],
   };
+  if (input.schemaVersion === 1 && Array.isArray(input.attributes)) {
+    normalized.attributes = input.attributes.map((value) => {
+      if (typeof value !== "object" || value === null || Array.isArray(value)) return value;
+      const attribute = value as Record<string, unknown>;
+      const score = typeof attribute.defaultScore === "number" ? attribute.defaultScore : 10;
+      if (score <= 20 || attribute.superhuman === true) return attribute;
+      return {
+        ...attribute,
+        superhuman: true,
+        maximumScore: Math.max(21, score),
+        provenance: attribute.provenance ?? "rulebook",
+      };
+    });
+  }
   if (input.statMode === "light") {
     normalized.statMode = "full";
     normalized.legacyStatMode = "light";

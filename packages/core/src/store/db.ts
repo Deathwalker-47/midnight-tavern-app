@@ -275,6 +275,126 @@ ALTER TABLE messages ADD COLUMN active_variant INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE messages ADD COLUMN variant_states_json TEXT;
 `,
   },
+  {
+    version: 7,
+    name: "v7_story_runtime",
+    // V7 story-scoped play controls. Difficulty is deliberately mutable from the next turn;
+    // action_budget and the mechanical config snapshot are part of the sealed rulebook.
+    sql: `
+ALTER TABLE stories ADD COLUMN difficulty_json TEXT;
+ALTER TABLE stories ADD COLUMN action_budget INTEGER NOT NULL DEFAULT 2;
+ALTER TABLE stories ADD COLUMN rulebook_version INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE stories ADD COLUMN config_snapshot_json TEXT;
+`,
+  },
+  {
+    version: 8,
+    name: "v7_turn_operations_and_journal",
+    // A turn operation keeps already-rolled rulings stable across narrator retry, cancellation,
+    // timeout, and app restart. story_events is the append-only, reader-facing mechanical journal.
+    sql: `
+CREATE TABLE turn_operations (
+  id                   TEXT PRIMARY KEY,
+  story_id             TEXT NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
+  player_message_id    TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+  narrator_message_id  TEXT,
+  state                TEXT NOT NULL,
+  classified_json      TEXT,
+  rulings_json         TEXT,
+  staged_json          TEXT,
+  prose                TEXT,
+  error_kind           TEXT,
+  created_at           INTEGER NOT NULL,
+  updated_at           INTEGER NOT NULL
+);
+CREATE UNIQUE INDEX idx_turn_operations_player ON turn_operations(player_message_id);
+CREATE INDEX idx_turn_operations_story ON turn_operations(story_id, updated_at);
+
+CREATE TABLE story_events (
+  id                TEXT PRIMARY KEY,
+  story_id          TEXT NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
+  message_id        TEXT REFERENCES messages(id) ON DELETE CASCADE,
+  turn_index        INTEGER NOT NULL,
+  chapter_index     INTEGER,
+  actor_id          TEXT,
+  kind              TEXT NOT NULL,
+  payload_json      TEXT NOT NULL,
+  rulebook_version  INTEGER NOT NULL,
+  created_at        INTEGER NOT NULL
+);
+CREATE INDEX idx_story_events_story ON story_events(story_id, turn_index, created_at);
+CREATE INDEX idx_story_events_message ON story_events(message_id);
+CREATE INDEX idx_story_events_kind ON story_events(story_id, kind);
+`,
+  },
+  {
+    version: 9,
+    name: "v7_runtime_items_and_equipment",
+    // Items are defined only when a validated DM loot proposal is awarded during play. They are
+    // separate from the frozen StorySchema, and only item instances assigned to these seven slots
+    // can contribute equipment effects.
+    sql: `
+CREATE TABLE item_definitions (
+  id                   TEXT PRIMARY KEY,
+  story_id             TEXT NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
+  name                 TEXT NOT NULL,
+  description          TEXT NOT NULL,
+  tier                 TEXT NOT NULL,
+  kind                 TEXT NOT NULL,
+  slot_compatibility_json TEXT NOT NULL,
+  hands_required       INTEGER NOT NULL,
+  unique_item          INTEGER NOT NULL,
+  stacking_key         TEXT,
+  requires_skill       TEXT,
+  effects_json         TEXT NOT NULL,
+  props_json           TEXT NOT NULL,
+  tags_json            TEXT NOT NULL,
+  config_version       INTEGER NOT NULL,
+  created_at           TEXT NOT NULL
+);
+CREATE INDEX idx_item_definitions_story ON item_definitions(story_id, created_at);
+
+CREATE TABLE item_instances (
+  id                   TEXT PRIMARY KEY,
+  story_id             TEXT NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
+  owner_character_id   TEXT NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+  definition_id        TEXT NOT NULL REFERENCES item_definitions(id) ON DELETE CASCADE,
+  quantity             INTEGER NOT NULL,
+  acquired_at          TEXT NOT NULL,
+  provenance_json      TEXT NOT NULL
+);
+CREATE INDEX idx_item_instances_owner ON item_instances(owner_character_id, acquired_at);
+CREATE INDEX idx_item_instances_story ON item_instances(story_id, acquired_at);
+
+CREATE TABLE equipment_assignments (
+  character_id         TEXT NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+  slot                 TEXT NOT NULL CHECK (
+    slot IN ('primary','secondary','head','body','utility','accessory_1','accessory_2')
+  ),
+  item_instance_id     TEXT NOT NULL REFERENCES item_instances(id) ON DELETE CASCADE,
+  PRIMARY KEY (character_id, slot)
+);
+CREATE INDEX idx_equipment_instance ON equipment_assignments(item_instance_id);
+`,
+  },
+  {
+    version: 10,
+    name: "v7_rulebook_snapshots",
+    // Direct rulebook regeneration is destructive, so retain a complete opaque mechanical
+    // pre-image before installing the replacement. Restore tooling can be added without changing
+    // the snapshot format because the payload is versioned JSON.
+    sql: `
+CREATE TABLE rulebook_snapshots (
+  id                TEXT PRIMARY KEY,
+  story_id          TEXT NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
+  rulebook_version  INTEGER NOT NULL,
+  snapshot_json     TEXT NOT NULL,
+  created_at        INTEGER NOT NULL
+);
+CREATE INDEX idx_rulebook_snapshots_story
+  ON rulebook_snapshots(story_id, rulebook_version, created_at);
+`,
+  },
 ];
 
 /**

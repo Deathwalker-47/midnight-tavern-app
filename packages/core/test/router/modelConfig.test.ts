@@ -26,6 +26,8 @@ import {
   makeRouter,
   ROLES,
   ROLE_LABELS,
+  MODEL_RECOMMENDATION_CONFIG,
+  MODEL_RECOMMENDATION_CONFIG_VERSION,
   PROVIDER_IDS,
   makeProvider,
   type FetchLike,
@@ -119,6 +121,17 @@ describe("provider sampler support", () => {
 });
 
 describe("model catalog", () => {
+  it("loads recommendations, role defaults, and samplers from one versioned config", () => {
+    expect(MODEL_RECOMMENDATION_CONFIG_VERSION).toBe(1);
+    expect(MODEL_RECOMMENDATION_CONFIG.models).toHaveLength(MODEL_CATALOG.length);
+    expect(MODEL_RECOMMENDATION_CONFIG.defaultRoleMap.narrator.model).toBe(
+      DEFAULT_ROLE_MAP.narrator.model
+    );
+    expect(MODEL_RECOMMENDATION_CONFIG.samplerPresets.Creative.temperature).toBe(
+      SAMPLER_PRESETS.Creative.temperature
+    );
+  });
+
   it("every catalog entry validates against the schema", () => {
     for (const m of MODEL_CATALOG) {
       expect(CatalogModelSchema.safeParse(m).success, m.id).toBe(true);

@@ -21,11 +21,22 @@ import { makePlayer, makeEnemy, makeStory } from "../fixtures.js";
 const STORY_ID = "story-fixture";
 
 function storyRecord(): StoryRecord {
+  const schema = makeStory({ storyId: STORY_ID, locked: true });
+  const blade = schema.skills.find((skill) => skill.id === "blade");
+  if (blade) {
+    blade.advancedUses = [
+      { minRank: "expert", description: "Perform a measured counter-strike." },
+    ];
+  }
+  for (const action of schema.actions.filter((candidate) => candidate.requiresSkill === "blade")) {
+    action.governingAttribute = "dex";
+    action.description = `${action.label} using trained blade work.`;
+  }
   return {
     id: STORY_ID,
     title: "The Silent Vale",
     createdAt: 1000,
-    schema: makeStory({ storyId: STORY_ID, locked: true }),
+    schema,
     locked: true,
   };
 }
@@ -61,7 +72,9 @@ describe("getCharacterDossier", () => {
       storyId: STORY_ID,
       name: "Kestrel",
       isPlayer: true,
-      hard: makePlayer({ skills: [{ skillId: "blade", rank: "adept", successCount: 1 }] }),
+      hard: makePlayer({
+        skills: [{ skillId: "blade", rank: "adept", successCount: 1, xp: 120 }],
+      }),
       soft: soft("kestrel", "Kestrel", {
         identity: {
           traits: ["stoic"],
@@ -98,6 +111,26 @@ describe("getCharacterDossier", () => {
         relationships: [{ toCharacterId: "kestrel", trust: 0.6, power: -0.2, feeling: "trusts" }],
       }),
       softTier: "secondary",
+    });
+    await store.events.insert({
+      id: "xp-kestrel-blade",
+      storyId: STORY_ID,
+      turnIndex: 7,
+      actorId: "kestrel",
+      kind: "xp",
+      payload: {
+        award: {
+          skillId: "blade",
+          amount: 20,
+          previousXp: 100,
+          newXp: 120,
+          rankBefore: "adept",
+          rankAfter: "adept",
+          reason: "Defeated the grave-wight in a close duel.",
+        },
+      },
+      rulebookVersion: 1,
+      createdAt: 1700,
     });
   });
 
@@ -136,11 +169,37 @@ describe("getCharacterDossier", () => {
     expect(d!.relationships.toPlayer).toBeUndefined();
   });
 
-  it("computes skill progress (toNext) from successCount and the schema advance rule", async () => {
+  it("computes skill progress from cumulative XP and the V7 progression config", async () => {
     // blade: successesPerRank = 3; Kestrel is adept with successCount 1 → 2 to go.
     const d = await getCharacterDossier(store, storyRecord().schema, "kestrel");
     const blade = d!.sheet.skills.find((s) => s.skillId === "blade");
-    expect(blade).toMatchObject({ name: "Blade", rank: "adept", successCount: 1, toNext: 2 });
+    expect(blade).toMatchObject({
+      name: "Blade",
+      definition: "Swordplay.",
+      tier: "common",
+      rank: "adept",
+      successCount: 1,
+      xp: 120,
+      toNext: 180,
+      nextRankXp: 300,
+      permits: ["Expert+: Perform a measured counter-strike."],
+      linkedAttribute: "Dexterity",
+      latestAward: {
+        xp: 20,
+        reason: "Defeated the grave-wight in a close duel.",
+        turnIdx: 7,
+      },
+    });
+    expect(blade!.linkedActions?.map((action) => action.label)).toEqual([
+      "Attack (melee)",
+      "Duel (opposed)",
+      "Master strike",
+    ]);
+    expect(blade!.linkedActions?.[0]).toMatchObject({
+      category: "combat",
+      governingAttribute: "Dexterity",
+      description: "Attack (melee) using trained blade work.",
+    });
   });
 
   it("reports toNext=null at master rank", async () => {

@@ -8,7 +8,14 @@
  */
 import { create } from "zustand";
 import { getBridge } from "../bridge/core.js";
-import type { MessageRecord, Ruling, CastMember } from "../bridge/core.js";
+import type {
+  MessageRecord,
+  Ruling,
+  CastMember,
+  ClassifierRecoveryMetadata,
+  TurnOperationRecoveryInspection,
+  TurnOperationPhase,
+} from "../bridge/core.js";
 
 /** The three error families a turn can fail with (§02 universal errors). */
 export type TurnErrorKind = "provider-auth" | "model-output" | "network";
@@ -29,14 +36,20 @@ interface PlayState {
 
   /** True between send and completion; composer disables, thinking indicator shows. */
   thinking: boolean;
+  /** Persisted backend phase; prevents the old generic "story continues" label getting stuck. */
+  operationPhase: TurnOperationPhase;
   /** Live narrator prose accumulated from stream deltas during a turn. */
   proseBuffer: string;
   turnError?: TurnError;
+  classifierRecovery?: ClassifierRecoveryMetadata;
+  recoveryInspection?: TurnOperationRecoveryInspection;
 
   /** Load a story's transcript, rulings, and cast into the store. */
   load: (storyId: string) => Promise<void>;
   /** Send the player's turn; streams deltas into `proseBuffer`, then commits. */
   submit: (playerText: string, opts?: { personaBlock?: string; signal?: AbortSignal }) => Promise<void>;
+  /** Resume the exact persisted failed/stale operation without inserting another player message. */
+  retryRecovered: (opts?: { personaBlock?: string; signal?: AbortSignal }) => Promise<void>;
   /**
    * Regenerate the last narrator turn's prose as a new variant (low-level-plan-v2 §6). Streams into
    * `proseBuffer` like a turn; the committed ruling is re-used verbatim so the mechanical outcome is
@@ -83,6 +96,42 @@ function isCurrentOperation(generation: number, storyId: string, get: () => Play
   return operationGeneration === generation && get().storyId === storyId;
 }
 
+interface PlaySnapshot {
+  messages: MessageRecord[];
+  rulings: Ruling[];
+  cast: CastMember[];
+  recoveryInspection?: TurnOperationRecoveryInspection;
+}
+
+async function readPlaySnapshot(storyId: string): Promise<PlaySnapshot> {
+  const bridge = getBridge();
+  const [messages, rulings, cast, recoveryInspection] = await Promise.all([
+    bridge.listMessages(storyId),
+    bridge.listRulings(storyId),
+    bridge.listPresentCast(storyId),
+    bridge.inspectTurnRecovery(storyId),
+  ]);
+  return {
+    messages,
+    rulings,
+    cast,
+    ...(recoveryInspection ? { recoveryInspection } : {}),
+  };
+}
+
+function phaseForRecovery(
+  inspection: TurnOperationRecoveryInspection | undefined
+): TurnOperationPhase {
+  if (!inspection) return "idle";
+  if (inspection.operation.state === "classifier_error") {
+    return "classifier-recovery";
+  }
+  if (inspection.operation.state === "timed_out") return "timed-out";
+  if (inspection.operation.state === "cancelled") return "cancelled";
+  if (inspection.stale) return "stale";
+  return inspection.recoverable ? "error" : "idle";
+}
+
 export const usePlayStore = create<PlayState>((set, get) => ({
   storyId: undefined,
   messages: [],
@@ -90,21 +139,30 @@ export const usePlayStore = create<PlayState>((set, get) => ({
   cast: [],
   loading: false,
   thinking: false,
+  operationPhase: "idle",
   proseBuffer: "",
   turnError: undefined,
+  classifierRecovery: undefined,
+  recoveryInspection: undefined,
 
   load: async (storyId) => {
     const generation = beginOperation();
     set({ storyId, loading: true, turnError: undefined });
     try {
-      const bridge = getBridge();
-      const [messages, rulings, cast] = await Promise.all([
-        bridge.listMessages(storyId),
-        bridge.listRulings(storyId),
-        bridge.listPresentCast(storyId),
-      ]);
+      const snapshot = await readPlaySnapshot(storyId);
       if (!isCurrentOperation(generation, storyId, get)) return;
-      set({ messages, rulings, cast, loading: false, thinking: false, proseBuffer: "" });
+      set({
+        messages: snapshot.messages,
+        rulings: snapshot.rulings,
+        cast: snapshot.cast,
+        loading: false,
+        thinking: false,
+        operationPhase: phaseForRecovery(snapshot.recoveryInspection),
+        proseBuffer: "",
+        classifierRecovery:
+          snapshot.recoveryInspection?.operation.classifierRecovery,
+        recoveryInspection: snapshot.recoveryInspection,
+      });
     } catch (err) {
       if (!isCurrentOperation(generation, storyId, get)) return;
       set({ loading: false, turnError: classifyError(err) });
@@ -128,8 +186,11 @@ export const usePlayStore = create<PlayState>((set, get) => ({
     set((s) => ({
       messages: [...s.messages, optimistic],
       thinking: true,
+      operationPhase: "classifying",
       proseBuffer: "",
       turnError: undefined,
+      classifierRecovery: undefined,
+      recoveryInspection: undefined,
     }));
 
     try {
@@ -141,33 +202,169 @@ export const usePlayStore = create<PlayState>((set, get) => ({
             set((s) => ({ proseBuffer: s.proseBuffer + delta }));
           }
         },
+        onPhase: (operationPhase) => {
+          if (isCurrentOperation(generation, storyId, get)) {
+            set({
+              operationPhase,
+              thinking: !["idle", "error", "cancelled", "timed-out"].includes(operationPhase),
+            });
+          }
+        },
         ...(opts.personaBlock ? { personaBlock: opts.personaBlock } : {}),
         ...(opts.signal ? { signal: opts.signal } : {}),
       });
       // Re-pull authoritative state (ids, idx, committed rulings, cast deltas).
-      const bridge = getBridge();
-      const [messages, rulings, cast] = await Promise.all([
-        bridge.listMessages(storyId),
-        bridge.listRulings(storyId),
-        bridge.listPresentCast(storyId),
-      ]);
+      const snapshot = await readPlaySnapshot(storyId);
       if (!isCurrentOperation(generation, storyId, get)) return;
-      set({ messages, rulings, cast, thinking: false, proseBuffer: "" });
-      void outcome;
+      set({
+        messages: snapshot.messages,
+        rulings: snapshot.rulings,
+        cast: snapshot.cast,
+        thinking: false,
+        operationPhase: phaseForRecovery(snapshot.recoveryInspection),
+        proseBuffer: "",
+        classifierRecovery:
+          outcome.classifierRecovery ??
+          snapshot.recoveryInspection?.operation.classifierRecovery,
+        recoveryInspection: snapshot.recoveryInspection,
+      });
     } catch (err) {
       if (!isCurrentOperation(generation, storyId, get)) return;
-      // Keep the optimistic player line (turn is "saved"); surface the error card.
-      set({ thinking: false, proseBuffer: "", turnError: classifyError(err) });
+      let snapshot: PlaySnapshot | undefined;
+      try {
+        snapshot = await readPlaySnapshot(storyId);
+      } catch {
+        // Preserve the currently visible transcript if the recovery read itself is unavailable.
+      }
+      if (!isCurrentOperation(generation, storyId, get)) return;
+      const inspection = snapshot?.recoveryInspection;
+      set({
+        ...(snapshot
+          ? {
+              messages: snapshot.messages,
+              rulings: snapshot.rulings,
+              cast: snapshot.cast,
+            }
+          : {}),
+        thinking: false,
+        operationPhase: opts.signal?.aborted
+          ? "cancelled"
+          : phaseForRecovery(inspection) === "idle"
+            ? "error"
+            : phaseForRecovery(inspection),
+        proseBuffer: "",
+        turnError: classifyError(err),
+        classifierRecovery: inspection?.operation.classifierRecovery,
+        recoveryInspection: inspection,
+      });
     }
   },
 
-  clearError: () => set({ turnError: undefined }),
+  retryRecovered: async (opts = {}) => {
+    const storyId = get().storyId;
+    const inspection = get().recoveryInspection;
+    if (!storyId || !inspection?.recoverable) return;
+    const generation = beginOperation();
+    set({
+      thinking: true,
+      operationPhase:
+        inspection.operation.state === "classifier_error"
+          ? "classifying"
+          : "thinking",
+      proseBuffer: "",
+      turnError: undefined,
+      classifierRecovery: undefined,
+      recoveryInspection: undefined,
+    });
+    try {
+      const outcome = await getBridge().retryTurnOperation({
+        operationId: inspection.operation.id,
+        onDelta: (delta) => {
+          if (isCurrentOperation(generation, storyId, get)) {
+            set((state) => ({ proseBuffer: state.proseBuffer + delta }));
+          }
+        },
+        onPhase: (operationPhase) => {
+          if (isCurrentOperation(generation, storyId, get)) {
+            set({
+              operationPhase,
+              thinking: ![
+                "idle",
+                "error",
+                "cancelled",
+                "timed-out",
+                "stale",
+              ].includes(operationPhase),
+            });
+          }
+        },
+        ...(opts.personaBlock ? { personaBlock: opts.personaBlock } : {}),
+        ...(opts.signal ? { signal: opts.signal } : {}),
+      });
+      const snapshot = await readPlaySnapshot(storyId);
+      if (!isCurrentOperation(generation, storyId, get)) return;
+      set({
+        messages: snapshot.messages,
+        rulings: snapshot.rulings,
+        cast: snapshot.cast,
+        thinking: false,
+        operationPhase: phaseForRecovery(snapshot.recoveryInspection),
+        proseBuffer: "",
+        classifierRecovery:
+          outcome.classifierRecovery ??
+          snapshot.recoveryInspection?.operation.classifierRecovery,
+        recoveryInspection: snapshot.recoveryInspection,
+      });
+    } catch (err) {
+      if (!isCurrentOperation(generation, storyId, get)) return;
+      let snapshot: PlaySnapshot | undefined;
+      try {
+        snapshot = await readPlaySnapshot(storyId);
+      } catch {
+        // The original authoritative state stays visible when refresh is unavailable.
+      }
+      if (!isCurrentOperation(generation, storyId, get)) return;
+      const nextInspection = snapshot?.recoveryInspection;
+      set({
+        ...(snapshot
+          ? {
+              messages: snapshot.messages,
+              rulings: snapshot.rulings,
+              cast: snapshot.cast,
+            }
+          : {}),
+        thinking: false,
+        operationPhase: opts.signal?.aborted
+          ? "cancelled"
+          : phaseForRecovery(nextInspection) === "idle"
+            ? "error"
+            : phaseForRecovery(nextInspection),
+        proseBuffer: "",
+        turnError: classifyError(err),
+        classifierRecovery: nextInspection?.operation.classifierRecovery,
+        recoveryInspection: nextInspection,
+      });
+    }
+  },
+
+  clearError: () =>
+    set({
+      turnError: undefined,
+      classifierRecovery: undefined,
+      recoveryInspection: undefined,
+      operationPhase: "idle",
+    }),
 
   swipeLast: async (opts = {}) => {
     const storyId = get().storyId;
     if (!storyId) return;
     const generation = beginOperation();
-    set({ thinking: true, proseBuffer: "", turnError: undefined });
+    set({
+      thinking: true,
+      operationPhase: "thinking",
+      proseBuffer: "",
+      turnError: undefined,
+    });
     try {
       await getBridge().swipeLastTurn({
         storyId,
@@ -187,10 +384,22 @@ export const usePlayStore = create<PlayState>((set, get) => ({
         bridge.listPresentCast(storyId),
       ]);
       if (!isCurrentOperation(generation, storyId, get)) return;
-      set({ messages, rulings, cast, thinking: false, proseBuffer: "" });
+      set({
+        messages,
+        rulings,
+        cast,
+        thinking: false,
+        operationPhase: "idle",
+        proseBuffer: "",
+      });
     } catch (err) {
       if (!isCurrentOperation(generation, storyId, get)) return;
-      set({ thinking: false, proseBuffer: "", turnError: classifyError(err) });
+      set({
+        thinking: false,
+        operationPhase: opts.signal?.aborted ? "cancelled" : "error",
+        proseBuffer: "",
+        turnError: classifyError(err),
+      });
     }
   },
 
@@ -259,8 +468,11 @@ export const usePlayStore = create<PlayState>((set, get) => ({
       cast: [],
       loading: false,
       thinking: false,
+      operationPhase: "idle",
       proseBuffer: "",
       turnError: undefined,
+      classifierRecovery: undefined,
+      recoveryInspection: undefined,
     });
   },
 }));

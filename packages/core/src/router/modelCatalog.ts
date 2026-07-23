@@ -15,6 +15,7 @@
 import { z } from "zod";
 import { RoleSchema, ProviderIdSchema } from "./roles.js";
 import { SamplerProfileSchema } from "./samplers.js";
+import { MODEL_RECOMMENDATION_CONFIG } from "./modelConfig.js";
 
 /** One catalog entry: a model id plus the curated metadata we layer on by id. */
 export const CatalogModelSchema = z.object({
@@ -36,138 +37,9 @@ export type CatalogModel = z.infer<typeof CatalogModelSchema>;
  * direct-provider entries). Update this list to refresh recommendations; the schema is validated
  * by a test so a malformed entry fails CI, not production.
  */
-export const MODEL_CATALOG: readonly CatalogModel[] = [
-  {
-    id: "anthropic/claude-sonnet-4",
-    provider: "openrouter",
-    label: "Claude Sonnet 4",
-    recommendedFor: ["narrator", "bootstrapper"],
-    tier: "recommended",
-    contextTokens: 200000,
-    supportsJsonMode: true,
-    notes: "Strong prose + reliable structured output. The default all-rounder.",
-  },
-  {
-    id: "anthropic/claude-opus-4",
-    provider: "openrouter",
-    label: "Claude Opus 4",
-    recommendedFor: ["narrator", "bootstrapper"],
-    tier: "recommended",
-    contextTokens: 200000,
-    supportsJsonMode: true,
-    notes: "Highest quality prose; pricier.",
-  },
-  {
-    id: "openai/gpt-4o",
-    provider: "openrouter",
-    label: "GPT-4o",
-    recommendedFor: ["narrator", "summarizer", "bootstrapper"],
-    tier: "recommended",
-    contextTokens: 128000,
-    supportsJsonMode: true,
-  },
-  {
-    id: "openai/gpt-4o-mini",
-    provider: "openrouter",
-    label: "GPT-4o mini",
-    recommendedFor: ["classifier", "analyzer", "summarizer"],
-    tier: "recommended",
-    contextTokens: 128000,
-    supportsJsonMode: true,
-  },
-  {
-    id: "google/gemini-2.0-flash-001",
-    provider: "openrouter",
-    label: "Gemini 2.0 Flash",
-    recommendedFor: ["classifier", "analyzer", "summarizer"],
-    tier: "recommended",
-    contextTokens: 1000000,
-    supportsJsonMode: true,
-  },
-  {
-    id: "google/gemini-2.5-pro",
-    provider: "openrouter",
-    label: "Gemini 2.5 Pro",
-    recommendedFor: ["narrator", "bootstrapper"],
-    tier: "recommended",
-    contextTokens: 1000000,
-    supportsJsonMode: true,
-  },
-  {
-    id: "deepseek/deepseek-chat",
-    provider: "openrouter",
-    label: "DeepSeek V3",
-    recommendedFor: ["bootstrapper", "analyzer"],
-    tier: "advanced",
-    contextTokens: 64000,
-    supportsJsonMode: true,
-  },
-  {
-    id: "meta-llama/llama-3.3-70b-instruct",
-    provider: "openrouter",
-    label: "Llama 3.3 70B",
-    recommendedFor: ["classifier"],
-    tier: "advanced",
-    contextTokens: 131000,
-    supportsJsonMode: true,
-  },
-  {
-    id: "meta-llama/llama-3.1-8b-instruct",
-    provider: "openrouter",
-    label: "Llama 3.1 8B",
-    recommendedFor: ["classifier"],
-    tier: "advanced",
-    contextTokens: 131000,
-    supportsJsonMode: false,
-    notes: "Fast and cheap, but may not guarantee valid JSON on structured roles.",
-  },
-  {
-    id: "gpt-4o",
-    provider: "openai",
-    label: "GPT-4o (direct)",
-    recommendedFor: ["narrator", "summarizer", "bootstrapper"],
-    tier: "recommended",
-    contextTokens: 128000,
-    supportsJsonMode: true,
-  },
-  {
-    id: "gpt-4o-mini",
-    provider: "openai",
-    label: "GPT-4o mini (direct)",
-    recommendedFor: ["classifier", "analyzer"],
-    tier: "recommended",
-    contextTokens: 128000,
-    supportsJsonMode: true,
-  },
-  {
-    id: "claude-sonnet-4-20250514",
-    provider: "anthropic",
-    label: "Claude Sonnet 4 (direct)",
-    recommendedFor: ["narrator", "bootstrapper"],
-    tier: "recommended",
-    contextTokens: 200000,
-    supportsJsonMode: false,
-    notes: "Anthropic's OpenAI-compat endpoint does not expose JSON mode.",
-  },
-  {
-    id: "gemini-2.0-flash-001",
-    provider: "google",
-    label: "Gemini 2.0 Flash (direct)",
-    recommendedFor: ["classifier", "analyzer", "summarizer"],
-    tier: "recommended",
-    contextTokens: 1000000,
-    supportsJsonMode: true,
-  },
-  {
-    id: "deepseek-chat",
-    provider: "deepseek",
-    label: "DeepSeek V3 (direct)",
-    recommendedFor: ["bootstrapper", "analyzer"],
-    tier: "advanced",
-    contextTokens: 64000,
-    supportsJsonMode: true,
-  },
-];
+export const MODEL_CATALOG: readonly CatalogModel[] = z
+  .array(CatalogModelSchema)
+  .parse(MODEL_RECOMMENDATION_CONFIG.models);
 
 /** Every catalog entry. */
 export function allCatalogModels(): readonly CatalogModel[] {

@@ -40,6 +40,24 @@ export type {
   ChapterRecord,
   ArcRecord,
   ArcDoc,
+  StoryEvent,
+  StoryJournalPage,
+  StoryJournalQuery,
+  SuggestedAction,
+  CharacterInventoryView,
+  EquipmentAssignment,
+  EquipmentSlot,
+  ItemDefinition,
+  DifficultyConfig,
+  BootstrapPhase,
+  BootstrapProgressEvent,
+  BootstrapResumeState,
+  ImportedMechanics,
+  ClassifierRecoveryMetadata,
+  TurnOperationRecoveryInspection,
+  UniversalActionConfig,
+  EquipmentLootConfig,
+  RulebookRegenerationImpact,
 } from "@midnight-tavern/core";
 export type {
   CharacterRecord,
@@ -78,6 +96,7 @@ import type {
   Role,
   RoleMap,
   RoleBinding,
+  Samplers,
   KnownModel,
   ProviderId,
   ProviderConfigs,
@@ -101,6 +120,22 @@ import type {
   Store,
   BootstrapPhase,
   StatMode,
+  StoryJournalPage,
+  StoryJournalQuery,
+  SuggestedAction,
+  CharacterInventoryView,
+  EquipmentAssignment,
+  EquipmentSlot,
+  ItemDefinition,
+  DifficultyConfig,
+  BootstrapProgressEvent,
+  BootstrapResumeState,
+  ImportedMechanics,
+  ClassifierRecoveryMetadata,
+  TurnOperationRecoveryInspection,
+  UniversalActionConfig,
+  EquipmentLootConfig,
+  RulebookRegenerationImpact,
 } from "@midnight-tavern/core";
 
 // Value import: the Tauri storage driver. Browser-safe — it only pulls `@tauri-apps/api/core`
@@ -142,14 +177,31 @@ export interface CreateStoryArgs {
   statMode?: StatMode;
   /** The protagonist's display name. */
   playerName: string;
+  /** Persona selected before forging; required identity context for player-sheet generation. */
+  persona?: { id?: string; name: string; description: string };
+  /** Sealed consequential-action limit; defaults to two. */
+  actionBudget?: number;
+  /** Initial play difficulty; defaults to Standard. */
+  difficulty?: Partial<DifficultyConfig>;
   /** Full author-facing narrative configuration saved with the new story. */
   blueprint?: Blueprint;
   /** Optional chosen opening, persisted as the first narrator message. */
   openingMessage?: string;
   /** Imported character-book entries to create and attach after bootstrap. */
   lorebookSeeds?: LorebookSeed[];
+  /** Lossless imported card source, retained until prompt-time macro evaluation. */
+  sourceCard?: CharacterCard;
+  /** Explicit mechanics parsed from the imported card and accepted on the review screen. */
+  importedMechanics?: ImportedMechanics;
+  acceptImportedMechanics?: boolean;
   /** Optional streaming sink for the forging interstitial's progress copy. */
   onProgress?: (phase: BootstrapPhase) => void;
+  /** Truthful fragment/retry/elapsed progress for the V7 forging interstitial. */
+  onProgressDetail?: (event: BootstrapProgressEvent) => void;
+  /** Persist each validated fragment so cancellation or restart can resume truthfully. */
+  onCheckpoint?: (checkpoint: BootstrapResumeState) => void;
+  /** A prior matching checkpoint; core rejects it if the effective source fingerprint changed. */
+  resume?: BootstrapResumeState;
   signal?: AbortSignal;
 }
 
@@ -157,6 +209,25 @@ export interface ChangeStoryStatModeArgs {
   storyId: string;
   target: StatMode;
   onProgress?: (phase: BootstrapPhase) => void;
+  onProgressDetail?: (event: BootstrapProgressEvent) => void;
+  signal?: AbortSignal;
+}
+
+export interface RegenerateRulebookArgs {
+  storyId: string;
+  /** Duplicate is the safe default; in-place is available only after the stronger typed warning. */
+  mode?: "duplicate" | "in-place";
+  /** Must be true after the UI warning is explicitly accepted. */
+  confirmMechanicalReset: true;
+  statMode?: StatMode;
+  actionBudget?: number;
+  persona?: { id?: string; name: string; description: string };
+  onProgress?: (phase: BootstrapPhase) => void;
+  onProgressDetail?: (event: BootstrapProgressEvent) => void;
+  /** Persist validated forge fragments so a safe cancellation can resume. */
+  onCheckpoint?: (checkpoint: BootstrapResumeState) => void;
+  /** Previously retained fragments for the same effective source. */
+  resume?: BootstrapResumeState;
   signal?: AbortSignal;
 }
 
@@ -173,8 +244,24 @@ export interface SubmitTurnArgs {
   onDelta?: (delta: string) => void;
   /** Player persona + protagonist essentials block (§7.3). */
   personaBlock?: string;
+  /** Persisted V7 operation state, mapped to reader-facing UI phases. */
+  onPhase?: (phase: TurnOperationPhase) => void;
   signal?: AbortSignal;
 }
+
+export type TurnOperationPhase =
+  | "classifying"
+  | "classifier-recovery"
+  | "ruling"
+  | "generating-loot"
+  | "thinking"
+  | "streaming"
+  | "saving"
+  | "idle"
+  | "error"
+  | "cancelled"
+  | "timed-out"
+  | "stale";
 
 export interface SubmitTurnOutcome {
   /** Full narrator prose for the turn. */
@@ -183,6 +270,18 @@ export interface SubmitTurnOutcome {
   rulings: Ruling[];
   /** idx of the persisted narrator message. */
   narratorIdx: number;
+  classifierRecovered: boolean;
+  classifierRecovery?: ClassifierRecoveryMetadata;
+  refusedActionCount: number;
+  usedNarratorFallback: boolean;
+}
+
+export interface RetryTurnOperationArgs {
+  operationId: string;
+  onDelta?: (delta: string) => void;
+  personaBlock?: string;
+  onPhase?: (phase: TurnOperationPhase) => void;
+  signal?: AbortSignal;
 }
 
 /** Args for regenerating the last narrator turn's prose as a new variant (§6). */
@@ -192,6 +291,8 @@ export interface SwipeArgs {
   onDelta?: (delta: string) => void;
   /** Player persona + protagonist essentials block (§7.3). */
   personaBlock?: string;
+  /** Optional feedback stored with this alternate telling. */
+  feedback?: string;
   signal?: AbortSignal;
 }
 
@@ -232,6 +333,17 @@ export interface CardImportResult {
   spec: string;
 }
 
+export type ModelRecommendationPreset = "Precise" | "Balanced" | "Creative";
+export type SamplerKey = keyof Samplers;
+
+/** Data-only recommendation metadata exposed to browser-safe UI code. */
+export interface ModelRecommendationConfigView {
+  version: number;
+  samplerPresets: Record<ModelRecommendationPreset, Samplers>;
+  defaultPresetForRole: Record<Role, ModelRecommendationPreset>;
+  providerSamplerSupport: Partial<Record<ProviderId, readonly SamplerKey[]>>;
+}
+
 /**
  * The full façade. Every method is async so the two backends (in-memory now, SQLite via the
  * Tauri sidecar later) are interchangeable behind one Promise-returning contract.
@@ -244,6 +356,11 @@ export interface CoreBridge {
   renameStory(id: string, title: string): Promise<void>;
   deleteStory(id: string): Promise<void>;
   changeStoryStatMode(args: ChangeStoryStatModeArgs): Promise<StoryRecord>;
+  regenerateRulebook(args: RegenerateRulebookArgs): Promise<StoryRecord>;
+  previewRulebookRegenerationImpact(
+    storyId: string
+  ): Promise<RulebookRegenerationImpact>;
+  setStoryDifficulty(storyId: string, difficulty: Partial<DifficultyConfig>): Promise<StoryRecord>;
   /** Read a story's author-facing Story Blueprint (§3), or undefined if it has none. */
   getBlueprint(id: string): Promise<Blueprint | undefined>;
   /** Save (or clear, with `undefined`) a story's Story Blueprint. Style/identity only — the frozen mechanical schema is untouched. */
@@ -252,11 +369,29 @@ export interface CoreBridge {
   // — Play —
   listMessages(storyId: string): Promise<MessageRecord[]>;
   submitTurn(args: SubmitTurnArgs): Promise<SubmitTurnOutcome>;
+  /** Inspect the latest persisted non-terminal/failed turn without mutating transcript state. */
+  inspectTurnRecovery(storyId: string): Promise<TurnOperationRecoveryInspection | undefined>;
+  /** Resume the exact persisted player message; never inserts a duplicate player line. */
+  retryTurnOperation(args: RetryTurnOperationArgs): Promise<SubmitTurnOutcome>;
   listPresentCast(storyId: string): Promise<CastMember[]>;
   getLivingCard(storyId: string, characterId: string): Promise<LivingCardView | undefined>;
   /** Deep read-only profile (v2 §7): full hard+soft join with reverse-resolved relationships. */
   getCharacterDossier(storyId: string, characterId: string): Promise<Dossier | undefined>;
   listRulings(storyId: string): Promise<Ruling[]>;
+  suggestActions(storyId: string, signal?: AbortSignal): Promise<SuggestedAction[]>;
+  listStoryJournal(storyId: string, query?: StoryJournalQuery): Promise<StoryJournalPage>;
+  exportStoryJournal(storyId: string, format?: "markdown" | "csv"): Promise<string>;
+  /** Versioned, upgradable global action catalog used by every Full Stats story. */
+  universalActionsConfig(): Promise<UniversalActionConfig>;
+  /** Universal seven-slot, tier-budget, and on-demand loot policy. */
+  equipmentLootConfig(): Promise<EquipmentLootConfig>;
+  getCharacterInventory(characterId: string): Promise<CharacterInventoryView>;
+  equipItem(
+    characterId: string,
+    itemInstanceId: string,
+    slot: EquipmentSlot
+  ): Promise<EquipmentAssignment[]>;
+  unequipSlot(characterId: string, slot: EquipmentSlot): Promise<EquipmentAssignment[]>;
 
   // — Overview: persisted summaries (audit #6) —
   /** Chapters the summarizer has written for a story, in turn order. */
@@ -284,6 +419,10 @@ export interface CoreBridge {
   getProviderConfigs(): Promise<ProviderConfigs>;
   setProviderConfig(provider: ProviderId, config: ProviderConfigInput): Promise<void>;
   removeProviderConfig(provider: ProviderId): Promise<void>;
+  /** Exactly one configured provider is Primary; undefined only when no providers are connected. */
+  getPrimaryProvider(): Promise<ProviderId | undefined>;
+  /** Replaces the prior Primary provider. The target must already have saved credentials. */
+  setPrimaryProvider(provider: ProviderId): Promise<void>;
   getRoleMap(): Promise<RoleMap>;
   setRoleMap(map: RoleMap): Promise<void>;
   /** Canonical role→model defaults (a fresh install's map). */
@@ -356,6 +495,12 @@ export interface CoreBridge {
   modelsForRole(role: Role, provider: ProviderId, availableIds?: readonly string[]): RankedModel[];
   /** The app's shipped recommended assignment for a role (wizard + "reset to recommended"). */
   defaultAssignmentFor(role: Role): RoleBinding;
+  /** Versioned preset/profile data loaded from the shipped recommendation config. */
+  modelRecommendationConfig(): ModelRecommendationConfigView;
+  /** Config-derived recommended parameters for the selected model and role. */
+  recommendedSamplerProfile(role: Role, modelId?: string): Samplers;
+  /** Config-derived provider capability mask for one sampler field. */
+  providerSupportsSampler(provider: ProviderId, field: SamplerKey): boolean;
 
   // — Importer —
   importCardFromBytes(bytes: Uint8Array): Promise<CardImportResult>;
@@ -387,11 +532,117 @@ const MEMORY_PROVIDER_IDS: readonly ProviderId[] = [
 ];
 
 const MEMORY_DEFAULT_ROLE_MAP: RoleMap = {
-  narrator: { provider: "openrouter", model: "anthropic/claude-sonnet-4", source: "recommended", samplersDirty: false, samplers: { temperature: 0.8, maxTokens: 1200 } },
-  classifier: { provider: "openrouter", model: "openai/gpt-4o-mini", source: "recommended", samplersDirty: false, samplers: { temperature: 0, maxTokens: 800 } },
-  analyzer: { provider: "openrouter", model: "openai/gpt-4o-mini", source: "recommended", samplersDirty: false, samplers: { temperature: 0.2, maxTokens: 1000 } },
-  summarizer: { provider: "openrouter", model: "openai/gpt-4o", source: "recommended", samplersDirty: false, samplers: { temperature: 0.3, maxTokens: 1500 } },
-  bootstrapper: { provider: "openrouter", model: "anthropic/claude-sonnet-4", source: "recommended", samplersDirty: false, samplers: { temperature: 0.6, maxTokens: 4000 } },
+  narrator: { provider: "openrouter", model: "anthropic/claude-sonnet-4", source: "recommended", samplersDirty: false, samplers: { temperature: 0.8, topP: 0.95, presencePenalty: 0.3, frequencyPenalty: 0.3, maxTokens: 1200 } },
+  classifier: { provider: "openrouter", model: "openai/gpt-4o-mini", source: "recommended", samplersDirty: false, samplers: { temperature: 0, topP: 1, maxTokens: 500 } },
+  analyzer: { provider: "openrouter", model: "openai/gpt-4o-mini", source: "recommended", samplersDirty: false, samplers: { temperature: 0.2, topP: 1, maxTokens: 800 } },
+  summarizer: { provider: "openrouter", model: "openai/gpt-4o", source: "recommended", samplersDirty: false, samplers: { temperature: 0.5, topP: 0.95, maxTokens: 1200 } },
+  bootstrapper: { provider: "openrouter", model: "anthropic/claude-sonnet-4", source: "recommended", samplersDirty: false, samplers: { temperature: 0.4, topP: 0.95, maxTokens: 8000 } },
+};
+
+const MEMORY_MODEL_RECOMMENDATION_CONFIG: ModelRecommendationConfigView = {
+  version: 1,
+  samplerPresets: {
+    Precise: {
+      temperature: 0,
+      topP: 1,
+      topK: 0,
+      minP: 0,
+      frequencyPenalty: 0,
+      presencePenalty: 0,
+      repetitionPenalty: 1,
+      maxTokens: 800,
+    },
+    Balanced: {
+      temperature: 0.5,
+      topP: 0.95,
+      topK: 40,
+      minP: 0.02,
+      frequencyPenalty: 0,
+      presencePenalty: 0,
+      repetitionPenalty: 1.05,
+      maxTokens: 1200,
+    },
+    Creative: {
+      temperature: 0.8,
+      topP: 0.98,
+      topK: 60,
+      minP: 0.05,
+      frequencyPenalty: 0.2,
+      presencePenalty: 0.2,
+      repetitionPenalty: 1.1,
+      maxTokens: 1600,
+    },
+  },
+  defaultPresetForRole: {
+    classifier: "Precise",
+    analyzer: "Precise",
+    bootstrapper: "Balanced",
+    summarizer: "Balanced",
+    narrator: "Creative",
+  },
+  providerSamplerSupport: {
+    openai: [
+      "temperature",
+      "topP",
+      "frequencyPenalty",
+      "presencePenalty",
+      "maxTokens",
+      "stop",
+      "seed",
+    ],
+    anthropic: ["temperature", "topP", "topK", "maxTokens", "stop"],
+  },
+};
+
+/** Browser/dev fallback only; the packaged SQLite bridge reads the canonical core JSON config. */
+const MEMORY_UNIVERSAL_ACTIONS_CONFIG: UniversalActionConfig = {
+  version: 1,
+  actions: [
+    { id: "attack_melee", category: "combat", label: "Attack (melee)", description: "Strike a target at close range.", aliases: ["attack", "strike", "stab", "slash", "lunge", "punch", "kick"], defaultRequiresItemKind: "weapon", requiresCharacterTarget: true },
+    { id: "attack_ranged", category: "combat", label: "Attack (ranged)", description: "Attack a target from a distance.", aliases: ["shoot", "fire", "throw", "snipe"], defaultRequiresItemKind: "weapon", requiresCharacterTarget: true },
+    { id: "defend", category: "combat", label: "Defend", description: "Brace, block, or parry an incoming threat.", aliases: ["block", "parry", "guard", "brace"], requiresCharacterTarget: false },
+    { id: "evade", category: "combat", label: "Evade", description: "Avoid a threat through movement or positioning.", aliases: ["dodge", "duck", "escape", "sidestep"], requiresCharacterTarget: false },
+    { id: "move", category: "utility", label: "Move", description: "Change position in the current scene.", aliases: ["walk", "run", "sprint", "climb", "swim"], requiresCharacterTarget: false },
+    { id: "observe", category: "exploration", label: "Observe", description: "Study immediately visible details.", aliases: ["look", "watch", "listen", "inspect"], requiresCharacterTarget: false },
+    { id: "search", category: "exploration", label: "Search", description: "Examine a person or place for something concealed.", aliases: ["investigate", "loot", "scavenge", "examine"], requiresCharacterTarget: false },
+    { id: "interact", category: "utility", label: "Interact", description: "Manipulate an object or environmental feature.", aliases: ["use", "open", "close", "pull", "push", "activate"], requiresCharacterTarget: false },
+    { id: "influence", category: "social", label: "Influence", description: "Persuade, reassure, command, or negotiate with someone.", aliases: ["persuade", "convince", "charm", "command", "negotiate"], requiresCharacterTarget: true },
+    { id: "deceive", category: "social", label: "Deceive", description: "Mislead someone through words or behavior.", aliases: ["lie", "bluff", "misdirect", "disguise"], requiresCharacterTarget: true },
+    { id: "use_item", category: "utility", label: "Use item", description: "Use an owned item for its intended purpose.", aliases: ["drink", "consume", "equip", "apply"], requiresCharacterTarget: false },
+    { id: "assist", category: "utility", label: "Assist", description: "Help another character with their immediate action.", aliases: ["help", "aid", "support"], requiresCharacterTarget: true },
+    { id: "recover", category: "utility", label: "Recover", description: "Catch breath or tend to an immediate condition.", aliases: ["rest", "heal", "bandage", "regain"], requiresCharacterTarget: false },
+    { id: "wait", category: "utility", label: "Wait", description: "Hold position and allow the scene to advance.", aliases: ["pause", "hold", "do nothing"], requiresCharacterTarget: false },
+  ],
+};
+
+const MEMORY_EQUIPMENT_LOOT_CONFIG: EquipmentLootConfig = {
+  version: 1,
+  slots: [
+    "primary",
+    "secondary",
+    "head",
+    "body",
+    "utility",
+    "accessory_1",
+    "accessory_2",
+  ],
+  tiers: {
+    common: { maximumEffects: 1, maximumCheckBonus: 0, maximumAttributeBonus: 0, requiresMilestone: false },
+    uncommon: { maximumEffects: 1, maximumCheckBonus: 1, maximumAttributeBonus: 0, requiresMilestone: false },
+    rare: { maximumEffects: 2, maximumCheckBonus: 2, maximumAttributeBonus: 1, requiresMilestone: false },
+    legendary: { maximumEffects: 3, maximumCheckBonus: 3, maximumAttributeBonus: 2, requiresMilestone: true },
+    mythical: { maximumEffects: 4, maximumCheckBonus: 4, maximumAttributeBonus: 3, requiresMilestone: true },
+  },
+  loot: {
+    maximumItemsPerEncounter: 3,
+    routineMaximumTier: {
+      combat: "rare",
+      non_combat: "rare",
+      milestone: "legendary",
+      quest: "legendary",
+    },
+    mythicalRequiresExplicitAuthorization: true,
+  },
 };
 
 const MEMORY_KNOWN_MODELS: KnownModel[] = [
@@ -507,6 +758,7 @@ export function makeMemoryBridge(): CoreBridge {
   const lorebooks = new Map<string, MemLorebook>();
   const providerConfigs: ProviderConfigs = {};
   let roleMap: RoleMap = structuredCloneSafe(MEMORY_DEFAULT_ROLE_MAP);
+  let primaryProvider: ProviderId | undefined;
   let setupState: SetupState = { validatedProviders: [], rolesConfirmed: false, dismissed: false };
   const personas: PersonaRecord[] = [];
   let licenseState: LicenseState = { status: "unlicensed" };
@@ -573,6 +825,14 @@ export function makeMemoryBridge(): CoreBridge {
         createdAt: Date.now(),
         schema: stubSchema(storyId, args.title, args.premise, statMode),
         locked: true,
+        actionBudget: Math.max(1, Math.min(5, Math.round(args.actionBudget ?? 2))),
+        rulebookVersion: 1,
+        difficulty: {
+          preset: args.difficulty?.preset ?? "standard",
+          dcOffset: args.difficulty?.dcOffset ?? 0,
+          damageTakenMultiplier: args.difficulty?.damageTakenMultiplier ?? 1,
+          damageDealtMultiplier: args.difficulty?.damageDealtMultiplier ?? 1,
+        },
         ...(args.blueprint ? { blueprint: args.blueprint } : {}),
       };
       const playerCharacterId = uid();
@@ -666,6 +926,119 @@ export function makeMemoryBridge(): CoreBridge {
       return story.record;
     },
 
+    async previewRulebookRegenerationImpact(storyId) {
+      const story = requireStory(storyId);
+      const cards = [...story.cards.values()];
+      return {
+        attributes: story.record.schema.attributes.length,
+        skills: story.record.schema.skills.length,
+        skillProgressions: cards.reduce(
+          (total, card) => total + card.skills.length,
+          0
+        ),
+        storyActions: story.record.schema.actions.length,
+        universalActions: MEMORY_UNIVERSAL_ACTIONS_CONFIG.actions.length,
+        resources: story.record.schema.resources.length,
+        flags: 0,
+        characters: story.cast.length,
+        rulings: story.rulings.length,
+        checkpoints: 0,
+        journalEvents: 0,
+        runtimeItemDefinitions: 0,
+        runtimeItemInstances: cards.reduce(
+          (total, card) => total + card.inventory.length,
+          0
+        ),
+        equippedSlots: 0,
+        actionBudget:
+          story.record.actionBudget ??
+          story.record.schema.actionBudget ??
+          2,
+      };
+    },
+
+    async regenerateRulebook(args) {
+      if (args.confirmMechanicalReset !== true) {
+        throw new Error("Rulebook regeneration requires explicit reset confirmation.");
+      }
+      let story = requireStory(args.storyId);
+      let duplicateDraftId: string | undefined;
+      if (args.mode !== "in-place") {
+        const source = story;
+        const storyId = uid();
+        story = {
+          record: {
+            ...structuredCloneSafe(source.record),
+            id: storyId,
+            title: `${source.record.title} - Regenerated Copy`,
+            createdAt: Date.now(),
+            schema: { ...structuredCloneSafe(source.record.schema), storyId },
+            rulebookVersion: 1,
+          },
+          messages: source.messages.map((message) => ({
+            ...structuredCloneSafe(message),
+            id: uid(),
+            storyId,
+          })),
+          rulings: [],
+          cast: structuredCloneSafe(source.cast),
+          cards: new Map(
+            [...source.cards.entries()].map(([id, card]) => [
+              id,
+              structuredCloneSafe(card),
+            ])
+          ),
+          lorebook: source.lorebook.map((entry) => ({
+            ...structuredCloneSafe(entry),
+            id: uid(),
+          })),
+          ...(source.activePersonaId
+            ? { activePersonaId: source.activePersonaId }
+            : {}),
+          attachedLorebooks: structuredCloneSafe(source.attachedLorebooks),
+        };
+        stories.set(storyId, story);
+        duplicateDraftId = storyId;
+      }
+      try {
+        args.onProgress?.("phase-a");
+        await delay(120, args.signal);
+        args.onProgress?.("phase-b");
+        await delay(120, args.signal);
+        const mode = args.statMode ?? story.record.schema.statMode;
+        story.record.schema = stubSchema(
+          story.record.id,
+          story.record.title,
+          story.record.schema.premise,
+          mode
+        );
+        story.record.actionBudget = Math.max(
+          1,
+          Math.min(5, Math.round(args.actionBudget ?? story.record.actionBudget ?? 2))
+        );
+        story.record.rulebookVersion = (story.record.rulebookVersion ?? 1) + 1;
+        story.rulings = [];
+        args.onProgress?.("validate");
+        args.onProgress?.("freeze");
+        args.onProgress?.("install");
+        return story.record;
+      } catch (error) {
+        if (duplicateDraftId) stories.delete(duplicateDraftId);
+        throw error;
+      }
+    },
+
+    async setStoryDifficulty(storyId, difficulty) {
+      const story = requireStory(storyId);
+      story.record.difficulty = {
+        preset: difficulty.preset ?? "standard",
+        dcOffset: difficulty.dcOffset ?? 0,
+        damageTakenMultiplier: difficulty.damageTakenMultiplier ?? 1,
+        damageDealtMultiplier: difficulty.damageDealtMultiplier ?? 1,
+      };
+      return story.record;
+    },
+
     async getBlueprint(id) {
       return requireStory(id).record.blueprint;
     },
@@ -682,6 +1055,7 @@ export function makeMemoryBridge(): CoreBridge {
     },
 
     async submitTurn(args) {
+      args.onPhase?.("classifying");
       const story = requireStory(args.storyId);
       const now = Date.now();
       const playerIdx = story.messages.length;
@@ -699,9 +1073,12 @@ export function makeMemoryBridge(): CoreBridge {
       const prose =
         "The lamp gutters as you speak, and the room leans in to listen. " +
         "Somewhere below the floorboards, something old turns over in its sleep.";
+      args.onPhase?.("thinking");
+      args.onPhase?.("streaming");
       await streamProse(prose, args.onDelta, args.signal);
 
       const narratorIdx = playerIdx + 1;
+      args.onPhase?.("saving");
       story.messages.push({
         id: uid(),
         storyId: args.storyId,
@@ -711,7 +1088,23 @@ export function makeMemoryBridge(): CoreBridge {
         createdAt: Date.now(),
       });
       const rulings: Ruling[] = [];
-      return { prose, rulings, narratorIdx };
+      args.onPhase?.("idle");
+      return {
+        prose,
+        rulings,
+        narratorIdx,
+        classifierRecovered: false,
+        refusedActionCount: 0,
+        usedNarratorFallback: false,
+      };
+    },
+
+    async inspectTurnRecovery(_storyId) {
+      return undefined;
+    },
+
+    async retryTurnOperation(_args) {
+      throw new Error("No recoverable turn operation exists in design mode.");
     },
 
     async swipeLastTurn(args): Promise<SwipeOutcome> {
@@ -731,7 +1124,12 @@ export function makeMemoryBridge(): CoreBridge {
       last.variants = variants;
       last.activeVariant = activeVariant;
       last.content = variantProse;
-      return { variants, activeVariant };
+      return {
+        variants: variants.map((variant) =>
+          typeof variant === "string" ? variant : variant.prose
+        ),
+        activeVariant,
+      };
     },
 
     async selectVariant(storyId, messageIdx, variantIndex): Promise<SwipeOutcome> {
@@ -742,8 +1140,14 @@ export function makeMemoryBridge(): CoreBridge {
       const clamped = Math.max(0, Math.min(variantIndex, variants.length - 1));
       msg.variants = variants;
       msg.activeVariant = clamped;
-      msg.content = variants[clamped]!;
-      return { variants, activeVariant: clamped };
+      const selected = variants[clamped]!;
+      msg.content = typeof selected === "string" ? selected : selected.prose;
+      return {
+        variants: variants.map((variant) =>
+          typeof variant === "string" ? variant : variant.prose
+        ),
+        activeVariant: clamped,
+      };
     },
 
     async deleteLastTurn(storyId) {
@@ -844,7 +1248,9 @@ export function makeMemoryBridge(): CoreBridge {
             name: s.name,
             rank: s.rank,
             successCount: 0,
+            xp: 0,
             toNext: null,
+            nextRankXp: null,
           })),
           inventory: card.inventory.map((e) => ({
             itemId: e.itemId,
@@ -862,6 +1268,64 @@ export function makeMemoryBridge(): CoreBridge {
       return [...requireStory(storyId).rulings];
     },
 
+    async suggestActions(storyId) {
+      const story = requireStory(storyId);
+      const actionSuggestions: SuggestedAction[] = story.record.schema.actions
+        .slice(0, 4)
+        .map((action) => ({
+          id: uid(),
+          kind: "action",
+          text: action.label,
+          actionId: action.id,
+          rationale: action.description ?? "A valid action for this story.",
+        }));
+      return [
+        ...actionSuggestions,
+        {
+          id: uid(),
+          kind: "dialogue",
+          text: "Ask what the nearest character knows.",
+          rationale: "Learn more without assuming the outcome.",
+        } as SuggestedAction,
+        {
+          id: uid(),
+          kind: "move",
+          text: "Observe the surroundings carefully.",
+          rationale: "Gather context before committing.",
+        } as SuggestedAction,
+      ].slice(0, 6);
+    },
+
+    async listStoryJournal(_storyId, _query) {
+      return { events: [] };
+    },
+
+    async exportStoryJournal(storyId, format = "markdown") {
+      return format === "csv"
+        ? '"turn_index","chapter","kind","actor","summary","details"\n'
+        : `# ${requireStory(storyId).record.title} — Mechanical Journal\n\n_No mechanical events have been recorded in design mode._\n`;
+    },
+
+    async universalActionsConfig() {
+      return structuredCloneSafe(MEMORY_UNIVERSAL_ACTIONS_CONFIG);
+    },
+
+    async equipmentLootConfig() {
+      return structuredCloneSafe(MEMORY_EQUIPMENT_LOOT_CONFIG);
+    },
+
+    async getCharacterInventory(_characterId) {
+      return { definitions: [], instances: [], assignments: [] };
+    },
+
+    async equipItem(_characterId, _itemInstanceId, _slot) {
+      throw new Error("Design mode has no runtime item instances to equip.");
+    },
+
+    async unequipSlot(_characterId, _slot) {
+      return [];
+    },
+
     // The in-memory backend runs no summarizer, so there are never persisted chapters/arcs to read.
     // Overview treats an empty result as "no summaries yet" (the honest state for dev/design mode).
     async listChapters(_storyId) {
@@ -876,13 +1340,34 @@ export function makeMemoryBridge(): CoreBridge {
     },
     async setProviderConfig(provider, config) {
       providerConfigs[provider] = { apiKey: config.apiKey, ...(config.baseUrl ? { baseUrl: config.baseUrl } : {}) };
+      primaryProvider ??= provider;
     },
     async removeProviderConfig(provider) {
+      const remaining = (Object.keys(providerConfigs) as ProviderId[]).filter(
+        (candidate) => candidate !== provider && Boolean(providerConfigs[candidate]?.apiKey)
+      );
+      if (primaryProvider === provider && remaining.length > 0) {
+        throw new Error("Choose a replacement Primary provider before disconnecting this one.");
+      }
       delete providerConfigs[provider];
+      if (primaryProvider === provider) primaryProvider = undefined;
       setupState = {
         ...setupState,
         validatedProviders: setupState.validatedProviders.filter((id) => id !== provider),
       };
+    },
+    async getPrimaryProvider() {
+      if (primaryProvider && providerConfigs[primaryProvider]?.apiKey) return primaryProvider;
+      primaryProvider = (Object.keys(providerConfigs) as ProviderId[]).find((provider) =>
+        Boolean(providerConfigs[provider]?.apiKey)
+      );
+      return primaryProvider;
+    },
+    async setPrimaryProvider(provider) {
+      if (!providerConfigs[provider]?.apiKey) {
+        throw new Error("Connect and validate this provider before making it Primary.");
+      }
+      primaryProvider = provider;
     },
     async getRoleMap() {
       return structuredCloneSafe(roleMap);
@@ -1069,22 +1554,38 @@ export function makeMemoryBridge(): CoreBridge {
     },
 
     // — Model recommendations (v2 §1/§5) — stub ranks from the mirrored known-models list.
-    modelsForRole(_role, provider, availableIds) {
+    modelsForRole(role, provider, availableIds) {
       const ids = availableIds ?? MEMORY_KNOWN_MODELS.filter((m) => m.provider === provider).map((m) => m.model);
       return ids.map((id) => {
         const m = MEMORY_KNOWN_MODELS.find((known) => known.provider === provider && known.model === id);
+        const recommendedForRole =
+          MEMORY_DEFAULT_ROLE_MAP[role].provider === provider &&
+          MEMORY_DEFAULT_ROLE_MAP[role].model === id;
         return {
           id,
           label: m?.label ?? id,
           provider,
           tier: m?.tier ?? "advanced",
-          recommendedForRole: m?.tier === "recommended",
+          recommendedForRole,
           supportsJsonMode: m?.supportsJsonMode ?? false,
         };
-      });
+      }).sort((a, b) =>
+        Number(b.recommendedForRole) - Number(a.recommendedForRole) ||
+        a.label.localeCompare(b.label)
+      );
     },
     defaultAssignmentFor(role) {
       return structuredCloneSafe(MEMORY_DEFAULT_ROLE_MAP[role]);
+    },
+    modelRecommendationConfig() {
+      return structuredCloneSafe(MEMORY_MODEL_RECOMMENDATION_CONFIG);
+    },
+    recommendedSamplerProfile(role) {
+      return structuredCloneSafe(MEMORY_DEFAULT_ROLE_MAP[role].samplers ?? {});
+    },
+    providerSupportsSampler(provider, field) {
+      const supported = MEMORY_MODEL_RECOMMENDATION_CONFIG.providerSamplerSupport[provider];
+      return supported ? supported.includes(field) : true;
     },
 
     async importCardFromBytes() {

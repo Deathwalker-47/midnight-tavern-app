@@ -8,6 +8,7 @@
  */
 import { z } from "zod";
 import { PROVIDER_IDS } from "./providers/registry.js";
+import { MODEL_RECOMMENDATION_CONFIG } from "./modelConfig.js";
 
 /** The five model-consuming roles (D9). "bootstrapper" is surfaced to users as "Story AI". */
 export const ROLES = ["narrator", "classifier", "analyzer", "summarizer", "bootstrapper"] as const;
@@ -82,59 +83,22 @@ export interface KnownModel {
  * picks (strong instruction-following + JSON reliability); `advanced` are exposed for
  * users who know what they want. Model ids are the OpenRouter-style slugs.
  */
-export const KNOWN_MODELS: KnownModel[] = [
-  { provider: "openrouter", model: "anthropic/claude-sonnet-4", label: "Claude Sonnet 4", tier: "recommended", supportsJsonMode: true },
-  { provider: "openrouter", model: "openai/gpt-4o", label: "GPT-4o", tier: "recommended", supportsJsonMode: true },
-  { provider: "openrouter", model: "google/gemini-2.0-flash-001", label: "Gemini 2.0 Flash", tier: "recommended", supportsJsonMode: true },
-  { provider: "openrouter", model: "openai/gpt-4o-mini", label: "GPT-4o mini", tier: "recommended", supportsJsonMode: true },
-  { provider: "openrouter", model: "deepseek/deepseek-chat", label: "DeepSeek V3", tier: "advanced", supportsJsonMode: true },
-  { provider: "openrouter", model: "meta-llama/llama-3.3-70b-instruct", label: "Llama 3.3 70B", tier: "advanced", supportsJsonMode: true },
-  { provider: "openai", model: "gpt-4o", label: "GPT-4o (direct)", tier: "advanced", supportsJsonMode: true },
-  { provider: "anthropic", model: "claude-sonnet-4-20250514", label: "Claude Sonnet 4 (direct)", tier: "advanced", supportsJsonMode: false },
-];
+export const KNOWN_MODELS: KnownModel[] = MODEL_RECOMMENDATION_CONFIG.models.map((entry) => ({
+  provider: ProviderIdSchema.parse(entry.provider),
+  model: entry.id,
+  label: entry.label,
+  tier: entry.tier as KnownModel["tier"],
+  supportsJsonMode: entry.supportsJsonMode,
+}));
 
 /**
  * Recommended default role map for a fresh install: OpenRouter throughout, a strong
  * generalist for narration/bootstrap and cheaper fast models for the mechanical roles.
  * Narrator runs warmer for prose; structured roles run cold for reliable JSON.
  */
-export const DEFAULT_ROLE_MAP: RoleMap = {
-  narrator: {
-    provider: "openrouter",
-    model: "anthropic/claude-sonnet-4",
-    samplers: { temperature: 0.8, topP: 0.95, presencePenalty: 0.3, frequencyPenalty: 0.3, maxTokens: 1200 },
-    source: "recommended",
-    samplersDirty: false,
-  },
-  classifier: {
-    provider: "openrouter",
-    model: "openai/gpt-4o-mini",
-    samplers: { temperature: 0, topP: 1, maxTokens: 500 },
-    source: "recommended",
-    samplersDirty: false,
-  },
-  analyzer: {
-    provider: "openrouter",
-    model: "openai/gpt-4o-mini",
-    samplers: { temperature: 0.2, topP: 1, maxTokens: 800 },
-    source: "recommended",
-    samplersDirty: false,
-  },
-  summarizer: {
-    provider: "openrouter",
-    model: "openai/gpt-4o",
-    samplers: { temperature: 0.5, topP: 0.95, maxTokens: 1200 },
-    source: "recommended",
-    samplersDirty: false,
-  },
-  bootstrapper: {
-    provider: "openrouter",
-    model: "anthropic/claude-sonnet-4",
-    samplers: { temperature: 0.4, topP: 0.95, maxTokens: 8000 },
-    source: "recommended",
-    samplersDirty: false,
-  },
-};
+export const DEFAULT_ROLE_MAP: RoleMap = RoleMapSchema.parse(
+  MODEL_RECOMMENDATION_CONFIG.defaultRoleMap
+);
 
 /**
  * User-facing role labels (low-level-plan-v2 §5). The internal id `bootstrapper` is shown as

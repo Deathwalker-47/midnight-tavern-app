@@ -3,7 +3,12 @@ import type { CSSProperties } from "react";
 import type { ScreenProps } from "./registry.js";
 import { roleConfigurationIssues, useSettingsStore } from "../state/settingsStore.js";
 import { useStoriesStore } from "../state/storiesStore.js";
-import type { RoleBinding, Samplers } from "../bridge/core.js";
+import {
+  getBridge,
+  type ModelRecommendationConfigView,
+  type RoleBinding,
+  type Samplers,
+} from "../bridge/core.js";
 import {
   Button,
   EmptyState,
@@ -41,45 +46,44 @@ const PROVIDER_LABELS: Record<string, string> = {
   custom: "Custom endpoint",
 };
 
-const ROLE_DEFAULT_SAMPLERS: Record<ModelRole, Samplers> = {
-  classifier: { temperature: 0, topP: 1, maxTokens: 500 },
-  analyzer: { temperature: 0.2, topP: 1, maxTokens: 800 },
-  bootstrapper: { temperature: 0.4, topP: 0.95, maxTokens: 8000 },
-  summarizer: { temperature: 0.5, topP: 0.95, maxTokens: 1200 },
-  narrator: {
-    temperature: 0.8,
-    topP: 0.95,
-    presencePenalty: 0.3,
-    frequencyPenalty: 0.3,
-    maxTokens: 1200,
-  },
-};
+const SAMPLER_FIELD_DEFS = [
+  { key: "temperature", label: "Temperature", min: 0, max: 2, step: 0.05 },
+  { key: "topP", label: "Top-p", min: 0, max: 1, step: 0.05 },
+  { key: "topK", label: "Top-k", min: 0, max: 100, step: 1 },
+  { key: "minP", label: "Min-p", min: 0, max: 1, step: 0.01 },
+  { key: "frequencyPenalty", label: "Frequency penalty", min: -2, max: 2, step: 0.1 },
+  { key: "presencePenalty", label: "Presence penalty", min: -2, max: 2, step: 0.1 },
+  { key: "repetitionPenalty", label: "Repetition penalty", min: 0, max: 2, step: 0.05 },
+  { key: "maxTokens", label: "Max tokens", min: 100, max: 16000, step: 100 },
+] as const;
 
-const ROLE_PRESET: Record<ModelRole, SamplerPreset> = {
-  classifier: "Precise",
-  analyzer: "Precise",
-  bootstrapper: "Precise",
-  summarizer: "Balanced",
-  narrator: "Creative",
-};
+function samplerFields(
+  provider: RoleBinding["provider"],
+  presetDefaults: Samplers,
+  recommended: Samplers,
+  samplers: Samplers | undefined
+): SamplerField[] {
+  const values = { ...presetDefaults, ...recommended, ...(samplers ?? {}) };
+  return SAMPLER_FIELD_DEFS.flatMap((field): SamplerField[] => {
+    const value = values[field.key];
+    if (typeof value !== "number") return [];
+    return [{
+      key: field.key,
+      label: field.label,
+      value,
+      min: field.min,
+      max: field.max,
+      step: field.step,
+      supported: getBridge().providerSupportsSampler(provider, field.key),
+    }];
+  });
+}
 
-const PRESET_BASE: Record<SamplerPreset, Samplers> = {
-  Precise: { temperature: 0.2, topP: 1 },
-  Balanced: { temperature: 0.5, topP: 0.95 },
-  Creative: { temperature: 0.8, topP: 0.95, presencePenalty: 0.3, frequencyPenalty: 0.3 },
-};
-
-function samplerFields(role: ModelRole, samplers: Samplers | undefined): SamplerField[] {
-  const values = { ...ROLE_DEFAULT_SAMPLERS[role], ...(samplers ?? {}) };
-  return [
-    { key: "temperature", label: "Temperature", value: values.temperature ?? 0.7, min: 0, max: 2, step: 0.05 },
-    { key: "topP", label: "Top-p", value: values.topP ?? 1, min: 0, max: 1, step: 0.05 },
-    { key: "topK", label: "Top-k", value: values.topK ?? 0, min: 0, max: 100, step: 1 },
-    { key: "minP", label: "Min-p", value: values.minP ?? 0, min: 0, max: 1, step: 0.01 },
-    { key: "frequencyPenalty", label: "Frequency penalty", value: values.frequencyPenalty ?? 0, min: -2, max: 2, step: 0.1 },
-    { key: "presencePenalty", label: "Presence penalty", value: values.presencePenalty ?? 0, min: -2, max: 2, step: 0.1 },
-    { key: "maxTokens", label: "Max tokens", value: values.maxTokens ?? 1200, min: 100, max: role === "bootstrapper" ? 16000 : 4000, step: 100 },
-  ];
+function samplerSummary(profile: Samplers): string {
+  return Object.entries(profile)
+    .filter((entry): entry is [string, number] => typeof entry[1] === "number")
+    .map(([key, value]) => `${key} ${value}`)
+    .join(" · ");
 }
 
 type RoleMatrixEditorProps = {
@@ -110,6 +114,10 @@ export function RoleMatrixEditor({
   const [openRole, setOpenRole] = useState<ModelRole | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [confirmError, setConfirmError] = useState<string>();
+  const recommendationConfig = useMemo<ModelRecommendationConfigView>(
+    () => getBridge().modelRecommendationConfig(),
+    []
+  );
 
   useEffect(() => {
     if (loaded) return;
@@ -151,15 +159,17 @@ export function RoleMatrixEditor({
     const existing = roleMap[role];
     const first = modelsForRole(role, provider)[0];
     const model = first?.id ?? existing.model;
-    const applyDefaults = first?.tier === "recommended" && !existing.samplersDirty;
+    const applyDefaults = !existing.samplersDirty;
     void setRoleMap({
       ...roleMap,
       [role]: {
         ...existing,
         provider,
         model,
-        source: first?.tier === "recommended" ? "recommended" : "custom",
-        ...(applyDefaults ? { samplers: ROLE_DEFAULT_SAMPLERS[role] } : {}),
+        source: first?.recommendedForRole ? "recommended" : "custom",
+        ...(applyDefaults
+          ? { samplers: getBridge().recommendedSamplerProfile(role, model) }
+          : {}),
       },
     });
     void refreshModels(provider);
@@ -169,14 +179,16 @@ export function RoleMatrixEditor({
     if (!roleMap || !model) return;
     const existing = roleMap[role];
     const selected = modelsForRole(role, existing.provider).find((candidate) => candidate.id === model);
-    const applyDefaults = selected?.tier === "recommended" && !existing.samplersDirty;
+    const applyDefaults = !existing.samplersDirty;
     void setRoleMap({
       ...roleMap,
       [role]: {
         ...existing,
         model,
-        source: selected?.tier === "recommended" ? "recommended" : "custom",
-        ...(applyDefaults ? { samplers: ROLE_DEFAULT_SAMPLERS[role] } : {}),
+        source: selected?.recommendedForRole ? "recommended" : "custom",
+        ...(applyDefaults
+          ? { samplers: getBridge().recommendedSamplerProfile(role, model) }
+          : {}),
       },
     });
   }
@@ -184,14 +196,18 @@ export function RoleMatrixEditor({
   function changeSampler(role: ModelRole, key: string, value: number): void {
     if (!roleMap) return;
     const binding = roleMap[role];
-    const samplers: Samplers = { ...(binding.samplers ?? ROLE_DEFAULT_SAMPLERS[role]), [key]: value };
+    const samplers: Samplers = {
+      ...getBridge().recommendedSamplerProfile(role, binding.model),
+      ...(binding.samplers ?? {}),
+      [key]: value,
+    };
     void setRoleMap({ ...roleMap, [role]: { ...binding, samplers, samplersDirty: true } });
   }
 
   function applyPreset(role: ModelRole, preset: SamplerPreset): void {
     if (!roleMap) return;
     const binding = roleMap[role];
-    const samplers = { ...ROLE_DEFAULT_SAMPLERS[role], ...PRESET_BASE[preset] };
+    const samplers = { ...recommendationConfig.samplerPresets[preset] };
     void setRoleMap({ ...roleMap, [role]: { ...binding, samplers, samplersDirty: true } });
   }
 
@@ -200,8 +216,29 @@ export function RoleMatrixEditor({
     const binding = roleMap[role];
     void setRoleMap({
       ...roleMap,
-      [role]: { ...binding, samplers: ROLE_DEFAULT_SAMPLERS[role], samplersDirty: false },
+      [role]: {
+        ...binding,
+        samplers: getBridge().recommendedSamplerProfile(role, binding.model),
+        samplersDirty: false,
+      },
     });
+  }
+
+  function resetRole(role: ModelRole): void {
+    if (!roleMap) return;
+    const recommended = getBridge().defaultAssignmentFor(role);
+    void setRoleMap({
+      ...roleMap,
+      [role]: {
+        ...recommended,
+        ...(recommended.samplers
+          ? { samplers: getBridge().recommendedSamplerProfile(role, recommended.model) }
+          : {}),
+        samplersDirty: false,
+        source: "recommended",
+      },
+    });
+    void refreshModels(recommended.provider);
   }
 
   if (!loaded && !loadError) {
@@ -231,6 +268,15 @@ export function RoleMatrixEditor({
               const live = providerModels[binding.provider] ?? [];
               const ranked = modelsForRole(role, binding.provider);
               const modelState = modelStates[binding.provider];
+              const recommendedAssignment = getBridge().defaultAssignmentFor(role);
+              const recommendedLive = providerModels[recommendedAssignment.provider] ?? [];
+              const recommendedState = modelStates[recommendedAssignment.provider];
+              const recommendedUnavailable =
+                !providerConfigs[recommendedAssignment.provider]?.apiKey ||
+                (recommendedState?.state === "ready" &&
+                  !recommendedLive.some(
+                    (candidate) => candidate.id === recommendedAssignment.model
+                  ));
               const options = ranked.map((model) => {
                 const liveModel = live.find((candidate) => candidate.id === model.id);
                 const tags = [
@@ -245,9 +291,25 @@ export function RoleMatrixEditor({
               if (!options.some((option) => option.value === binding.model)) {
                 options.unshift({ value: binding.model, label: `${binding.model} · saved selection` });
               }
-              const selected = ranked.find((candidate) => candidate.id === binding.model);
+              const selected = getBridge()
+                .modelsForRole(role, binding.provider)
+                .find((candidate) => candidate.id === binding.model);
+              const selectedFromLive = ranked.find((candidate) => candidate.id === binding.model);
               const jsonRisk = STRUCTURED_ROLES.has(role) && selected?.supportsJsonMode === false;
               const liveSelected = live.find((candidate) => candidate.id === binding.model);
+              const selectedUnavailable =
+                modelState?.state === "ready" && live.length > 0 && !liveSelected;
+              const selectedCustom = binding.source === "custom" || !selected?.recommendedForRole;
+              const recommendationOutdated =
+                binding.source === "recommended" && !selected?.recommendedForRole;
+              const roleIsRecommended =
+                binding.provider === recommendedAssignment.provider &&
+                binding.model === recommendedAssignment.model &&
+                !binding.samplersDirty;
+              const recommendedProfile = getBridge().recommendedSamplerProfile(
+                role,
+                binding.model
+              );
               return (
                 <div key={role}>
                   <RoleMatrixRow
@@ -259,14 +321,18 @@ export function RoleMatrixEditor({
                     options={options}
                     value={binding.model}
                     onChange={(model) => changeModel(role, model)}
-                    fit={selected?.tier === "recommended" ? "recommended" : "advanced"}
+                    fit={selected?.recommendedForRole ? "recommended" : "advanced"}
                     modelState={modelState?.state ?? "idle"}
                     onRefreshModels={() => void refreshModels(binding.provider)}
                   />
                   <div style={{ padding: "0 0 8px 32px", color: "var(--muted)", fontFamily: "var(--font-ui)", fontSize: 11.5 }}>
                     {liveSelected?.contextLength
                       ? `Live provider model · ${liveSelected.contextLength.toLocaleString()} token context`
-                      : "Live provider model · capability tags are curated when known"}
+                      : selectedUnavailable
+                        ? "Saved model · unavailable in the latest live provider inventory"
+                        : selectedFromLive
+                          ? "Live provider model · capability tags are curated when known"
+                          : "Saved model · live availability has not been verified"}
                   </div>
                   {modelState?.state === "error" ? (
                     <div style={{ padding: "0 0 8px" }}>
@@ -286,6 +352,67 @@ export function RoleMatrixEditor({
                       />
                     </div>
                   ) : null}
+                  {selectedUnavailable ? (
+                    <div style={{ padding: "0 0 8px" }} data-testid={`model-unavailable-${role}`}>
+                      <InlineNotice
+                        severity="warn"
+                        title="Saved model unavailable"
+                        detail="Choose a live model, refresh the provider inventory, or reset this role to the current recommendation."
+                      />
+                    </div>
+                  ) : recommendationOutdated ? (
+                    <div
+                      style={{ padding: "0 0 8px" }}
+                      data-testid={`recommendation-outdated-${role}`}
+                    >
+                      <InlineNotice
+                        severity="warn"
+                        title="Saved recommendation is outdated"
+                        detail={`Recommendation config v${recommendationConfig.version} no longer recommends this model for ${role}.`}
+                      />
+                    </div>
+                  ) : null}
+                  <div
+                    data-testid={`model-fit-state-${role}`}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 12,
+                      padding: "2px 0 8px 32px",
+                      color: selectedCustom ? "var(--brass)" : "var(--muted)",
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 10.5,
+                    }}
+                  >
+                    <span>
+                      {selectedCustom
+                        ? `Custom selection · config v${recommendationConfig.version}`
+                        : `Recommended selection · config v${recommendationConfig.version}`}
+                    </span>
+                    {!roleIsRecommended ? (
+                      <button
+                        type="button"
+                        disabled={recommendedUnavailable}
+                        title={
+                          recommendedUnavailable
+                            ? "The recommended provider or model is not currently available."
+                            : "Restore the config-supplied model and parameters."
+                        }
+                        onClick={() => resetRole(role)}
+                        style={{
+                          background: "transparent",
+                          border: 0,
+                          color: recommendedUnavailable ? "var(--muted)" : "var(--teal)",
+                          cursor: recommendedUnavailable ? "default" : "pointer",
+                          fontFamily: "var(--font-mono)",
+                          fontSize: 10.5,
+                        }}
+                      >
+                        Reset role to recommended
+                      </button>
+                    ) : null}
+                  </div>
                   <div style={{ display: "flex", justifyContent: "flex-end", padding: "2px 0 8px" }}>
                     <button
                       type="button"
@@ -299,13 +426,35 @@ export function RoleMatrixEditor({
                   {openRole === role ? (
                     <div style={{ paddingBottom: 12 }}>
                       <SamplerPanel
-                        fields={samplerFields(role, binding.samplers)}
-                        activePreset={binding.samplersDirty ? undefined : ROLE_PRESET[role]}
+                        fields={samplerFields(
+                          binding.provider,
+                          recommendationConfig.samplerPresets[
+                            recommendationConfig.defaultPresetForRole[role]
+                          ],
+                          recommendedProfile,
+                          binding.samplers
+                        )}
+                        activePreset={
+                          binding.samplersDirty
+                            ? undefined
+                            : recommendationConfig.defaultPresetForRole[role]
+                        }
                         dirty={binding.samplersDirty ?? false}
                         onPreset={(preset) => applyPreset(role, preset)}
                         onFieldChange={(key, value) => changeSampler(role, key, value)}
                         onResetToRecommended={() => resetSamplers(role)}
                       />
+                      <div
+                        style={{
+                          marginTop: 8,
+                          color: "var(--muted)",
+                          fontFamily: "var(--font-mono)",
+                          fontSize: 10.5,
+                        }}
+                      >
+                        Recommended parameters · config v{recommendationConfig.version} ·{" "}
+                        {samplerSummary(recommendedProfile)}
+                      </div>
                     </div>
                   ) : null}
                 </div>

@@ -11,13 +11,27 @@
  * transaction, so a story never exists on disk without its protagonist.
  */
 import { randomUUID } from "../util/uuid.js";
-import type { Router } from "../router/index.js";
+import {
+  MODEL_RECOMMENDATION_CONFIG_VERSION,
+  type Router,
+} from "../router/index.js";
 import type { Store } from "../store/index.js";
-import type { StorySchema, StoryRecord } from "../types/index.js";
+import {
+  STANDARD_DIFFICULTY,
+  type StorySchema,
+  type StoryRecord,
+} from "../types/index.js";
 import { validateStorySchema } from "./validate.js";
 import { deterministicRepair } from "./repair.js";
 import { instantiatePlayer } from "./instantiate.js";
-import { generateStorySchema, type BootstrapInput, type BootstrapOptions } from "./generate.js";
+import {
+  generateStorySchema,
+  resolveBootstrapCreationInput,
+  type BootstrapInput,
+  type BootstrapOptions,
+  type BootstrapResumeState,
+} from "./generate.js";
+import { MECHANICS_CONFIG_VERSIONS } from "../config/index.js";
 
 /** Raised when a caller tries to freeze a schema that still fails cross-validation. */
 export class UnfreezableSchemaError extends Error {
@@ -50,10 +64,29 @@ export interface PlayerSeed {
   characterId?: string;
 }
 
+/**
+ * Preserve the semantic inputs that must survive the initial forge. Source-card macros are
+ * intentionally stored unexpanded so a future rulebook regeneration can evaluate them against
+ * the then-current persona and runtime context instead of baking in stale substitutions.
+ */
+function creationSourceSnapshot(input: BootstrapInput): Record<string, unknown> | undefined {
+  const snapshot = {
+    ...(input.sourceCard ? { sourceCard: structuredClone(input.sourceCard) } : {}),
+    ...(input.acceptImportedMechanics && input.importedMechanics
+      ? {
+          importedMechanics: structuredClone(input.importedMechanics),
+          acceptImportedMechanics: true,
+        }
+      : {}),
+    ...(input.persona ? { persona: structuredClone(input.persona) } : {}),
+  };
+  return Object.keys(snapshot).length > 0 ? snapshot : undefined;
+}
+
 /** Build a sealed, entirely local No Stats rulebook. No model role participates. */
 export function createNoStatsSchema(input: BootstrapInput): StorySchema {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     storyId: input.storyId,
     title: input.title,
     premise: input.premise,
@@ -66,6 +99,8 @@ export function createNoStatsSchema(input: BootstrapInput): StorySchema {
     actions: [],
     startingState: { attributes: {}, resources: {}, skills: [], inventory: [] },
     npcTemplates: [],
+    actionBudget: Math.max(1, Math.min(5, Math.round(input.actionBudget ?? 2))),
+    mechanicsConfigVersions: MECHANICS_CONFIG_VERSIONS,
     locked: true,
   };
 }
@@ -81,14 +116,53 @@ export async function bootstrapStory(
   player: PlayerSeed,
   options: BootstrapOptions = {}
 ): Promise<BootstrapResult> {
-  let installedSchema: StorySchema;
+  const operationStartedAt = Date.now();
+  let latestCheckpoint: BootstrapResumeState | undefined;
+  const generationOptions: BootstrapOptions = {
+    ...options,
+    onCheckpoint: (checkpoint) => {
+      latestCheckpoint = checkpoint;
+      options.onCheckpoint?.(checkpoint);
+    },
+  };
+  let generatedSchema: StorySchema | undefined;
+  let noStatsInput: BootstrapInput | undefined;
   if (input.statMode === "none") {
-    installedSchema = createNoStatsSchema(input);
+    noStatsInput = resolveBootstrapCreationInput(input, generationOptions);
   } else {
-    const generated = await generateStorySchema(router, { ...input, statMode: "full" }, options);
-    options.onProgress?.("freeze");
-    installedSchema = freezeSchema(generated);
+    generatedSchema = await generateStorySchema(
+      router,
+      { ...input, statMode: "full" },
+      generationOptions
+    );
   }
+  const progressStartedAt = latestCheckpoint?.startedAt ?? operationStartedAt;
+  options.onProgress?.("freeze");
+  options.onProgressDetail?.({
+    phase: "freeze",
+    fragment: "freeze",
+    status: "running",
+    attempt: 1,
+    maxAttempts: 1,
+    elapsedMs: Math.max(0, Date.now() - progressStartedAt),
+    message: "Sealing the validated rulebook.",
+    ...(input.statMode === "none"
+      ? {}
+      : { latestCompletedFragment: "cross-validation" as const }),
+  });
+  const installedSchema = noStatsInput
+    ? createNoStatsSchema(noStatsInput)
+    : freezeSchema(generatedSchema!);
+  options.onProgressDetail?.({
+    phase: "freeze",
+    fragment: "freeze",
+    status: "completed",
+    attempt: 1,
+    maxAttempts: 1,
+    elapsedMs: Math.max(0, Date.now() - progressStartedAt),
+    message: "Rulebook sealed.",
+    latestCompletedFragment: "freeze",
+  });
 
   const story: StoryRecord = {
     id: input.storyId,
@@ -96,12 +170,32 @@ export async function bootstrapStory(
     createdAt: Date.now(),
     schema: installedSchema,
     locked: true,
+    difficulty: STANDARD_DIFFICULTY,
+    actionBudget: installedSchema.actionBudget ?? 2,
+    rulebookVersion: 1,
+    configSnapshot: {
+      mechanics: installedSchema.mechanicsConfigVersions ?? MECHANICS_CONFIG_VERSIONS,
+      modelRecommendations: MODEL_RECOMMENDATION_CONFIG_VERSION,
+      ...(creationSourceSnapshot(input)
+        ? { creationSource: creationSourceSnapshot(input) }
+        : {}),
+    },
   };
 
   const playerCharacterId = player.characterId ?? randomUUID();
   const hard = instantiatePlayer(installedSchema, playerCharacterId);
 
   options.onProgress?.("install");
+  options.onProgressDetail?.({
+    phase: "install",
+    fragment: "install",
+    status: "running",
+    attempt: 1,
+    maxAttempts: 1,
+    elapsedMs: Math.max(0, Date.now() - progressStartedAt),
+    message: "Installing the sealed story and player state.",
+    latestCompletedFragment: "freeze",
+  });
   await store.transaction(async () => {
     await store.stories.insert(story);
     await store.characters.insert({
@@ -111,6 +205,16 @@ export async function bootstrapStory(
       isPlayer: true,
       hard,
     });
+  });
+  options.onProgressDetail?.({
+    phase: "install",
+    fragment: "install",
+    status: "completed",
+    attempt: 1,
+    maxAttempts: 1,
+    elapsedMs: Math.max(0, Date.now() - progressStartedAt),
+    message: "Story installed.",
+    latestCompletedFragment: "install",
   });
 
   return { story, playerCharacterId };

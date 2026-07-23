@@ -17,21 +17,27 @@ const EXPECTED_TABLES = [
   "arcs",
   "chapters",
   "characters",
+  "equipment_assignments",
+  "item_definitions",
+  "item_instances",
   "lorebook_entries",
   "lorebooks",
   "messages",
   "personas",
+  "rulebook_snapshots",
   "rulings",
   "schema_migrations",
   "settings",
   "stories",
+  "story_events",
   "story_lorebooks",
   "turn_checkpoints",
+  "turn_operations",
   "world_soft",
 ];
 
 /** Number of embedded migrations. Bump when adding one. */
-const MIGRATION_COUNT = 6;
+const MIGRATION_COUNT = 10;
 
 async function tableNames(db: Db): Promise<string[]> {
   const rows = await db.all<{ name: string }>(
@@ -57,6 +63,10 @@ describe("openDb / migrations", () => {
       { version: 4, name: "story_persona" },
       { version: 5, name: "checkpoints" },
       { version: 6, name: "variant_soft_states" },
+      { version: 7, name: "v7_story_runtime" },
+      { version: 8, name: "v7_turn_operations_and_journal" },
+      { version: 9, name: "v7_runtime_items_and_equipment" },
+      { version: 10, name: "v7_rulebook_snapshots" },
     ]);
     await db.close();
   });
@@ -80,7 +90,12 @@ describe("openDb / migrations", () => {
         rmSync(dir, { recursive: true, force: true });
       } catch {
         await new Promise((r) => setTimeout(r, 50));
-        rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 });
+        try {
+          rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+        } catch {
+          // Windows can retain a native SQLite handle beyond the test process tick. The database
+          // assertions have already completed; OS temp cleanup will reclaim this directory.
+        }
       }
     }
   });

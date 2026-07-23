@@ -200,9 +200,22 @@ export function LivingCard(props: LivingCardProps): JSX.Element {
       {card.skills.length > 0 ? (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
           {card.skills.slice(0, 4).map((s) => (
-            <span key={s.skillId} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--ui-text)" }}>{s.name}</span>
-              <MasteryPips rank={asRank(s.rank)} recentlyAdvanced={recentlyAdvancedSkillIds.includes(s.skillId)} animate={animate} />
+            <span key={s.skillId} style={{ display: "inline-flex", flexDirection: "column", gap: 2 }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                <span
+                  title={s.definition}
+                  style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--ui-text)" }}
+                >
+                  {s.name}
+                </span>
+                <MasteryPips rank={asRank(s.rank)} recentlyAdvanced={recentlyAdvancedSkillIds.includes(s.skillId)} animate={animate} />
+              </span>
+              <span style={{ fontFamily: "var(--font-mono)", fontSize: 8.5, color: "var(--muted)" }}>
+                {s.nextRankXp == null
+                  ? `${s.xp ?? 0} XP · mastered`
+                  : `${s.xp ?? 0} / ${s.nextRankXp} XP`}
+                {s.latestAward ? ` · +${s.latestAward.xp} T${s.latestAward.turnIdx}` : ""}
+              </span>
             </span>
           ))}
         </div>
@@ -241,7 +254,12 @@ export function LivingCardView(props: LivingCardProps): JSX.Element {
             {card.skills.map((s) => (
               <div key={s.skillId} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--ui-text)" }}>{s.name}</span>
+                  <span
+                    title={s.definition}
+                    style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--ui-text)" }}
+                  >
+                    {s.name}
+                  </span>
                   <MasteryPips
                     rank={asRank(s.rank)}
                     recentlyAdvanced={recentlyAdvancedSkillIds.includes(s.skillId)}
@@ -249,9 +267,17 @@ export function LivingCardView(props: LivingCardProps): JSX.Element {
                     animate={animate}
                   />
                 </div>
-                {s.toNext !== undefined && s.toNext !== null && s.successCount !== undefined ? (
-                  <span style={{ alignSelf: "flex-end", fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--muted)" }}>
-                    {s.successCount} successes · {s.toNext} to next rank
+                <span style={{ alignSelf: "flex-end", fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--muted)" }}>
+                  {s.nextRankXp == null
+                    ? `${s.xp ?? 0} XP · mastered`
+                    : `${s.xp ?? 0} / ${s.nextRankXp} XP${s.toNext != null ? ` · ${s.toNext} to next rank` : ""}`}
+                </span>
+                {s.latestAward ? (
+                  <span style={{ alignSelf: "flex-end", fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--success)" }}>
+                    +{s.latestAward.xp} XP · {s.latestAward.reason} · T{s.latestAward.turnIdx}
+                    {s.latestAward.rankUp
+                      ? ` · ${s.latestAward.rankUp.from.toUpperCase()} → ${s.latestAward.rankUp.to.toUpperCase()}`
+                      : ""}
                   </span>
                 ) : null}
               </div>

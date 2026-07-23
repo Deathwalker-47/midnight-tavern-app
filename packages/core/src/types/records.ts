@@ -12,10 +12,31 @@
 import { z } from "zod";
 import { StorySchemaSchema } from "./schema.js";
 import { BlueprintSchema } from "./blueprint.js";
+import { DifficultyConfigSchema, type DifficultyConfig } from "./difficulty.js";
+
+/** Persisted story difficulty. Kept here as a storage contract to make legacy NULL rows tolerant. */
+export const PersistedDifficultySchema = DifficultyConfigSchema;
+export type PersistedDifficulty = DifficultyConfig;
 
 /** A message's author role in the transcript. */
 export const MessageRoleSchema = z.enum(["player", "narrator", "system"]);
 export type MessageRole = z.infer<typeof MessageRoleSchema>;
+
+/** A narrator telling variant. Legacy databases may still contain plain strings. */
+export const NarratorVariantSchema = z.object({
+  index: z.number().int().nonnegative(),
+  prose: z.string(),
+  feedback: z.string().max(300).optional(),
+  softPatchJson: z.string().optional(),
+  createdAt: z.number().int().nonnegative(),
+});
+export type NarratorVariant = z.infer<typeof NarratorVariantSchema>;
+export const StoredNarratorVariantSchema = z.union([z.string(), NarratorVariantSchema]);
+export type StoredNarratorVariant = z.infer<typeof StoredNarratorVariantSchema>;
+
+export function variantProse(variant: StoredNarratorVariant): string {
+  return typeof variant === "string" ? variant : variant.prose;
+}
 
 /**
  * A story row. `schema` is the frozen StorySchema (persisted as `stories.schema_json`);
@@ -32,6 +53,14 @@ export const StoryRecordSchema = z.object({
    * and bootstrap-only stories omit it. Style-only; the mechanical `schema` above is the wall.
    */
   blueprint: BlueprintSchema.optional(),
+  /** Runtime play difficulty. Missing legacy values read as Standard in the repository. */
+  difficulty: PersistedDifficultySchema.optional(),
+  /** Consequential player actions allowed per message. Part of the sealed rulebook. */
+  actionBudget: z.number().int().min(1).max(5).optional(),
+  /** Monotonic rulebook generation boundary. */
+  rulebookVersion: z.number().int().positive().optional(),
+  /** Versioned mechanical configuration frozen with this rulebook. */
+  configSnapshot: z.record(z.string(), z.unknown()).optional(),
 });
 export type StoryRecord = z.infer<typeof StoryRecordSchema>;
 
@@ -50,7 +79,7 @@ export const MessageRecordSchema = z.object({
    * Narrator prose variants from swipe/regenerate (low-level-plan-v2 §6). Absent on player messages
    * and on narrator messages never swiped. `content` always mirrors the active variant.
    */
-  variants: z.array(z.string()).optional(),
+  variants: z.array(StoredNarratorVariantSchema).optional(),
   /** Index into `variants` of the currently-shown prose (defaults to 0, the original). */
   activeVariant: z.number().int().nonnegative().optional(),
 });

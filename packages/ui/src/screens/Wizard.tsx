@@ -16,15 +16,34 @@
  * gates creation. Nav via `useRoute().navigate`. Token variables only; honors reduced-motion
  * through the components' own hooks.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
-import { useStoriesStore } from "../state/storiesStore";
+import { EMPTY_STORY_DRAFT, useStoriesStore } from "../state/storiesStore";
 import { useSettingsStore } from "../state/settingsStore";
 import { useRoute } from "../state/uiStore";
 import { getBridge } from "../bridge/core";
-import type { PersonaRecord } from "../bridge/core";
-import { Button, PremiseInput, ForgingInterstitial, InlineNotice, Chip } from "../components";
-import type { ForgeStep, ForgeStepStatus } from "../components";
+import type {
+  BootstrapProgressEvent,
+  BootstrapResumeState,
+  PersonaRecord,
+} from "../bridge/core";
+import {
+  Button,
+  PremiseInput,
+  ForgingInterstitial,
+  InlineNotice,
+  Chip,
+  StoryCreationReview,
+  STANDARD_DIFFICULTY,
+} from "../components";
+import type {
+  DifficultyValue,
+  ForgeOperationState,
+  ForgeStep,
+  ForgeStepStatus,
+  MacroReview,
+  MechanicSourceReview,
+} from "../components";
 import type { ScreenProps } from "./registry";
 
 /** The forge phases the bridge streams via `onProgress`, mapped to human step labels. */
@@ -32,13 +51,38 @@ const FORGE_PHASES = ["phase-a", "repair", "phase-b", "validate", "freeze", "ins
 type ForgePhase = (typeof FORGE_PHASES)[number];
 
 const STEP_LABELS: Record<ForgePhase, string> = {
-  "phase-a": "Reading your premise",
+  "phase-a": "Reading premise, card, and persona cues",
   repair: "Correcting the model's structured response",
-  "phase-b": "Deciding the rules of this world",
-  validate: "Writing the skill catalog",
-  freeze: "Sealing the rulebook",
-  install: "Placing your starting gear",
+  "phase-b": "Defining attributes, skills, resources, and story actions",
+  validate: "Validating every mechanic and reference",
+  freeze: "Sealing the versioned rulebook",
+  install: "Placing characters and opening the scene",
 };
+
+const FORGE_RESUME_KEY = "midnight-tavern:v7-forge-resume";
+
+interface ForgeResumeEnvelope {
+  storyId: string;
+  checkpoint: BootstrapResumeState;
+}
+
+function readForgeResume(): ForgeResumeEnvelope | undefined {
+  try {
+    const raw = globalThis.sessionStorage?.getItem(FORGE_RESUME_KEY);
+    return raw ? (JSON.parse(raw) as ForgeResumeEnvelope) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function persistForgeResume(value: ForgeResumeEnvelope | undefined): void {
+  try {
+    if (value) globalThis.sessionStorage?.setItem(FORGE_RESUME_KEY, JSON.stringify(value));
+    else globalThis.sessionStorage?.removeItem(FORGE_RESUME_KEY);
+  } catch {
+    // Resume is a reliability enhancement; restricted browser storage must not block forging.
+  }
+}
 
 /** The three error families forging can fail with, each with a named cause + fix. */
 type ForgeErrorKind = "provider-auth" | "model-output" | "network";
@@ -78,13 +122,30 @@ const SEEDS: { label: string; text: string }[] = [
 export function Wizard(_props: ScreenProps): JSX.Element {
   const create = useStoriesStore((s) => s.create);
   const forging = useStoriesStore((s) => s.forging);
+  const storyDraft = useStoriesStore((s) => s.draft) ?? EMPTY_STORY_DRAFT;
   const entitlement = useSettingsStore((s) => s.entitlement);
   const { navigate } = useRoute();
 
-  const [playerName, setPlayerName] = useState("");
-  const [premise, setPremise] = useState("");
+  const [playerName, setPlayerName] = useState(storyDraft.playerName ?? "");
+  const [premise, setPremise] = useState(storyDraft.premise ?? "");
+  const [wizardStep, setWizardStep] = useState<"premise" | "review">("premise");
+  const [statMode, setStatMode] = useState<"none" | "full">(storyDraft.statMode ?? "full");
+  const [difficulty, setDifficulty] = useState<DifficultyValue>(STANDARD_DIFFICULTY);
+  const [actionBudget, setActionBudget] = useState(2);
+  const [continueWithoutPersona, setContinueWithoutPersona] = useState(false);
   const [phase, setPhase] = useState<ForgePhase | undefined>(undefined);
   const [error, setError] = useState<ForgeError | undefined>(undefined);
+  const [forgeState, setForgeState] = useState<ForgeOperationState>("running");
+  const [elapsed, setElapsed] = useState(0);
+  const [lastProgressEvent, setLastProgressEvent] = useState<string>();
+  const [progressAttempt, setProgressAttempt] = useState(1);
+  const [resumeEnvelope, setResumeEnvelope] = useState<ForgeResumeEnvelope | undefined>(
+    readForgeResume
+  );
+  const forgeStoryId = useRef(
+    resumeEnvelope?.storyId ?? globalThis.crypto?.randomUUID?.() ?? `story-${Date.now()}`
+  );
+  const forgeAbort = useRef<AbortController>();
   // Optional persona pick (v2 §4); "" ⇒ use the global default persona.
   const [personas, setPersonas] = useState<PersonaRecord[]>([]);
   const [personaId, setPersonaId] = useState("");
@@ -94,7 +155,11 @@ export function Wizard(_props: ScreenProps): JSX.Element {
     void getBridge()
       .listPersonas()
       .then((ps) => {
-        if (!cancelled) setPersonas(ps);
+        if (!cancelled) {
+          setPersonas(ps);
+          const defaultPersona = ps.find((persona) => persona.isDefault);
+          if (defaultPersona) setPersonaId((current) => current || defaultPersona.id);
+        }
       })
       .catch(() => {
         /* personas are optional; a load failure just leaves the picker empty */
@@ -104,34 +169,98 @@ export function Wizard(_props: ScreenProps): JSX.Element {
     };
   }, []);
 
+  useEffect(() => {
+    if (!forging && !phase) return;
+    const started = Date.now() - elapsed * 1000;
+    const timer = window.setInterval(() => {
+      const seconds = Math.floor((Date.now() - started) / 1000);
+      setElapsed(seconds);
+      setForgeState((current) => current === "running" && seconds >= 30 ? "slow" : current);
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [forging, phase]);
+
   // Default to allowing creation while entitlement loads; only an expired trial blocks it.
   const canCreate = entitlement ? entitlement.canCreateStory : true;
   const trimmedPremise = premise.trim();
-  const forgeDisabled = trimmedPremise.length < 12 || forging;
+  const selectedPersona = personas.find((persona) => persona.id === personaId);
+  const macroReview = useMemo(() => inspectMacros([
+    ["Premise", premise],
+    ["Imported card", storyDraft.importedCard?.premise ?? ""],
+    ["Opening", storyDraft.selectedOpening ?? ""],
+  ]), [premise, storyDraft.importedCard, storyDraft.selectedOpening]);
+  const mechanicReview = useMemo(() => mechanicsFromDraft(storyDraft.importedCard), [storyDraft.importedCard]);
+  const reviewBlocked =
+    (statMode === "full" && macroReview.some((macro) => macro.state === "blocking")) ||
+    (!selectedPersona && !continueWithoutPersona);
+  const forgeDisabled = trimmedPremise.length < 12 || forging || reviewBlocked;
 
   const runForge = async (): Promise<void> => {
     if (forgeDisabled) return;
     setError(undefined);
     setPhase("phase-a");
+    setForgeState("running");
+    setElapsed(0);
+    setLastProgressEvent("Forge request accepted");
+    const abort = new AbortController();
+    forgeAbort.current = abort;
     try {
       const result = await create({
+        storyId: forgeStoryId.current,
         title: deriveTitle(trimmedPremise),
         premise: trimmedPremise,
         playerName: playerName.trim() || "You",
-        onProgress: (p) => setPhase(p),
+        statMode,
+        blueprint: storyDraft.blueprint,
+        openingMessage: storyDraft.selectedOpening,
+        lorebookSeeds: storyDraft.importedCard?.lorebook,
+        sourceCard: storyDraft.importedCard?.sourceCard,
+        importedMechanics: storyDraft.importedCard?.importedMechanics,
+        acceptImportedMechanics: Boolean(storyDraft.importedCard?.importedMechanics),
+        persona: selectedPersona,
+        difficulty,
+        actionBudget,
+        signal: abort.signal,
+        resume: resumeEnvelope?.checkpoint,
+        onCheckpoint: (checkpoint: BootstrapResumeState) => {
+          const envelope = { storyId: forgeStoryId.current, checkpoint };
+          setResumeEnvelope(envelope);
+          persistForgeResume(envelope);
+        },
+        onProgress: (rawPhase: ForgePhase) => {
+          const p = FORGE_PHASES.includes(rawPhase) ? rawPhase : undefined;
+          if (p) setPhase(p);
+          setForgeState(p === "repair" ? "degraded" : "running");
+          setLastProgressEvent(p ? STEP_LABELS[p] : "Progress event received");
+        },
+        onProgressDetail: (event: BootstrapProgressEvent) => {
+          if (FORGE_PHASES.includes(event.phase as ForgePhase)) {
+            setPhase(event.phase as ForgePhase);
+          }
+          setProgressAttempt(event.attempt);
+          setElapsed(Math.floor(event.elapsedMs / 1000));
+          setForgeState(
+            event.status === "retrying"
+              ? "degraded"
+              : event.status === "cancelled"
+                ? "cancelled"
+                : "running"
+          );
+          setLastProgressEvent(event.message);
+        },
       });
-      // Apply the optional persona pick to the freshly-created story (v2 §4).
-      if (personaId) {
-        try {
-          await getBridge().setActivePersona(result.story.id, personaId);
-        } catch {
-          /* non-fatal: the story still opens on the default persona */
-        }
-      }
+      persistForgeResume(undefined);
+      setResumeEnvelope(undefined);
+      setForgeState("completed");
       navigate("play", { storyId: result.story.id });
     } catch (err) {
+      if (abort.signal.aborted) {
+        setForgeState("cancelled");
+        setLastProgressEvent("Cancellation acknowledged; completed fragments retained");
+        return;
+      }
       setError(classifyError(err));
-      setPhase(undefined);
+      setForgeState(String(err).toLowerCase().includes("timeout") ? "timed-out" : "failed");
     }
   };
 
@@ -163,11 +292,66 @@ export function Wizard(_props: ScreenProps): JSX.Element {
 
   // ── Forging interstitial ─────────────────────────────────────────────────
   if (forging || phase) {
-    const steps = buildSteps(phase, error?.kind ? phase : undefined);
+    const steps = buildSteps(phase, error?.kind ? phase : undefined, forgeState);
     return (
       <div style={styles.screen}>
         <div style={styles.card}>
-          <ForgingInterstitial title="Forging your story" steps={steps} />
+          <ForgingInterstitial
+            title={statMode === "none" ? "Opening your story" : "Forging your story"}
+            steps={steps}
+            operationState={forgeState}
+            elapsedSeconds={elapsed}
+            activeSubstep={phase ? STEP_LABELS[phase] : undefined}
+            attempt={progressAttempt}
+            lastEvent={lastProgressEvent}
+            onCancel={() => forgeAbort.current?.abort()}
+            onRetry={() => void runForge()}
+            onResume={() => {
+              setForgeState("running");
+              void runForge();
+            }}
+          />
+          {error ? <ForgeErrorNotice error={error} onRetry={() => void runForge()} onSettings={() => navigate("settings")} /> : null}
+          {forgeState === "cancelled" ? (
+            <div style={{ display: "flex", justifyContent: "center" }}>
+              <Button variant="secondary" onClick={() => { setPhase(undefined); setWizardStep("review"); }}>
+                Return to review
+              </Button>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
+
+  if (wizardStep === "review") {
+    return (
+      <div style={{ ...styles.screen, alignItems: "flex-start" }}>
+        <div style={{ ...styles.card, width: 900 }}>
+          <div className="mono" style={styles.kicker}>NEW STORY · REVIEW BEFORE FORGE</div>
+          <h1 style={styles.title}>Review the world and your role</h1>
+          <p style={styles.lede}>These choices become part of the sealed rulebook. Runtime loot is generated only when a DM Ruling awards it; no item catalog or starting gear is forged here.</p>
+          <StoryCreationReview
+            persona={selectedPersona}
+            continueWithoutPersona={continueWithoutPersona}
+            onContinueWithoutPersona={setContinueWithoutPersona}
+            onChangePersona={() => setWizardStep("premise")}
+            onEditPersona={() => navigate("personas", selectedPersona ? { personaId: selectedPersona.id } : {})}
+            mechanics={mechanicReview}
+            macros={macroReview}
+            statMode={statMode}
+            onStatModeChange={setStatMode}
+            difficulty={difficulty}
+            onDifficultyChange={setDifficulty}
+            actionBudget={actionBudget}
+            onActionBudgetChange={setActionBudget}
+          />
+          <div style={styles.footer}>
+            <Button variant="ghost" onClick={() => setWizardStep("premise")}>← Back</Button>
+            <Button variant="primary" onClick={() => void runForge()} disabled={forgeDisabled} title={reviewBlocked ? "Resolve the persona or macro warning first" : undefined}>
+              {statMode === "none" ? "Open this story →" : "Forge this world →"}
+            </Button>
+          </div>
         </div>
       </div>
     );
@@ -178,12 +362,12 @@ export function Wizard(_props: ScreenProps): JSX.Element {
     <div style={styles.screen}>
       <div style={styles.card}>
         <div className="mono" style={styles.kicker}>
-          NEW STORY · STEP 1 OF 1
+          NEW STORY · PREMISE
         </div>
         <h1 style={styles.title}>What world shall we forge?</h1>
         <p style={styles.lede}>
-          Describe the premise in a sentence or a page. The storyteller reads it and writes the rules — the skills you
-          can learn, the dangers, the things you&rsquo;ll carry.
+          Describe the premise in a sentence or a page. On the next screen you will confirm your persona,
+          imported mechanics, macro compatibility, difficulty, and action budget before anything is forged.
         </p>
 
         {error ? <ForgeErrorNotice error={error} onRetry={() => void runForge()} onSettings={() => navigate("settings")} /> : null}
@@ -212,7 +396,7 @@ export function Wizard(_props: ScreenProps): JSX.Element {
               onChange={(e) => setPersonaId(e.target.value)}
               style={{ ...styles.nameInput, fontFamily: "var(--font-ui)", fontSize: 14 }}
             >
-              <option value="">Default persona</option>
+              <option value="">No persona selected</option>
               {personas.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
@@ -226,7 +410,9 @@ export function Wizard(_props: ScreenProps): JSX.Element {
         <PremiseInput
           value={premise}
           onChange={setPremise}
-          onSubmit={() => void runForge()}
+          onSubmit={() => {
+            if (trimmedPremise.length >= 12) setWizardStep("review");
+          }}
           label="Your premise"
           placeholder="A courier crosses an ash-buried mountain road where pilgrims have begun to vanish near a ruined monastery…"
         />
@@ -255,8 +441,8 @@ export function Wizard(_props: ScreenProps): JSX.Element {
           <Button variant="ghost" onClick={() => navigate("library")}>
             Cancel
           </Button>
-          <Button variant="primary" onClick={() => void runForge()} disabled={forgeDisabled} title={trimmedPremise.length < 12 ? "Write a little more of the premise first" : undefined}>
-            Forge this world →
+          <Button variant="primary" onClick={() => setWizardStep("review")} disabled={trimmedPremise.length < 12 || forging} title={trimmedPremise.length < 12 ? "Write a little more of the premise first" : undefined}>
+            Review before forge →
           </Button>
         </div>
       </div>
@@ -265,13 +451,13 @@ export function Wizard(_props: ScreenProps): JSX.Element {
 }
 
 /** Map the current forge phase onto the step list; the errored phase (if any) shows as `error`. */
-function buildSteps(phase: ForgePhase | undefined, erroredPhase: ForgePhase | undefined): ForgeStep[] {
+function buildSteps(phase: ForgePhase | undefined, erroredPhase: ForgePhase | undefined, operationState: ForgeOperationState = "running"): ForgeStep[] {
   const currentIdx = phase ? FORGE_PHASES.indexOf(phase) : -1;
   return FORGE_PHASES.map((p, i) => {
     let status: ForgeStepStatus;
     if (erroredPhase && p === erroredPhase) status = "error";
     else if (i < currentIdx) status = "done";
-    else if (i === currentIdx) status = "active";
+    else if (i === currentIdx) status = operationState === "cancelled" || operationState === "resumable" ? "paused" : "active";
     else status = "pending";
     return { label: STEP_LABELS[p], status };
   });
@@ -319,6 +505,70 @@ function deriveTitle(premise: string): string {
   const firstClause = premise.split(/[.,;—]/)[0]?.trim() ?? premise;
   const words = firstClause.split(/\s+/).slice(0, 6).join(" ");
   return words.length > 0 ? words.replace(/^\w/, (c) => c.toUpperCase()) : "Untitled story";
+}
+
+const BUILTIN_MACROS = new Set([
+  "user", "char", "persona", "description", "scenario", "personality", "mesexamples",
+  "system", "wiBefore", "wiAfter", "charPrompt", "charJailbreak", "original", "input",
+  "lastMessage", "lastCharMessage", "lastUserMessage", "time", "date", "weekday", "isotime",
+  "isodate", "idle_duration", "random", "roll", "pick", "trim", "newline", "noop",
+]);
+
+function inspectMacros(fields: Array<readonly [string, string]>): MacroReview[] {
+  const review: MacroReview[] = [];
+  for (const [field, text] of fields) {
+    const tokens = text.match(/\{\{[^{}]*\}\}/g) ?? [];
+    for (const token of tokens) {
+      const body = token.slice(2, -2).trim();
+      const name = body.split(/[:\s]/, 1)[0] ?? "";
+      const supported = BUILTIN_MACROS.has(name) || name.startsWith("getvar") || name.startsWith("setvar") || name.startsWith("addvar");
+      review.push({
+        token,
+        field,
+        state: supported ? "supported" : "warning",
+        detail: supported
+          ? name === "user" ? "Resolves to the attached persona." : name === "char" ? "Resolves to the imported card/story character." : "Built-in SillyTavern macro."
+          : "Unknown or extension-provided token; preserved for review.",
+      });
+    }
+    const stripped = text.replace(/\{\{[^{}]*\}\}/g, "");
+    if (stripped.includes("{{") || stripped.includes("}}")) {
+      review.push({
+        token: "Unclosed {{…}}",
+        field,
+        state: field === "Premise" ? "blocking" : "warning",
+        detail: field === "Premise" ? "A required field contains an incomplete token." : "The incomplete token is preserved.",
+      });
+    }
+  }
+  return review;
+}
+
+function mechanicsFromDraft(card: unknown): MechanicSourceReview[] {
+  if (!card || typeof card !== "object") return [];
+  const extended = card as {
+    mechanicSources?: unknown[];
+    mechanics?: { attributes?: unknown[] };
+  };
+  const rows = extended.mechanicSources ?? extended.mechanics?.attributes ?? [];
+  return rows.flatMap((row, index) => {
+    if (!row || typeof row !== "object") return [];
+    const value = row as Record<string, unknown>;
+    const name = typeof value.name === "string" ? value.name : undefined;
+    if (!name) return [];
+    const score = typeof value.score === "number" ? value.score : undefined;
+    const source = typeof value.source === "string" ? value.source.toUpperCase() : "CARD";
+    return [{
+      id: typeof value.id === "string" ? value.id : `imported-mechanic-${index}`,
+      name,
+      abbreviation: typeof value.abbreviation === "string" ? value.abbreviation : typeof value.abbrev === "string" ? value.abbrev : name.slice(0, 4).toUpperCase(),
+      ...(score !== undefined ? { score } : {}),
+      ...(typeof value.lockedReason === "string" ? { lockedReason: value.lockedReason } : {}),
+      definition: typeof value.definition === "string" ? value.definition : typeof value.description === "string" ? value.description : "Explicit mechanic imported from the card.",
+      source: (["CARD", "PERSONA", "BLUEPRINT", "CUE", "GENERATED"].includes(source) ? source : "CARD") as MechanicSourceReview["source"],
+      scope: value.scope === "WORLD" ? "WORLD" : "PLAYER",
+    }];
+  });
 }
 
 const styles: Record<string, CSSProperties> = {

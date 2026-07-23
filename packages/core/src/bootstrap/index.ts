@@ -7,13 +7,20 @@
  */
 export {
   generateStorySchema,
+  resolveBootstrapCreationInput,
   PhaseASchema,
   PhaseBSchema,
+  BootstrapMacroEvaluationError,
   type PhaseA,
   type PhaseB,
+  type PhaseBFoundation,
   type BootstrapInput,
   type BootstrapOptions,
   type BootstrapPhase,
+  type BootstrapFragment,
+  type BootstrapProgressEvent,
+  type BootstrapResumeState,
+  type BootstrapMacroWarning,
 } from "./generate.js";
 export { validateStorySchema } from "./validate.js";
 export { deterministicRepair, formatValidationFeedback } from "./repair.js";
@@ -38,4 +45,5 @@ export {
   buildPhaseAUser,
   buildPhaseBActionBatchUser,
   buildPhaseBFoundationUser,
+  type BootstrapPromptContext,
 } from "./prompts.js";

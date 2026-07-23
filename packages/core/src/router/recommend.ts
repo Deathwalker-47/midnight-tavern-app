@@ -8,7 +8,7 @@
  * Availability comes from the caller (a provider's live model list, or the catalog, or free
  * text); this module only layers curated ranking + metadata on top by model id.
  */
-import type { Role, RoleBinding } from "./roles.js";
+import { DEFAULT_ROLE_MAP, type Role, type RoleBinding } from "./roles.js";
 import type { ProviderId } from "./providers/registry.js";
 import { catalogModel, catalogModelsForProvider, type CatalogModel } from "./modelCatalog.js";
 import { DEFAULT_SAMPLER_PROFILES, type SamplerProfile } from "./samplers.js";
@@ -62,14 +62,10 @@ function rankScore(m: RankedModel): number {
  * profile. Marked `source: "recommended"` and `samplersDirty: false`.
  */
 export function defaultAssignmentFor(role: Role): RoleBinding {
-  const pick = firstRecommended(role);
-  const profile = samplerProfileFor(role, pick?.id);
+  const configured = DEFAULT_ROLE_MAP[role];
   return {
-    provider: pick?.provider ?? "openrouter",
-    model: pick?.id ?? "anthropic/claude-sonnet-4",
-    samplers: profile,
-    source: "recommended",
-    samplersDirty: false,
+    ...configured,
+    ...(configured.samplers ? { samplers: { ...configured.samplers } } : {}),
   };
 }
 
@@ -81,13 +77,4 @@ export function samplerProfileFor(role: Role, modelId?: string): SamplerProfile 
   const cat = modelId ? catalogModel(modelId) : undefined;
   const override = cat?.samplerDefaults?.[role];
   return override ?? DEFAULT_SAMPLER_PROFILES[role];
-}
-
-/** First catalog model recommended for a role (catalog declaration order), if any. */
-function firstRecommended(role: Role): CatalogModel | undefined {
-  return allSortedForRole(role)[0];
-}
-
-function allSortedForRole(role: Role): CatalogModel[] {
-  return catalogModelsForProvider("openrouter").filter((m) => m.recommendedFor.includes(role));
 }

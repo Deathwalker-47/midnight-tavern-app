@@ -1,7 +1,14 @@
 /**
  * Classifier barrel (low-level-plan §M4).
  */
-export { classify } from "./classify.js";
+export {
+  classify,
+  classifyWithRecovery,
+  type ClassifierRecoveryKind,
+  type ClassifierRecoveryIssue,
+  type ClassifierRecoveryMetadata,
+  type ClassifierRecoveryResult,
+} from "./classify.js";
 export {
   buildClassifierSchema,
   buildClassifierUser,

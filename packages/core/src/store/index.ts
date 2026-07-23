@@ -21,6 +21,16 @@ import { makeLorebookRepo, type LorebookRepo } from "./repositories/lorebook.js"
 import { makePersonaRepo, type PersonaRepo } from "./repositories/personas.js";
 import { makeCheckpointRepo, type CheckpointRepo } from "./repositories/checkpoints.js";
 import { makeSettingsRepo, type SettingsRepo } from "./repositories/settings.js";
+import { makeStoryEventRepo, type StoryEventRepo } from "./repositories/storyEvents.js";
+import {
+  makeTurnOperationRepo,
+  type TurnOperationRepo,
+} from "./repositories/turnOperations.js";
+import { makeRuntimeItemRepo, type RuntimeItemRepo } from "./repositories/runtimeItems.js";
+import {
+  makeRulebookSnapshotRepo,
+  type RulebookSnapshotRepo,
+} from "./repositories/rulebookSnapshots.js";
 
 export { openDb, openDbWith, type Db, type SqlDriver, type SqlParam, type RunResult } from "./db.js";
 export type { StoryRepo } from "./repositories/stories.js";
@@ -34,6 +44,25 @@ export type { LorebookRepo, AttachedLorebook } from "./repositories/lorebook.js"
 export type { PersonaRepo } from "./repositories/personas.js";
 export type { CheckpointRepo, CheckpointRecord } from "./repositories/checkpoints.js";
 export type { SettingsRepo } from "./repositories/settings.js";
+export type {
+  StoryEventRepo,
+  StoryEvent,
+  StoryEventKind,
+  StoryEventFilter,
+  StoryEventCursor,
+} from "./repositories/storyEvents.js";
+export type {
+  TurnOperationRepo,
+  TurnOperation,
+  TurnOperationState,
+} from "./repositories/turnOperations.js";
+export type {
+  RuntimeItemRepo,
+} from "./repositories/runtimeItems.js";
+export type {
+  RulebookSnapshotRepo,
+  RulebookSnapshot,
+} from "./repositories/rulebookSnapshots.js";
 
 /** The full persistence surface: one migrated DB plus a typed repository per table. */
 export interface Store {
@@ -49,6 +78,10 @@ export interface Store {
   readonly personas: PersonaRepo;
   readonly checkpoints: CheckpointRepo;
   readonly settings: SettingsRepo;
+  readonly events: StoryEventRepo;
+  readonly turnOperations: TurnOperationRepo;
+  readonly runtimeItems: RuntimeItemRepo;
+  readonly rulebookSnapshots: RulebookSnapshotRepo;
   /** Run `fn` across repositories atomically (commit on return, roll back on throw). */
   transaction<T>(fn: () => Promise<T>): Promise<T>;
   close(): Promise<void>;
@@ -69,6 +102,10 @@ function makeStore(db: Db): Store {
     personas: makePersonaRepo(db),
     checkpoints: makeCheckpointRepo(db),
     settings: makeSettingsRepo(db),
+    events: makeStoryEventRepo(db),
+    turnOperations: makeTurnOperationRepo(db),
+    runtimeItems: makeRuntimeItemRepo(db),
+    rulebookSnapshots: makeRulebookSnapshotRepo(db),
     transaction: (fn) => db.transaction(fn),
     close: () => db.close(),
   };
