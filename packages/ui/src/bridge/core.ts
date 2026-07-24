@@ -59,6 +59,7 @@ export type {
   UniversalActionConfig,
   EquipmentLootConfig,
   RulebookRegenerationImpact,
+  AttributeAdvancementDecision,
 } from "@midnight-tavern/core";
 export type {
   CharacterRecord,
@@ -138,6 +139,7 @@ import type {
   UniversalActionConfig,
   EquipmentLootConfig,
   RulebookRegenerationImpact,
+  AttributeAdvancementDecision,
 } from "@midnight-tavern/core";
 
 // Value import: the Tauri storage driver. Browser-safe — it only pulls `@tauri-apps/api/core`
@@ -276,6 +278,8 @@ export interface SubmitTurnOutcome {
   classifierRecovery?: ClassifierRecoveryMetadata;
   refusedActionCount: number;
   usedNarratorFallback: boolean;
+  /** Structured deterministic verdicts for DM-proposed attribute changes. */
+  attributeAdvancements: AttributeAdvancementDecision[];
 }
 
 export interface RetryTurnOperationArgs {
@@ -1252,6 +1256,7 @@ export function makeMemoryBridge(): CoreBridge {
         classifierRecovered: false,
         refusedActionCount: 0,
         usedNarratorFallback: false,
+        attributeAdvancements: [],
       };
     },
 

@@ -44,6 +44,22 @@ interface V7DossierExtras {
     activeEffects?: Array<{ label: string; source: string; active: boolean; reason?: string }>;
   };
   progressionHistory?: Array<{ skillName: string; xp: number; reason: string; turnIdx: number; rankUp?: string; rewound?: boolean }>;
+  attributeAdvancementHistory?: Array<{
+    attributeId: string;
+    attributeName: string;
+    approved: boolean;
+    scoreBefore: number;
+    scoreAfter: number;
+    delta: number;
+    source: string;
+    rationale: string;
+    turnIdx: number;
+    band?: string;
+    evidenceRefs: string[];
+    denialReasons: string[];
+    proposalKey: string;
+    recent?: boolean;
+  }>;
 }
 
 const MONO_LABEL: CSSProperties = {
@@ -226,6 +242,11 @@ export function CharacterDossier(props: ScreenProps): JSX.Element {
 
   const d = state.dossier;
   const v7 = d as typeof d & V7DossierExtras;
+  const latestApprovedAttributeChange = new Map(
+    (v7.attributeAdvancementHistory ?? [])
+      .filter((entry) => entry.approved)
+      .map((entry) => [entry.attributeId, entry])
+  );
   const fullStats = state.statMode === "full";
   const fallen = !d.sheet.alive;
   const short = d.identity.name.split(/\s+/)[0] ?? d.identity.name;
@@ -603,22 +624,37 @@ export function CharacterDossier(props: ScreenProps): JSX.Element {
                   <>
                     <div style={{ ...SUB_LABEL, margin: "0 0 9px" }}>ATTRIBUTES</div>
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 7, marginBottom: 16 }}>
-                      {d.sheet.attributes.map((attribute) => (
-                        <div
-                          key={attribute.attributeId}
-                          title={attribute.description}
-                          style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "8px 9px", background: "var(--teal-tint)", border: "1px solid var(--teal-dim)", borderRadius: 7 }}
-                        >
-                          <span style={{ minWidth: 0 }}>
-                            <span style={{ display: "block", fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--teal)", letterSpacing: ".08em" }}>{attribute.abbrev}</span>
-                            <span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 10.5, color: "var(--secondary)" }}>{attribute.name}</span>
-                          </span>
-                          <span style={{ display: "flex", alignItems: "baseline", gap: 5, fontFamily: "var(--font-mono)" }}>
-                            <strong style={{ fontSize: 15, color: "var(--ui-text)" }}>{attribute.score}</strong>
-                            <span style={{ fontSize: 10, color: "var(--brass)" }}>{attribute.modifier >= 0 ? "+" : ""}{attribute.modifier}</span>
-                          </span>
-                        </div>
-                      ))}
+                      {d.sheet.attributes.map((attribute) => {
+                        const latestChange = latestApprovedAttributeChange.get(
+                          attribute.attributeId
+                        );
+                        return (
+                          <div
+                            key={attribute.attributeId}
+                            title={attribute.description}
+                            style={{ padding: "8px 9px", background: "var(--teal-tint)", border: `1px solid ${latestChange?.recent ? "var(--brass-dim)" : "var(--teal-dim)"}`, borderRadius: 7 }}
+                          >
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                              <span style={{ minWidth: 0 }}>
+                                <span style={{ display: "block", fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--teal)", letterSpacing: ".08em" }}>{attribute.abbrev}</span>
+                                <span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 10.5, color: "var(--secondary)" }}>{attribute.name}</span>
+                              </span>
+                              <span style={{ display: "flex", alignItems: "baseline", gap: 5, fontFamily: "var(--font-mono)" }}>
+                                <strong style={{ fontSize: 15, color: "var(--ui-text)" }}>{attribute.score}</strong>
+                                <span style={{ fontSize: 10, color: "var(--brass)" }}>{attribute.modifier >= 0 ? "+" : ""}{attribute.modifier}</span>
+                              </span>
+                            </div>
+                            {latestChange ? (
+                              <div
+                                data-testid={`attribute-change-${attribute.attributeId}`}
+                                style={{ marginTop: 5, color: "var(--brass)", fontFamily: "var(--font-mono)", fontSize: 8.5, lineHeight: 1.35 }}
+                              >
+                                LAST CHANGE · T{latestChange.turnIdx} · {latestChange.scoreBefore} → {latestChange.scoreAfter} · {latestChange.source.replaceAll("_", " ")}
+                              </div>
+                            ) : null}
+                          </div>
+                        );
+                      })}
                     </div>
                   </>
                 ) : null}
@@ -741,6 +777,46 @@ export function CharacterDossier(props: ScreenProps): JSX.Element {
                         <div key={`${entry.turnIdx}:${entry.skillName}:${index}`} style={{ display: "grid", gridTemplateColumns: "45px 1fr", gap: 7, color: entry.rewound ? "var(--muted)" : "var(--secondary)", fontFamily: "var(--font-mono)", fontSize: 9.5 }}>
                           <span>T{entry.turnIdx}</span>
                           <span>{entry.rewound ? "REWOUND" : `+${entry.xp} XP`} · {entry.skillName} · {entry.reason}{entry.rankUp ? ` · RANK UP ${entry.rankUp}` : ""}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : null}
+
+                {v7.attributeAdvancementHistory?.length ? (
+                  <>
+                    <div style={{ ...SUB_LABEL, margin: "16px 0 8px" }}>ATTRIBUTE ADVANCEMENT</div>
+                    <div style={{ display: "grid", gap: 7 }}>
+                      {v7.attributeAdvancementHistory.map((entry, index) => (
+                        <div
+                          key={`${entry.proposalKey}:${index}`}
+                          data-testid="attribute-advancement-history"
+                          style={{
+                            padding: "7px 9px",
+                            background: entry.recent ? "var(--brass-tint)" : "var(--bg2-card)",
+                            border: `1px solid ${entry.approved ? "var(--teal-dim)" : "var(--hairline)"}`,
+                            borderRadius: 6,
+                            color: "var(--secondary)",
+                            fontFamily: "var(--font-mono)",
+                            fontSize: 9.5,
+                            lineHeight: 1.45,
+                          }}
+                        >
+                          <div style={{ color: entry.approved ? "var(--success)" : "var(--muted)" }}>
+                            T{entry.turnIdx} · {entry.approved ? `${entry.scoreBefore} → ${entry.scoreAfter}` : "DENIED"} · {entry.attributeName}
+                          </div>
+                          <div style={{ marginTop: 2 }}>
+                            {entry.source.replaceAll("_", " ")} · {entry.rationale}
+                          </div>
+                          {entry.denialReasons.length ? (
+                            <div style={{ marginTop: 2, color: "var(--failure)" }}>
+                              {entry.denialReasons.join(" ")}
+                            </div>
+                          ) : null}
+                          <div style={{ marginTop: 2, color: "var(--muted)" }}>
+                            EVIDENCE · {entry.evidenceRefs.join(", ") || "none accepted"}
+                            {entry.band ? ` · ${entry.band.replaceAll("_", " ")}` : ""}
+                          </div>
                         </div>
                       ))}
                     </div>

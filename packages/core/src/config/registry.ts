@@ -2,8 +2,11 @@ import { z } from "zod";
 import universalActionsJson from "./universal-actions.json";
 import progressionJson from "./progression.json";
 import equipmentLootJson from "./equipment-loot.json";
+import attributeAdvancementJson from "./attribute-advancement.json";
 import {
   ActionCategorySchema,
+  AttributeAdvancementBandSchema,
+  AttributeAdvancementSourceSchema,
   ItemKindSchema,
   ItemTierSchema,
   MasteryRankSchema,
@@ -122,6 +125,75 @@ const EquipmentLootConfigSchema = z.object({
 });
 export type EquipmentLootConfig = z.infer<typeof EquipmentLootConfigSchema>;
 
+const AdvancementTriggerPolicySchema = z.object({
+  minimumEvidence: z.number().int().positive(),
+  minimumDistinctTurns: z.number().int().positive(),
+  minimumTurnSpan: z.number().int().nonnegative(),
+  minimumHighStakesEvidence: z.number().int().nonnegative(),
+  checkBonus: z.number().int().nonnegative(),
+});
+
+const AttributeAdvancementConfigSchema = z
+  .object({
+    version: z.number().int().positive(),
+    bands: z.array(
+      z.object({
+        id: AttributeAdvancementBandSchema,
+        minimumScore: z.number().int().min(1).max(19),
+        maximumScore: z.number().int().min(1).max(19),
+        dc: z.number().int().min(1).max(30),
+        cooldownTurns: z.number().int().nonnegative(),
+      })
+    ),
+    triggers: z.record(
+      AttributeAdvancementSourceSchema,
+      AdvancementTriggerPolicySchema
+    ),
+    highStakesMinimumDc: z.number().int().positive(),
+    exceptionalActionMinimumDc: z.number().int().positive(),
+    exceptionalResourceDeltaMinimum: z.number().positive(),
+    recentEvidenceTurns: z.number().int().positive(),
+    maximumEvidenceRefs: z.number().int().positive(),
+    maximumApprovalsPerCharacterWindow: z.number().int().positive(),
+    approvalWindowTurns: z.number().int().positive(),
+    maximumApprovalsPerTurn: z.number().int().positive(),
+    maximumEvidenceBonus: z.number().int().nonnegative(),
+  })
+  .superRefine((config, ctx) => {
+    const expected = [
+      { id: "easy", minimumScore: 1, maximumScore: 5 },
+      { id: "normal", minimumScore: 6, maximumScore: 9 },
+      { id: "moderate", minimumScore: 10, maximumScore: 13 },
+      { id: "hard", minimumScore: 14, maximumScore: 17 },
+      { id: "near_impossible", minimumScore: 18, maximumScore: 19 },
+    ] as const;
+    expected.forEach((band, index) => {
+      const actual = config.bands[index];
+      if (
+        !actual ||
+        actual.id !== band.id ||
+        actual.minimumScore !== band.minimumScore ||
+        actual.maximumScore !== band.maximumScore
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["bands", index],
+          message: `Attribute advancement band ${index} must be ${band.id} (${band.minimumScore}-${band.maximumScore}).`,
+        });
+      }
+      if (index > 0 && actual && actual.dc <= config.bands[index - 1]!.dc) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["bands", index, "dc"],
+          message: "Attribute advancement DCs must increase with score.",
+        });
+      }
+    });
+  });
+export type AttributeAdvancementConfig = z.infer<
+  typeof AttributeAdvancementConfigSchema
+>;
+
 export const UNIVERSAL_ACTIONS_CONFIG = Object.freeze(
   UniversalActionConfigSchema.parse(universalActionsJson)
 );
@@ -129,12 +201,16 @@ export const PROGRESSION_CONFIG = Object.freeze(ProgressionConfigSchema.parse(pr
 export const EQUIPMENT_LOOT_CONFIG = Object.freeze(
   EquipmentLootConfigSchema.parse(equipmentLootJson)
 );
+export const ATTRIBUTE_ADVANCEMENT_CONFIG = Object.freeze(
+  AttributeAdvancementConfigSchema.parse(attributeAdvancementJson)
+);
 
 // Versions snapshotted into a story rulebook for reproducible mechanics.
 export const MECHANICS_CONFIG_VERSIONS = Object.freeze({
   universalActions: UNIVERSAL_ACTIONS_CONFIG.version,
   progression: PROGRESSION_CONFIG.version,
   equipmentLoot: EQUIPMENT_LOOT_CONFIG.version,
+  attributeAdvancement: ATTRIBUTE_ADVANCEMENT_CONFIG.version,
 });
 
 function normalizePhrase(value: string): string {

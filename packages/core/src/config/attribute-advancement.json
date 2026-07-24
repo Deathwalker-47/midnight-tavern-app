@@ -1,0 +1,100 @@
+{
+  "version": 1,
+  "bands": [
+    {
+      "id": "easy",
+      "minimumScore": 1,
+      "maximumScore": 5,
+      "dc": 8,
+      "cooldownTurns": 6
+    },
+    {
+      "id": "normal",
+      "minimumScore": 6,
+      "maximumScore": 9,
+      "dc": 12,
+      "cooldownTurns": 10
+    },
+    {
+      "id": "moderate",
+      "minimumScore": 10,
+      "maximumScore": 13,
+      "dc": 16,
+      "cooldownTurns": 14
+    },
+    {
+      "id": "hard",
+      "minimumScore": 14,
+      "maximumScore": 17,
+      "dc": 20,
+      "cooldownTurns": 20
+    },
+    {
+      "id": "near_impossible",
+      "minimumScore": 18,
+      "maximumScore": 19,
+      "dc": 24,
+      "cooldownTurns": 30
+    }
+  ],
+  "triggers": {
+    "sustained_training": {
+      "minimumEvidence": 3,
+      "minimumDistinctTurns": 3,
+      "minimumTurnSpan": 4,
+      "minimumHighStakesEvidence": 0,
+      "checkBonus": 3
+    },
+    "repeated_high_stakes_use": {
+      "minimumEvidence": 3,
+      "minimumDistinctTurns": 3,
+      "minimumTurnSpan": 4,
+      "minimumHighStakesEvidence": 2,
+      "checkBonus": 2
+    },
+    "exceptional_action": {
+      "minimumEvidence": 1,
+      "minimumDistinctTurns": 1,
+      "minimumTurnSpan": 0,
+      "minimumHighStakesEvidence": 1,
+      "checkBonus": 4
+    },
+    "milestone": {
+      "minimumEvidence": 2,
+      "minimumDistinctTurns": 2,
+      "minimumTurnSpan": 1,
+      "minimumHighStakesEvidence": 1,
+      "checkBonus": 4
+    },
+    "transformation": {
+      "minimumEvidence": 1,
+      "minimumDistinctTurns": 1,
+      "minimumTurnSpan": 0,
+      "minimumHighStakesEvidence": 0,
+      "checkBonus": 6
+    },
+    "blessing": {
+      "minimumEvidence": 1,
+      "minimumDistinctTurns": 1,
+      "minimumTurnSpan": 0,
+      "minimumHighStakesEvidence": 0,
+      "checkBonus": 5
+    },
+    "curse_or_trauma": {
+      "minimumEvidence": 1,
+      "minimumDistinctTurns": 1,
+      "minimumTurnSpan": 0,
+      "minimumHighStakesEvidence": 0,
+      "checkBonus": 5
+    }
+  },
+  "highStakesMinimumDc": 15,
+  "exceptionalActionMinimumDc": 18,
+  "exceptionalResourceDeltaMinimum": 8,
+  "recentEvidenceTurns": 80,
+  "maximumEvidenceRefs": 8,
+  "maximumApprovalsPerCharacterWindow": 2,
+  "approvalWindowTurns": 50,
+  "maximumApprovalsPerTurn": 1,
+  "maximumEvidenceBonus": 4
+}

@@ -20,6 +20,7 @@ import type {
   ActionDef,
   Outcome,
   NarratorStyleInputs,
+  AttributeAdvancementDecision,
 } from "../types/index.js";
 import { renderStyleSettings } from "../types/index.js";
 import { buildMemoryBlock } from "../summarizer/index.js";
@@ -431,6 +432,8 @@ export interface AssembleContextArgs {
   rulings: Ruling[];
   presentIds: string[];
   playerText: string;
+  /** Framework verdicts for evidence-bound DM attribute proposals this turn. */
+  attributeAdvancements?: AttributeAdvancementDecision[];
   /** Player persona + protagonist essentials (block 4), pre-rendered by the caller. */
   personaBlock?: string;
   /**
@@ -475,6 +478,11 @@ export async function assembleContext(
 
   // Block 2: rulings (never dropped).
   const rulingLines = rulings.map((r) => renderRuling(r, actionsById, nameFor));
+  const advancementLines = (args.attributeAdvancements ?? []).map((decision) =>
+    decision.approved
+      ? `ATTRIBUTE RULING: ${nameFor(decision.proposal.characterId)} ${decision.proposal.attributeId} permanently changed ${decision.scoreBefore}->${decision.scoreAfter} from ${decision.proposal.source} - APPROVED by framework policy. Narrate this as final and do not alter the value.`
+      : `ATTRIBUTE RULING: proposed ${nameFor(decision.proposal.characterId)} ${decision.proposal.attributeId} ${decision.proposal.delta > 0 ? "+1" : "-1"} from ${decision.proposal.source} - DENIED (${decision.denialReasons.join("; ")}). Do not imply that the attribute changed.`
+  );
 
   // Block 3: hard-state snapshot of present characters (never dropped).
   const hardLines = present.map((r) => renderHardSnapshot(r, schema));
@@ -514,8 +522,14 @@ export async function assembleContext(
 
   // 2, 3: authoritative truth.
   if (schema.statMode === "full") {
-  pushAlways("This turn's rulings (authoritative — narrate exactly)", rulingLines.length ? rulingLines.join("\n") : "No mechanical actions this turn.");
-  pushAlways("Present characters (hard state)", hardLines.join("\n"));
+    const authoritativeLines = [...rulingLines, ...advancementLines];
+    pushAlways(
+      "This turn's rulings (authoritative — narrate exactly)",
+      authoritativeLines.length
+        ? authoritativeLines.join("\n")
+        : "No mechanical actions this turn."
+    );
+    pushAlways("Present characters (hard state)", hardLines.join("\n"));
   }
 
   // 4: persona / protagonist essentials.

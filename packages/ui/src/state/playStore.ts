@@ -15,6 +15,7 @@ import type {
   ClassifierRecoveryMetadata,
   TurnOperationRecoveryInspection,
   TurnOperationPhase,
+  StoryEvent,
 } from "../bridge/core.js";
 
 /** The three error families a turn can fail with (§02 universal errors). */
@@ -31,6 +32,8 @@ interface PlayState {
   storyId?: string;
   messages: MessageRecord[];
   rulings: Ruling[];
+  /** Persisted deterministic attribute-advancement decisions attached to narrator exchanges. */
+  attributeAdvancementEvents: StoryEvent[];
   cast: CastMember[];
   loading: boolean;
 
@@ -99,21 +102,27 @@ function isCurrentOperation(generation: number, storyId: string, get: () => Play
 interface PlaySnapshot {
   messages: MessageRecord[];
   rulings: Ruling[];
+  attributeAdvancementEvents: StoryEvent[];
   cast: CastMember[];
   recoveryInspection?: TurnOperationRecoveryInspection;
 }
 
 async function readPlaySnapshot(storyId: string): Promise<PlaySnapshot> {
   const bridge = getBridge();
-  const [messages, rulings, cast, recoveryInspection] = await Promise.all([
+  const [messages, rulings, advancementPage, cast, recoveryInspection] = await Promise.all([
     bridge.listMessages(storyId),
     bridge.listRulings(storyId),
+    bridge.listStoryJournal(storyId, {
+      kinds: ["attribute_advanced", "attribute_advancement_denied"],
+      limit: 200,
+    }),
     bridge.listPresentCast(storyId),
     bridge.inspectTurnRecovery(storyId),
   ]);
   return {
     messages,
     rulings,
+    attributeAdvancementEvents: advancementPage.events,
     cast,
     ...(recoveryInspection ? { recoveryInspection } : {}),
   };
@@ -136,6 +145,7 @@ export const usePlayStore = create<PlayState>((set, get) => ({
   storyId: undefined,
   messages: [],
   rulings: [],
+  attributeAdvancementEvents: [],
   cast: [],
   loading: false,
   thinking: false,
@@ -154,6 +164,7 @@ export const usePlayStore = create<PlayState>((set, get) => ({
       set({
         messages: snapshot.messages,
         rulings: snapshot.rulings,
+        attributeAdvancementEvents: snapshot.attributeAdvancementEvents,
         cast: snapshot.cast,
         loading: false,
         thinking: false,
@@ -219,6 +230,7 @@ export const usePlayStore = create<PlayState>((set, get) => ({
       set({
         messages: snapshot.messages,
         rulings: snapshot.rulings,
+        attributeAdvancementEvents: snapshot.attributeAdvancementEvents,
         cast: snapshot.cast,
         thinking: false,
         operationPhase: phaseForRecovery(snapshot.recoveryInspection),
@@ -243,6 +255,7 @@ export const usePlayStore = create<PlayState>((set, get) => ({
           ? {
               messages: snapshot.messages,
               rulings: snapshot.rulings,
+              attributeAdvancementEvents: snapshot.attributeAdvancementEvents,
               cast: snapshot.cast,
             }
           : {}),
@@ -306,6 +319,7 @@ export const usePlayStore = create<PlayState>((set, get) => ({
       set({
         messages: snapshot.messages,
         rulings: snapshot.rulings,
+        attributeAdvancementEvents: snapshot.attributeAdvancementEvents,
         cast: snapshot.cast,
         thinking: false,
         operationPhase: phaseForRecovery(snapshot.recoveryInspection),
@@ -330,6 +344,7 @@ export const usePlayStore = create<PlayState>((set, get) => ({
           ? {
               messages: snapshot.messages,
               rulings: snapshot.rulings,
+              attributeAdvancementEvents: snapshot.attributeAdvancementEvents,
               cast: snapshot.cast,
             }
           : {}),
@@ -377,17 +392,13 @@ export const usePlayStore = create<PlayState>((set, get) => ({
         ...(opts.signal ? { signal: opts.signal } : {}),
       });
       // The analyzer may re-derive soft state on the new prose; re-pull everything.
-      const bridge = getBridge();
-      const [messages, rulings, cast] = await Promise.all([
-        bridge.listMessages(storyId),
-        bridge.listRulings(storyId),
-        bridge.listPresentCast(storyId),
-      ]);
+      const snapshot = await readPlaySnapshot(storyId);
       if (!isCurrentOperation(generation, storyId, get)) return;
       set({
-        messages,
-        rulings,
-        cast,
+        messages: snapshot.messages,
+        rulings: snapshot.rulings,
+        attributeAdvancementEvents: snapshot.attributeAdvancementEvents,
+        cast: snapshot.cast,
         thinking: false,
         operationPhase: "idle",
         proseBuffer: "",
@@ -465,6 +476,7 @@ export const usePlayStore = create<PlayState>((set, get) => ({
       storyId: undefined,
       messages: [],
       rulings: [],
+      attributeAdvancementEvents: [],
       cast: [],
       loading: false,
       thinking: false,

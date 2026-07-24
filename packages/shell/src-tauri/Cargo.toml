@@ -5,7 +5,7 @@
 # pinned (no floating "^"/"~" ranges) so CI reproduces the same build every time.
 [package]
 name = "midnight-tavern"
-version = "0.2.4"
+version = "0.2.5"
 description = "Midnight Tavern desktop shell (Tauri v2)"
 authors = ["Midnight Tavern"]
 edition = "2021"

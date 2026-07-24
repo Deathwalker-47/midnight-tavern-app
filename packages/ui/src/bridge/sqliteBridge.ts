@@ -362,6 +362,7 @@ export function buildSqliteBridge(
             : {}),
           refusedActionCount: result.refusedActionCount,
           usedNarratorFallback: result.usedNarratorFallback,
+          attributeAdvancements: result.attributeAdvancements,
         };
       } catch (error) {
         diagnosticsLogger.error("turn.submit.failed", {
@@ -419,6 +420,7 @@ export function buildSqliteBridge(
           : {}),
         refusedActionCount: result.refusedActionCount,
         usedNarratorFallback: result.usedNarratorFallback,
+        attributeAdvancements: result.attributeAdvancements,
       };
     },
 

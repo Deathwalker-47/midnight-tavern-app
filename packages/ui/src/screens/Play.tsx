@@ -49,6 +49,8 @@ import type {
   MessageRecord,
   Ruling,
   StoryRecord,
+  StoryEvent,
+  AttributeAdvancementDecision,
 } from "../bridge/core";
 import type { ScreenProps } from "./registry";
 
@@ -237,14 +239,48 @@ function signed(value: number): string {
   return value >= 0 ? `+${value}` : String(value);
 }
 
-/** Interleave rulings into the transcript: each ruling renders after the message whose id is its
- * turnId; rulings with no matching message fall through to the end of the stream. */
-type StreamItem = { kind: "msg"; key: string; message: MessageRecord } | { kind: "ruling"; key: string; ruling: Ruling };
+function advancementDecisionFromEvent(
+  event: StoryEvent
+): AttributeAdvancementDecision | undefined {
+  const value = event.payload["decision"];
+  if (!value || typeof value !== "object") return undefined;
+  const decision = value as Partial<AttributeAdvancementDecision>;
+  if (
+    typeof decision.approved !== "boolean" ||
+    typeof decision.scoreBefore !== "number" ||
+    typeof decision.scoreAfter !== "number" ||
+    !decision.proposal ||
+    typeof decision.proposal.characterId !== "string" ||
+    typeof decision.proposal.attributeId !== "string"
+  ) {
+    return undefined;
+  }
+  return decision as AttributeAdvancementDecision;
+}
 
-function buildStream(messages: MessageRecord[], rulings: Ruling[]): StreamItem[] {
+/** Interleave deterministic rulings and advancement decisions before their narrator prose. */
+type StreamItem =
+  | { kind: "msg"; key: string; message: MessageRecord }
+  | { kind: "ruling"; key: string; ruling: Ruling }
+  | {
+      kind: "attribute-advancement";
+      key: string;
+      event: StoryEvent;
+      decision: AttributeAdvancementDecision;
+    };
+
+function buildStream(
+  messages: MessageRecord[],
+  rulings: Ruling[],
+  advancementEvents: StoryEvent[]
+): StreamItem[] {
   const ordered = [...messages].sort((a, b) => a.idx - b.idx);
   const ids = new Set(ordered.map((m) => m.id));
   const byMessage = new Map<string, Ruling[]>();
+  const advancementByMessage = new Map<
+    string,
+    Array<{ event: StoryEvent; decision: AttributeAdvancementDecision }>
+  >();
   for (const r of rulings) {
     const messageId = r.messageId ?? (ids.has(r.turnId) ? r.turnId : undefined);
     if (!messageId || !ids.has(messageId)) continue;
@@ -252,10 +288,27 @@ function buildStream(messages: MessageRecord[], rulings: Ruling[]): StreamItem[]
     if (bucket) bucket.push(r);
     else byMessage.set(messageId, [r]);
   }
+  for (const event of advancementEvents) {
+    const decision = advancementDecisionFromEvent(event);
+    if (!event.messageId || !ids.has(event.messageId) || !decision) continue;
+    const bucket = advancementByMessage.get(event.messageId);
+    const row = { event, decision };
+    if (bucket) bucket.push(row);
+    else advancementByMessage.set(event.messageId, [row]);
+  }
   const items: StreamItem[] = [];
   for (const m of ordered) {
     const attached = byMessage.get(m.id) ?? [];
     attached.forEach((r, i) => items.push({ kind: "ruling", key: `${m.id}:r${i}`, ruling: r }));
+    const advancements = advancementByMessage.get(m.id) ?? [];
+    advancements.forEach(({ event, decision }, index) =>
+      items.push({
+        kind: "attribute-advancement",
+        key: `${m.id}:attribute-advancement:${event.id}:${index}`,
+        event,
+        decision,
+      })
+    );
     items.push({ kind: "msg", key: m.id, message: m });
   }
   return items;
@@ -470,6 +523,9 @@ export function Play(props: PlayProps): JSX.Element {
   const deleteFrom = usePlayStore((s) => s.deleteFrom);
   const storeMessages = usePlayStore((s) => s.messages);
   const storeRulings = usePlayStore((s) => s.rulings);
+  const storeAttributeAdvancementEvents = usePlayStore(
+    (s) => s.attributeAdvancementEvents
+  );
   const storeCast = usePlayStore((s) => s.cast);
   const storeLoading = usePlayStore((s) => s.loading);
   const storeThinking = usePlayStore((s) => s.thinking);
@@ -532,6 +588,7 @@ export function Play(props: PlayProps): JSX.Element {
   // ── Resolve effective render inputs (store, then debug override) ────────────────────────────
   let messages = storeMessages;
   let rulings = storeRulings;
+  let attributeAdvancementEvents = storeAttributeAdvancementEvents;
   let cast = storeCast;
   let loading = storeLoading;
   let thinking = storeThinking;
@@ -555,6 +612,7 @@ export function Play(props: PlayProps): JSX.Element {
     cast = DEMO_CAST;
     messages = DEMO_MESSAGES;
     rulings = [];
+    attributeAdvancementEvents = [];
 
     switch (debugState) {
       case "loading":
@@ -662,7 +720,10 @@ export function Play(props: PlayProps): JSX.Element {
   const operationBusy = !["idle", "error", "cancelled", "timed-out", "stale"].includes(operationPhase);
   const busy = operationBusy || loading;
 
-  const stream = useMemo(() => buildStream(messages, rulings), [messages, rulings]);
+  const stream = useMemo(
+    () => buildStream(messages, rulings, attributeAdvancementEvents),
+    [messages, rulings, attributeAdvancementEvents]
+  );
 
   // ── Turn-history metadata (low-level-plan-v2 §6) ────────────────────────────────────────────
   // The latest narrator message gets swipe + delete + rewind; earlier narrator messages get
@@ -960,6 +1021,18 @@ export function Play(props: PlayProps): JSX.Element {
                           animate={!reduced}
                           story={storyRecord}
                           onEditRetry={() => editBudgetTurn(item.ruling)}
+                        />
+                      );
+                    }
+                    if (item.kind === "attribute-advancement") {
+                      return (
+                        <AttributeAdvancementBlock
+                          key={item.key}
+                          event={item.event}
+                          decision={item.decision}
+                          nameOf={nameOf}
+                          animate={!reduced}
+                          story={storyRecord}
                         />
                       );
                     }
@@ -1290,6 +1363,85 @@ function RulingBlock(props: {
                 ?.ownerCharacterId ?? props.ruling.actorId,
           })
         }
+      />
+    </div>
+  );
+}
+
+function AttributeAdvancementBlock(props: {
+  event: StoryEvent;
+  decision: AttributeAdvancementDecision;
+  nameOf: (id: string) => string;
+  animate: boolean;
+  story?: StoryRecord;
+}): JSX.Element {
+  const { decision } = props;
+  const attribute = props.story?.schema.attributes.find(
+    (candidate) => candidate.id === decision.proposal.attributeId
+  );
+  const attributeName = attribute?.name ?? humanize(decision.proposal.attributeId);
+  const actorName = props.nameOf(decision.proposal.characterId);
+  const checkTotal = decision.roll + decision.modifier;
+  const denialReason =
+    decision.denialReasons.join(" ") ||
+    "The deterministic advancement policy did not approve this proposal.";
+  const detailRows = [
+    { label: "CHARACTER", value: actorName },
+    {
+      label: "ATTRIBUTE",
+      value: `${attributeName} · ${decision.scoreBefore} → ${decision.scoreAfter}`,
+    },
+    { label: "QUALIFYING CRITERIA", value: humanize(decision.proposal.source) },
+    { label: "SCENE EVIDENCE", value: decision.evidenceRefs.join(", ") || "None accepted" },
+    { label: "DM RATIONALE", value: decision.proposal.rationale },
+    ...(decision.band
+      ? [
+          {
+            label: "DIFFICULTY",
+            value: `${humanize(decision.band)} · ${checkTotal} vs DC ${decision.dc}`,
+          },
+        ]
+      : []),
+    ...(decision.denialCodes.length
+      ? [{ label: "DENIAL CODES", value: decision.denialCodes.join(", ") }]
+      : []),
+    { label: "POLICY", value: `Attribute advancement v${decision.policyVersion}` },
+    { label: "AUDIT EVENT", value: props.event.id },
+  ];
+
+  return (
+    <div style={S.rulingWrap} data-testid="attribute-advancement-ruling">
+      <RulingArtifact
+        label={
+          decision.approved
+            ? "DM RULING · ATTRIBUTE ADVANCED"
+            : "DM RULING · ATTRIBUTE ADVANCEMENT DENIED"
+        }
+        variant={decision.approved ? "success" : "denied"}
+        {...(decision.approved
+          ? {
+              roll: {
+                title: `${actorName} · ${attributeName} advancement`,
+                outcome: "success" as const,
+                d20: decision.roll,
+                dice: [decision.roll],
+                usedIndex: 0,
+                rollMode: "normal" as const,
+                modifier: decision.modifier,
+                total: checkTotal,
+                dc: decision.dc,
+                modifierTerms: [{ label: "Qualifying evidence", value: decision.modifier }],
+              },
+              resultLine: `${attributeName} advances from ${decision.scoreBefore} to ${decision.scoreAfter}.`,
+              effectLine: `${signed(decision.proposal.delta)} ${attributeName} · ${humanize(decision.proposal.source)}`,
+            }
+          : {
+              reason: denialReason,
+              resultLine: `${attributeName} remains ${decision.scoreBefore}.`,
+              effectLine: "No attribute score changed.",
+            })}
+        detailRows={detailRows}
+        animate={props.animate}
       />
     </div>
   );

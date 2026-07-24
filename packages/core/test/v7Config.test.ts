@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   EQUIPMENT_LOOT_CONFIG,
+  ATTRIBUTE_ADVANCEMENT_CONFIG,
   MECHANICS_CONFIG_VERSIONS,
   PROGRESSION_CONFIG,
   UNIVERSAL_ACTIONS_CONFIG,
@@ -17,6 +18,7 @@ describe("V7 mechanics configuration registry", () => {
       universalActions: 1,
       progression: 1,
       equipmentLoot: 1,
+      attributeAdvancement: 1,
     });
     expect(UNIVERSAL_ACTIONS_CONFIG.actions.length).toBeGreaterThan(10);
     expect(PROGRESSION_CONFIG.ranks.map((entry) => entry.minimumXp)).toEqual([
@@ -24,6 +26,24 @@ describe("V7 mechanics configuration registry", () => {
     ]);
     expect(EQUIPMENT_LOOT_CONFIG.slots).toHaveLength(7);
     expect(new Set(EQUIPMENT_LOOT_CONFIG.slots).size).toBe(7);
+    expect(
+      ATTRIBUTE_ADVANCEMENT_CONFIG.bands.map((band) => [
+        band.minimumScore,
+        band.maximumScore,
+      ])
+    ).toEqual([
+      [1, 5],
+      [6, 9],
+      [10, 13],
+      [14, 17],
+      [18, 19],
+    ]);
+    expect(
+      StorySchemaSchema.parse({
+        ...makeStory(),
+        mechanicsConfigVersions: MECHANICS_CONFIG_VERSIONS,
+      }).mechanicsConfigVersions
+    ).toEqual(MECHANICS_CONFIG_VERSIONS);
   });
 
   it("maps natural phrasing to an upgradeable universal family", () => {

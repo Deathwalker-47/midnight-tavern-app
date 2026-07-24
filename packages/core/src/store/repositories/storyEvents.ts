@@ -13,6 +13,8 @@ export const StoryEventKindSchema = z.enum([
   "item_lost",
   "equipment_changed",
   "attribute_changed",
+  "attribute_advanced",
+  "attribute_advancement_denied",
   "death",
   "milestone",
   "chapter_started",

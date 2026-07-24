@@ -57,6 +57,12 @@ export {
   type PendingLootAward,
 } from "./loot.js";
 export {
+  determineAttributeAdvancements,
+  recordAttributeAdvancementDecision,
+  type AttributeAdvancementAdjudication,
+  type DetermineAttributeAdvancementArgs,
+} from "./attributeAdvancement.js";
+export {
   SuggestedActionSchema,
   suggestPlayerActions,
   type SuggestedAction,

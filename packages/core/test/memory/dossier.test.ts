@@ -202,6 +202,60 @@ describe("getCharacterDossier", () => {
     });
   });
 
+  it("projects chronological attribute advancement with score and evidence context", async () => {
+    await store.events.insert({
+      id: "attribute-kestrel-dex",
+      storyId: STORY_ID,
+      turnIndex: 9,
+      actorId: "kestrel",
+      kind: "attribute_advanced",
+      payload: {
+        decision: {
+          approved: true,
+          proposal: {
+            characterId: "kestrel",
+            attributeId: "dex",
+            source: "repeated_high_stakes_use",
+            delta: 1,
+            evidenceRefs: ["ruling-4", "ruling-7", "ruling-9"],
+            rationale: "Three precise combat actions succeeded across separate scenes.",
+          },
+          proposalKey: "aa-v1-dex",
+          band: "moderate",
+          scoreBefore: 10,
+          scoreAfter: 11,
+          dc: 13,
+          roll: 14,
+          modifier: 2,
+          effectiveChancePercent: 50,
+          evidenceRefs: ["ruling-4", "ruling-7", "ruling-9"],
+          denialCodes: [],
+          denialReasons: [],
+          policyVersion: 1,
+        },
+      },
+      rulebookVersion: 1,
+      createdAt: 1900,
+    });
+
+    const d = await getCharacterDossier(store, storyRecord().schema, "kestrel");
+
+    expect(d!.attributeAdvancementHistory).toEqual([
+      expect.objectContaining({
+        attributeId: "dex",
+        attributeName: "Dexterity",
+        approved: true,
+        scoreBefore: 10,
+        scoreAfter: 11,
+        source: "repeated_high_stakes_use",
+        rationale: "Three precise combat actions succeeded across separate scenes.",
+        evidenceRefs: ["ruling-4", "ruling-7", "ruling-9"],
+        turnIdx: 9,
+        recent: true,
+      }),
+    ]);
+  });
+
   it("reports toNext=null at master rank", async () => {
     await store.characters.updateHard(
       "kestrel",

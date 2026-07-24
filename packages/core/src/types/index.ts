@@ -9,3 +9,4 @@ export * from "./softState.js";
 export * from "./events.js";
 export * from "./records.js";
 export * from "./blueprint.js";
+export * from "./attributeAdvancement.js";

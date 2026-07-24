@@ -107,6 +107,8 @@ export const PHASE_B_FOUNDATION_SYSTEM = [
   "Output one JSON object containing ONLY startingState, npcTemplates, and startingGear.",
   "- startingState: resources map, skills array, and inventory array.",
   "  It also includes attributes, assigning every Phase A attribute a score in its allowed range.",
+  "  Attribute scores are integers: lockedAtZero attributes are exactly 0; ordinary attributes",
+  "  are 1-20; superhuman attributes are 1 through their explicit maximumScore.",
   "  Use the attached persona to shape the PLAYER starting attributes and skills.",
   "- npcTemplates: 2-4 key NPCs with templateId, name, attributes, resources, skills, and inventory.",
   "- startingGear: 1-7 runtime item proposals owned by the PLAYER at the opening.",
@@ -178,6 +180,17 @@ export function buildPhaseBFoundationUser(
     "",
     "PHASE A OUTPUT (build on exactly these ids):",
     JSON.stringify(phaseA),
+    "",
+    "ATTRIBUTE SCORE RANGES:",
+    phaseA.attributes
+      .map((attribute) =>
+        `${attribute.id}: ${
+          attribute.lockedAtZero
+            ? "0 only"
+            : `1-${attribute.superhuman ? attribute.maximumScore : 20}`
+        }`
+      )
+      .join(", "),
     "",
     "Design startingState, npcTemplates, and only the player's bounded startingGear. Emit no item catalog.",
   ];

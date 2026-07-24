@@ -3,11 +3,33 @@ import {
   exportStoryJournalCsv,
   exportStoryJournalMarkdown,
   listStoryJournal,
+  summarizeStoryEvent,
 } from "../../src/orchestrator/index.js";
 import { openStore, type StoryEventCursor } from "../../src/store/index.js";
 import { makeStory } from "../fixtures.js";
 
 describe("Mechanical Journal read model", () => {
+  it("exports attribute advancement as a readable mechanical result", () => {
+    expect(
+      summarizeStoryEvent({
+        id: "advance-1",
+        storyId: "story-1",
+        turnIndex: 12,
+        actorId: "kestrel",
+        kind: "attribute_advanced",
+        payload: {
+          decision: {
+            scoreBefore: 14,
+            scoreAfter: 15,
+            proposal: { attributeId: "iron_will" },
+          },
+        },
+        rulebookVersion: 1,
+        createdAt: 12,
+      })
+    ).toBe("kestrel - Iron Will advanced 14 -> 15");
+  });
+
   it("paginates without gaps, resolves chapters, and exports every event", async () => {
     const store = await openStore(":memory:");
     const schema = makeStory();

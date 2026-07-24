@@ -1070,6 +1070,75 @@ describe("generateStorySchema — repair loop", () => {
     expect(counts).toEqual({ a: 1, b: 3 });
   });
 
+  it("clamps player and NPC attribute scores to Phase A ranges without another model request", async () => {
+    const boundedPhaseA = {
+      ...PHASE_A,
+      attributes: PHASE_A.attributes.map((attribute) => {
+        if (attribute.id === "finesse") {
+          return {
+            ...attribute,
+            defaultScore: 0,
+            lockedAtZero: true,
+          };
+        }
+        if (attribute.id === "insight") {
+          return {
+            ...attribute,
+            defaultScore: 24,
+            superhuman: true,
+            maximumScore: 30,
+          };
+        }
+        return attribute;
+      }),
+    };
+    const outOfRangeFoundation = {
+      ...PHASE_B,
+      startingState: {
+        ...PHASE_B.startingState,
+        attributes: {
+          might: 0,
+          finesse: 17,
+          insight: 99,
+        },
+      },
+      npcTemplates: [{
+        ...PHASE_B.npcTemplates[0]!,
+        attributes: {
+          might: 87,
+          finesse: 12,
+          insight: 31,
+        },
+      }],
+    };
+    const { router, counts, prompts } = phasedRouter({
+      a: [J(boundedPhaseA)],
+      b: [J(outOfRangeFoundation)],
+    });
+
+    const out = await generateStorySchema(router, input);
+
+    expect(out.startingState.attributes).toEqual({
+      might: 1,
+      finesse: 0,
+      insight: 30,
+    });
+    expect(out.npcTemplates[0]?.attributes).toEqual({
+      might: 20,
+      finesse: 0,
+      insight: 30,
+    });
+    expect(validateStorySchema(out)).toEqual([]);
+    expect(counts).toEqual({ a: 1, b: 3 });
+    expect(
+      prompts.some((prompt) =>
+        prompt.user.includes("might: 1-20") &&
+        prompt.user.includes("finesse: 0 only") &&
+        prompt.user.includes("insight: 1-30")
+      )
+    ).toBe(true);
+  });
+
   it("returns a cross-valid schema from all-valid first responses", async () => {
     const { router, counts } = phasedRouter({ a: [J(PHASE_A)], b: [J(PHASE_B)] });
     const phases: string[] = [];
@@ -1110,6 +1179,7 @@ describe("generateStorySchema — repair loop", () => {
       universalActions: 1,
       progression: 1,
       equipmentLoot: 1,
+      attributeAdvancement: 1,
     });
   });
 

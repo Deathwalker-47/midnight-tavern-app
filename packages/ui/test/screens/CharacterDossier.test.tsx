@@ -14,7 +14,16 @@ function dossier(): Dossier {
     past: { observations: [] },
     relationships: { outgoing: [], incoming: [] },
     sheet: {
-      attributes: [],
+      attributes: [
+        {
+          attributeId: "might",
+          name: "Might",
+          abbrev: "MGT",
+          score: 12,
+          modifier: 1,
+          description: "Raw physical force.",
+        },
+      ],
       resources: [],
       skills: [
         {
@@ -49,6 +58,24 @@ function dossier(): Dossier {
       inventory: [],
       alive: true,
     },
+    attributeAdvancementHistory: [
+      {
+        attributeId: "might",
+        attributeName: "Might",
+        approved: true,
+        scoreBefore: 11,
+        scoreAfter: 12,
+        delta: 1,
+        source: "repeated_high_stakes_use",
+        rationale: "Three decisive combat actions tested Might across separate scenes.",
+        turnIdx: 9,
+        band: "moderate",
+        evidenceRefs: ["ruling-4", "ruling-7", "ruling-9"],
+        denialReasons: [],
+        proposalKey: "aa-v1-test",
+        recent: true,
+      },
+    ],
     involvedThreads: [],
   };
 }
@@ -89,6 +116,15 @@ describe("CharacterDossier skill progression", () => {
     expect(screen.getByText("Defeated the grave-wight in a close duel.")).toBeInTheDocument();
     expect(screen.getByText("Turn 7")).toBeInTheDocument();
     expect(screen.queryByText(/99 \/ 279 XP/)).not.toBeInTheDocument();
+    expect(screen.getByTestId("attribute-change-might")).toHaveTextContent(
+      /T9.*11.*12.*repeated high stakes use/i
+    );
+    expect(screen.getByTestId("attribute-advancement-history")).toHaveTextContent(
+      /Three decisive combat actions tested Might across separate scenes/i
+    );
+    expect(screen.getByTestId("attribute-advancement-history")).toHaveTextContent(
+      /ruling-4, ruling-7, ruling-9/i
+    );
 
     fireEvent.click(screen.getByRole("button", { name: "Open loadout →" }));
     expect(useRoute.getState()).toMatchObject({

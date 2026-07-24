@@ -85,4 +85,58 @@ describe("Mechanical Journal", () => {
       id: "newer-event",
     });
   });
+
+  it("classifies attribute advancement as progression and exposes its scene evidence", async () => {
+    const bridge = makeMemoryBridge();
+    bridge.getStory = async () => story();
+    bridge.listPresentCast = async () => [
+      { characterId: "hero", name: "Kestrel", isPlayer: true, alive: true },
+    ];
+    bridge.listStoryJournal = async () => ({
+      events: [
+        {
+          ...event("attribute-event", 18, 1, 18),
+          kind: "attribute_advanced",
+          payload: {
+            decision: {
+              approved: true,
+              proposal: {
+                characterId: "hero",
+                attributeId: "might",
+                source: "exceptional_action",
+                delta: 1,
+                evidenceRefs: ["ruling-dragon"],
+                rationale: "Held the gate alone during the dragon assault.",
+              },
+              proposalKey: "aa-v1-dragon",
+              band: "hard",
+              scoreBefore: 16,
+              scoreAfter: 17,
+              dc: 17,
+              roll: 18,
+              modifier: 4,
+              effectiveChancePercent: 40,
+              evidenceRefs: ["ruling-dragon"],
+              denialCodes: [],
+              denialReasons: [],
+              policyVersion: 1,
+            },
+          },
+        },
+      ],
+    });
+    setBridge(bridge);
+
+    render(<Journal storyId="story-1" />);
+
+    expect(
+      await screen.findByText("Kestrel - Might advanced: 16 → 17")
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Kestrel - Might advanced: 16 → 17"));
+    expect(screen.getByText("Exceptional Action")).toBeInTheDocument();
+    expect(
+      screen.getByText("Held the gate alone during the dragon assault.")
+    ).toBeInTheDocument();
+    expect(screen.getByText("ruling-dragon")).toBeInTheDocument();
+  });
 });

@@ -191,6 +191,8 @@ const StorySchemaObjectSchema = z.object({
       universalActions: z.number().int().positive(),
       progression: z.number().int().positive(),
       equipmentLoot: z.number().int().positive(),
+      /** Optional so rulebooks sealed before attribute advancement remain loadable. */
+      attributeAdvancement: z.number().int().positive().optional(),
     })
     .optional(),
   /** Set only while a pre-v5 `light` story awaits the one-time destination choice. */

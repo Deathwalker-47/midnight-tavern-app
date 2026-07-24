@@ -63,6 +63,41 @@ function summarizeRuling(ruling: Ruling): string {
 export function summarizeStoryEvent(event: StoryEvent): string {
   const ruling = rulingFrom(event);
   if (ruling) return summarizeRuling(ruling);
+  if (
+    event.kind === "attribute_advanced" ||
+    event.kind === "attribute_advancement_denied"
+  ) {
+    const decisionValue = event.payload["decision"];
+    const decision =
+      decisionValue && typeof decisionValue === "object"
+        ? (decisionValue as Record<string, unknown>)
+        : undefined;
+    const proposalValue = decision?.["proposal"];
+    const proposal =
+      proposalValue && typeof proposalValue === "object"
+        ? (proposalValue as Record<string, unknown>)
+        : undefined;
+    const attribute =
+      typeof proposal?.["attributeId"] === "string"
+        ? humanize(proposal["attributeId"])
+        : "Attribute";
+    const actor = event.actorId ?? "Character";
+    if (
+      event.kind === "attribute_advanced" &&
+      typeof decision?.["scoreBefore"] === "number" &&
+      typeof decision["scoreAfter"] === "number"
+    ) {
+      return `${actor} - ${attribute} advanced ${decision["scoreBefore"]} -> ${decision["scoreAfter"]}`;
+    }
+    const reasons = Array.isArray(decision?.["denialReasons"])
+      ? decision["denialReasons"].filter(
+          (reason): reason is string => typeof reason === "string"
+        )
+      : [];
+    return `${actor} - ${attribute} advancement denied${
+      reasons.length ? ` (${reasons.join(" ")})` : ""
+    }`;
+  }
   const payload = Object.keys(event.payload).length ? ` - ${JSON.stringify(event.payload)}` : "";
   return `${humanize(event.kind)}${event.actorId ? ` - ${event.actorId}` : ""}${payload}`;
 }

@@ -232,6 +232,16 @@ function toJournalEvent(
   const rulingValue = event.payload["ruling"];
   const ruling =
     rulingValue && typeof rulingValue === "object" ? (rulingValue as Ruling) : undefined;
+  const advancementValue = event.payload["decision"];
+  const advancement =
+    advancementValue && typeof advancementValue === "object"
+      ? (advancementValue as Record<string, unknown>)
+      : undefined;
+  const proposalValue = advancement?.["proposal"];
+  const proposal =
+    proposalValue && typeof proposalValue === "object"
+      ? (proposalValue as Record<string, unknown>)
+      : undefined;
   const category: JournalKind =
     event.kind === "roll"
       ? "roll"
@@ -241,7 +251,9 @@ function toJournalEvent(
         ? "denied"
         : event.kind === "xp" ||
             event.kind === "rank_up" ||
-            event.kind === "skill_unlocked"
+            event.kind === "skill_unlocked" ||
+            event.kind === "attribute_advanced" ||
+            event.kind === "attribute_advancement_denied"
           ? "progression"
           : event.kind === "item_created" ||
               event.kind === "item_gained" ||
@@ -255,7 +267,27 @@ function toJournalEvent(
               : "milestone";
   const roll = ruling?.roll;
   const action = ruling?.actionLabel ?? ruling?.actionId;
-  const summary = ruling
+  const advancementActor =
+    event.actorId === undefined
+      ? "Character"
+      : nameById.get(event.actorId) ?? event.actorId;
+  const advancementAttribute =
+    typeof proposal?.["attributeId"] === "string"
+      ? humanize(proposal["attributeId"])
+      : "Attribute";
+  const summary = advancement
+    ? event.kind === "attribute_advanced"
+      ? `${advancementActor} - ${advancementAttribute} advanced: ${
+          typeof advancement["scoreBefore"] === "number"
+            ? advancement["scoreBefore"]
+            : "?"
+        } → ${
+          typeof advancement["scoreAfter"] === "number"
+            ? advancement["scoreAfter"]
+            : "?"
+        }`
+      : `${advancementActor} - ${advancementAttribute} advancement denied`
+    : ruling
     ? !ruling.gate.allowed
       ? `${nameById.get(ruling.actorId) ?? ruling.actorId} - ${action}: DENIED (${ruling.gate.reason ?? "not allowed"})`
       : roll
@@ -285,6 +317,53 @@ function toJournalEvent(
   }
   if (ruling?.difficulty) {
     details.push({ label: "Difficulty", value: ruling.difficulty.preset });
+  }
+  if (advancement) {
+    if (typeof proposal?.["source"] === "string") {
+      details.push({
+        label: "Qualifying criteria",
+        value: humanize(proposal["source"]),
+      });
+    }
+    if (typeof proposal?.["rationale"] === "string") {
+      details.push({ label: "DM rationale", value: proposal["rationale"] });
+    }
+    if (
+      typeof advancement["roll"] === "number" &&
+      typeof advancement["modifier"] === "number" &&
+      typeof advancement["dc"] === "number"
+    ) {
+      details.push({
+        label: "Advancement check",
+        value: `${advancement["roll"]} ${advancement["modifier"] >= 0 ? "+" : "−"} ${Math.abs(advancement["modifier"])} vs DC ${advancement["dc"]}`,
+      });
+    }
+    if (typeof advancement["band"] === "string") {
+      details.push({ label: "Score band", value: humanize(advancement["band"]) });
+    }
+    if (Array.isArray(advancement["evidenceRefs"])) {
+      details.push({
+        label: "Scene evidence",
+        value:
+          advancement["evidenceRefs"]
+            .filter((reference): reference is string => typeof reference === "string")
+            .join(", ") || "None accepted",
+      });
+    }
+    if (Array.isArray(advancement["denialReasons"])) {
+      const reasons = advancement["denialReasons"].filter(
+        (reason): reason is string => typeof reason === "string"
+      );
+      if (reasons.length) {
+        details.push({ label: "Denial reasons", value: reasons.join(" ") });
+      }
+    }
+    if (typeof advancement["policyVersion"] === "number") {
+      details.push({
+        label: "Policy",
+        value: `Attribute advancement v${advancement["policyVersion"]}`,
+      });
+    }
   }
   details.push({ label: "Record", value: JSON.stringify(event.payload) });
   return {

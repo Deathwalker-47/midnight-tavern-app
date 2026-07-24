@@ -175,6 +175,22 @@ export interface Dossier {
     rankUp?: string;
     rewound?: boolean;
   }[];
+  attributeAdvancementHistory?: {
+    attributeId: string;
+    attributeName: string;
+    approved: boolean;
+    scoreBefore: number;
+    scoreAfter: number;
+    delta: number;
+    source: string;
+    rationale: string;
+    turnIdx: number;
+    band?: string;
+    evidenceRefs: string[];
+    denialReasons: string[];
+    proposalKey: string;
+    recent?: boolean;
+  }[];
   /** World threads that name this character (unresolved only). */
   involvedThreads: { title: string; note: string }[];
 }
@@ -223,6 +239,78 @@ function latestXpAwardBySkill(events: StoryEvent[]): Map<string, ProjectedXpAwar
     if (award) latest.set(award.skillId, award);
   }
   return latest;
+}
+
+type ProjectedAttributeAdvancement = NonNullable<
+  Dossier["attributeAdvancementHistory"]
+>[number];
+
+function projectAttributeAdvancement(
+  event: StoryEvent,
+  attributeNameById: ReadonlyMap<string, string>
+): ProjectedAttributeAdvancement | undefined {
+  if (
+    event.kind !== "attribute_advanced" &&
+    event.kind !== "attribute_advancement_denied"
+  ) {
+    return undefined;
+  }
+  const value = event.payload["decision"];
+  if (!value || typeof value !== "object") return undefined;
+  const decision = value as Record<string, unknown>;
+  const proposalValue = decision["proposal"];
+  if (!proposalValue || typeof proposalValue !== "object") return undefined;
+  const proposal = proposalValue as Record<string, unknown>;
+  const attributeId = proposal["attributeId"];
+  const source = proposal["source"];
+  const rationale = proposal["rationale"];
+  const scoreBefore = decision["scoreBefore"];
+  const scoreAfter = decision["scoreAfter"];
+  const proposalKey = decision["proposalKey"];
+  if (
+    typeof attributeId !== "string" ||
+    typeof source !== "string" ||
+    typeof rationale !== "string" ||
+    typeof scoreBefore !== "number" ||
+    typeof scoreAfter !== "number" ||
+    typeof proposalKey !== "string"
+  ) {
+    return undefined;
+  }
+  const evidenceRefs = Array.isArray(decision["evidenceRefs"])
+    ? decision["evidenceRefs"].filter(
+        (reference): reference is string => typeof reference === "string"
+      )
+    : [];
+  const denialReasons = Array.isArray(decision["denialReasons"])
+    ? decision["denialReasons"].filter(
+        (reason): reason is string => typeof reason === "string"
+      )
+    : [];
+  const approved =
+    typeof decision["approved"] === "boolean"
+      ? decision["approved"]
+      : event.kind === "attribute_advanced";
+  return {
+    attributeId,
+    attributeName: attributeNameById.get(attributeId) ?? attributeId,
+    approved,
+    scoreBefore,
+    scoreAfter,
+    delta:
+      typeof proposal["delta"] === "number"
+        ? proposal["delta"]
+        : scoreAfter - scoreBefore,
+    source,
+    rationale,
+    turnIdx: event.turnIndex,
+    ...(typeof decision["band"] === "string"
+      ? { band: decision["band"] }
+      : {}),
+    evidenceRefs,
+    denialReasons,
+    proposalKey,
+  };
 }
 
 /** Project the hard sheet (resources/skills/inventory), resolving display names via the schema. */
@@ -473,6 +561,9 @@ export async function getCharacterDossier(
     provenance: `Turn ${observation.turnIdx}`,
   }));
   const skillNameById = new Map(schema.skills.map((skill) => [skill.id, skill.name]));
+  const attributeNameById = new Map(
+    schema.attributes.map((attribute) => [attribute.id, attribute.name])
+  );
   const progressionHistory = characterEvents.flatMap((event) => {
     if (event.kind !== "xp" && event.kind !== "rank_up") return [];
     const award = event.payload["award"];
@@ -489,6 +580,16 @@ export async function getCharacterDossier(
         : {}),
     }];
   });
+  const attributeAdvancementHistory = characterEvents
+    .flatMap((event) => {
+      const advancement = projectAttributeAdvancement(event, attributeNameById);
+      return advancement ? [advancement] : [];
+    })
+    .sort((left, right) => left.turnIdx - right.turnIdx)
+    .map((entry, index, entries) => ({
+      ...entry,
+      recent: index === entries.length - 1,
+    }));
 
   return {
     characterId: self.id,
@@ -539,6 +640,7 @@ export async function getCharacterDossier(
       ? {
           equipment: { slots: equipmentSlots, activeEffects },
           progressionHistory,
+          attributeAdvancementHistory,
         }
       : {}),
     involvedThreads,

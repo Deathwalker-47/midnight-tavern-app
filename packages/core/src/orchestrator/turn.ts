@@ -40,7 +40,12 @@ import { assembleContext } from "./context.js";
 import { capture } from "./checkpoint.js";
 import { generateGuardedNarration } from "./authorityGuard.js";
 import { determineLootAwards, type PendingLootAward } from "./loot.js";
+import {
+  determineAttributeAdvancements,
+  recordAttributeAdvancementDecision,
+} from "./attributeAdvancement.js";
 import type {
+  AttributeAdvancementDecision,
   ClassifiedTurn,
   CharacterHardState,
   MechanicalIntent,
@@ -82,6 +87,8 @@ export interface SubmitTurnResult {
   refusedActionCount: number;
   /** Whether narrator generation used the deterministic ruling-summary fallback. */
   usedNarratorFallback: boolean;
+  /** Deterministic app verdicts for any DM-proposed attribute changes this turn. */
+  attributeAdvancements: AttributeAdvancementDecision[];
 }
 
 /** Fetch the story or throw — every turn needs its frozen schema. Shared with history ops (§6). */
@@ -185,7 +192,8 @@ async function recordRulingEvents(
   story: StoryRecord,
   messageId: string,
   turnIndex: number,
-  ruling: Ruling
+  ruling: Ruling,
+  playerText: string
 ): Promise<void> {
   const common = {
     storyId: story.id,
@@ -203,7 +211,9 @@ async function recordRulingEvents(
       : ruling.roll
         ? "roll"
         : "denied",
-    payload: { ruling },
+    // Keep the originating player action beside the ruling so multi-turn
+    // training/transformation evidence can be reconstructed deterministically.
+    payload: { ruling, playerText },
   });
   if (ruling.xpAward) {
     await store.events.insert({
@@ -525,6 +535,7 @@ async function runTurnOperation(
     let classifierRecovery: ClassifierRecoveryMetadata | undefined;
     let refusedActionCount = 0;
     let lootAwards: PendingLootAward[] = [];
+    let attributeAdvancements: AttributeAdvancementDecision[] = [];
 
     if (schema.statMode === "full") {
       const recentMessages = await store.messages.recent(storyId, 6);
@@ -670,6 +681,19 @@ async function runTurnOperation(
           },
         ];
       }
+
+      const advancement = await determineAttributeAdvancements(router, store, {
+        story,
+        playerText,
+        rulings,
+        turnIndex: playerIdx + 1,
+        hardStates: workingById,
+        ...(opts.signal ? { signal: opts.signal } : {}),
+      });
+      attributeAdvancements = advancement.decisions;
+      for (const [characterId, hard] of advancement.hardStates) {
+        workingById.set(characterId, hard);
+      }
     }
 
     const presentIds = presentCharacters.map((character) => character.id);
@@ -681,6 +705,7 @@ async function runTurnOperation(
       presentIds,
       playerText: classifierRecovered ? `${playerText}\n\n${classified.freeText}` : playerText,
       styleInputs,
+      attributeAdvancements,
       ...(opts.personaBlock ? { personaBlock: opts.personaBlock } : {}),
     });
 
@@ -728,7 +753,17 @@ async function runTurnOperation(
           story,
           narratorMessageId,
           narratorIdx,
-          stagedRuling.ruling
+          stagedRuling.ruling,
+          playerText
+        );
+      }
+      for (const decision of attributeAdvancements) {
+        await recordAttributeAdvancementDecision(
+          store,
+          story,
+          narratorMessageId,
+          narratorIdx,
+          decision
         );
       }
       let milestoneLogged = false;
@@ -804,6 +839,7 @@ async function runTurnOperation(
       ...(classifierRecovery ? { classifierRecovery } : {}),
       refusedActionCount,
       usedNarratorFallback: narration.usedSafeFallback,
+      attributeAdvancements,
     };
   } catch (error) {
     const state = operationErrorState(error, opts.signal);

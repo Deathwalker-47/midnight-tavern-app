@@ -11,3 +11,4 @@ export * from "./gate.js";
 export * from "./resolver.js";
 export * from "./ledger.js";
 export * from "./unlock.js";
+export * from "./attributeAdvancement.js";

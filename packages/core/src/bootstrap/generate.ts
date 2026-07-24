@@ -273,6 +273,46 @@ function normalizePhaseB(value: unknown): unknown {
   };
 }
 
+function stabilizeAttributeScores(
+  scores: Record<string, number>,
+  phaseA: PhaseA
+): Record<string, number> {
+  const definitions = new Map(
+    phaseA.attributes.map((attribute) => [attribute.id, attribute])
+  );
+  return Object.fromEntries(
+    Object.entries(scores).map(([attributeId, score]) => {
+      const definition = definitions.get(attributeId);
+      if (!definition) return [attributeId, score];
+      if (definition.lockedAtZero) return [attributeId, 0];
+      const maximum = definition.superhuman
+        ? definition.maximumScore!
+        : 20;
+      return [attributeId, Math.max(1, Math.min(maximum, score))];
+    })
+  );
+}
+
+function stabilizeFoundationAttributeScores(
+  foundation: PhaseBFoundation,
+  phaseA: PhaseA
+): PhaseBFoundation {
+  return {
+    ...foundation,
+    startingState: {
+      ...foundation.startingState,
+      attributes: stabilizeAttributeScores(
+        foundation.startingState.attributes,
+        phaseA
+      ),
+    },
+    npcTemplates: foundation.npcTemplates.map((template) => ({
+      ...template,
+      attributes: stabilizeAttributeScores(template.attributes, phaseA),
+    })),
+  };
+}
+
 const PhaseAObjectSchema = z.object({
   statMode: StatModeSchema,
   attributes: z.array(AttributeDefSchema),
@@ -1450,7 +1490,10 @@ export async function generateStorySchema(
         }
       )
     );
-    const result = applyImportedStartingState(value, imported);
+    const result = stabilizeFoundationAttributeScores(
+      applyImportedStartingState(value, imported),
+      mechanicsCore
+    );
     checkpoint = { ...checkpoint, foundation: result };
     complete("phase-b", "actor-foundation", "Player and NPC foundation validated.");
     return result;
@@ -1461,7 +1504,10 @@ export async function generateStorySchema(
   if (resume?.foundation) {
     const resumed = PhaseBFoundationSchema.safeParse(resume.foundation);
     if (resumed.success) {
-      foundation = applyImportedStartingState(resumed.data, imported);
+      foundation = stabilizeFoundationAttributeScores(
+        applyImportedStartingState(resumed.data, imported),
+        mechanicsCore
+      );
       emit(
         "phase-b",
         "actor-foundation",

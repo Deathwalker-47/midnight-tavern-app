@@ -9,7 +9,12 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, screen, fireEvent, waitFor, cleanup } from "@testing-library/react";
 import { Play } from "../../src/screens/Play";
-import { setBridge, getBridge, type CoreBridge } from "../../src/bridge/core";
+import {
+  setBridge,
+  getBridge,
+  type CoreBridge,
+  type StoryEvent,
+} from "../../src/bridge/core";
 import { usePlayStore } from "../../src/state/playStore";
 import { useUiStore } from "../../src/state/uiStore";
 import { useRoute } from "../../src/app/router";
@@ -110,6 +115,69 @@ describe("Play — stream + composer", () => {
     expect(screen.getByTestId("ruling-denied-glyph")).toHaveTextContent("⊘");
     // A rolled verdict stamps its outcome.
     expect(screen.getAllByTestId("ruling-stamp").length).toBeGreaterThan(0);
+  });
+
+  it("renders a persisted attribute advancement ruling before narrator prose", async () => {
+    const narrator = {
+      id: "narrator-1",
+      storyId: "s1",
+      idx: 1,
+      role: "narrator" as const,
+      content: "The portcullis rises after your impossible feat of strength.",
+      createdAt: 2,
+    };
+    const advancement: StoryEvent = {
+      id: "advancement-1",
+      storyId: "s1",
+      messageId: narrator.id,
+      turnIndex: 1,
+      actorId: "hero",
+      kind: "attribute_advanced",
+      payload: {
+        decision: {
+          approved: true,
+          proposal: {
+            characterId: "hero",
+            attributeId: "might",
+            source: "exceptional_action",
+            delta: 1,
+            evidenceRefs: ["ruling-gate"],
+            rationale: "A specific high-stakes combat action changed the scene.",
+          },
+          proposalKey: "aa-v1-gate",
+          band: "moderate",
+          scoreBefore: 12,
+          scoreAfter: 13,
+          dc: 13,
+          roll: 17,
+          modifier: 4,
+          effectiveChancePercent: 60,
+          evidenceRefs: ["ruling-gate"],
+          denialCodes: [],
+          denialReasons: [],
+          policyVersion: 1,
+        },
+      },
+      rulebookVersion: 1,
+      createdAt: 2,
+    };
+    const bridge = emptyBridge();
+    bridge.listMessages = vi.fn(async () => [narrator]);
+    bridge.listPresentCast = vi.fn(async () => [
+      { characterId: "hero", name: "Kestrel", isPlayer: true, alive: true },
+    ]);
+    bridge.listStoryJournal = vi.fn(async () => ({ events: [advancement] }));
+    setBridge(bridge);
+
+    render(<Play storyId="s1" />);
+
+    const artifact = await screen.findByTestId("attribute-advancement-ruling");
+    const prose = screen.getByText(narrator.content);
+    expect(artifact).toHaveTextContent("DM RULING · ATTRIBUTE ADVANCED");
+    expect(artifact).toHaveTextContent(/Might advances from 12 to 13/i);
+    expect(
+      artifact.compareDocumentPosition(prose) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
   });
 
   it("nudges instead of sending when the input is too vague (<12 chars)", () => {
