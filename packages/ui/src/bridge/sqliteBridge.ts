@@ -15,7 +15,10 @@
  */
 import type {
   BootstrapPhase,
+  ProviderConfigs,
+  ProviderId,
   Role,
+  RoleMap,
   Store,
   TurnOperationState,
 } from "@midnight-tavern/core";
@@ -33,8 +36,6 @@ import type {
   TurnOperationPhase,
 } from "./core.js";
 import { diagnosticError, diagnosticsLogger } from "../observability/logger.js";
-
-const PRIMARY_PROVIDER_SETTING_KEY = "primaryProvider";
 
 /**
  * Build the real bridge over an already-opened, migrated {@link Store}. `core` is the live core
@@ -55,11 +56,46 @@ export function buildSqliteBridge(
   // Router deps come from stored settings. We rebuild the router per operation that needs it
   // (createStory / submitTurn / validateProviderKey) rather than caching, so a settings change
   // mid-session is picked up without a bridge reload. Reads are cheap (two settings rows).
+  async function primaryProviderFor(
+    providerConfigs: ProviderConfigs
+  ): Promise<ProviderId | undefined> {
+    const saved = await store.settings.get(
+      core.PRIMARY_PROVIDER_SETTING_KEY,
+      core.ProviderIdSchema
+    );
+    if (saved && providerConfigs[saved]?.apiKey) return saved;
+    const fallback = (Object.keys(providerConfigs) as ProviderId[]).find((provider) =>
+      Boolean(providerConfigs[provider]?.apiKey)
+    );
+    if (fallback) {
+      await store.settings.set(
+        core.PRIMARY_PROVIDER_SETTING_KEY,
+        core.ProviderIdSchema,
+        fallback
+      );
+      return fallback;
+    }
+    if (saved) await store.settings.delete(core.PRIMARY_PROVIDER_SETTING_KEY);
+    return undefined;
+  }
+
+  async function effectiveRoleMap(providerConfigs: ProviderConfigs): Promise<RoleMap> {
+    const stored =
+      (await store.settings.get(core.ROLE_MAP_SETTING_KEY, core.RoleMapSchema)) ??
+      core.DEFAULT_ROLE_MAP;
+    const primary = await primaryProviderFor(providerConfigs);
+    if (!primary) return stored;
+    const effective = core.roleMapForPrimary(stored, primary);
+    if (effective !== stored) {
+      await store.settings.set(core.ROLE_MAP_SETTING_KEY, core.RoleMapSchema, effective);
+    }
+    return effective;
+  }
+
   async function currentRouter(requiredRoles: readonly Role[] = core.ROLES) {
     const providerConfigs =
       (await store.settings.get(core.PROVIDER_CONFIGS_SETTING_KEY, core.ProviderConfigsSchema)) ?? {};
-    const roleMap =
-      (await store.settings.get(core.ROLE_MAP_SETTING_KEY, core.RoleMapSchema)) ?? core.DEFAULT_ROLE_MAP;
+    const roleMap = await effectiveRoleMap(providerConfigs);
     for (const role of requiredRoles) {
       const binding = roleMap[role];
       if (!providerConfigs[binding.provider]?.apiKey) {
@@ -506,19 +542,24 @@ export function buildSqliteBridge(
       configs[provider] = { apiKey: config.apiKey, ...(config.baseUrl ? { baseUrl: config.baseUrl } : {}) };
       await store.settings.set(core.PROVIDER_CONFIGS_SETTING_KEY, core.ProviderConfigsSchema, configs);
       const primary = await store.settings.get(
-        PRIMARY_PROVIDER_SETTING_KEY,
+        core.PRIMARY_PROVIDER_SETTING_KEY,
         core.ProviderIdSchema
       );
       if (!primary || !configs[primary]?.apiKey) {
-        await store.settings.set(PRIMARY_PROVIDER_SETTING_KEY, core.ProviderIdSchema, provider);
+        await store.settings.set(
+          core.PRIMARY_PROVIDER_SETTING_KEY,
+          core.ProviderIdSchema,
+          provider
+        );
       }
+      await effectiveRoleMap(configs);
     },
 
     async removeProviderConfig(provider) {
       const configs =
         (await store.settings.get(core.PROVIDER_CONFIGS_SETTING_KEY, core.ProviderConfigsSchema)) ?? {};
       const primary = await store.settings.get(
-        PRIMARY_PROVIDER_SETTING_KEY,
+        core.PRIMARY_PROVIDER_SETTING_KEY,
         core.ProviderIdSchema
       );
       const remaining = (Object.keys(configs) as Array<keyof typeof configs>).filter(
@@ -530,7 +571,7 @@ export function buildSqliteBridge(
       delete configs[provider];
       await store.settings.set(core.PROVIDER_CONFIGS_SETTING_KEY, core.ProviderConfigsSchema, configs);
       if (primary === provider || (primary && !configs[primary]?.apiKey)) {
-        await store.settings.delete(PRIMARY_PROVIDER_SETTING_KEY);
+        await store.settings.delete(core.PRIMARY_PROVIDER_SETTING_KEY);
       }
       if (core.SETUP_STATE_SETTING_KEY && core.SetupStateSchema) {
         const setup =
@@ -547,20 +588,7 @@ export function buildSqliteBridge(
     async getPrimaryProvider() {
       const configs =
         (await store.settings.get(core.PROVIDER_CONFIGS_SETTING_KEY, core.ProviderConfigsSchema)) ?? {};
-      const saved = await store.settings.get(
-        PRIMARY_PROVIDER_SETTING_KEY,
-        core.ProviderIdSchema
-      );
-      if (saved && configs[saved]?.apiKey) return saved;
-      const fallback = (Object.keys(configs) as Array<keyof typeof configs>).find((provider) =>
-        Boolean(configs[provider]?.apiKey)
-      );
-      if (fallback) {
-        await store.settings.set(PRIMARY_PROVIDER_SETTING_KEY, core.ProviderIdSchema, fallback);
-        return fallback;
-      }
-      if (saved) await store.settings.delete(PRIMARY_PROVIDER_SETTING_KEY);
-      return undefined;
+      return primaryProviderFor(configs);
     },
 
     async setPrimaryProvider(provider) {
@@ -569,15 +597,26 @@ export function buildSqliteBridge(
       if (!configs[provider]?.apiKey) {
         throw new Error("Connect and validate this provider before making it Primary.");
       }
-      await store.settings.set(PRIMARY_PROVIDER_SETTING_KEY, core.ProviderIdSchema, provider);
+      await store.settings.set(
+        core.PRIMARY_PROVIDER_SETTING_KEY,
+        core.ProviderIdSchema,
+        provider
+      );
+      await effectiveRoleMap(configs);
     },
 
     async getRoleMap() {
-      return (await store.settings.get(core.ROLE_MAP_SETTING_KEY, core.RoleMapSchema)) ?? core.DEFAULT_ROLE_MAP;
+      const configs =
+        (await store.settings.get(core.PROVIDER_CONFIGS_SETTING_KEY, core.ProviderConfigsSchema)) ?? {};
+      return effectiveRoleMap(configs);
     },
 
     async setRoleMap(map) {
-      await store.settings.set(core.ROLE_MAP_SETTING_KEY, core.RoleMapSchema, map);
+      const configs =
+        (await store.settings.get(core.PROVIDER_CONFIGS_SETTING_KEY, core.ProviderConfigsSchema)) ?? {};
+      const primary = await primaryProviderFor(configs);
+      const effective = primary ? core.roleMapForPrimary(map, primary) : map;
+      await store.settings.set(core.ROLE_MAP_SETTING_KEY, core.RoleMapSchema, effective);
     },
 
     defaultRoleMap() {

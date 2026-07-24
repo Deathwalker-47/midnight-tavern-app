@@ -39,11 +39,6 @@ function includesWholePhrase(text: string, phrase: string): boolean {
   return ` ${text} `.includes(` ${phrase} `);
 }
 
-function groundedInScene(text: string, anchors: readonly string[]): boolean {
-  const candidate = normalized(text);
-  return anchors.some((anchor) => includesWholePhrase(candidate, anchor));
-}
-
 function actionTextMatches(
   text: string,
   action: { label: string; aliases?: string[] }
@@ -69,9 +64,6 @@ export async function suggestPlayerActions(
   const validActions = new Map(
     context.availableActions.map((action) => [action.id, action] as const)
   );
-  const normalizedAnchors = context.sceneAnchors
-    .map(normalized)
-    .filter((anchor) => anchor.length >= 4);
   const SuggestionsSchema = z
     .object({
       suggestions: z.array(SuggestedActionSchema.omit({ id: true })).min(5).max(6),
@@ -88,42 +80,11 @@ export async function suggestPlayerActions(
           });
         }
         seen.add(text);
-        if (suggestion.kind === "action") {
-          const action = suggestion.actionId
-            ? validActions.get(suggestion.actionId)
-            : undefined;
-          if (!action) {
-            refinement.addIssue({
-              code: z.ZodIssueCode.custom,
-              path: ["suggestions", index, "actionId"],
-              message: "Action suggestions must use an offered, currently available actionId.",
-            });
-          } else if (!actionTextMatches(suggestion.text, action)) {
-            refinement.addIssue({
-              code: z.ZodIssueCode.custom,
-              path: ["suggestions", index, "text"],
-              message: `Action text must include its supplied label or alias (${action.label}).`,
-            });
-          }
-        } else if (suggestion.actionId !== undefined) {
-          refinement.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ["suggestions", index, "actionId"],
-            message: "Only kind=action may include actionId.",
-          });
-        }
         if (KNOWN_GENERIC_SUGGESTIONS.some((phrase) => text.includes(phrase))) {
           refinement.addIssue({
             code: z.ZodIssueCode.custom,
             path: ["suggestions", index, "text"],
             message: "Generic fallback phrasing is not grounded in this scene.",
-          });
-        }
-        if (normalizedAnchors.length > 0 && !groundedInScene(text, normalizedAnchors)) {
-          refinement.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ["suggestions", index, "text"],
-            message: "Mention an exact supplied live-scene anchor.",
           });
         }
       }
@@ -137,7 +98,7 @@ export async function suggestPlayerActions(
         system: [
           "You suggest optional next moves for a roleplay player.",
           "Return exactly 5 or 6 concise possibilities. Mix dialogue, movement, and a mechanical action only when a relevant action candidate is supplied.",
-          "Every option must be specific to the latest narrator message and current scene. Mention at least one exact supplied live-scene anchor in every option.",
+          "Every option must be specific to the latest narrator message and current scene. Use supplied character and location names where natural, but natural pronouns and paraphrases are valid.",
           "Never use generic filler such as asking the nearest character, observing the surroundings, or pausing before committing.",
           "Never decide an outcome or speak as if the player already acted.",
           "When kind=action, use only an exact actionId from the available actions and include that action's exact label or one of its aliases in text. If that list is empty, return no kind=action options.",
@@ -171,10 +132,27 @@ export async function suggestPlayerActions(
       SuggestionsSchema,
       { maxRepairs: 2, ...(signal ? { signal } : {}) }
     );
-    return response.suggestions.map((suggestion) => ({
-      id: randomUUID(),
-      ...suggestion,
-    }));
+    return response.suggestions.map((suggestion) => {
+      if (suggestion.kind === "action") {
+        const action = suggestion.actionId
+          ? validActions.get(suggestion.actionId)
+          : undefined;
+        if (action && actionTextMatches(suggestion.text, action)) {
+          return { id: randomUUID(), ...suggestion };
+        }
+        // Suggestions are insert-only prose; invalid mechanical metadata must never make an
+        // otherwise useful, scene-specific option unavailable. The real turn classifier and DM
+        // still decide whether the text maps to a mechanical action when the player sends it.
+        const { actionId: _ignored, ...safeSuggestion } = suggestion;
+        return {
+          id: randomUUID(),
+          ...safeSuggestion,
+          kind: "move" as const,
+        };
+      }
+      const { actionId: _ignored, ...safeSuggestion } = suggestion;
+      return { id: randomUUID(), ...safeSuggestion };
+    });
   } catch (error) {
     if (signal?.aborted) throw error;
     throw new SuggestionGenerationError(

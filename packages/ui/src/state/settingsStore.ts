@@ -299,8 +299,9 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   },
 
   setRoleMap: async (map) => {
-    await getBridge().setRoleMap(map);
-    set({ roleMap: map });
+    const bridge = getBridge();
+    await bridge.setRoleMap(map);
+    set({ roleMap: await bridge.getRoleMap() });
     diagnosticsLogger.info("roles.updated");
   },
 
@@ -317,14 +318,26 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     const repairedRoles: Role[] = [];
     for (const role of ROLE_IDS) {
       const current = next[role];
-      if (state.providerConfigs[current.provider]?.apiKey) continue;
-      const replacement = get().modelsForRole(role, fallback)[0];
+      const providerMissing = !state.providerConfigs[current.provider]?.apiKey;
+      const liveModels = state.providerModels[current.provider];
+      const appManagedModelUnavailable =
+        !providerMissing &&
+        current.source !== "custom" &&
+        state.modelStates[current.provider]?.state === "ready" &&
+        Boolean(liveModels?.length) &&
+        !liveModels!.some((model) => model.id === current.model);
+      if (!providerMissing && !appManagedModelUnavailable) continue;
+
+      const replacementProvider = providerMissing ? fallback : current.provider;
+      const replacement = get().modelsForRole(role, replacementProvider)[0];
       if (!replacement) continue;
       next[role] = {
         ...current,
-        provider: fallback,
+        provider: replacementProvider,
         model: replacement.id,
-        source: replacement.tier === "recommended" ? "recommended" : "custom",
+        // This repair is app-owned even when the live aggregator model has no catalog entry.
+        // Explicit custom models on a still-connected provider are deliberately left untouched.
+        source: "recommended",
       };
       repairedRoles.push(role);
     }

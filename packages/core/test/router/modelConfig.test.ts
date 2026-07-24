@@ -22,6 +22,7 @@ import {
   matchPreset,
   modelsForRole,
   defaultAssignmentFor,
+  roleMapForPrimary,
   samplerProfileFor,
   makeRouter,
   ROLES,
@@ -190,6 +191,53 @@ describe("recommendations", () => {
 
   it("samplerProfileFor falls back to the role default for an unknown model", () => {
     expect(samplerProfileFor("narrator", "unknown/model")).toEqual(DEFAULT_SAMPLER_PROFILES.narrator);
+  });
+
+  it("moves recommended role bindings to the Primary provider without touching custom bindings", () => {
+    const original: RoleMap = {
+      ...DEFAULT_ROLE_MAP,
+      narrator: {
+        ...DEFAULT_ROLE_MAP.narrator,
+        source: "custom",
+      },
+    };
+
+    const effective = roleMapForPrimary(original, "electronhub");
+
+    expect(effective.narrator).toEqual(original.narrator);
+    for (const role of ROLES.filter((candidate) => candidate !== "narrator")) {
+      expect(effective[role].provider).toBe("electronhub");
+      expect(effective[role].model).toBe(original[role].model);
+      expect(effective[role].source).toBe("recommended");
+    }
+    expect(original.classifier.provider).toBe("openrouter");
+  });
+
+  it("selects provider-native models and preserves user-edited samplers when Primary changes", () => {
+    const customSamplers = { temperature: 1.1, maxTokens: 333 };
+    const original: RoleMap = {
+      ...DEFAULT_ROLE_MAP,
+      classifier: {
+        ...DEFAULT_ROLE_MAP.classifier,
+        samplers: customSamplers,
+        samplersDirty: true,
+      },
+    };
+
+    const effective = roleMapForPrimary(original, "openai");
+
+    expect(effective.narrator).toMatchObject({ provider: "openai", model: "gpt-4o" });
+    expect(effective.classifier).toMatchObject({
+      provider: "openai",
+      model: "gpt-4o-mini",
+      samplers: customSamplers,
+      samplersDirty: true,
+    });
+  });
+
+  it("returns the existing map when every binding already follows Primary or is custom", () => {
+    const effective = roleMapForPrimary(DEFAULT_ROLE_MAP, "openrouter");
+    expect(effective).toBe(DEFAULT_ROLE_MAP);
   });
 });
 

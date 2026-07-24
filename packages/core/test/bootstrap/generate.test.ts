@@ -153,6 +153,7 @@ const PHASE_B = {
   actions: STORY.actions,
   startingState: STORY.startingState,
   npcTemplates: STORY.npcTemplates,
+  startingGear: [],
 };
 
 /**
@@ -191,8 +192,9 @@ function phasedRouter(scripts: { a: string[]; b: string[] }): {
             .match(/REQUESTED CATEGORIES: ([^\n]+)/)?.[1]
             ?.split(",")
             .map((category) => category.trim()) ?? [];
-      if (foundationRequest && phaseBPass < 0) {
-        phaseBSource = seq[0] ?? "";
+      if (foundationRequest) {
+        phaseBSource =
+          seq[Math.min(phaseBPass + 1, seq.length - 1)] ?? "";
       } else if (requested.includes("combat")) {
         phaseBPass++;
         phaseBSource = seq[Math.min(phaseBPass, seq.length - 1)] ?? "";
@@ -206,6 +208,7 @@ function phasedRouter(scripts: { a: string[]; b: string[] }): {
               items: parsed.items,
               startingState: parsed.startingState,
               npcTemplates: parsed.npcTemplates,
+              startingGear: parsed.startingGear,
             }),
           };
         }
@@ -516,7 +519,9 @@ describe("generateStorySchema — repair loop", () => {
   it("gives models explicit skill-rank and on-demand-loot contracts", () => {
     expect(PHASE_B_FOUNDATION_SYSTEM).toContain('{"skillId":"existing_skill_id","rank":"novice"}');
     expect(PHASE_B_FOUNDATION_SYSTEM).toMatch(/inventory MUST be empty arrays/i);
-    expect(PHASE_B_FOUNDATION_SYSTEM).toMatch(/never generated during story creation/i);
+    expect(PHASE_B_FOUNDATION_SYSTEM).toMatch(/startingGear: 1-7 runtime item proposals/i);
+    expect(PHASE_B_FOUNDATION_SYSTEM).toMatch(/NOT a universe item catalog/i);
+    expect(PHASE_B_FOUNDATION_SYSTEM).toMatch(/All other equipment and loot.*on demand/i);
     expect(PHASE_B_ACTION_BATCH_SYSTEM).toMatch(/Do not grant or consume item ids/i);
     expect(PHASE_B_ACTION_BATCH_SYSTEM).toMatch(/roughly 25-33%/i);
     expect(PHASE_B_ACTION_BATCH_SYSTEM).toMatch(/at most 2/i);
@@ -631,6 +636,171 @@ describe("generateStorySchema — repair loop", () => {
       { type: "resource", resourceId: "stamina", min: 1 },
       { type: "attribute", attributeId: "might", min: 10 },
     ]);
+  });
+
+  it("stabilizes dead skill prerequisite flags for initial forge and regeneration without repair", async () => {
+    const screenshotFailure = {
+      ...PHASE_A,
+      skills: PHASE_A.skills.map((skill, index) => {
+        if (index === 0) {
+          return {
+            ...skill,
+            prerequisites: [
+              { type: "flag" as const, flagId: "touched_sipstrassi", value: true },
+            ],
+          };
+        }
+        if (index === 1) {
+          return {
+            ...skill,
+            prerequisites: [
+              {
+                type: "flag" as const,
+                flagId: "entered_covenant_territory",
+                value: true,
+              },
+            ],
+          };
+        }
+        return skill;
+      }),
+    };
+
+    for (const storyId of ["initial-forge", "regenerated-copy"]) {
+      const { router, counts } = phasedRouter({
+        a: [J(screenshotFailure)],
+        b: [J(PHASE_B)],
+      });
+
+      const out = await generateStorySchema(router, { ...input, storyId });
+      const setFlags = new Set(
+        out.actions.flatMap((action) =>
+          Object.values(action.effects).flatMap((effect) =>
+            effect.setFlag?.value ? [effect.setFlag.flagId] : []
+          )
+        )
+      );
+
+      expect(out.skills[0]?.prerequisites).toEqual([
+        { type: "flag", flagId: "touched_sipstrassi", value: true },
+      ]);
+      expect(out.skills[1]?.prerequisites).toEqual([
+        {
+          type: "flag",
+          flagId: "entered_covenant_territory",
+          value: true,
+        },
+      ]);
+      expect(setFlags.has("touched_sipstrassi")).toBe(true);
+      expect(setFlags.has("entered_covenant_territory")).toBe(true);
+      expect(validateStorySchema(out)).toEqual([]);
+      expect(counts).toEqual({ a: 1, b: 3 });
+    }
+  });
+
+  it("removes only unreachable optional references while preserving valid progression", async () => {
+    const phaseAWithDanglingReferences = {
+      ...PHASE_A,
+      resources: PHASE_A.resources.map((resource) => ({
+        ...resource,
+        lethal: true,
+      })),
+      skills: PHASE_A.skills.map((skill, index) => {
+        if (index === 0) {
+          return {
+            ...skill,
+            tier: "missing_tier",
+            prerequisites: [
+              { type: "skill" as const, skillId: PHASE_A.skills[1]!.id },
+              { type: "skill" as const, skillId: skill.id },
+              { type: "resource" as const, resourceId: "missing_resource", min: 1 },
+              { type: "resource" as const, resourceId: "stamina", min: 999 },
+              { type: "attribute" as const, attributeId: "missing_attribute", min: 1 },
+              { type: "attribute" as const, attributeId: "might", min: 999 },
+              { type: "item" as const, itemId: "future_manual" },
+            ],
+            unlockPaths: [
+              {
+                method: "trainer" as const,
+                npcHint: "A veteran",
+                cost: {
+                  resources: { stamina: 2, missing_resource: 10 },
+                  items: [{ itemId: "future_manual", qty: 1 }],
+                },
+              },
+            ],
+          };
+        }
+        if (index === 1) {
+          return {
+            ...skill,
+            prerequisites: [
+              { type: "skill" as const, skillId: PHASE_A.skills[0]!.id },
+            ],
+          };
+        }
+        return skill;
+      }),
+    };
+    const phaseBWithDanglingReferences = JSON.parse(J(PHASE_B)) as typeof PHASE_B;
+    const action = phaseBWithDanglingReferences.actions.at(-1)!;
+    action.governingAttribute = "missing_attribute";
+    action.requiresSkill = "missing_skill";
+    action.dc = 99;
+    action.costs = { resources: { stamina: 1, missing_resource: 10 } };
+    action.effects.success = {
+      ...action.effects.success,
+      resourceDeltaSelf: { hp: 1, missing_resource: 10 },
+      attributeDeltaSelf: { might: 1, missing_attribute: 10 },
+    };
+    action.advantageWhen = [
+      {
+        condition: {
+          type: "resource",
+          resourceId: "missing_resource",
+          min: 1,
+        },
+        reason: "Missing resource",
+      },
+    ];
+    const { router, counts } = phasedRouter({
+      a: [J(phaseAWithDanglingReferences)],
+      b: [J(phaseBWithDanglingReferences)],
+    });
+
+    const out = await generateStorySchema(router, input);
+    const firstSkill = out.skills[0]!;
+    const secondSkill = out.skills[1]!;
+    const stabilizedAction = out.actions.find(
+      (candidate) => candidate.id === action.id
+    )!;
+
+    expect(firstSkill.tier).toBe(PHASE_A.tiers[0]!.id);
+    expect(firstSkill.prerequisites).toEqual([
+      { type: "skill", skillId: PHASE_A.skills[1]!.id },
+      { type: "resource", resourceId: "stamina", min: 10 },
+      { type: "attribute", attributeId: "might", min: 20 },
+    ]);
+    expect(secondSkill.prerequisites).toEqual([]);
+    expect(firstSkill.unlockPaths).toEqual([
+      {
+        method: "trainer",
+        npcHint: "A veteran",
+        cost: { resources: { stamina: 2 } },
+      },
+    ]);
+    expect(out.resources.filter((resource) => resource.lethal)).toHaveLength(1);
+    expect(stabilizedAction).toMatchObject({
+      dc: 25,
+      costs: { resources: { stamina: 1 }, items: [] },
+    });
+    expect(stabilizedAction.governingAttribute).toBeUndefined();
+    expect(stabilizedAction.requiresSkill).toBeUndefined();
+    expect(stabilizedAction.advantageWhen).toBeUndefined();
+    expect(stabilizedAction.effects.success.resourceDeltaSelf).toEqual({ hp: 1 });
+    expect(stabilizedAction.effects.success.attributeDeltaSelf).toEqual({ might: 1 });
+    expect(validateStorySchema(out)).toEqual([]);
+    expect(counts).toEqual({ a: 1, b: 3 });
   });
 
   it("normalizes the exact missing condition fields seen in forge diagnostics", () => {
@@ -928,7 +1098,7 @@ describe("generateStorySchema — repair loop", () => {
     ).toBe(true);
   });
 
-  it("emits a V2 rulebook with no pregenerated items or starting gear", async () => {
+  it("keeps the V2 rulebook free of a pregenerated item catalog and embedded gear", async () => {
     const { router } = phasedRouter({ a: [J(PHASE_A)], b: [J(PHASE_B)] });
     const out = await generateStorySchema(router, input);
     expect(out.schemaVersion).toBe(2);
@@ -941,6 +1111,36 @@ describe("generateStorySchema — repair loop", () => {
       progression: 1,
       equipmentLoot: 1,
     });
+  });
+
+  it("retains only bounded player starting gear in the actor-foundation checkpoint", async () => {
+    const startingGear = [{
+      name: "Persona Longbow",
+      description: "The longbow explicitly carried by the selected persona.",
+      kind: "weapon" as const,
+      tier: "common" as const,
+      slotCompatibility: ["primary" as const],
+      handsRequired: 2 as const,
+      unique: false,
+      effects: [],
+      props: {},
+      tags: ["starting_gear"],
+      preferredSlot: "primary" as const,
+    }];
+    const { router } = phasedRouter({
+      a: [J(PHASE_A)],
+      b: [J({ ...PHASE_B, startingGear })],
+    });
+    let latest: BootstrapResumeState | undefined;
+    const out = await generateStorySchema(router, input, {
+      onCheckpoint: (checkpoint) => {
+        latest = checkpoint;
+      },
+    });
+
+    expect(out.items).toEqual([]);
+    expect(out.startingState.inventory).toEqual([]);
+    expect(latest?.foundation?.startingGear).toEqual(startingGear);
   });
 
   it("uses the attached persona and deterministically preserves accepted card attributes", async () => {
@@ -1195,25 +1395,33 @@ describe("generateStorySchema — repair loop", () => {
     ).toBe(true);
   });
 
-  it("re-prompts Phase B when the assembled schema fails cross-validation, then succeeds", async () => {
+  it("re-prompts the Phase B foundation when an essential actor reference is invalid", async () => {
     const crossInvalidB = {
       ...PHASE_B,
-      actions: PHASE_B.actions.map((action, index) =>
-        index === 0 ? { ...action, governingAttribute: "no_such_attribute" } : action
-      ),
+      startingState: {
+        ...PHASE_B.startingState,
+        attributes: {
+          ...PHASE_B.startingState.attributes,
+          no_such_attribute: 10,
+        },
+      },
     };
     const { router, counts } = phasedRouter({ a: [J(PHASE_A)], b: [J(crossInvalidB), J(PHASE_B)] });
     const out = await generateStorySchema(router, input);
     expect(validateStorySchema(out)).toEqual([]);
-    expect(counts.b).toBe(4); // foundation + two initial batches + only the affected batch
+    expect(counts.b).toBe(4); // foundation + two action batches + repaired foundation
   });
 
   it("throws ModelOutputError naming the bootstrapper after exhausting schema repairs", async () => {
     const crossInvalidB = {
       ...PHASE_B,
-      actions: PHASE_B.actions.map((action, index) =>
-        index === 0 ? { ...action, governingAttribute: "no_such_attribute" } : action
-      ),
+      startingState: {
+        ...PHASE_B.startingState,
+        attributes: {
+          ...PHASE_B.startingState.attributes,
+          no_such_attribute: 10,
+        },
+      },
     };
     const { router } = phasedRouter({ a: [J(PHASE_A)], b: [J(crossInvalidB)] }); // never fixes it
     await expect(generateStorySchema(router, input, { maxSchemaRepairs: 2 })).rejects.toMatchObject({
@@ -1225,9 +1433,13 @@ describe("generateStorySchema — repair loop", () => {
   it("wraps the cross-validation errors into the thrown message", async () => {
     const crossInvalidB = {
       ...PHASE_B,
-      actions: PHASE_B.actions.map((action, index) =>
-        index === 0 ? { ...action, governingAttribute: "no_such_attribute" } : action
-      ),
+      startingState: {
+        ...PHASE_B.startingState,
+        attributes: {
+          ...PHASE_B.startingState.attributes,
+          no_such_attribute: 10,
+        },
+      },
     };
     const { router } = phasedRouter({ a: [J(PHASE_A)], b: [J(crossInvalidB)] });
     const err = await generateStorySchema(router, input, { maxSchemaRepairs: 1 }).catch((e) => e as ModelOutputError);

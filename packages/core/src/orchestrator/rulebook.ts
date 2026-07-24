@@ -4,8 +4,11 @@ import {
   generateStorySchema,
   instantiateGeneric,
   instantiatePlayer,
+  persistStartingGear,
+  resolveStartingGear,
   type BootstrapOptions,
   type BootstrapInput,
+  type StartingGearSeed,
 } from "../bootstrap/index.js";
 import type { CharacterCard, ImportedMechanics } from "../importer/index.js";
 import { MECHANICS_CONFIG_VERSIONS } from "../config/index.js";
@@ -266,6 +269,7 @@ export async function regenerateRulebook(
       ? { acceptImportedMechanics: true }
       : {}),
   } satisfies BootstrapInput;
+  let generatedStartingGear: StartingGearSeed[] = [];
   const schema =
     statMode === "none"
       ? createNoStatsSchema(input)
@@ -273,9 +277,16 @@ export async function regenerateRulebook(
           await generateStorySchema(
             router,
             { ...input, statMode: "full" },
-            options
+            {
+              ...options,
+              onCheckpoint: (checkpoint) => {
+                generatedStartingGear = checkpoint.foundation?.startingGear ?? generatedStartingGear;
+                options.onCheckpoint?.(checkpoint);
+              },
+            }
           )
         );
+  const startingGear = resolveStartingGear(input, generatedStartingGear);
   const next: StoryRecord = {
     ...story,
     schema,
@@ -357,6 +368,20 @@ export async function regenerateRulebook(
         ? instantiatePlayer(schema, character.id)
         : instantiateGeneric(schema, character.id);
       await store.characters.updateHard(character.id, hard);
+      if (character.isPlayer) {
+        const equipment = await persistStartingGear(
+          store,
+          storyId,
+          character.id,
+          startingGear
+        );
+        if (equipment.length > 0) {
+          await store.characters.updateHard(character.id, {
+            ...hard,
+            equipment,
+          });
+        }
+      }
     }
     await store.events.insert({
       id: randomUUID(),

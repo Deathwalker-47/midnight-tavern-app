@@ -76,6 +76,80 @@ describe("V7 persistence repositories", () => {
     });
   });
 
+  it("installs only card/persona starting possessions in runtime inventory", async () => {
+    const store = await openStore(":memory:");
+    const sourceCard = parseCardObject({
+      spec: "chara_card_v2",
+      spec_version: "2.0",
+      data: {
+        name: "Border Story",
+        description: "The protagonist carries a silver pistol.",
+      },
+    });
+    const created = await bootstrapStory(
+      inertRouter,
+      store,
+      {
+        storyId: "starting-possessions",
+        title: "Starting possessions",
+        premise: "A ranger crosses the old border.",
+        statMode: "none",
+        sourceCard,
+        persona: {
+          id: "persona-ranger",
+          name: "Ari",
+          description: "A ranger carrying a longbow and wearing a green cloak.",
+        },
+      },
+      { name: "Ari" }
+    );
+
+    const definitions = await store.runtimeItems.listDefinitions(created.story.id);
+    const instances = await store.runtimeItems.listInventory(created.playerCharacterId);
+    const loadout = await store.runtimeItems.listLoadout(created.playerCharacterId);
+    expect(definitions.map((definition) => definition.name)).toEqual(
+      expect.arrayContaining(["Silver Pistol", "Longbow", "Green Cloak"])
+    );
+    expect(definitions).toHaveLength(3);
+    expect(instances).toHaveLength(3);
+    expect(new Set(loadout.map((assignment) => assignment.slot)).size).toBe(loadout.length);
+    expect(loadout.length).toBeLessThanOrEqual(7);
+    expect(created.story.schema.items).toEqual([]);
+    const player = await store.characters.get(created.playerCharacterId);
+    expect(player?.hard.equipment).toHaveLength(loadout.length);
+    expect(player?.hard.equipment).toEqual(expect.arrayContaining(loadout));
+    await regenerateRulebook(inertRouter, store, created.story.id, {
+      confirmMechanicalReset: true,
+      statMode: "none",
+    });
+    expect(
+      (await store.runtimeItems.listDefinitions(created.story.id))
+        .map((definition) => definition.name)
+    ).toEqual(expect.arrayContaining(["Silver Pistol", "Longbow", "Green Cloak"]));
+    await store.close();
+  });
+
+  it("installs one neutral basic possession when no gear is described", async () => {
+    const store = await openStore(":memory:");
+    const created = await bootstrapStory(
+      inertRouter,
+      store,
+      {
+        storyId: "basic-starting-possession",
+        title: "Basic starting possession",
+        premise: "A stranger wakes beside the road.",
+        statMode: "none",
+      },
+      { name: "Ari" }
+    );
+    const definitions = await store.runtimeItems.listDefinitions(created.story.id);
+    expect(definitions.map((definition) => definition.name)).toEqual([
+      "Basic Personal Effects",
+    ]);
+    expect(created.story.schema.items).toEqual([]);
+    await store.close();
+  });
+
   it("round-trips runtime loot, loadout assignments, operations, and journal events", async () => {
     const store = await openStore(":memory:");
     const schema = makeStory();

@@ -154,7 +154,9 @@ export function Settings(_props: ScreenProps): JSX.Element {
   async function makePrimary(id: ProviderId): Promise<void> {
     setPrimaryError(undefined);
     try {
-      await getBridge().setPrimaryProvider(id);
+      const bridge = getBridge();
+      await bridge.setPrimaryProvider(id);
+      await setRoleMap(await bridge.getRoleMap());
       setPrimaryProvider(id);
     } catch (error) {
       setPrimaryError(error instanceof Error ? error.message : "Couldn't change the Primary provider.");

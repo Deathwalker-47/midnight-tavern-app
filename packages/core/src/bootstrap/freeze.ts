@@ -25,6 +25,11 @@ import { validateStorySchema } from "./validate.js";
 import { deterministicRepair } from "./repair.js";
 import { instantiatePlayer } from "./instantiate.js";
 import {
+  persistStartingGear,
+  resolveStartingGear,
+  type StartingGearSeed,
+} from "./startingGear.js";
+import {
   generateStorySchema,
   resolveBootstrapCreationInput,
   type BootstrapInput,
@@ -184,6 +189,9 @@ export async function bootstrapStory(
 
   const playerCharacterId = player.characterId ?? randomUUID();
   const hard = instantiatePlayer(installedSchema, playerCharacterId);
+  const generatedStartingGear: StartingGearSeed[] =
+    latestCheckpoint?.foundation?.startingGear ?? [];
+  const startingGear = resolveStartingGear(input, generatedStartingGear);
 
   options.onProgress?.("install");
   options.onProgressDetail?.({
@@ -205,6 +213,18 @@ export async function bootstrapStory(
       isPlayer: true,
       hard,
     });
+    const equipment = await persistStartingGear(
+      store,
+      input.storyId,
+      playerCharacterId,
+      startingGear
+    );
+    if (equipment.length > 0) {
+      await store.characters.updateHard(playerCharacterId, {
+        ...hard,
+        equipment,
+      });
+    }
   });
   options.onProgressDetail?.({
     phase: "install",

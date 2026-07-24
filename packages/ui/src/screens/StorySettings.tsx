@@ -711,8 +711,8 @@ function RulebookRegenerationDialog(props: {
   const phrase = `REGENERATE ${props.storyTitle}`.toUpperCase();
   const steps: ForgeStep[] = [
     { label: "Read preserved card, persona, blueprint, and lore", status: props.progress.phase === "phase-a" ? "active" : "done" },
-    { label: "Forge replacement mechanics without pregenerated items", status: props.progress.phase === "phase-b" ? "active" : props.progress.phase === "phase-a" ? "pending" : "done" },
-    { label: "Validate references and on-demand loot policy", status: props.progress.phase === "validate" ? "active" : ["phase-a", "phase-b"].includes(props.progress.phase ?? "") ? "pending" : "done" },
+    { label: "Forge replacement mechanics and character starting gear", status: props.progress.phase === "phase-b" ? "active" : props.progress.phase === "phase-a" ? "pending" : "done" },
+    { label: "Validate references, starting loadout, and on-demand loot policy", status: props.progress.phase === "validate" ? "active" : ["phase-a", "phase-b"].includes(props.progress.phase ?? "") ? "pending" : "done" },
     { label: "Create rollback snapshot and atomic version boundary", status: props.progress.phase === "freeze" || props.progress.phase === "install" ? "active" : "pending" },
   ];
   const operation: ForgeOperationState =
@@ -1008,7 +1008,7 @@ function regenerationMessage(phase: BootstrapPhase): string {
     case "phase-a":
       return "Drafting attributes, skills, and rules.";
     case "phase-b":
-      return "Creating actions and starting state without pregenerated items.";
+      return "Creating actions, starting state, and the character's bounded starting gear.";
     case "repair":
       return "Repairing model output against the rulebook contract.";
     case "validate":

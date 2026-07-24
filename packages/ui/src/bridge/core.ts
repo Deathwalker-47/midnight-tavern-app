@@ -48,6 +48,7 @@ export type {
   EquipmentAssignment,
   EquipmentSlot,
   ItemDefinition,
+  ItemInstance,
   DifficultyConfig,
   BootstrapPhase,
   BootstrapProgressEvent,
@@ -127,6 +128,7 @@ import type {
   EquipmentAssignment,
   EquipmentSlot,
   ItemDefinition,
+  ItemInstance,
   DifficultyConfig,
   BootstrapProgressEvent,
   BootstrapResumeState,
@@ -539,6 +541,17 @@ const MEMORY_DEFAULT_ROLE_MAP: RoleMap = {
   bootstrapper: { provider: "openrouter", model: "anthropic/claude-sonnet-4", source: "recommended", samplersDirty: false, samplers: { temperature: 0.4, topP: 0.95, maxTokens: 8000 } },
 };
 
+function memoryRoleMapForPrimary(map: RoleMap, primary: ProviderId): RoleMap {
+  return Object.fromEntries(
+    Object.entries(map).map(([role, binding]) => [
+      role,
+      binding.source === "custom" || binding.provider === primary
+        ? structuredCloneSafe(binding)
+        : { ...structuredCloneSafe(binding), provider: primary },
+    ])
+  ) as RoleMap;
+}
+
 const MEMORY_MODEL_RECOMMENDATION_CONFIG: ModelRecommendationConfigView = {
   version: 1,
   samplerPresets: {
@@ -694,6 +707,12 @@ interface MemStory {
   activePersonaId?: string;
   /** Global lorebooks attached to this story, with link-level enabled flag (v2 §2). */
   attachedLorebooks: { lorebookId: string; enabled: boolean }[];
+  /** Runtime-only possessions owned by this story's characters. */
+  runtimeItems: {
+    definitions: ItemDefinition[];
+    instances: ItemInstance[];
+    assignments: EquipmentAssignment[];
+  };
 }
 
 /** One global lorebook in the stub library (v2 §2). */
@@ -706,6 +725,123 @@ function uid(): string {
   // crypto.randomUUID exists in modern browsers, jsdom, and node; fall back for safety.
   const c = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto;
   return c?.randomUUID ? c.randomUUID() : `id-${Math.random().toString(36).slice(2)}-${Date.now()}`;
+}
+
+interface MemoryStartingGearSpec {
+  pattern: RegExp;
+  name: string;
+  kind: ItemDefinition["kind"];
+  slots: EquipmentSlot[];
+  preferredSlot?: EquipmentSlot;
+  handsRequired: 0 | 1 | 2;
+}
+
+const MEMORY_POSSESSION_CUE =
+  /\b(?:carry|carries|carrying|wield|wields|wielding|wear|wears|wearing|armed with|equipped with|keeps?|owns?|has|have|holstered|strapped|packed)\b/i;
+const MEMORY_STARTING_GEAR: readonly MemoryStartingGearSpec[] = [
+  { pattern: /\blongbow\b/i, name: "Longbow", kind: "weapon", slots: ["primary"], preferredSlot: "primary", handsRequired: 2 },
+  { pattern: /\b(?:shortbow|bow)\b/i, name: "Bow", kind: "weapon", slots: ["primary"], preferredSlot: "primary", handsRequired: 2 },
+  { pattern: /\b(?:pistol|revolver|handgun)\b/i, name: "Pistol", kind: "weapon", slots: ["primary", "secondary"], preferredSlot: "primary", handsRequired: 1 },
+  { pattern: /\b(?:rifle|shotgun|musket)\b/i, name: "Long Gun", kind: "weapon", slots: ["primary"], preferredSlot: "primary", handsRequired: 2 },
+  { pattern: /\b(?:knife|dagger)\b/i, name: "Knife", kind: "weapon", slots: ["primary", "secondary"], preferredSlot: "secondary", handsRequired: 1 },
+  { pattern: /\b(?:sword|blade|machete|axe)\b/i, name: "Blade", kind: "weapon", slots: ["primary", "secondary"], preferredSlot: "primary", handsRequired: 1 },
+  { pattern: /\b(?:helmet|helm|hat)\b/i, name: "Headwear", kind: "armor", slots: ["head"], preferredSlot: "head", handsRequired: 0 },
+  { pattern: /\b(?:armor|armour|breastplate|vest|coat|cloak|jacket|robes?)\b/i, name: "Protective Clothing", kind: "armor", slots: ["body"], preferredSlot: "body", handsRequired: 0 },
+  { pattern: /\b(?:lockpicks?|toolkit|tools?|medkit|first aid kit|rope|lantern|torch|compass|radio|phone|binoculars|spellbook)\b/i, name: "Field Tool", kind: "tool", slots: ["utility"], preferredSlot: "utility", handsRequired: 0 },
+  { pattern: /\b(?:ring|amulet|necklace|bracelet|watch|talisman)\b/i, name: "Personal Accessory", kind: "accessory", slots: ["accessory_1", "accessory_2"], preferredSlot: "accessory_1", handsRequired: 0 },
+];
+
+function makeMemoryStartingGear(
+  args: CreateStoryArgs,
+  storyId: string,
+  characterId: string
+): MemStory["runtimeItems"] {
+  const sources = [
+    args.sourceCard
+      ? [
+          args.sourceCard.data.description,
+          args.sourceCard.data.personality,
+          args.sourceCard.data.scenario,
+          args.sourceCard.data.first_mes,
+          args.sourceCard.data.creator_notes ?? "",
+        ].filter(Boolean).join("\n")
+      : "",
+    args.persona?.description ?? "",
+  ].filter((value) => value.trim().length > 0);
+  const selected: MemoryStartingGearSpec[] = [];
+  for (const text of sources) {
+    for (const spec of MEMORY_STARTING_GEAR) {
+      const match = spec.pattern.exec(text);
+      if (!match) continue;
+      const vicinity = text.slice(
+        Math.max(0, match.index - 90),
+        Math.min(text.length, match.index + match[0].length + 45)
+      );
+      if (!MEMORY_POSSESSION_CUE.test(vicinity)) continue;
+      if (!selected.some((entry) => entry.name === spec.name)) selected.push(spec);
+    }
+  }
+  if (selected.length === 0) {
+    selected.push({
+      pattern: /$^/,
+      name: "Basic Personal Effects",
+      kind: "misc",
+      slots: [],
+      handsRequired: 0,
+    });
+  }
+  const createdAt = new Date().toISOString();
+  const definitions: ItemDefinition[] = [];
+  const instances: ItemInstance[] = [];
+  const assignments: EquipmentAssignment[] = [];
+  const usedSlots = new Set<EquipmentSlot>();
+  for (const spec of selected.slice(0, 7)) {
+    const definitionId = uid();
+    const instanceId = uid();
+    definitions.push({
+      id: definitionId,
+      storyId,
+      name: spec.name,
+      description: "An established starting possession.",
+      kind: spec.kind,
+      tier: "common",
+      slotCompatibility: spec.slots,
+      handsRequired: spec.handsRequired,
+      unique: false,
+      effects: [],
+      props: {},
+      tags: ["starting_gear"],
+      createdAt,
+      configVersion: MEMORY_EQUIPMENT_LOOT_CONFIG.version,
+    });
+    instances.push({
+      id: instanceId,
+      storyId,
+      definitionId,
+      ownerCharacterId: characterId,
+      quantity: 1,
+      acquiredAt: createdAt,
+      provenance: {
+        sourceType: "quest",
+        sourceLabel: "Character creation",
+        rulingId: `story_creation:${storyId}`,
+        turnId: `story_creation:${storyId}`,
+        tierBudget: "common",
+        eligibilityReasons: ["Established starting possession"],
+        policyVersion: MEMORY_EQUIPMENT_LOOT_CONFIG.version,
+        grantedAt: createdAt,
+      },
+    });
+    const slot = [spec.preferredSlot, ...spec.slots]
+      .find((candidate): candidate is EquipmentSlot =>
+        Boolean(candidate && spec.slots.includes(candidate) && !usedSlots.has(candidate))
+      );
+    if (slot) {
+      assignments.push({ characterId, slot, itemInstanceId: instanceId });
+      usedSlots.add(slot);
+    }
+  }
+  return { definitions, instances, assignments };
 }
 
 /** A minimal frozen-schema shell so `StoryRecord` typechecks without a live bootstrapper. */
@@ -836,6 +972,7 @@ export function makeMemoryBridge(): CoreBridge {
         ...(args.blueprint ? { blueprint: args.blueprint } : {}),
       };
       const playerCharacterId = uid();
+      const runtimeItems = makeMemoryStartingGear(args, storyId, playerCharacterId);
       const card: LivingCardView = {
         characterId: playerCharacterId,
         name: args.playerName,
@@ -847,7 +984,13 @@ export function makeMemoryBridge(): CoreBridge {
         resources: statMode === "full"
           ? [{ id: "hp", label: "Health", current: 20, max: 20, playerVisible: true }]
           : [],
-        inventory: [],
+        inventory: runtimeItems.instances.map((instance) => ({
+          itemId: instance.definitionId,
+          name: runtimeItems.definitions.find(
+            (definition) => definition.id === instance.definitionId
+          )?.name ?? "Starting gear",
+          qty: instance.quantity,
+        })),
         skills: [],
       };
       const storyLorebookEntries: LorebookEntry[] = (args.lorebookSeeds ?? []).map(
@@ -888,6 +1031,7 @@ export function makeMemoryBridge(): CoreBridge {
         lorebook: storyLorebookEntries,
         ...(args.persona?.id ? { activePersonaId: args.persona.id } : {}),
         attachedLorebooks: [{ lorebookId: storyId, enabled: true }],
+        runtimeItems,
       });
       lorebooks.set(storyId, {
         book: {
@@ -958,12 +1102,9 @@ export function makeMemoryBridge(): CoreBridge {
         rulings: story.rulings.length,
         checkpoints: 0,
         journalEvents: 0,
-        runtimeItemDefinitions: 0,
-        runtimeItemInstances: cards.reduce(
-          (total, card) => total + card.inventory.length,
-          0
-        ),
-        equippedSlots: 0,
+        runtimeItemDefinitions: story.runtimeItems.definitions.length,
+        runtimeItemInstances: story.runtimeItems.instances.length,
+        equippedSlots: story.runtimeItems.assignments.length,
         actionBudget:
           story.record.actionBudget ??
           story.record.schema.actionBudget ??
@@ -1010,6 +1151,7 @@ export function makeMemoryBridge(): CoreBridge {
             ? { activePersonaId: source.activePersonaId }
             : {}),
           attachedLorebooks: structuredCloneSafe(source.attachedLorebooks),
+          runtimeItems: structuredCloneSafe(source.runtimeItems),
         };
         stories.set(storyId, story);
         duplicateDraftId = storyId;
@@ -1328,16 +1470,66 @@ export function makeMemoryBridge(): CoreBridge {
       return structuredCloneSafe(MEMORY_EQUIPMENT_LOOT_CONFIG);
     },
 
-    async getCharacterInventory(_characterId) {
-      return { definitions: [], instances: [], assignments: [] };
+    async getCharacterInventory(characterId) {
+      const story = [...stories.values()].find((candidate) =>
+        candidate.cards.has(characterId)
+      );
+      if (!story) return { definitions: [], instances: [], assignments: [] };
+      const instances = story.runtimeItems.instances.filter(
+        (instance) => instance.ownerCharacterId === characterId
+      );
+      const definitionIds = new Set(instances.map((instance) => instance.definitionId));
+      return structuredCloneSafe({
+        definitions: story.runtimeItems.definitions.filter((definition) =>
+          definitionIds.has(definition.id)
+        ),
+        instances,
+        assignments: story.runtimeItems.assignments.filter(
+          (assignment) => assignment.characterId === characterId
+        ),
+      });
     },
 
-    async equipItem(_characterId, _itemInstanceId, _slot) {
-      throw new Error("Design mode has no runtime item instances to equip.");
+    async equipItem(characterId, itemInstanceId, slot) {
+      const story = [...stories.values()].find((candidate) =>
+        candidate.cards.has(characterId)
+      );
+      if (!story) throw new Error("Unknown character.");
+      const instance = story.runtimeItems.instances.find(
+        (candidate) =>
+          candidate.id === itemInstanceId &&
+          candidate.ownerCharacterId === characterId
+      );
+      if (!instance) throw new Error("Only an owned item can be equipped.");
+      const definition = story.runtimeItems.definitions.find(
+        (candidate) => candidate.id === instance.definitionId
+      );
+      if (!definition?.slotCompatibility.includes(slot)) {
+        throw new Error("That item is incompatible with this equipment slot.");
+      }
+      story.runtimeItems.assignments = story.runtimeItems.assignments.filter(
+        (assignment) =>
+          assignment.characterId !== characterId ||
+          (assignment.slot !== slot && assignment.itemInstanceId !== itemInstanceId)
+      );
+      story.runtimeItems.assignments.push({ characterId, slot, itemInstanceId });
+      return structuredCloneSafe(story.runtimeItems.assignments.filter(
+        (assignment) => assignment.characterId === characterId
+      ));
     },
 
-    async unequipSlot(_characterId, _slot) {
-      return [];
+    async unequipSlot(characterId, slot) {
+      const story = [...stories.values()].find((candidate) =>
+        candidate.cards.has(characterId)
+      );
+      if (!story) return [];
+      story.runtimeItems.assignments = story.runtimeItems.assignments.filter(
+        (assignment) =>
+          assignment.characterId !== characterId || assignment.slot !== slot
+      );
+      return structuredCloneSafe(story.runtimeItems.assignments.filter(
+        (assignment) => assignment.characterId === characterId
+      ));
     },
 
     // The in-memory backend runs no summarizer, so there are never persisted chapters/arcs to read.
@@ -1354,7 +1546,10 @@ export function makeMemoryBridge(): CoreBridge {
     },
     async setProviderConfig(provider, config) {
       providerConfigs[provider] = { apiKey: config.apiKey, ...(config.baseUrl ? { baseUrl: config.baseUrl } : {}) };
-      primaryProvider ??= provider;
+      if (!primaryProvider) {
+        primaryProvider = provider;
+        roleMap = memoryRoleMapForPrimary(roleMap, provider);
+      }
     },
     async removeProviderConfig(provider) {
       const remaining = (Object.keys(providerConfigs) as ProviderId[]).filter(
@@ -1382,12 +1577,16 @@ export function makeMemoryBridge(): CoreBridge {
         throw new Error("Connect and validate this provider before making it Primary.");
       }
       primaryProvider = provider;
+      roleMap = memoryRoleMapForPrimary(roleMap, provider);
     },
     async getRoleMap() {
+      if (primaryProvider) roleMap = memoryRoleMapForPrimary(roleMap, primaryProvider);
       return structuredCloneSafe(roleMap);
     },
     async setRoleMap(map) {
-      roleMap = structuredCloneSafe(map);
+      roleMap = primaryProvider
+        ? memoryRoleMapForPrimary(map, primaryProvider)
+        : structuredCloneSafe(map);
     },
     defaultRoleMap() {
       return structuredCloneSafe(MEMORY_DEFAULT_ROLE_MAP);

@@ -91,4 +91,24 @@ describe("RoleMatrix", () => {
       })
     );
   });
+
+  it("marks a provider chosen in the role editor as an explicit custom binding", async () => {
+    const bridge = makeMemoryBridge();
+    await bridge.setProviderConfig("openrouter", { apiKey: "sk-or-connected" });
+    await bridge.setProviderConfig("electronhub", { apiKey: "sk-eh-connected" });
+    setBridge(bridge);
+
+    render(<RoleMatrix />);
+    await waitFor(() => expect(screen.queryByTestId("rolematrix-loading")).not.toBeInTheDocument());
+
+    const [narratorProvider] = screen.getAllByRole("combobox");
+    fireEvent.change(narratorProvider!, { target: { value: "electronhub" } });
+
+    await waitFor(() =>
+      expect(useSettingsStore.getState().roleMap?.narrator).toMatchObject({
+        provider: "electronhub",
+        source: "custom",
+      })
+    );
+  });
 });

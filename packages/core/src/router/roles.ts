@@ -68,6 +68,9 @@ export type RoleMap = z.infer<typeof RoleMapSchema>;
 /** Settings key under which the role map is persisted. */
 export const ROLE_MAP_SETTING_KEY = "roleMap";
 
+/** Settings key for the connected provider that recommended/default role bindings should follow. */
+export const PRIMARY_PROVIDER_SETTING_KEY = "primaryProvider";
+
 /** A model the UI can offer, with a tier badge. */
 export interface KnownModel {
   provider: (typeof PROVIDER_IDS)[number];

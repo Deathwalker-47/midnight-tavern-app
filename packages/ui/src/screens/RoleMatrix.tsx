@@ -166,7 +166,9 @@ export function RoleMatrixEditor({
         ...existing,
         provider,
         model,
-        source: first?.recommendedForRole ? "recommended" : "custom",
+        // A provider chosen in the role editor is intentional and must stay pinned when Primary
+        // changes, even when the selected model also happens to be recommended.
+        source: "custom",
         ...(applyDefaults
           ? { samplers: getBridge().recommendedSamplerProfile(role, model) }
           : {}),
@@ -178,14 +180,14 @@ export function RoleMatrixEditor({
   function changeModel(role: ModelRole, model: string): void {
     if (!roleMap || !model) return;
     const existing = roleMap[role];
-    const selected = modelsForRole(role, existing.provider).find((candidate) => candidate.id === model);
     const applyDefaults = !existing.samplersDirty;
     void setRoleMap({
       ...roleMap,
       [role]: {
         ...existing,
         model,
-        source: selected?.recommendedForRole ? "recommended" : "custom",
+        // Any explicit model selection is user-owned; only "Reset role" returns app ownership.
+        source: "custom",
         ...(applyDefaults
           ? { samplers: getBridge().recommendedSamplerProfile(role, model) }
           : {}),

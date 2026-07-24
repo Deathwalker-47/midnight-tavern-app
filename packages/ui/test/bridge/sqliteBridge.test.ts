@@ -21,10 +21,21 @@ function fakeCore(overrides: Record<string, unknown> = {}) {
   return {
     PROVIDER_CONFIGS_SETTING_KEY: "providerConfigs",
     ROLE_MAP_SETTING_KEY: "roleMap",
+    PRIMARY_PROVIDER_SETTING_KEY: "primaryProvider",
     ProviderConfigsSchema: {},
     ProviderIdSchema: {},
     RoleMapSchema: {},
     DEFAULT_ROLE_MAP: { narrator: { provider: "openrouter", model: "m" } },
+    roleMapForPrimary: vi.fn((map: Record<string, any>, primary: string) =>
+      Object.fromEntries(
+        Object.entries(map).map(([role, binding]) => [
+          role,
+          binding.source === "custom" || binding.provider === primary
+            ? binding
+            : { ...binding, provider: primary },
+        ])
+      )
+    ),
     ROLES: [],
     MissingCredentialsError: class MissingCredentialsError extends Error {},
     KNOWN_MODELS: [{ provider: "openrouter", model: "openrouter/x", label: "X", tier: "recommended" }],
@@ -264,6 +275,61 @@ describe("buildSqliteBridge", () => {
     await bridge.removeProviderConfig("openrouter");
     expect(await bridge.getPrimaryProvider()).toBe("openai");
     await expect(bridge.setPrimaryProvider("anthropic")).rejects.toThrow(/connect and validate/i);
+  });
+
+  it("routes app-managed roles through Primary while preserving explicit role providers", async () => {
+    const bootstrapStory = vi.fn(async () => ({
+      story: { id: "s-primary", title: "Primary routing" },
+      playerCharacterId: "pc-primary",
+    }));
+    const makeRouter = vi.fn(() => ({ router: true }));
+    const roleMap = {
+      bootstrapper: {
+        provider: "openrouter",
+        model: "anthropic/claude-sonnet-4",
+        source: "recommended",
+        samplersDirty: false,
+      },
+      narrator: {
+        provider: "openrouter",
+        model: "anthropic/claude-opus-4",
+        source: "custom",
+        samplersDirty: false,
+      },
+    };
+    const core = fakeCore({
+      ROLES: ["bootstrapper"],
+      DEFAULT_ROLE_MAP: roleMap,
+      bootstrapStory,
+      makeRouter,
+    });
+    const store = fakeStore();
+    const bridge = buildSqliteBridge(store, core);
+
+    await bridge.setProviderConfig("openrouter", { apiKey: "or-key" });
+    await bridge.setProviderConfig("electronhub", { apiKey: "eh-key" });
+    await bridge.setRoleMap(roleMap as any);
+    await bridge.setPrimaryProvider("electronhub");
+
+    expect(await bridge.getRoleMap()).toMatchObject({
+      bootstrapper: { provider: "electronhub", source: "recommended" },
+      narrator: { provider: "openrouter", source: "custom" },
+    });
+
+    await bridge.createStory({
+      storyId: "s-primary",
+      title: "Primary routing",
+      premise: "Verify provider selection.",
+      playerName: "Hero",
+    });
+    expect(makeRouter).toHaveBeenLastCalledWith(expect.objectContaining({
+      providerConfigs: expect.objectContaining({
+        electronhub: { apiKey: "eh-key" },
+      }),
+      roleMap: expect.objectContaining({
+        bootstrapper: expect.objectContaining({ provider: "electronhub" }),
+      }),
+    }));
   });
 
   it("exposes versioned recommendation parameters and provider capability masks", () => {

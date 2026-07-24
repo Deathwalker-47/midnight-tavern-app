@@ -203,6 +203,26 @@ describe("context-grounded possible moves", () => {
     expect(router.prompts[0]?.user).not.toContain("ANCIENT_CARAVAN_PROLOGUE");
   });
 
+  it("accepts natural scene paraphrases without requiring exact anchor tokens", async () => {
+    const { store } = await seedStory();
+    stores.push(store);
+    const paraphrased = JSON.stringify({
+      suggestions: [
+        { kind: "dialogue", text: "Ask him why taking it into yourself restored your strength." },
+        { kind: "move", text: "Keep a measured distance from the doorway." },
+        { kind: "dialogue", text: "Explain that the transfer felt deliberate, not accidental." },
+        { kind: "move", text: "Check the threshold for signs that someone recently forced it." },
+        { kind: "dialogue", text: "Press him on what he expected the transfer to do." },
+      ],
+    });
+    const router = new SuggestionRouter([paraphrased]);
+
+    const suggestions = await suggestPlayerActions(router, store, STORY_ID);
+
+    expect(suggestions).toHaveLength(5);
+    expect(router.prompts).toHaveLength(1);
+  });
+
   it("repairs then reports generic fallback output instead of silently showing it", async () => {
     const { store } = await seedStory();
     stores.push(store);
@@ -223,7 +243,7 @@ describe("context-grounded possible moves", () => {
     expect(router.prompts).toHaveLength(3);
   });
 
-  it("rejects an action id paired with unrelated prose", async () => {
+  it("drops invalid mechanical metadata without discarding useful prose", async () => {
     const { store } = await seedStory();
     stores.push(store);
     const mismatched = JSON.stringify({
@@ -241,9 +261,14 @@ describe("context-grounded possible moves", () => {
     });
     const router = new SuggestionRouter([mismatched]);
 
-    await expect(
-      suggestPlayerActions(router, store, STORY_ID)
-    ).rejects.toBeInstanceOf(SuggestionGenerationError);
-    expect(router.prompts).toHaveLength(3);
+    const suggestions = await suggestPlayerActions(router, store, STORY_ID);
+
+    expect(suggestions).toHaveLength(5);
+    expect(suggestions[2]).toMatchObject({
+      kind: "move",
+      text: "Talk to Sorel about the burden.",
+    });
+    expect(suggestions[2]?.actionId).toBeUndefined();
+    expect(router.prompts).toHaveLength(1);
   });
 });

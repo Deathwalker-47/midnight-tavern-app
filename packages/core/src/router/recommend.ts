@@ -8,7 +8,13 @@
  * Availability comes from the caller (a provider's live model list, or the catalog, or free
  * text); this module only layers curated ranking + metadata on top by model id.
  */
-import { DEFAULT_ROLE_MAP, type Role, type RoleBinding } from "./roles.js";
+import {
+  DEFAULT_ROLE_MAP,
+  ROLES,
+  type Role,
+  type RoleBinding,
+  type RoleMap,
+} from "./roles.js";
 import type { ProviderId } from "./providers/registry.js";
 import { catalogModel, catalogModelsForProvider, type CatalogModel } from "./modelCatalog.js";
 import { DEFAULT_SAMPLER_PROFILES, type SamplerProfile } from "./samplers.js";
@@ -67,6 +73,56 @@ export function defaultAssignmentFor(role: Role): RoleBinding {
     ...configured,
     ...(configured.samplers ? { samplers: { ...configured.samplers } } : {}),
   };
+}
+
+/**
+ * Rebind app-managed role assignments to the current Primary provider.
+ *
+ * `source: "custom"` is the persistence boundary for an intentional user choice and is never
+ * rewritten. Recommended bindings are app-managed defaults: when Primary changes they follow it,
+ * choosing a curated provider-native model when one exists and otherwise preserving the saved
+ * model id (aggregators such as Electron Hub expose their inventories dynamically).
+ *
+ * @param roleMap - Persisted role bindings to reconcile with the current Primary provider.
+ * @param primary - Connected provider that app-managed bindings should use.
+ * @returns The original map when no bindings change, otherwise a shallowly copied reconciled map.
+ *
+ * @remarks
+ * User-edited sampler values remain intact even when their app-managed provider and model move.
+ * The input map and all unchanged bindings are never mutated.
+ *
+ * @see {@link defaultAssignmentFor} for the shipped app-managed assignment of one role.
+ */
+export function roleMapForPrimary(roleMap: RoleMap, primary: ProviderId): RoleMap {
+  let changed = false;
+  const next = { ...roleMap };
+
+  for (const role of ROLES) {
+    const binding = roleMap[role];
+    if (binding.source === "custom" || binding.provider === primary) continue;
+
+    const shipped = DEFAULT_ROLE_MAP[role];
+    const providerModels = modelsForRole(role, primary);
+    const providerModel =
+      primary === shipped.provider
+        ? shipped.model
+        : providerModels.find((candidate) => candidate.recommendedForRole)?.id ??
+          providerModels[0]?.id;
+    const model = providerModel ?? binding.model;
+    next[role] = {
+      ...binding,
+      provider: primary,
+      model,
+      ...(!binding.samplersDirty
+        ? { samplers: { ...samplerProfileFor(role, model) } }
+        : binding.samplers
+          ? { samplers: { ...binding.samplers } }
+          : {}),
+    };
+    changed = true;
+  }
+
+  return changed ? next : roleMap;
 }
 
 /**

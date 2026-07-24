@@ -23,6 +23,7 @@ export {
   RoleBindingSourceSchema,
   RoleMapSchema,
   ROLE_MAP_SETTING_KEY,
+  PRIMARY_PROVIDER_SETTING_KEY,
   ROLE_LABELS,
   KNOWN_MODELS,
   DEFAULT_ROLE_MAP,
@@ -61,6 +62,7 @@ export {
 export {
   modelsForRole,
   defaultAssignmentFor,
+  roleMapForPrimary,
   samplerProfileFor,
   type RankedModel,
 } from "./recommend.js";

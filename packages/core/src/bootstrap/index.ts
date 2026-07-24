@@ -37,6 +37,14 @@ export {
   instantiateFromTemplate,
   instantiateGeneric,
 } from "./instantiate.js";
+export {
+  StartingGearSeedSchema,
+  explicitStartingGear,
+  resolveStartingGear,
+  persistStartingGear,
+  type StartingGearSeed,
+  type StartingGearCreationSource,
+} from "./startingGear.js";
 export { changeStoryStatMode, type ChangeStatModeOptions } from "./switchMode.js";
 export {
   PHASE_A_SYSTEM,

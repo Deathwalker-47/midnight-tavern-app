@@ -28,8 +28,12 @@ import {
   ConditionSchema,
   ConditionWithReasonSchema,
   CATALOG_MIN_ACTIONS,
+  DC_MIN,
+  DC_MAX,
+  MAX_EQUIPPED_SLOTS,
   type ActionDef,
   type ActionCategory,
+  type Condition,
   type ConditionWithReason,
   type StorySchema,
   type StatMode,
@@ -57,6 +61,7 @@ import {
   buildPhaseBActionBatchUser,
   buildPhaseBFoundationUser,
 } from "./prompts.js";
+import { StartingGearSeedSchema } from "./startingGear.js";
 
 const MONEY_RESOURCE = /^(?:credits?|currency|coins?|gold|money|cash|funds?|wealth)$/i;
 const ACTION_BATCHES: readonly (readonly ActionCategory[])[] = [
@@ -259,6 +264,7 @@ function normalizePhaseB(value: unknown): unknown {
   return {
     ...value,
     items: [],
+    startingGear: Array.isArray(value.startingGear) ? value.startingGear : [],
     actions: Array.isArray(value.actions) ? value.actions.map(normalizeAction) : value.actions,
     startingState: normalizeActorState(value.startingState),
     npcTemplates: Array.isArray(value.npcTemplates)
@@ -278,6 +284,151 @@ export type PhaseA = z.infer<typeof PhaseAObjectSchema>;
 
 /** Phase A output: the world's numeric + skill shape. */
 export const PhaseASchema = z.preprocess(normalizePhaseA, PhaseAObjectSchema);
+
+function createsSkillCycle(
+  dependencies: ReadonlyMap<string, ReadonlySet<string>>,
+  skillId: string,
+  prerequisiteId: string
+): boolean {
+  if (skillId === prerequisiteId) return true;
+  const pending = [prerequisiteId];
+  const visited = new Set<string>();
+  while (pending.length > 0) {
+    const current = pending.pop()!;
+    if (current === skillId) return true;
+    if (visited.has(current)) continue;
+    visited.add(current);
+    pending.push(...(dependencies.get(current) ?? []));
+  }
+  return false;
+}
+
+function stabilizePrerequisite(
+  condition: Condition,
+  skillId: string,
+  dependencies: ReadonlyMap<string, ReadonlySet<string>>,
+  skillIds: ReadonlySet<string>,
+  resources: ReadonlyMap<string, PhaseA["resources"][number]>,
+  attributes: ReadonlyMap<string, PhaseA["attributes"][number]>
+): Condition | undefined {
+  switch (condition.type) {
+    case "skill":
+      return skillIds.has(condition.skillId) &&
+        !createsSkillCycle(dependencies, skillId, condition.skillId)
+        ? condition
+        : undefined;
+    case "resource": {
+      const resource = resources.get(condition.resourceId);
+      return resource
+        ? { ...condition, min: Math.min(condition.min, resource.max) }
+        : undefined;
+    }
+    case "attribute": {
+      const attribute = attributes.get(condition.attributeId);
+      return attribute
+        ? {
+            ...condition,
+            min: Math.min(
+              condition.min,
+              attribute.maximumScore ?? (attribute.superhuman ? attribute.defaultScore : 20)
+            ),
+          }
+        : undefined;
+    }
+    case "item":
+      return undefined;
+    case "flag":
+      return condition;
+  }
+}
+
+function stabilizePhaseAReferences(phaseA: PhaseA): PhaseA {
+  if (phaseA.statMode === "none") {
+    return {
+      ...phaseA,
+      attributes: [],
+      resources: [],
+      skills: [],
+      tiers: [],
+    };
+  }
+
+  const resources = new Map(phaseA.resources.map((resource) => [resource.id, resource]));
+  const attributes = new Map(
+    phaseA.attributes.map((attribute) => [attribute.id, attribute])
+  );
+  const skillIds = new Set(phaseA.skills.map((skill) => skill.id));
+  const tierIds = new Set(phaseA.tiers.map((tier) => tier.id));
+  const defaultTier = phaseA.tiers[0]?.id;
+  const dependencies = new Map<string, Set<string>>();
+  const skills = phaseA.skills.map((skill) => {
+    const skillDependencies = dependencies.get(skill.id) ?? new Set<string>();
+    dependencies.set(skill.id, skillDependencies);
+    const prerequisites = skill.prerequisites.flatMap((condition) => {
+      const stabilized = stabilizePrerequisite(
+        condition,
+        skill.id,
+        dependencies,
+        skillIds,
+        resources,
+        attributes
+      );
+      if (!stabilized) return [];
+      if (stabilized.type === "skill") skillDependencies.add(stabilized.skillId);
+      return [stabilized];
+    });
+    const unlockPaths = skill.unlockPaths.map((path) => {
+      if (path.method !== "trainer") return path;
+      const resourceCosts = Object.fromEntries(
+        Object.entries(path.cost.resources ?? {}).filter(([resourceId]) =>
+          resources.has(resourceId)
+        )
+      );
+      return {
+        ...path,
+        cost: {
+          ...(Object.keys(resourceCosts).length > 0
+            ? { resources: resourceCosts }
+            : {}),
+        },
+      };
+    });
+    return {
+      ...skill,
+      ...(tierIds.has(skill.tier) || !defaultTier ? {} : { tier: defaultTier }),
+      prerequisites,
+      unlockPaths,
+    };
+  });
+
+  let lethalAssigned = false;
+  const explicitLethalIndex = phaseA.resources.findIndex(
+    (resource) => resource.lethal === true
+  );
+  const semanticLethalIndex = phaseA.resources.findIndex(
+    (resource) =>
+      /^(?:hp|health|life|vitality)$/i.test(resource.id) ||
+      /^(?:health|life|vitality)$/i.test(resource.label)
+  );
+  const preferredLethalIndex =
+    explicitLethalIndex >= 0
+      ? explicitLethalIndex
+      : Math.max(0, semanticLethalIndex);
+  const normalizedResources = phaseA.resources.map((resource, index) => {
+    const lethal = !lethalAssigned && index === preferredLethalIndex;
+    if (lethal) lethalAssigned = true;
+    return {
+      ...resource,
+      ...(lethal ? { lethal: true } : { lethal: undefined }),
+    };
+  });
+
+  return {
+    ...phaseA,
+    resources: normalizedResources,
+    skills,
+  };
+}
 
 function abbreviation(name: string): string {
   const words = name.match(/[\p{L}\p{N}]+/gu) ?? [];
@@ -361,6 +512,7 @@ export const PhaseBSchema = z.preprocess(normalizePhaseB, PhaseBObjectSchema);
 const PhaseBFoundationObjectSchema = z.object({
   startingState: StartingStateSchema,
   npcTemplates: z.array(NpcTemplateSchema),
+  startingGear: z.array(StartingGearSeedSchema).max(MAX_EQUIPPED_SLOTS).default([]),
 });
 export type PhaseBFoundation = z.infer<typeof PhaseBFoundationObjectSchema>;
 const PhaseBFoundationSchema = z.preprocess(normalizePhaseB, PhaseBFoundationObjectSchema);
@@ -373,7 +525,7 @@ const PhaseBFoundationSchema = z.preprocess(normalizePhaseB, PhaseBFoundationObj
  *
  * @param actions - Structurally valid actions returned for the current batch.
  * @param requiredSkillIds - Skills deterministically assigned to this action batch.
- * @param requiredTrialFlags - Trial flags deterministically assigned to this action batch.
+ * @param requiredProgressionFlags - Skill prerequisite and trial flags assigned to this batch.
  * @returns A copied action list with all assignable coverage gaps filled.
  *
  * @remarks
@@ -383,7 +535,7 @@ const PhaseBFoundationSchema = z.preprocess(normalizePhaseB, PhaseBFoundationObj
 function ensureActionCoverage(
   actions: ActionDef[],
   requiredSkillIds: readonly string[],
-  requiredTrialFlags: readonly string[]
+  requiredProgressionFlags: readonly string[]
 ): ActionDef[] {
   const repaired = actions.map((action) => ({
     ...action,
@@ -417,7 +569,7 @@ function ensureActionCoverage(
     skillCounts.set(skillId, 1);
   }
 
-  const requiredFlags = new Set(requiredTrialFlags);
+  const requiredFlags = new Set(requiredProgressionFlags);
   const trueFlagCounts = new Map<string, number>();
   for (const action of repaired) {
     for (const effect of Object.values(action.effects)) {
@@ -499,16 +651,43 @@ function conditionHasLiveFlag(
   return Boolean(values && (!entry.condition.value || values.has(true)));
 }
 
-function pruneDeadFlagConditions(
+function conditionReferencesKnownMechanic(
+  condition: Condition,
+  skillIds: ReadonlySet<string>,
+  resourceIds: ReadonlySet<string>,
+  attributeIds: ReadonlySet<string>
+): boolean {
+  switch (condition.type) {
+    case "skill":
+      return skillIds.has(condition.skillId);
+    case "resource":
+      return resourceIds.has(condition.resourceId);
+    case "attribute":
+      return attributeIds.has(condition.attributeId);
+    case "item":
+      return false;
+    case "flag":
+      return true;
+  }
+}
+
+function pruneInvalidActionConditions(
   action: ActionDef,
-  flags: ReadonlyMap<string, ReadonlySet<boolean>>
+  flags: ReadonlyMap<string, ReadonlySet<boolean>>,
+  skillIds: ReadonlySet<string>,
+  resourceIds: ReadonlySet<string>,
+  attributeIds: ReadonlySet<string>
 ): ActionDef {
-  const advantageWhen = action.advantageWhen?.filter((entry) =>
-    conditionHasLiveFlag(entry, flags)
-  );
-  const disadvantageWhen = action.disadvantageWhen?.filter((entry) =>
-    conditionHasLiveFlag(entry, flags)
-  );
+  const isLive = (entry: ConditionWithReason) =>
+    conditionHasLiveFlag(entry, flags) &&
+    conditionReferencesKnownMechanic(
+      entry.condition,
+      skillIds,
+      resourceIds,
+      attributeIds
+    );
+  const advantageWhen = action.advantageWhen?.filter(isLive);
+  const disadvantageWhen = action.disadvantageWhen?.filter(isLive);
   return {
     ...action,
     advantageWhen: advantageWhen?.length ? advantageWhen : undefined,
@@ -516,24 +695,109 @@ function pruneDeadFlagConditions(
   };
 }
 
+function filterNumericReferences(
+  values: Record<string, number> | undefined,
+  knownIds: ReadonlySet<string>
+): Record<string, number> | undefined {
+  if (!values) return undefined;
+  const entries = Object.entries(values).filter(([id]) => knownIds.has(id));
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
+}
+
+function stabilizeActionReferences(
+  action: ActionDef,
+  skillIds: ReadonlySet<string>,
+  resourceIds: ReadonlySet<string>,
+  attributeIds: ReadonlySet<string>
+): ActionDef {
+  const requiresSkill =
+    action.requiresSkill && skillIds.has(action.requiresSkill)
+      ? action.requiresSkill
+      : undefined;
+  const governingAttribute =
+    action.governingAttribute && attributeIds.has(action.governingAttribute)
+      ? action.governingAttribute
+      : undefined;
+  const resourceCosts = filterNumericReferences(
+    action.costs?.resources,
+    resourceIds
+  );
+  const effects = Object.fromEntries(
+    Object.entries(action.effects).map(([outcome, effect]) => [
+      outcome,
+      {
+        ...effect,
+        resourceDeltaSelf: filterNumericReferences(
+          effect.resourceDeltaSelf,
+          resourceIds
+        ),
+        resourceDeltaTarget: filterNumericReferences(
+          effect.resourceDeltaTarget,
+          resourceIds
+        ),
+        attributeDeltaSelf: filterNumericReferences(
+          effect.attributeDeltaSelf,
+          attributeIds
+        ),
+        attributeDeltaTarget: filterNumericReferences(
+          effect.attributeDeltaTarget,
+          attributeIds
+        ),
+        grantItem: undefined,
+      },
+    ])
+  ) as ActionDef["effects"];
+  return {
+    ...action,
+    requiresSkill,
+    minRank: requiresSkill ? action.minRank : undefined,
+    governingAttribute,
+    dc: Math.max(DC_MIN, Math.min(DC_MAX, action.dc)),
+    costs: action.costs
+      ? {
+          ...(resourceCosts ? { resources: resourceCosts } : {}),
+          items: [],
+        }
+      : undefined,
+    effects,
+  };
+}
+
 /**
  * @internal
- * Makes structurally valid model-authored action conditions cross-reference safe without
+ * Makes structurally valid model-authored action mechanics cross-reference safe without
  * consuming another provider repair attempt.
  *
  * @param actions - Complete action catalog assembled from all bounded batches.
+ * @param phaseA - Validated Phase A tables which own all frozen mechanic ids.
  * @returns A copied catalog with live optional predicates and bounded conditional coverage.
  *
  * @remarks
- * Dead flag conditions are removed. When coverage exceeds 33%, whole condition lists are
- * removed from excess actions while retaining category spread and richer actions first.
- * Effects are never invented or changed; sparse valid conditions remain playable because
- * the 25% target is generation guidance rather than a freeze-safety invariant.
+ * Dangling optional references are removed while valid authored mechanics remain unchanged.
+ * When coverage exceeds 33%, whole condition lists are removed from excess actions while
+ * retaining category spread and richer actions first. Sparse valid conditions remain
+ * playable because the 25% target is generation guidance rather than a freeze-safety invariant.
  */
-function stabilizeActionConditions(actions: readonly ActionDef[]): ActionDef[] {
+function stabilizeActionConditions(
+  actions: readonly ActionDef[],
+  phaseA: PhaseA
+): ActionDef[] {
   const maximumConditionalActions = Math.floor(actions.length * 0.33);
   const flags = actionFlagValues(actions);
-  const pruned = actions.map((action) => pruneDeadFlagConditions(action, flags));
+  const skillIds = new Set(phaseA.skills.map((skill) => skill.id));
+  const resourceIds = new Set(phaseA.resources.map((resource) => resource.id));
+  const attributeIds = new Set(
+    phaseA.attributes.map((attribute) => attribute.id)
+  );
+  const pruned = actions.map((action) =>
+    pruneInvalidActionConditions(
+      stabilizeActionReferences(action, skillIds, resourceIds, attributeIds),
+      flags,
+      skillIds,
+      resourceIds,
+      attributeIds
+    )
+  );
   const conditionalCount = pruned.filter(actionHasConditions).length;
 
   if (conditionalCount <= maximumConditionalActions) return pruned;
@@ -576,7 +840,7 @@ function stabilizeActionConditions(actions: readonly ActionDef[]): ActionDef[] {
 function phaseBActionBatchSchema(
   categories: readonly ActionCategory[],
   requiredSkillIds: readonly string[],
-  requiredTrialFlags: readonly string[]
+  requiredProgressionFlags: readonly string[]
 ) {
   const allowed = new Set<ActionCategory>(categories);
   return z.preprocess(
@@ -584,7 +848,11 @@ function phaseBActionBatchSchema(
     z
       .object({ actions: z.array(ActionDefSchema) })
       .transform(({ actions }) => ({
-        actions: ensureActionCoverage(actions, requiredSkillIds, requiredTrialFlags),
+        actions: ensureActionCoverage(
+          actions,
+          requiredSkillIds,
+          requiredProgressionFlags
+        ),
       }))
       .superRefine(({ actions }, context) => {
         for (const category of categories) {
@@ -640,7 +908,7 @@ function phaseBActionBatchSchema(
             });
           }
         }
-        for (const flagId of requiredTrialFlags) {
+        for (const flagId of requiredProgressionFlags) {
           const isSet = actions.some((action) =>
             Object.values(action.effects).some(
               (effect) => effect.setFlag?.flagId === flagId && effect.setFlag.value
@@ -658,10 +926,15 @@ function phaseBActionBatchSchema(
   );
 }
 
-function trialFlagIds(phaseA: PhaseA): string[] {
-  return phaseA.skills.flatMap((skill) =>
-    skill.unlockPaths.flatMap((path) => path.method === "trial" ? [path.flagId] : [])
-  );
+function progressionFlagIds(phaseA: PhaseA): string[] {
+  return phaseA.skills.flatMap((skill) => [
+    ...skill.prerequisites.flatMap((condition) =>
+      condition.type === "flag" ? [condition.flagId] : []
+    ),
+    ...skill.unlockPaths.flatMap((path) =>
+      path.method === "trial" ? [path.flagId] : []
+    ),
+  ]);
 }
 
 export interface BootstrapInput {
@@ -960,9 +1233,35 @@ export async function generateStorySchema(
       : {}),
     ...(latestCompletedFragment ? { latestCompletedFragment } : {}),
   };
+  const cardStartingPossessionSource = resolvedInput.sourceCard
+    ? [
+        resolvedInput.sourceCard.data.description,
+        resolvedInput.sourceCard.data.personality,
+        resolvedInput.sourceCard.data.scenario,
+        resolvedInput.sourceCard.data.first_mes,
+        resolvedInput.sourceCard.data.creator_notes ?? "",
+      ].filter(Boolean).join("\n").slice(0, 6_000)
+    : undefined;
+  const personaStartingPossessionSource =
+    resolvedInput.persona?.description.slice(0, 3_000);
   const promptContext = {
     ...(resolvedInput.persona ? { persona: resolvedInput.persona } : {}),
     ...(imported ? { importedMechanics: imported } : {}),
+  };
+  const foundationPromptContext = {
+    ...promptContext,
+    ...(cardStartingPossessionSource || personaStartingPossessionSource
+      ? {
+          startingPossessionSources: {
+            ...(cardStartingPossessionSource
+              ? { card: cardStartingPossessionSource }
+              : {}),
+            ...(personaStartingPossessionSource
+              ? { persona: personaStartingPossessionSource }
+              : {}),
+          },
+        }
+      : {}),
   };
   const fragmentStartedAt: Partial<Record<BootstrapFragment, number>> = {};
   const summarizeValidationError = (error: string): string => {
@@ -1062,7 +1361,9 @@ export async function generateStorySchema(
   if (resume?.phaseA) {
     const resumed = PhaseASchema.safeParse(resume.phaseA);
     if (resumed.success) {
-      phaseA = applyImportedMechanics(resumed.data, imported);
+      phaseA = stabilizePhaseAReferences(
+        applyImportedMechanics(resumed.data, imported)
+      );
       emit("phase-a", "mechanics-core", "resumed", 1, 1, "Resumed validated mechanics core.");
     }
   }
@@ -1103,7 +1404,9 @@ export async function generateStorySchema(
     const selected = resolvedInput.statMode
       ? PhaseASchema.parse({ ...generatedPhaseA, statMode: resolvedInput.statMode })
       : generatedPhaseA;
-    phaseA = applyImportedMechanics(selected, imported);
+    phaseA = stabilizePhaseAReferences(
+      applyImportedMechanics(selected, imported)
+    );
     checkpoint = { ...checkpoint, phaseA };
     complete("phase-a", "mechanics-core", "Mechanics core validated.");
   }
@@ -1134,7 +1437,7 @@ export async function generateStorySchema(
           resolvedInput.premise,
           mechanicsCore,
           feedback,
-          promptContext
+          foundationPromptContext
         ),
       },
       PhaseBFoundationSchema,
@@ -1185,18 +1488,18 @@ export async function generateStorySchema(
       mechanicsCore.skills.map((skill) => skill.id),
       ACTION_BATCHES.length
     );
-    const trialFlagPartitions = partitionRequirements(
-      [...new Set(trialFlagIds(mechanicsCore))],
+    const progressionFlagPartitions = partitionRequirements(
+      [...new Set(progressionFlagIds(mechanicsCore))],
       ACTION_BATCHES.length
     );
     const batchPromises = ACTION_BATCHES.map(async (categories, batchIndex) => {
       const fragment = batchFragment(categories);
       const requiredSkillIds = skillPartitions[batchIndex]!;
-      const requiredTrialFlags = trialFlagPartitions[batchIndex]!;
+      const requiredProgressionFlags = progressionFlagPartitions[batchIndex]!;
       const batchSchema = phaseBActionBatchSchema(
         categories,
         requiredSkillIds,
-        requiredTrialFlags
+        requiredProgressionFlags
       );
       let batch: { actions: ActionDef[] } | undefined;
       const cachedActions = !retryFragments.has(fragment)
@@ -1237,7 +1540,7 @@ export async function generateStorySchema(
               mechanicsCore,
               categories,
               requiredSkillIds,
-              requiredTrialFlags,
+              requiredProgressionFlags,
               phaseBFeedback,
               promptContext
             ),
@@ -1289,7 +1592,8 @@ export async function generateStorySchema(
       ...foundation,
       items: [],
       actions: stabilizeActionConditions(
-        applyImportedActionDetails(actions, imported)
+        applyImportedActionDetails(actions, imported),
+        mechanicsCore
       ),
     });
 
