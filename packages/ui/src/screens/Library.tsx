@@ -74,6 +74,7 @@ export function Library(_props: ScreenProps): JSX.Element {
   const [importError, setImportError] = useState<string>();
   const [importResult, setImportResult] = useState<CardImportResult>();
   const [importUrl, setImportUrl] = useState("");
+  const [dragActive, setDragActive] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
 
   // Default to allowing creation while entitlement is still loading; only an expired trial gates.
@@ -348,9 +349,32 @@ export function Library(_props: ScreenProps): JSX.Element {
           >
             <div style={styles.renameTitle}>Import character card</div>
             <p style={styles.importCopy}>Choose a Chara Card V2/V3 PNG or JSON file. You can review every mapped field before creating a story.</p>
-            <Button variant="secondary" disabled={importBusy} onClick={() => fileInput.current?.click()}>
-              {importBusy ? "Reading card…" : "Choose PNG or JSON…"}
-            </Button>
+            <div
+              data-testid="import-drop-zone"
+              data-active={dragActive || undefined}
+              onDragOver={(event) => {
+                event.preventDefault();
+                setDragActive(true);
+              }}
+              onDragLeave={() => setDragActive(false)}
+              onDrop={(event) => {
+                event.preventDefault();
+                setDragActive(false);
+                const file = event.dataTransfer.files?.[0];
+                if (file) void importFile(file);
+              }}
+              style={{
+                ...styles.dropZone,
+                borderColor: dragActive ? "var(--brass)" : "var(--hairline)",
+                background: dragActive ? "color-mix(in srgb, var(--brass) 8%, transparent)" : "transparent",
+              }}
+            >
+              <span style={{ fontSize: 24 }} aria-hidden="true">⇪</span>
+              <div style={styles.dropHint}>Drop a PNG or JSON card here</div>
+              <Button variant="secondary" disabled={importBusy} onClick={() => fileInput.current?.click()}>
+                {importBusy ? "Reading card…" : "Choose PNG or JSON…"}
+              </Button>
+            </div>
             <div style={styles.urlRow}>
               <input
                 aria-label="Character card URL"
@@ -365,14 +389,30 @@ export function Library(_props: ScreenProps): JSX.Element {
             </div>
             {importError ? <InlineNotice severity="error" title="Couldn't import this card" detail={importError} /> : null}
             {importResult ? (
-              <div style={styles.importPreview}>
+              <div style={styles.importPreview} data-testid="import-preview">
                 <div className="mono" style={styles.sectionLabel}>{importResult.spec.toUpperCase()}</div>
                 <div style={styles.previewName}>{importResult.mapped.name}</div>
+                {importResult.mapped.identity.traits.length ? (
+                  <div style={styles.traits}>
+                    {importResult.mapped.identity.traits.slice(0, 6).map((trait) => (
+                      <span key={trait} style={styles.traitChip}>{trait}</span>
+                    ))}
+                  </div>
+                ) : null}
                 <p style={styles.previewPremise}>{importResult.mapped.premise || "No premise supplied."}</p>
                 <div style={styles.previewMeta}>
                   {importResult.mapped.openings.length} opening{importResult.mapped.openings.length === 1 ? "" : "s"} ·{" "}
                   {importResult.mapped.lorebook.length} lore entr{importResult.mapped.lorebook.length === 1 ? "y" : "ies"}
                 </div>
+                {importResult.mapped.openings.length === 0 && importResult.mapped.lorebook.length === 0 ? (
+                  <div style={{ marginTop: 12 }} data-testid="import-sparse-warning">
+                    <InlineNotice
+                      severity="warn"
+                      title="Sparse card"
+                      detail="This card had no opening scenes or lorebook entries — the storyteller will build more of the world itself."
+                    />
+                  </div>
+                ) : null}
               </div>
             ) : null}
             <div style={styles.renameActions}>
@@ -440,6 +480,28 @@ const styles: Record<string, CSSProperties> = {
     boxShadow: "var(--elevation)",
   },
   importCopy: { color: "var(--secondary)", fontFamily: "var(--font-ui)", fontSize: 13, lineHeight: 1.55 },
+  dropZone: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: 10,
+    padding: "20px 16px",
+    marginTop: 12,
+    border: "1px dashed var(--hairline)",
+    borderRadius: "var(--radius-chip)",
+    transition: "border-color var(--motion-fast), background var(--motion-fast)",
+  },
+  dropHint: { fontSize: 12.5, color: "var(--secondary)" },
+  traits: { display: "flex", flexWrap: "wrap", gap: 6, margin: "8px 0 4px" },
+  traitChip: {
+    fontFamily: "var(--font-mono)",
+    fontSize: 10.5,
+    color: "var(--teal)",
+    background: "var(--bg3-raised)",
+    border: "1px solid var(--hairline)",
+    borderRadius: "var(--radius-chip)",
+    padding: "2px 8px",
+  },
   urlRow: { display: "flex", gap: 8, alignItems: "center", margin: "14px 0" },
   importPreview: { margin: "16px 0", padding: "16px", background: "var(--bg2-card)", border: "1px solid var(--hairline)", borderRadius: "var(--radius-chip)" },
   previewName: { color: "var(--prose)", fontFamily: "var(--font-display)", fontSize: 22 },

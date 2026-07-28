@@ -38,7 +38,7 @@ interface NavItem {
 const NAV: NavItem[] = [
   { label: "Library", glyph: "❏", route: "library", activeOn: ["library", "wizard"] },
   { label: "Story", glyph: "✎", route: "play", activeOn: STORY_ROUTES },
-  { label: "Personas", glyph: "☙", route: "personas", activeOn: ["personas", "cardcreator"] },
+  { label: "Personas", glyph: "☙", route: "personas", activeOn: ["personas"] },
   { label: "Lore", glyph: "❦", route: "lorebook", activeOn: ["lorebook"] },
   { label: "Settings", glyph: "⚙", route: "settings", activeOn: ["settings", "designsystem"] },
 ];
@@ -292,7 +292,6 @@ function screenTitle(route: Route): string {
     settings: "Settings",
     rolematrix: "Role Matrix",
     personas: "Personas",
-    cardcreator: "Card Creator",
     lorebook: "Lorebook",
     wizard: "New story",
     designsystem: "Design System",

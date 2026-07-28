@@ -87,8 +87,60 @@ describe("Library", () => {
 
     await screen.findByText("Mara Voss");
     expect(screen.getByText(/1 opening/i)).toBeInTheDocument();
+    expect(screen.getByText("watchful")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /use this card/i }));
     await waitFor(() => expect(useStoriesStore.getState().draft?.importedCard?.name).toBe("Mara Voss"));
     expect(useRoute.getState()).toMatchObject({ route: "blueprint", params: {} });
+  });
+
+  it("imports a card dropped onto the drop zone", async () => {
+    const bridge = makeMemoryBridge();
+    bridge.importCardFromBytes = async () => ({
+      spec: "Card format V2",
+      card: {} as never,
+      mapped: {
+        name: "Dropped Card",
+        premise: "Arrived by drag and drop.",
+        identity: { traits: [], likes: [], dislikes: [] },
+        openings: ["An opening."],
+        lorebook: [],
+        blueprint: { name: "Dropped Card", firstMessage: "An opening." },
+      },
+    });
+    setBridge(bridge);
+    render(<Library />);
+
+    fireEvent.click(screen.getByRole("button", { name: /import card/i }));
+    const zone = screen.getByTestId("import-drop-zone");
+    fireEvent.drop(zone, { dataTransfer: { files: [new File(["{}"], "drop.json", { type: "application/json" })] } });
+
+    await screen.findByText("Dropped Card");
+    expect(screen.queryByTestId("import-sparse-warning")).not.toBeInTheDocument();
+  });
+
+  it("warns when an imported card has no openings and no lore", async () => {
+    const bridge = makeMemoryBridge();
+    bridge.importCardFromBytes = async () => ({
+      spec: "Card format V2",
+      card: {} as never,
+      mapped: {
+        name: "Bare Card",
+        premise: "Nothing but a name.",
+        identity: { traits: [], likes: [], dislikes: [] },
+        openings: [],
+        lorebook: [],
+        blueprint: { name: "Bare Card", firstMessage: "" },
+      },
+    });
+    setBridge(bridge);
+    render(<Library />);
+
+    fireEvent.click(screen.getByRole("button", { name: /import card/i }));
+    fireEvent.change(screen.getByLabelText("Choose a character card file"), {
+      target: { files: [new File(["{}"], "bare.json", { type: "application/json" })] },
+    });
+
+    await screen.findByText("Bare Card");
+    expect(screen.getByTestId("import-sparse-warning")).toBeInTheDocument();
   });
 });

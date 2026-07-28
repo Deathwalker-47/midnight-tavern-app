@@ -17,7 +17,7 @@ Every bridge method must exist in **both** backends. A method implemented only i
 
 Fourteen product routes plus a design-system reference:
 
-Library · Play · Overview · Characters · CharacterDossier · CharacterLoadout · StorySettings · StoryBlueprint · Settings · RoleMatrix · Personas · CardCreator (import preview) · Lorebook · Journal · Wizard / SetupWizard — and `DesignSystem` (component gallery). `registry.ts` wires routes.
+Library (with card import) · Play · Overview · Characters · CharacterDossier · CharacterLoadout · StorySettings · StoryBlueprint · Settings · RoleMatrix · Personas · Lorebook · Journal · Wizard / SetupWizard — and `DesignSystem` (component gallery). `registry.ts` wires routes.
 
 ## Components (`src/components/`)
 

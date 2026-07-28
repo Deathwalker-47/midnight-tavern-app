@@ -40,7 +40,6 @@ const StoryBlueprint = lazy(() =>
 const Settings = lazy(() => import("./Settings.js").then((m) => ({ default: m.Settings })));
 const RoleMatrix = lazy(() => import("./RoleMatrix.js").then((m) => ({ default: m.RoleMatrix })));
 const Personas = lazy(() => import("./Personas.js").then((m) => ({ default: m.Personas })));
-const CardCreator = lazy(() => import("./CardCreator.js").then((m) => ({ default: m.CardCreator })));
 const Lorebook = lazy(() => import("./Lorebook.js").then((m) => ({ default: m.Lorebook })));
 const Wizard = lazy(() => import("./Wizard.js").then((m) => ({ default: m.Wizard })));
 const DesignSystem = lazy(() =>
@@ -62,7 +61,6 @@ export const registry: Record<Route, ScreenComponent> = {
   settings: Settings,
   rolematrix: RoleMatrix,
   personas: Personas,
-  cardcreator: CardCreator,
   lorebook: Lorebook,
   wizard: Wizard,
   designsystem: DesignSystem,

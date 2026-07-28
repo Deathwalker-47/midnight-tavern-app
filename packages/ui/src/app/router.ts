@@ -23,7 +23,6 @@ export const ROUTES = [
   "settings",
   "rolematrix",
   "personas",
-  "cardcreator",
   "lorebook",
   "wizard",
   "designsystem",
@@ -34,7 +33,7 @@ export type Route = (typeof ROUTES)[number];
 /** Route params. `storyId` scopes the story surfaces (play/overview/characters/storysettings). */
 export interface RouteParams {
   storyId?: string;
-  /** Card Creator / Personas may edit a specific persona. */
+  /** Personas may edit a specific persona. */
   personaId?: string;
   /** Lorebook may open a specific entry. */
   entryId?: string;
