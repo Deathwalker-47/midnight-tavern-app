@@ -41,6 +41,14 @@ re-grounded against current HEAD (most audit gaps had already been closed by lat
   variants; an unavailable auditor can no longer trigger a second full narrator generation, and its
   last-resort summary includes the exact human-readable resolution. _Landed 2026-07-28; hardened in
   v0.2.8._
+- [ ] **7. Same-turn NPC agency + progressive authority-safe narration.** Packaged v0.2.8 testing
+  confirmed that NPC mechanics are only extracted from prior prose for persisted present characters,
+  so prose-only entities remain passive and same-turn reactions are absent. Mechanical turns also
+  buffer the whole narrator draft until a whole-response audit succeeds, preventing visible
+  streaming and compounding 48–113 second live turn latency. Add engine-approved scene-entity
+  promotion, deterministic-first NPC decisions after player resolution, separate NPC action budget,
+  immutable narrative contracts, progressively verified paragraph/beat delivery, bounded stage
+  deadlines/fallbacks, and first-safe-chunk telemetry. _Diagnosed 2026-07-28; next implementation._
 
 ## Internal-Beta exit criteria (the finish line for this phase)
 
@@ -49,6 +57,10 @@ re-grounded against current HEAD (most audit gaps had already been closed by lat
 - typecheck + tests + coverage stay green.
 - Role Matrix implements the full provider/model/sampler workflow. _(Largely done — verify.)_
 - No history op desynchronizes transcript / rulings / hard state / soft state / summaries. _(Done in V2.)_
+- Consequential NPCs can react or pursue goals in the same turn through authoritative DM rulings;
+  prose-only entities cannot bypass persistence, presence, catalogs, or gates.
+- Mechanical turns deliver progressively verified prose without exposing narrator text that
+  contradicts an immutable DM ruling.
 - UI tests run without `act(...)` warnings.
 
 ## Explicitly out of scope this phase (later)

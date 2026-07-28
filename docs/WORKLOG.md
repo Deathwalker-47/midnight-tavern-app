@@ -6,6 +6,25 @@ landed, why, verification, and any gotcha the next agent needs. Live state is in
 
 ---
 
+## 2026-07-28 — Refresh handoff with packaged latency, streaming, and NPC-agency diagnosis
+
+Updated `docs/HANDOFF.md` as the complete sequential-agent baton after the latest v0.2.8 packaged
+Jerusalem Man testing. It now preserves all V6/V7 requirements and later clarifications, separates
+landed behavior from unverified acceptance risks, records the exact 48.3 s and 112.9 s turn
+breakdowns, and documents two confirmed architectural gaps:
+
+- mechanical narration is deliberately buffered until a whole-draft authority audit succeeds, so
+  the existing UI/provider stream cannot display incremental prose; and
+- NPC intents are only extracted from prior narrator prose for already-persisted present characters,
+  leaving prose-only entities unable to act or receive same-turn DM rulings.
+
+The baton names the next coherent change: test-first same-turn NPC agency plus progressively verified
+paragraph/beat streaming, with deterministic reactions, bounded planner fallback, stage deadlines,
+telemetry, and atomic persistence. No runtime code changed.
+
+**Verification before documentation edit:** `npm run typecheck` clean; core **463 / 37 files** and UI
+**136 / 25 files** green (**599 tests** total). The same seven known React `act(...)` warnings remain.
+
 ## 2026-07-28 — Fix packaged classifier invalid-output regression
 
 The human's first successful packaged story then failed its first turn with **"Mechanics safely
