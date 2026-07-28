@@ -142,9 +142,26 @@ function safeSummary(rulings: readonly Ruling[]): string {
 }
 
 /**
- * Generates mechanical-turn narration behind an authority wall. Draft deltas stay buffered until
- * a separate consistency audit accepts the prose, so a rejected draft is never rendered. If the
- * auditor or all retries fail, a deterministic ruling summary is returned instead.
+ * Conservative deterministic check: does this prose beat assert a game mechanic (roll, DC, outcome,
+ * damage, death, XP, loot, tier, attribute/skill/stat change)? A beat that asserts none cannot
+ * contradict a mechanical ruling, so it is safe to show before the full authority audit. We err
+ * toward "yes" (hold) — a false positive only delays a beat; a false negative could leak an
+ * unaudited mechanic, which must never happen.
+ */
+const MECHANICAL_VOCAB =
+  /\b(d20|dc\b|dc\d|rolls?|rolled|rolling|dice|modifiers?|crit(ical)?s?|\bxp\b|experience\s+points?|levels?\s*up|levell?ed\s*up|hit\s*points?|\bhp\b|loot|award(s|ed|ing)?|damage|damages|success(es|ful)?|failures?|\bdies?\b|killed|\bdeath\b|wounds?|wounded|attributes?|\bskills?\b|\bstats?\b|checks?|common|uncommon|rare|legendary|mythical)\b/i;
+
+function assertsMechanic(paragraph: string): boolean {
+  return MECHANICAL_VOCAB.test(paragraph);
+}
+
+/**
+ * Generates mechanical-turn narration behind an authority wall. Prose is released progressively:
+ * each complete paragraph that asserts no mechanic is shown as soon as it streams (it cannot
+ * contradict a ruling), while the first mechanical paragraph and everything after it stay buffered
+ * until a separate consistency audit accepts the whole draft. A rejected mechanical remainder is
+ * replaced by a deterministic ruling summary and never rendered. If the auditor or all retries
+ * fail, the deterministic summary stands in.
  */
 export async function generateGuardedNarration(
   router: Router,
@@ -167,7 +184,30 @@ export async function generateGuardedNarration(
   let repairReason = "";
   let lastDraft = "";
 
+  // Progressive verified release, on the first (streaming) attempt only. As paragraphs stream in,
+  // each complete paragraph that asserts no mechanic is released immediately; the first mechanical
+  // paragraph (and everything after it) is held for the whole-draft audit. `releasedLen` tracks how
+  // many characters of the draft have already reached the UI.
+  let streamed = "";
+  let releasedLen = 0;
+  let holding = false;
+  const releaseSafeParagraphs = (): void => {
+    if (holding) return;
+    for (;;) {
+      const boundary = streamed.indexOf("\n\n", releasedLen);
+      if (boundary === -1) break;
+      const paragraph = streamed.slice(releasedLen, boundary);
+      if (assertsMechanic(paragraph)) {
+        holding = true;
+        break;
+      }
+      onDelta(streamed.slice(releasedLen, boundary + 2));
+      releasedLen = boundary + 2;
+    }
+  };
+
   for (let attempt = 0; attempt <= maxRepairs; attempt++) {
+    const streaming = attempt === 0;
     const repair =
       attempt === 0
         ? ""
@@ -181,14 +221,26 @@ export async function generateGuardedNarration(
     const response = await router.stream(
       "narrator",
       { system: prompt.system, user: prompt.user + repair },
-      () => {},
+      streaming
+        ? (delta: string) => {
+            streamed += delta;
+            releaseSafeParagraphs();
+          }
+        : () => {},
       options.signal ? { signal: options.signal } : {}
     );
     lastDraft = response.content;
+    // What we have already shown, but only if it is genuinely a prefix of the final draft (real
+    // providers return content === concat(deltas); this guards the defensive case).
+    const releasedPrefix =
+      releasedLen > 0 && lastDraft.startsWith(streamed.slice(0, releasedLen))
+        ? lastDraft.slice(0, releasedLen)
+        : "";
+
     try {
       const audited = await review(router, lastDraft, rulings, options.signal);
       if (audited.ok) {
-        onDelta(lastDraft);
+        onDelta(releasedPrefix ? lastDraft.slice(releasedPrefix.length) : lastDraft);
         return { prose: lastDraft, repairCount: attempt, usedSafeFallback: false };
       }
       repairReason = audited.reason;
@@ -199,11 +251,19 @@ export async function generateGuardedNarration(
           ? `Authority auditor failed: ${error.message}`
           : "Authority auditor failed.";
       options.onRepair?.(attempt + 1, repairReason);
-      const prose = safeSummary(rulings);
-      onDelta(prose);
-      return { prose, repairCount: attempt, usedSafeFallback: true };
+      const summary = safeSummary(rulings);
+      onDelta(summary);
+      return { prose: releasedPrefix + summary, repairCount: attempt, usedSafeFallback: true };
     }
+
     options.onRepair?.(attempt + 1, repairReason);
+    // If safe prose is already on screen we cannot regenerate a conflicting replacement for it, so
+    // replace only the held mechanical remainder with the deterministic summary and stop.
+    if (releasedPrefix) {
+      const summary = safeSummary(rulings);
+      onDelta(summary);
+      return { prose: releasedPrefix + summary, repairCount: attempt, usedSafeFallback: true };
+    }
   }
 
   const prose = safeSummary(rulings);
