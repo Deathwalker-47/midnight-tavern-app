@@ -552,13 +552,15 @@ export function Play(props: PlayProps): JSX.Element {
   const suggestionsAbort = useRef<AbortController>();
   const suggestionsGeneration = useRef(0);
 
-  // Load the story's transcript when the id changes (mount + route/tab switch).
+  // Load the story's transcript when the id changes (mount + route/tab switch). `debugState` is a
+  // pure preview/harness mode that layers demo data onto the view, so it must not hit the bridge.
   useEffect(() => {
+    if (debugState) return;
     if (storyId) void load(storyId);
-  }, [storyId, load]);
+  }, [storyId, load, debugState]);
 
   useEffect(() => {
-    if (!storyId) return;
+    if (debugState || !storyId) return;
     let cancelled = false;
     void getBridge().getStory(storyId).then((story) => {
       if (cancelled || !story) return;

@@ -4,7 +4,7 @@
  * minimal frozen schema stands in for a bootstrapped story.
  */
 import { describe, it, expect, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, act } from "@testing-library/react";
 import { StorySettings } from "../../src/screens/StorySettings";
 import { useStoriesStore } from "../../src/state/storiesStore";
 import { useSettingsStore } from "../../src/state/settingsStore";
@@ -50,19 +50,25 @@ beforeEach(() => {
 });
 
 describe("StorySettings", () => {
-  it("with no storyId shows the no-story empty state", () => {
+  // Each render mounts an effect that async-loads the global action/loot configs; flush it with a
+  // trailing `act` so the settling setState doesn't fire outside `act` after the test ends.
+  const flush = () => act(async () => {});
+
+  it("with no storyId shows the no-story empty state", async () => {
     render(<StorySettings />);
     expect(screen.getByText("No story open")).toBeInTheDocument();
+    await flush();
   });
 
-  it("with an error status shows the error notice and retry", () => {
+  it("with an error status shows the error notice and retry", async () => {
     useStoriesStore.setState({ currentStatus: "error" });
     render(<StorySettings storyId="s1" />);
     expect(screen.getByTestId("storysettings-error")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /try again/i })).toBeInTheDocument();
+    await flush();
   });
 
-  it("renders the sealed-rulebook banner and read-only catalog when loaded", () => {
+  it("renders the sealed-rulebook banner and read-only catalog when loaded", async () => {
     useStoriesStore.setState({ current: story("s1"), currentStatus: "ready" });
     render(<StorySettings storyId="s1" />);
     expect(screen.getByTestId("storysettings-locked")).toBeInTheDocument();
@@ -71,11 +77,13 @@ describe("StorySettings", () => {
     expect(screen.getByText("Blade Adept")).toBeInTheDocument();
     expect(screen.getByText("Strike")).toBeInTheDocument();
     expect(screen.getByText("DC 12")).toBeInTheDocument();
+    await flush();
   });
 
-  it("offers a danger-zone delete when loaded", () => {
+  it("offers a danger-zone delete when loaded", async () => {
     useStoriesStore.setState({ current: story("s1"), currentStatus: "ready" });
     render(<StorySettings storyId="s1" />);
     expect(screen.getByRole("button", { name: /delete story/i })).toBeInTheDocument();
+    await flush();
   });
 });
