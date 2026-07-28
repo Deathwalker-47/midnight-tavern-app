@@ -29,13 +29,18 @@ re-grounded against current HEAD (most audit gaps had already been closed by lat
   variations (`null` optional fields, missing conservative containers, numeric confidence strings)
   while retaining sealed actor/action/skill enums. If structured repair still fails, recover only
   exact, uniquely named catalog labels/ids/aliases; unknown actions and ambiguous targets remain
-  narration-only. Reproduced the Jerusalem Man two-action turn in tests. _Landed 2026-07-28._
+  narration-only. Reproduced the Jerusalem Man two-action turn in tests. Classifier repair is
+  bounded to one retry, and a provider-only diagnostic is silent when sealed mechanics were fully
+  recovered; unresolved actions/targets still surface. _Landed 2026-07-28; hardened in v0.2.8._
 - [x] **6. Persistent in-flight play + low-friction rulings.** Re-entering the same Play route now
   reuses its active global turn/regeneration operation instead of invalidating it. The classifier
   records scene stakes; valid unopposed narration-only actions auto-succeed without dice or XP,
   while attacks, deception, opposition, concrete danger, deadlines, scarcity, costs, and tracked
   effects still roll. Authority-auditor false positives were narrowed and the deterministic fallback
-  now reads as story prose without UUIDs or debug arithmetic. _Landed 2026-07-28._
+  now reads as story prose without UUIDs. The auditor accepts harmless JSON-mode boolean/null
+  variants; an unavailable auditor can no longer trigger a second full narrator generation, and its
+  last-resort summary includes the exact human-readable resolution. _Landed 2026-07-28; hardened in
+  v0.2.8._
 
 ## Internal-Beta exit criteria (the finish line for this phase)
 

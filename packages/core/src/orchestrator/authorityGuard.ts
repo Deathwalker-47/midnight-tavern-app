@@ -3,16 +3,25 @@ import { callStructured, type RolePrompt, type Router } from "../router/index.js
 import type { Ruling } from "../types/index.js";
 
 const AuthorityReviewSchema = z.object({
-  obeysRulings: z.boolean(),
-  contradictions: z
-    .array(
-      z.object({
-        rulingIndex: z.number().int().nonnegative(),
-        reason: z.string().min(1).max(300),
-        excerpt: z.string().max(300).optional(),
-      })
-    )
-    .max(20),
+  // JSON-mode providers sometimes serialize booleans as strings and empty
+  // arrays as null. Both forms are unambiguous and do not weaken the audit.
+  obeysRulings: z.preprocess(
+    (value) =>
+      value === "true" ? true : value === "false" ? false : value,
+    z.boolean()
+  ),
+  contradictions: z.preprocess(
+    (value) => value ?? [],
+    z
+      .array(
+        z.object({
+          rulingIndex: z.coerce.number().int().nonnegative(),
+          reason: z.string().min(1),
+          excerpt: z.string().optional(),
+        })
+      )
+      .max(20)
+  ),
 });
 
 export interface GuardedNarrationOptions {
@@ -85,7 +94,7 @@ async function review(
       ].join("\n"),
     },
     AuthorityReviewSchema,
-    { maxRepairs: 1, ...(signal ? { signal } : {}) }
+    { maxRepairs: 0, ...(signal ? { signal } : {}) }
   );
   return {
     ok: result.contradictions.length === 0,
@@ -118,6 +127,7 @@ function safeSummary(rulings: readonly Ruling[]): string {
           : `${action} succeeds as a routine action without an unnecessary check, and the scene moves forward.`;
       }
       const hint = ruling.effectsApplied?.narrationHint?.trim();
+      const resolution = `${action} resolves as ${ruling.roll.outcome.replace("_", " ")} (${ruling.roll.total} vs DC ${ruling.roll.dc}; d20 ${ruling.roll.d20}, modifier ${ruling.roll.modifier >= 0 ? "+" : ""}${ruling.roll.modifier}).`;
       const result =
         ruling.roll.outcome === "crit_success"
           ? "The attempt lands with exceptional force, and that advantage remains true in the scene."
@@ -126,7 +136,7 @@ function safeSummary(rulings: readonly Ruling[]): string {
             : ruling.roll.outcome === "crit_failure"
               ? "The attempt fails severely, and the resulting setback remains in force."
               : "The attempt does not achieve its intended result, and the scene moves forward with that setback intact.";
-      return hint ? `${hint} ${result}` : `${action}: ${result}`;
+      return hint ? `${resolution} ${hint} ${result}` : `${resolution} ${result}`;
     })
     .join("\n\n");
 }
@@ -188,6 +198,10 @@ export async function generateGuardedNarration(
         error instanceof Error
           ? `Authority auditor failed: ${error.message}`
           : "Authority auditor failed.";
+      options.onRepair?.(attempt + 1, repairReason);
+      const prose = safeSummary(rulings);
+      onDelta(prose);
+      return { prose, repairCount: attempt, usedSafeFallback: true };
     }
     options.onRepair?.(attempt + 1, repairReason);
   }

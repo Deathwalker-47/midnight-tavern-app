@@ -79,6 +79,50 @@ describe("Play — error states", () => {
     ).toBeInTheDocument();
   });
 
+  it("does not show a provider warning when sealed mechanics were recovered", async () => {
+    const bridge = emptyBridge();
+    bridge.listMessages = vi.fn(async () => [
+      {
+        id: "player-1",
+        storyId: "s1",
+        idx: 0,
+        role: "player" as const,
+        content: "Press the Ride.",
+        createdAt: 1,
+      },
+    ]);
+    bridge.inspectTurnRecovery = vi.fn(async () => ({
+      operation: {
+        id: "operation-1",
+        storyId: "s1",
+        playerMessageId: "player-1",
+        state: "idle" as const,
+        classifierRecovery: {
+          policy: "partial_mechanics" as const,
+          issues: [
+            {
+              kind: "invalid_output" as const,
+              message: "The classifier returned invalid structured output.",
+              retryable: true,
+            },
+          ],
+        },
+        createdAt: 1,
+        updatedAt: 2,
+      },
+      playerText: "Press the Ride.",
+      playerMessageIdx: 0,
+      stale: false,
+      recoverable: false,
+    }));
+    setBridge(bridge);
+
+    render(<Play storyId="s1" />);
+
+    expect(await screen.findByText("Press the Ride.")).toBeInTheDocument();
+    expect(screen.queryByTestId("classifier-recovery")).not.toBeInTheDocument();
+  });
+
   it("provider-auth names the fix and offers a Settings affordance", () => {
     render(<Play storyId="s1" debugState="error-provider-auth" />);
 

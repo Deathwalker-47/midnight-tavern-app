@@ -334,7 +334,10 @@ async function classifyDetailed(
   const prompt = { system: CLASSIFIER_SYSTEM, user: buildClassifierUser(schema, input) };
 
   const raw = await callStructured(router, "classifier", prompt, zodSchema, {
-    maxRepairs: opts?.maxRepairs ?? 3,
+    // One repair is enough to correct an ordinary JSON-mode mistake. If it
+    // still fails, sealed catalog recovery is faster and safer than making the
+    // player wait through two more identical provider responses.
+    maxRepairs: opts?.maxRepairs ?? 1,
     signal: opts?.signal,
   });
 

@@ -329,6 +329,34 @@ describe("classify — behavior", () => {
     ]);
   });
 
+  it("bounds classifier repair latency before recovering a sealed action locally", async () => {
+    let attempts = 0;
+    const router: Router = {
+      bindingFor: () => ({
+        provider: "electronhub",
+        model: "test",
+        source: "recommended",
+        samplersDirty: false,
+      }),
+      async complete() {
+        attempts += 1;
+        return { content: "not json" };
+      },
+      async stream() {
+        throw new Error("classifier never streams");
+      },
+    };
+
+    const out = await classifyWithRecovery(router, story, {
+      playerMessage: "I stab the guard with my knife.",
+      presentCharacters: present,
+      recentNarration: [],
+    });
+
+    expect(out.turn.playerIntents[0]?.actionId).toBe("attack_melee");
+    expect(attempts).toBe(2);
+  });
+
   it("does not guess between actions that share the same explicit phrase", async () => {
     const baseAction = story.actions.find((action) => action.id === "pick_lock")!;
     const ambiguousStory = {

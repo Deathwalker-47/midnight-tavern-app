@@ -156,3 +156,27 @@ debug arithmetic and gives a fuller readable consequence.
 Tauri build clean. Unsigned v0.2.7 bundles: NSIS SHA-256
 `F4ADCC8C602514A08AA1C7E9D485F490FD286788AC2920ECCE25F8E5ED9312A7`; MSI SHA-256
 `4C522431E64159FF03F3E82093E11BEBA76E4F0A76F79D561A47FAB464D295DA`.
+
+---
+
+## 2026-07-28 — Restore narrator prose and bound classifier/auditor latency
+
+Packaged telemetry for the Jerusalem Man story showed the exact failure chain. A mixed prayer plus
+sealed-action turn spent four classifier requests before recovering `Press the Ride`, then displayed
+the provider failure even though the deterministic DM ruling succeeded. A two-action pistol turn
+took 141 seconds: the narrator produced a 4,087-character draft, the authority auditor rejected a
+harmless JSON-mode shape as invalid, the app generated a second full draft, audited again, and
+finally discarded all prose for a terse deterministic summary.
+
+Classifier structured repair is now capped at one retry before sealed catalog recovery. Provider-only
+diagnostics are hidden when that recovery produced valid mechanics, while low-confidence,
+unresolved-action, and unresolved-target cases remain visible. The authority-audit schema accepts
+unambiguous string booleans and null empty-contradiction lists. An unavailable auditor now fails
+closed immediately after the first draft instead of launching a second narrator generation; the
+deterministic emergency text includes action, outcome, total, DC, d20, modifier, and narration hint.
+True contradictions still follow the existing rewrite-or-safe-fallback authority wall.
+
+**Verification:** focused red/green regressions plus clean typecheck; full suite green at **core 463 /
+UI 136 = 599 tests**. Production UI/Tauri build and `cargo check` clean. Unsigned v0.2.8 bundles:
+NSIS SHA-256 `F747FDEADD5CE1EC38151445BE6FB74F52DF4A2851BAF579B547C62DB9680AC1`;
+MSI SHA-256 `8D3C1C5D863FF9D359CA9B5A1213DFD5CDDA71789B8CC21F00234381CBF774BF`.

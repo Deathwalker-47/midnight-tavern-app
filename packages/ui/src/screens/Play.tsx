@@ -1097,7 +1097,8 @@ export function Play(props: PlayProps): JSX.Element {
                     </div>
                   )}
 
-                  {classifierRecovery ? (
+                  {classifierRecovery &&
+                  shouldSurfaceClassifierRecovery(classifierRecovery) ? (
                     <ClassifierRecovery
                       recovery={classifierRecovery}
                       canRetry={canRetryPersistedTurn}
@@ -1446,6 +1447,19 @@ function AttributeAdvancementBlock(props: {
       />
     </div>
   );
+}
+
+function shouldSurfaceClassifierRecovery(
+  recovery: ClassifierRecoveryMetadata
+): boolean {
+  if (recovery.policy !== "partial_mechanics") return true;
+  const diagnosticOnly = new Set([
+    "no_content",
+    "invalid_output",
+    "timeout",
+    "provider_error",
+  ]);
+  return recovery.issues.some((issue) => !diagnosticOnly.has(issue.kind));
 }
 
 function ClassifierRecovery(props: {
