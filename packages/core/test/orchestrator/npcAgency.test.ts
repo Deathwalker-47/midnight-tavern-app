@@ -25,7 +25,10 @@ import { makePlayer, makeStory } from "../fixtures.js";
 
 /** Minimal V7 router: canned classifier + loot decline + a fixed narrator stream. */
 class AgencyRouter implements Router {
-  constructor(readonly classified: ClassifiedTurn) {}
+  constructor(
+    readonly classified: ClassifiedTurn,
+    readonly narration = "Blades cross in the dark; the creature does not yield."
+  ) {}
   bindingFor(_role: Role): RoleBinding {
     return { provider: "openrouter", model: "test", source: "recommended", samplersDirty: false };
   }
@@ -41,7 +44,7 @@ class AgencyRouter implements Router {
     return { content: "" };
   }
   async stream(_role: Role, _prompt: RolePrompt, onDelta: StreamHandler): Promise<ChatResponse> {
-    const content = "Blades cross in the dark; the creature does not yield.";
+    const content = this.narration;
     onDelta(content);
     return { content };
   }
@@ -128,6 +131,130 @@ describe("same-turn NPC agency", () => {
     // wild-swings (success at d20 15 vs DC 15) for -3 to the player.
     expect(reaction!.actionId).toBe("attack_wild");
     expect((await store.characters.get("kestrel"))!.hard.resources.hp!.current).toBe(17);
+  });
+
+  it("promotes a consequential prose-only creature before it acts this turn", async () => {
+    await store.messages.insert({
+      id: "scene-intro",
+      storyId,
+      idx: 0,
+      role: "narrator",
+      content: "A hunched creature crawls from the cistern and blocks the narrow passage.",
+      createdAt: 0,
+    });
+    const promotedId = "fixture-story:scene:hunched-creature";
+    const result = await submitTurn(
+      new AgencyRouter({
+        playerIntents: [
+          {
+            ...PLAYER_ATTACK,
+            targetId: promotedId,
+          },
+        ],
+        npcIntents: [],
+        freeText: "",
+      }),
+      store,
+      storyId,
+      "I attack the hunched creature with my sword.",
+      { rng: d20Sequence([15]) }
+    );
+    await result.background;
+
+    const promoted = await store.characters.get(promotedId);
+    expect(promoted).toMatchObject({
+      id: promotedId,
+      storyId,
+      name: "Hunched creature",
+      isPlayer: false,
+      hard: {
+        characterId: promotedId,
+        isPlayer: false,
+        alive: true,
+      },
+    });
+    expect(result.rulings[0]).toMatchObject({
+      actorId: "kestrel",
+      actionId: "attack_melee",
+      targetId: promotedId,
+      gate: { allowed: true },
+    });
+    expect(
+      result.rulings.find(
+        (ruling) => ruling.actorId === promotedId && ruling.targetId === "kestrel"
+      )
+    ).toMatchObject({
+      actionId: "attack_wild",
+      gate: { allowed: true },
+      roll: { natural: 15 },
+    });
+  });
+
+  it("does not promote an ambient depiction even when the player names it", async () => {
+    await store.messages.insert({
+      id: "ambient-scene",
+      storyId,
+      idx: 0,
+      role: "narrator",
+      content:
+        "The scenery is crumbling. A faded mural shows a guard beside a painted crowd.",
+      createdAt: 0,
+    });
+    const result = await submitTurn(
+      new AgencyRouter({ playerIntents: [], npcIntents: [], freeText: "I threaten the guard." }),
+      store,
+      storyId,
+      "I threaten the guard.",
+      { rng: d20Sequence([15]) }
+    );
+    await result.background;
+
+    expect(await store.characters.listByStory(storyId)).toHaveLength(1);
+    expect(result.rulings).toHaveLength(0);
+  });
+
+  it("registers an actual NPC introduced by narration before the player provokes it", async () => {
+    await store.messages.insert({
+      id: "guard-arrives",
+      storyId,
+      idx: 0,
+      role: "narrator",
+      content: "A weary guard stands beside the gate and watches the road.",
+      createdAt: 0,
+    });
+    const result = await submitTurn(
+      new AgencyRouter({ playerIntents: [], npcIntents: [], freeText: "I wait." }),
+      store,
+      storyId,
+      "I wait and listen.",
+      { rng: d20Sequence([15]) }
+    );
+    await result.background;
+
+    expect(await store.characters.get("fixture-story:scene:weary-guard")).toMatchObject({
+      name: "Weary guard",
+      isPlayer: false,
+    });
+    expect(result.rulings).toHaveLength(0);
+  });
+
+  it("registers a newly narrated named NPC in the same turn it appears", async () => {
+    const result = await submitTurn(
+      new AgencyRouter(
+        { playerIntents: [], npcIntents: [], freeText: "I wait." },
+        "Mara enters the crypt and raises a lantern."
+      ),
+      store,
+      storyId,
+      "I wait and listen.",
+      { rng: d20Sequence([15]) }
+    );
+    await result.background;
+
+    expect(await store.characters.get("fixture-story:scene:mara")).toMatchObject({
+      name: "Mara",
+      isPlayer: false,
+    });
   });
 
   it("never lets a slain NPC act", async () => {

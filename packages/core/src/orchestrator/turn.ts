@@ -40,6 +40,7 @@ import { assembleContext } from "./context.js";
 import { capture } from "./checkpoint.js";
 import { generateGuardedNarration } from "./authorityGuard.js";
 import { planNpcReactions } from "./npcAgency.js";
+import { discoverNarratedSceneEntities } from "./sceneEntityPromotion.js";
 import { determineLootAwards, type PendingLootAward } from "./loot.js";
 import {
   determineAttributeAdvancements,
@@ -519,8 +520,8 @@ async function runTurnOperation(
   await setPhase("classifying");
 
   try {
-    const roster = await store.characters.listByStory(storyId);
-    const presentCharacters = roster.map((character) => ({
+    let roster = await store.characters.listByStory(storyId);
+    let presentCharacters = roster.map((character) => ({
       id: character.id,
       name: character.name,
       isPlayer: character.isPlayer,
@@ -545,6 +546,23 @@ async function runTurnOperation(
       const recentNarration = recentMessages
         .filter((message) => message.role === "narrator")
         .map((message) => message.content);
+      const sceneEntities = discoverNarratedSceneEntities({
+        storyId,
+        schema,
+        recentNarration,
+        roster,
+      });
+      for (const entity of sceneEntities) {
+        await ensureHardState(store, schema, storyId, entity.id, entity.name);
+      }
+      if (sceneEntities.length > 0) {
+        roster = await store.characters.listByStory(storyId);
+        presentCharacters = roster.map((character) => ({
+          id: character.id,
+          name: character.name,
+          isPlayer: character.isPlayer,
+        }));
+      }
       const classifier = await classifyWithRecovery(
         router,
         schema,
@@ -763,9 +781,18 @@ async function runTurnOperation(
     const prose = narration.prose;
     const narratorIdx = playerIdx + 1;
     const narratorMessageId = randomUUID();
+    const introducedSceneEntities = discoverNarratedSceneEntities({
+      storyId,
+      schema,
+      recentNarration: [prose],
+      roster,
+    });
 
     await setPhase("saving", { prose, narratorMessageId });
     await store.transaction(async () => {
+      for (const entity of introducedSceneEntities) {
+        await ensureHardState(store, schema, storyId, entity.id, entity.name);
+      }
       const checkpoint = await capture(store, storyId, narratorMessageId, narratorIdx);
       await store.messages.insert({
         id: narratorMessageId,
