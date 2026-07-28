@@ -6,6 +6,59 @@ landed, why, verification, and any gotcha the next agent needs. Live state is in
 
 ---
 
+## 2026-07-29 — Root cause 2: same-turn NPC agency (deterministic reaction stage)
+
+Implemented the larger half of the handoff's single next action, test-first: NPCs now act on
+the same turn instead of one turn late.
+
+**What landed.** New `orchestrator/npcAgency.ts::planNpcReactions` — a pure, deterministic
+stage. After the player's intents resolve, a **present, living** NPC that was the target of an
+**allowed combat** action this turn counter-attacks its attacker with the first sealed combat
+action its **own gate** permits. `turn.ts::runTurnOperation` calls it between player-intent
+resolution (incl. budget refusals) and the loot/advancement stage, then resolves each returned
+intent through the ordinary `resolve`→`commit` path against the same working ledger, appending
+those rulings so the narrative contract (`assembleContext` + `generateGuardedNarration`) carries
+them. This is the wall preserved: the planner only *chooses* a `MechanicalIntent`; the engine
+still gates/dices/commits it, so an NPC cannot invent an action id, target, item, skill, or
+bypass a gate.
+
+**Fail-safe boundaries baked in + tested** (`test/orchestrator/npcAgency.test.ts`, 4 tests):
+- a struck, surviving NPC produces its own authoritative ruling this same turn (dice, not prose);
+- a slain NPC never acts (dead/off-scene filtered on the post-player-resolution working state);
+- NPC agency uses its own per-NPC encounter budget (`DEFAULT_NPC_ENCOUNTER_BUDGET = 1`),
+  independent of the player's `actionBudget` — a player who exhausts/overruns their budget still
+  gets answered;
+- a narration-only turn (no living NPC targeted) yields no reaction.
+
+**Loot/advancement scoping (correctness).** Loot attaches to the *last successful ruling*; an NPC
+counter is a success, so it would have stolen the player's loot anchor. `runTurnOperation` now
+passes only the player-ruling prefix (`rulings.slice(0, playerRulingCount)`) to
+`determineLootAwards` and `determineAttributeAdvancements`; NPC rulings feed only narration, never
+the player's rewards. That fixed the "materializes runtime item" regression without a test edit.
+
+**Existing tests updated to the new (correct) behavior** — enemies fight back now: `turn.test.ts`
+(+1 ruling), `v7Turn.test.ts` (two attack scenarios +1 ruling each), `history.test.ts` (kept
+exchange now holds player strike + counter = 2 rulings). Each change is a real behavior assertion,
+not a number bump.
+
+**Verification.** typecheck clean; **core 469 / 38 files (was 465) + UI 136 / 25 = 605 tests**
+green. UI untouched. No new installer (correct per handoff — streaming end-to-end wiring + stage
+deadlines still pending before packaging).
+
+**Honest scope / still open (for the next agent):**
+- Deterministic *direct* reactions only (counter-attack). No bounded model planner yet for
+  ambiguous social/tactical NPC choices, and no scene-entity **promotion** — a consequential
+  prose-only entity (the Jerusalem "hunched creature") still can't act until it exists as a
+  persisted character. Promotion (validated template/generic instantiation of a prose entity
+  before it acts) is the next NPC-agency slice.
+- The trigger is combat-target-based; "threatens" via non-combat intimidation doesn't yet
+  provoke. Widen the provoke predicate when promotion lands.
+- Streaming end-to-end (root cause 1 tail) is still unverified in the packaged app, and per-stage
+  deadlines + a faster default narrator tier are still pending — those attack total latency; this
+  change does not.
+
+---
+
 ## 2026-07-29 — Root cause 1 foundation: progressive verified narration release
 
 Implemented the streaming half of the handoff's single next action, test-first.

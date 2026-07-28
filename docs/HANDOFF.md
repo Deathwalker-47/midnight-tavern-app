@@ -5,13 +5,13 @@
 > sequential-agent protocol is in [`/AGENTS.md`](../AGENTS.md).
 
 **Updated:** 2026-07-29
-**Branch / HEAD:** `main` at `d2f98dd` (`core(orchestrator): progressive verified release in guarded
-narration`) — pushed
+**Branch / HEAD:** `main` at `c5b12d3` (`core(orchestrator): same-turn NPC agency — deterministic
+reaction stage`), docs baton commit on top — pushed
 **App version:** `0.2.8` (no rebuild since this change; core-only, no packaged artifact yet)
 **Tracked tree before this documentation update:** clean
 **User-owned/untracked:** `.codex/`, `opencode.json` — do not add, delete, or overwrite without
 explicit instruction
-**Baseline:** green — typecheck; **core 465 / 37 files + UI 136 / 25 files = 601 tests**
+**Baseline:** green — typecheck; **core 469 / 38 files + UI 136 / 25 files = 605 tests**
 **Known test noise:** seven React `act(...)` warnings (five `RulingBlock`, one `Play`, one `Overview`)
 **Active plan:** [`Plan/next-phase-internal-beta.md`](../Plan/next-phase-internal-beta.md)
 
@@ -142,6 +142,23 @@ social/tactical choices need a small, fast structured model call. Ambient extras
 prose-only until promoted. NPC actions use a separate encounter budget and never consume the
 player's configured action allowance.
 
+**DETERMINISTIC REACTION STAGE LANDED (2026-07-29).** `orchestrator/npcAgency.ts::planNpcReactions`
++ its wire in `turn.ts::runTurnOperation` now give a **present, living, already-persisted** NPC a
+same-turn counter-attack when the player lands an allowed combat action on it: the planner chooses
+a `MechanicalIntent` (first sealed combat action the NPC's own gate permits), the engine resolves
+it with full gate/dice/effects authority, and its ruling joins the narrative contract before
+narration. Own per-NPC encounter budget (`DEFAULT_NPC_ENCOUNTER_BUDGET`), independent of the
+player's `actionBudget`; loot/advancement are scoped to the player-ruling prefix so an NPC counter
+can't steal the player's reward anchor. Four tests pin it (surviving NPC reacts / slain NPC never
+acts / separate budget / narration-only stays quiet). **Still required to finish this root cause:**
+(1) **scene-entity promotion** — a consequential prose-only entity (the Jerusalem "hunched
+creature") still can't act because no character row exists; promote it via validated
+template/generic instantiation *before* it acts, and prove ambient prose extras never gain
+mechanics accidentally. (2) a **small bounded planner** for ambiguous social/tactical NPC choices
+(deterministic direct reactions are covered; goal-driven non-combat NPC action on a non-combat
+player turn is not). (3) widen the provoke predicate beyond combat targets (non-combat
+intimidation/"threatens") once promotion lands.
+
 ## Required next turn pipeline
 
 1. Persist player text and restore/reuse the operation.
@@ -266,18 +283,25 @@ player's configured action allowance.
 
 ## Single next action
 
-Streaming test (b) is **done** (commit `d2f98dd`). Two things remain, in this order:
+The deterministic same-turn NPC **reaction** stage is now landed (see root cause 2 above); a
+present, persisted NPC fights back with engine authority. Two things remain, in this order:
 
-1. **NPC same-turn agency (root cause 2) — the larger, still-untouched half.** Start with a failing
-   core test: player attacks/threatens a tracked NPC → same-turn NPC reaction produces an
-   authoritative ruling before narration. Then split `runTurnOperation` into explicit
-   player-resolution → consequential-entity promotion → NPC-decision/resolution (deterministic
-   reactions first; a small bounded planner only for ambiguous choices) → narrative-contract →
-   progressive guarded narration. NPC actions use a separate encounter budget, never the player's.
-   Preserve bridge parity and atomic persistence.
-2. **Close out streaming end-to-end:** verify `orchestrator/turn.ts` + bridge thread the real UI
-   `onDelta` into `generateGuardedNarration` and the narrator streams deltas in the packaged app; add
-   per-stage deadlines + first-safe-chunk telemetry; make the default narrator a responsive tier.
+1. **Scene-entity promotion — finish root cause 2.** The still-broken half: a consequential entity
+   that exists only in narrator prose (the Jerusalem "hunched creature") cannot act because it has
+   no character row, so `planNpcReactions` never sees it. Start with a failing core test: the player
+   attacks/threatens an NPC that is named only in recent narration → the engine **promotes** it to a
+   persisted character (validated NPC template, else generic bounds via `ensureHardState`/bootstrap)
+   **before** it acts → it produces a same-turn authoritative ruling. Add the negative test too:
+   ambient prose nouns (scenery, crowd) must NOT be promoted or gain mechanics. Wire promotion into
+   `runTurnOperation` just before `planNpcReactions`. Then (optional, second slice) add a small
+   bounded structured planner for *ambiguous* social/tactical NPC choices — deterministic direct
+   reactions already cover defend/counter; goal-driven non-combat NPC action does not. Preserve
+   bridge parity and atomic persistence; keep the NPC encounter budget separate from the player's.
+2. **Close out streaming end-to-end (root cause 1 tail):** verify `orchestrator/turn.ts` + bridge
+   thread the real UI `onDelta` into `generateGuardedNarration` and the narrator streams deltas in
+   the packaged app; add per-stage deadlines + first-safe-chunk telemetry; make the default narrator
+   a responsive tier (e.g. Sonnet). This is what attacks the ~50s classifier stall / 38–54s Opus
+   time — neither NPC-agency change touched total latency.
 
 Do not polish the seven `act(...)` warnings, signing/updater/CSP, or cut another installer before the
 NPC-agency gap is fixed and the full suite/build are green.
