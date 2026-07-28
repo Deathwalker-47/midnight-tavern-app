@@ -22,16 +22,20 @@ export interface CharacterRecord {
   storyId: string;
   name: string;
   isPlayer: boolean;
+  present: boolean;
   hard: CharacterHardState;
   soft?: CharacterSoftState;
   softTier?: SoftTier;
 }
+
+export type CharacterInsert = Omit<CharacterRecord, "present"> & { present?: boolean };
 
 interface Row {
   id: string;
   story_id: string;
   name: string;
   is_player: number;
+  present: number;
   hard_json: string;
   soft_json: string | null;
   soft_tier: string | null;
@@ -43,6 +47,7 @@ function toRecord(row: Row): CharacterRecord {
     storyId: row.story_id,
     name: row.name,
     isPlayer: toBool(row.is_player),
+    present: toBool(row.present),
     hard: decodeJson(CharacterHardStateSchema, row.hard_json) as CharacterHardState,
   };
   if (row.soft_json !== null) record.soft = decodeJson(CharacterSoftStateSchema, row.soft_json);
@@ -51,9 +56,13 @@ function toRecord(row: Row): CharacterRecord {
 }
 
 export interface CharacterRepo {
-  insert(record: CharacterRecord): Promise<void>;
+  insert(record: CharacterInsert): Promise<void>;
   get(id: string): Promise<CharacterRecord | undefined>;
   listByStory(storyId: string): Promise<CharacterRecord[]>;
+  /** List only characters currently present in the active scene. */
+  listPresentByStory(storyId: string): Promise<CharacterRecord[]>;
+  /** Change scene presence without removing the character from the registry. */
+  setPresent(id: string, present: boolean): Promise<void>;
   /** Overwrite the engine-owned hard state for one character. */
   updateHard(id: string, hard: CharacterHardState): Promise<void>;
   /** Overwrite the analyzer-owned soft state (and tier) for one character. */
@@ -68,12 +77,14 @@ export function makeCharacterRepo(db: Db): CharacterRepo {
     async insert(record) {
       CharacterHardStateSchema.parse(record.hard);
       await db.run(
-        `INSERT INTO characters (id, story_id, name, is_player, hard_json, soft_json, soft_tier)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO characters (
+           id, story_id, name, is_player, present, hard_json, soft_json, soft_tier
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         record.id,
         record.storyId,
         record.name,
         toInt(record.isPlayer),
+        toInt(record.present ?? true),
         encodeJson(CharacterHardStateSchema, record.hard),
         record.soft ? encodeJson(CharacterSoftStateSchema, record.soft) : null,
         record.softTier ?? null
@@ -91,6 +102,25 @@ export function makeCharacterRepo(db: Db): CharacterRepo {
         storyId
       );
       return rows.map(toRecord);
+    },
+
+    async listPresentByStory(storyId) {
+      const rows = await db.all<Row>(
+        `SELECT * FROM characters
+          WHERE story_id = ? AND present = 1
+          ORDER BY is_player DESC, name`,
+        storyId
+      );
+      return rows.map(toRecord);
+    },
+
+    async setPresent(id, present) {
+      const info = await db.run(
+        "UPDATE characters SET present = ? WHERE id = ?",
+        toInt(present),
+        id
+      );
+      if (info.changes === 0) throw new Error(`No character with id "${id}" to update.`);
     },
 
     async updateHard(id, hard) {

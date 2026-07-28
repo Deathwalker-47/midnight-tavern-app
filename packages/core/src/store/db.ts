@@ -395,6 +395,17 @@ CREATE INDEX idx_rulebook_snapshots_story
   ON rulebook_snapshots(story_id, rulebook_version, created_at);
 `,
   },
+  {
+    version: 11,
+    name: "character_scene_presence",
+    // Registry membership and active-scene presence are separate facts. Existing characters remain
+    // present by default so upgrading a story cannot silently empty its active cast.
+    sql: `
+ALTER TABLE characters ADD COLUMN present INTEGER NOT NULL DEFAULT 1;
+CREATE INDEX idx_characters_story_present
+  ON characters(story_id, present, is_player, name);
+`,
+  },
 ];
 
 /**

@@ -151,6 +151,7 @@ export async function ensureHardState(
       storyId,
       name: templateHint ?? characterId,
       isPlayer: false,
+      present: true,
       hard,
     };
     await store.characters.insert(record);

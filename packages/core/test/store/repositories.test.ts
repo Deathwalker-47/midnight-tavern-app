@@ -168,6 +168,7 @@ describe("characters", () => {
     await expect(
       store.characters.updateSoft("ghost", softState("ghost"), "primary")
     ).rejects.toThrow(/No character/);
+    await expect(store.characters.setPresent("ghost", false)).rejects.toThrow(/No character/);
   });
 
   it("lists a story's characters with players first", async () => {
@@ -186,6 +187,29 @@ describe("characters", () => {
       hard: makePlayer(),
     });
     expect((await store.characters.listByStory("s1")).map((c) => c.id)).toEqual(["kestrel", "wight"]);
+  });
+
+  it("keeps absent characters registered while filtering scene presence", async () => {
+    await store.characters.insert({
+      id: "wight",
+      storyId: "s1",
+      name: "Wight",
+      isPlayer: false,
+      present: false,
+      hard: makePlayer({ characterId: "wight", isPlayer: false }),
+    });
+
+    expect((await store.characters.listByStory("s1")).map((character) => character.id)).toEqual([
+      "wight",
+    ]);
+    expect(await store.characters.listPresentByStory("s1")).toEqual([]);
+
+    await store.characters.setPresent("wight", true);
+
+    expect((await store.characters.listPresentByStory("s1")).map((character) => character.id)).toEqual([
+      "wight",
+    ]);
+    expect((await store.characters.get("wight"))?.present).toBe(true);
   });
 });
 

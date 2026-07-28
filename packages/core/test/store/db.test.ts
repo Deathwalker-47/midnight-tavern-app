@@ -37,7 +37,7 @@ const EXPECTED_TABLES = [
 ];
 
 /** Number of embedded migrations. Bump when adding one. */
-const MIGRATION_COUNT = 10;
+const MIGRATION_COUNT = 11;
 
 async function tableNames(db: Db): Promise<string[]> {
   const rows = await db.all<{ name: string }>(
@@ -67,7 +67,36 @@ describe("openDb / migrations", () => {
       { version: 8, name: "v7_turn_operations_and_journal" },
       { version: 9, name: "v7_runtime_items_and_equipment" },
       { version: 10, name: "v7_rulebook_snapshots" },
+      { version: 11, name: "character_scene_presence" },
     ]);
+    await db.close();
+  });
+
+  it("defaults character rows to present", async () => {
+    const db = await openDb(":memory:");
+    await db.run(
+      "INSERT INTO stories (id, title, created_at, schema_json, locked) VALUES (?,?,?,?,?)",
+      "s1",
+      "S",
+      0,
+      "{}",
+      1
+    );
+    await db.run(
+      `INSERT INTO characters (id, story_id, name, is_player, hard_json)
+       VALUES (?, ?, ?, ?, ?)`,
+      "c1",
+      "s1",
+      "Character",
+      0,
+      "{}"
+    );
+
+    const row = await db.get<{ present: number }>(
+      "SELECT present FROM characters WHERE id = ?",
+      "c1"
+    );
+    expect(row?.present).toBe(1);
     await db.close();
   });
 
