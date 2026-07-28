@@ -31,7 +31,9 @@ re-grounded against current HEAD (most audit gaps had already been closed by lat
   exact, uniquely named catalog labels/ids/aliases; unknown actions and ambiguous targets remain
   narration-only. Reproduced the Jerusalem Man two-action turn in tests. Classifier repair is
   bounded to one retry, and a provider-only diagnostic is silent when sealed mechanics were fully
-  recovered; unresolved actions/targets still surface. _Landed 2026-07-28; hardened in v0.2.8._
+  recovered; unresolved actions/targets still surface. Live testing showed two malformed responses
+  can occur consecutively, so the bounded structured path now permits a second repair before local
+  recovery. _Landed 2026-07-28; hardened again 2026-07-29._
 - [x] **6. Persistent in-flight play + low-friction rulings.** Re-entering the same Play route now
   reuses its active global turn/regeneration operation instead of invalidating it. The classifier
   records scene stakes; valid unopposed narration-only actions auto-succeed without dice or XP,
@@ -52,8 +54,11 @@ re-grounded against current HEAD (most audit gaps had already been closed by lat
   counter-reactions, bounded narrated-NPC registration/promotion, separate NPC budget, and safe
   narrative-prefix streaming landed. _Task 1 completed 2026-07-29:_ registry membership and active
   scene presence are now separate persisted facts (`characters.present`) with filtered repository
-  access and safe default migration behavior. Still open: making presence authoritative and
-  rollback-safe, a structured introduction contract that guarantees every actual NPC enters the
+  access and safe default migration behavior. _Task 2 completed 2026-07-29:_ presence is now
+  authoritative across active consumers and rollback-safe through checkpoint pre-images. Live DM
+  rulings are delivered to Play before the first narrator delta. The sentence-initial “Nothing
+  moves…” false-positive is rejected, and migration 13 removes the existing unused phantom.
+  Still open: a structured introduction contract that guarantees every actual NPC enters the
   registry, ambiguous goal-driven planning, mechanical-beat streaming, deadlines/telemetry, and
   responsive default models._
 

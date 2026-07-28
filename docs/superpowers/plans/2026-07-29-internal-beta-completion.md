@@ -167,7 +167,7 @@ git commit -m "core(store): separate character registry from scene presence"
 - Produces: checkpoint `presencePreJson: string`
 - Migration: version 12, `checkpoint_scene_presence`
 
-- [ ] **Step 1: Write failing tests for absent NPC exclusion and rewind**
+- [x] **Step 1: Write failing tests for absent NPC exclusion and rewind**
 
 ```ts
 expect(classifierPrompt).not.toContain("retired-guard");
@@ -177,14 +177,14 @@ await rewindTo(store, storyId, priorTurn);
 expect((await store.characters.get("retired-guard"))?.present).toBe(true);
 ```
 
-- [ ] **Step 2: Observe failures**
+- [x] **Step 2: Observe failures**
 
 ```powershell
 npm --prefix packages/core test -- test/orchestrator/history.test.ts test/orchestrator/npcAgency.test.ts
 npm --prefix packages/ui test -- test/bridge/sqliteBridge.test.ts test/bridge/memoryBridge.test.ts
 ```
 
-- [ ] **Step 3: Snapshot presence and switch every present-cast consumer**
+- [x] **Step 3: Snapshot presence and switch every present-cast consumer**
 
 ```ts
 const present = Object.fromEntries(roster.map((character) => [character.id, character.present]));
@@ -193,7 +193,7 @@ const present = Object.fromEntries(roster.map((character) => [character.id, char
 Use `listPresentByStory` in `runTurnOperation`, `assembleContext`, native `listPresentCast`, and the
 in-memory bridge equivalent. Restore every saved boolean in `applyRestore`.
 
-- [ ] **Step 4: Verify bridge parity, history, and full suite**
+- [x] **Step 4: Verify bridge parity, history, and full suite**
 
 ```powershell
 npm run typecheck
@@ -202,11 +202,16 @@ npm --prefix packages/ui test -- test/bridge/sqliteBridge.test.ts test/bridge/me
 npm test
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git commit -am "core(orchestrator): make scene presence authoritative"
 ```
+
+Completed in `de443cf`. Migration 12 persists checkpoint presence pre-images; rewind restores every
+saved boolean; classifier/context/NPC agency/analyzer/suggestions/native cast all use the present
+roster while dossier/history retain the complete registry. Focused RED failures were observed for
+absent-NPC agency, rewind, and native bridge filtering before implementation.
 
 ### Task 3: Add an Engine-Validated NPC Introduction Contract
 

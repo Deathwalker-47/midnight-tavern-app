@@ -364,3 +364,41 @@ True contradictions still follow the existing rewrite-or-safe-fallback authority
 UI 136 = 599 tests**. Production UI/Tauri build and `cargo check` clean. Unsigned v0.2.8 bundles:
 NSIS SHA-256 `F747FDEADD5CE1EC38151445BE6FB74F52DF4A2851BAF579B547C62DB9680AC1`;
 MSI SHA-256 `8D3C1C5D863FF9D359CA9B5A1213DFD5CDDA71789B8CC21F00234381CBF774BF`.
+
+---
+
+## 2026-07-29 — Make presence authoritative; repair live ruling order and false NPC promotion
+
+Completed detailed-plan Task 2 in commit `de443cf`. Migration 12 adds checkpoint scene-presence
+pre-images. Rewind restores every saved presence boolean. Turn classification, context assembly,
+NPC agency, analyzer, suggestions, swipe context, and the native cast bridge now consume only
+`listPresentByStory`; checkpoint/dossier/history/rulebook paths retain the complete registry.
+Focused RED tests proved that an absent NPC could still act, rewind failed to restore presence, and
+the native bridge exposed the full registry before the fix.
+
+The human then reported two packaged regressions: DM rulings appeared only after streamed prose
+completed, and the narration sentence “Nothing moves…” created a character named Nothing. Commit
+`2e4cf07` fixes both:
+
+- core emits an immutable `onRulings` snapshot before `thinking`, `streaming`, or any narrator delta;
+  both bridges thread it and Play renders `pendingRulings` above the live prose buffer;
+- sentence-initial quantifiers are excluded from proper-name promotion while a real name such as
+  Ashara remains accepted;
+- migration 13 removes the existing unused `:scene:nothing` phantom and scrubs its checkpoint keys;
+  mechanically referenced rows are preserved;
+- classifier structured output now permits a second bounded repair after live evidence showed two
+  consecutive malformed shapes from the same route.
+
+Test-first RED failures were observed for ruling-before-prose order, Nothing/Something promotion,
+the missing cleanup migration, and the unavailable second structured repair.
+
+**Verification:** `npm run typecheck` clean; core **480 / 39 files** and UI **137 / 25 files** green
+(**617 tests** total); production `npm run build` and Rust `cargo check` green. Known test noise
+remains seven React `act(...)` warnings. Fresh unsigned v0.2.8 bundles:
+
+- NSIS SHA-256 `B438E441A51C7C503E59F97A3794349485C919818EDAA565F6A4E4834F55798F`
+- MSI SHA-256 `9F2717FB8BE186F191120F053D53625727B2279B3CB178E82E990AC3032588B8`
+
+Added `docs/NEXT-AGENT-PROMPT.md` as a copy-ready continuation brief. The single next action is
+detailed-plan Task 3: the engine-validated NPC introduction/presence contract, followed by retiring
+post-narration heuristic creation as an authority path.

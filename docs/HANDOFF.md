@@ -5,13 +5,14 @@
 > sequential-agent protocol is in [`/AGENTS.md`](../AGENTS.md).
 
 **Updated:** 2026-07-29
-**Branch / HEAD:** `main` at `c284b1d` (`core(store): separate character registry from scene
-presence`), docs baton commit on top — local, not pushed
+**Branch / HEAD:** `main` at `2e4cf07` (`fix(play): show rulings before narration`) before this
+documentation commit — local, not pushed
 **App version:** `0.2.8` (fresh unsigned MSI/NSIS rebuild after this change)
 **Tracked tree before this documentation update:** clean
 **User-owned/untracked:** `.codex/`, `opencode.json` — do not add, delete, or overwrite without
 explicit instruction
-**Baseline:** green — typecheck; **core 475 / 38 files + UI 136 / 25 files = 611 tests**
+**Baseline:** green — typecheck; **core 480 / 39 files + UI 137 / 25 files = 617 tests**;
+production build and `cargo check` green
 **Known test noise:** seven React `act(...)` warnings (five `RulingBlock`, one `Play`, one `Overview`)
 **Active plan:** [`Plan/next-phase-internal-beta.md`](../Plan/next-phase-internal-beta.md)
 **Detailed execution plan:**
@@ -69,14 +70,22 @@ explicit instruction
   events before narrator prose. Ordinary scores cap at 20; 20+ requires explicit superhuman
   provenance.
 - In-flight Play operations survive leaving and returning to the same story route.
-- Classifier JSON normalization, one bounded repair, and exact sealed-catalog recovery landed.
+- Classifier JSON normalization, two bounded repairs, and exact sealed-catalog recovery landed.
+- Registry membership and scene presence are separate, authoritative persisted facts. Migration 12
+  snapshots presence for rewind; active turn/context/analyzer/suggestion/bridge consumers use only
+  present characters while dossier/history retain the complete registry.
+- Play receives a transient immutable ruling snapshot before narrator streaming starts and renders
+  it above the live prose buffer. The ruling no longer appears only after the completed prose reload.
+- Scene entity promotion rejects quantifier false positives such as “Nothing moves…” and
+  “Something watches…”. Migration 13 removes the existing unused `:scene:nothing` phantom and its
+  checkpoint keys on upgrade.
 - Narrator authority-audit normalization and fail-closed fallback landed; a provider-shape error no
   longer causes an automatic second full narrator generation.
 - Current unsigned v0.2.8 artifacts:
   - NSIS: `packages/shell/src-tauri/target/release/bundle/nsis/Midnight Tavern_0.2.8_x64-setup.exe`
-    — SHA-256 `DE84C91EAB90333F447EABD0D98A8865ADB54DFD2AAEFD4D80D167A47257A18B`
+    — SHA-256 `B438E441A51C7C503E59F97A3794349485C919818EDAA565F6A4E4834F55798F`
   - MSI: `packages/shell/src-tauri/target/release/bundle/msi/Midnight Tavern_0.2.8_x64_en-US.msi`
-    — SHA-256 `FF8BFA3A912189061AEBC853E2EDF5370A38A646C63B68526FAF5EEF59F597B6`
+    — SHA-256 `9F2717FB8BE186F191120F053D53625727B2279B3CB178E82E990AC3032588B8`
 
 ## Latest packaged evidence — do not dismiss as a model-only problem
 
@@ -182,8 +191,19 @@ Migration 11 adds `characters.present` with a safe default of present for existi
 `listPresentByStory` filters the active scene, and `setPresent` changes presence without deleting
 the character. Newly materialized encounter NPCs explicitly start present. Repository and migration
 tests cover registry retention, filtering, toggling, safe defaults, and missing-id failure.
-Consumers still intentionally use their existing behavior until Task 2 changes them atomically with
-checkpoint/rewind support.
+**PRESENCE AUTHORITY / ROLLBACK COMPLETED (2026-07-29, commit `de443cf`).**
+Migration 12 adds checkpoint presence pre-images. Rewind restores scene membership. Turn
+classification, context assembly, NPC agency, analyzer, suggestions, swipe, and the native cast
+bridge use `listPresentByStory`; complete-registry views remain complete. Tests prove an absent NPC
+stays registered but cannot act or enter narrator/classifier context.
+
+**LIVE RULING ORDER + FALSE ENTITY REPAIR COMPLETED (2026-07-29, commit `2e4cf07`).**
+`SubmitTurnOptions` and both UI bridges now carry `onRulings`, emitted before `thinking`/`streaming`.
+`playStore.pendingRulings` renders authoritative rulings above the live prose buffer and clears them
+when the persisted snapshot arrives, preventing duplicates. The proper-name heuristic no longer
+promotes sentence-initial quantifiers; migration 13 removes the reported unused “Nothing” row and
+scrubs its checkpoint keys. Classifier structured output gets one additional bounded repair because
+the live provider produced two consecutive invalid shapes.
 
 ## Required next turn pipeline
 
@@ -309,14 +329,14 @@ checkpoint/rewind support.
 
 ## Single next action
 
-Execute the detailed plan sequentially. Start with **Task 2: Make Presence Authoritative and
-Rollback-Safe**. Add checkpoint presence pre-images and restore behavior, then switch the
-orchestrator, NPC agency, context assembly, and both bridge implementations to the persisted
-present-cast query with parity tests. Keep the complete registry available for dossier/history
-views, and prove absent NPCs cannot act or enter active context.
+Execute the detailed plan sequentially. Start with **Task 3: Add an Engine-Validated NPC
+Introduction Contract**. Write the structured-stage tests first, then implement one bounded
+classifier-role proposal whose names/templates/grounding are deterministically validated. Reuse
+registry rows by normalized name, stage introduce/enter/leave transitions before narration, commit
+them atomically, and constrain narrator prose to registered present characters.
 
-Do not polish the seven `act(...)` warnings, signing/updater/CSP, or cut another installer before
-the all-NPC registry/presence contract is structurally complete and the full suite/build are green.
+Task 4 must then retire heuristic post-narration creation as an authority path. Keep only an
+explicitly bounded legacy catch-up if required for old stories. Do not begin signing/updater/CSP.
 
 ## Watch-outs
 
