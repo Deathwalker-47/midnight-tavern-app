@@ -22,6 +22,10 @@ import type {
   Store,
   TurnOperationState,
 } from "@midnight-tavern/core";
+// Native (Rust) fetch — bypasses webview CORS so provider APIs are actually reachable from the
+// packaged app. Injected into core's router + provider clients below. Tauri-only module; safe here
+// because this bridge is dynamically imported only inside the Tauri shell.
+import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 import type {
   CastMember,
   CardImportResult,
@@ -107,7 +111,13 @@ export function buildSqliteBridge(
         throw new core.MissingCredentialsError(role, binding.provider);
       }
     }
-    return core.makeRouter({ providerConfigs, roleMap, logger: diagnosticsLogger });
+    return core.makeRouter({
+      providerConfigs,
+      roleMap,
+      logger: diagnosticsLogger,
+      // Route every role/forge/turn provider call through native HTTP (no browser CORS).
+      fetchImpl: tauriFetch as typeof fetch,
+    });
   }
 
   async function requireStory(storyId: string) {
@@ -639,7 +649,7 @@ export function buildSqliteBridge(
       // core has no dedicated key-probe endpoint (providers expose only chat/chatStream), and no
       // balance surface, so we do a minimal real chat call: success ⇒ valid, failure ⇒ rejected.
       // Balance is intentionally omitted rather than faked (the stub showed a placeholder "$4.20").
-      const chatProvider = core.makeProvider(provider);
+      const chatProvider = core.makeProvider(provider, tauriFetch as typeof fetch);
       try {
         await chatProvider.validateConfig?.(
           { apiKey: trimmed, ...(baseUrl ? { baseUrl } : {}) },
@@ -670,7 +680,7 @@ export function buildSqliteBridge(
     },
 
     async listProviderModels(provider, apiKey, baseUrl, signal) {
-      const providerClient = core.makeProvider(provider);
+      const providerClient = core.makeProvider(provider, tauriFetch as typeof fetch);
       if (!providerClient.listModels) throw new Error(`${provider} does not expose model discovery.`);
       return providerClient.listModels(
         { apiKey: apiKey.trim(), ...(baseUrl ? { baseUrl } : {}) },

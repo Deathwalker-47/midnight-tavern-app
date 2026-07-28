@@ -57,6 +57,8 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        // Native HTTP so model-provider calls bypass webview CORS (see Cargo.toml note).
+        .plugin(tauri_plugin_http::init())
         .invoke_handler(tauri::generate_handler![
             db::db_exec,
             db::db_select,

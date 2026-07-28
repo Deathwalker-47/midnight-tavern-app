@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2/capability",
   "identifier": "default",
-  "description": "Least-privilege permissions for the main Midnight Tavern window: local SQLite, local logs, auto-update checks, file-import dialogs, diagnostics folder reveal, and scoped filesystem access limited to the app data directory. No arbitrary FS, no shell, no HTTP allowlist beyond the updater.",
+  "description": "Least-privilege permissions for the main Midnight Tavern window: local SQLite, local logs, auto-update checks, file-import dialogs, diagnostics folder reveal, scoped filesystem access limited to the app data directory, and native HTTP to user-configured model-provider endpoints (https anywhere + localhost, so browser CORS never blocks provider calls). No arbitrary FS, no shell.",
   "windows": ["main"],
   "permissions": [
     "core:default",
@@ -18,6 +18,15 @@
     },
 
     "dialog:allow-open",
+
+    {
+      "identifier": "http:default",
+      "allow": [
+        { "url": "https://**" },
+        { "url": "http://localhost:*" },
+        { "url": "http://127.0.0.1:*" }
+      ]
+    },
 
     "fs:default",
     {
