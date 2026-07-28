@@ -4,13 +4,14 @@
 > context, and the **single next action**. History belongs in [`WORKLOG.md`](WORKLOG.md); the
 > sequential-agent protocol is in [`/AGENTS.md`](../AGENTS.md).
 
-**Updated:** 2026-07-28
-**Branch / HEAD:** `main` at `c98d783` (`core: restore guarded narrator prose`), local only
-**App version:** `0.2.8`
+**Updated:** 2026-07-29
+**Branch / HEAD:** `main` at `d2f98dd` (`core(orchestrator): progressive verified release in guarded
+narration`) — pushed
+**App version:** `0.2.8` (no rebuild since this change; core-only, no packaged artifact yet)
 **Tracked tree before this documentation update:** clean
 **User-owned/untracked:** `.codex/`, `opencode.json` — do not add, delete, or overwrite without
 explicit instruction
-**Baseline:** green — typecheck; **core 463 / 37 files + UI 136 / 25 files = 599 tests**
+**Baseline:** green — typecheck; **core 465 / 37 files + UI 136 / 25 files = 601 tests**
 **Known test noise:** seven React `act(...)` warnings (five `RulingBlock`, one `Play`, one `Overview`)
 **Active plan:** [`Plan/next-phase-internal-beta.md`](../Plan/next-phase-internal-beta.md)
 
@@ -104,6 +105,17 @@ chunks. Each chunk must be held until validated against immutable rulings, then 
 chunk is repaired or replaced without exposing it. This gives genuine incremental delivery with a
 small verification delay while preserving fail-closed DM authority. A post-audit typewriter effect
 is not real streaming and does not solve latency.
+
+**FOUNDATION LANDED (2026-07-29, commit `d2f98dd`).** `generateGuardedNarration` now releases each
+complete *non-mechanical* paragraph as it streams and holds the first mechanical paragraph + rest for
+the whole-draft audit (deterministic `assertsMechanic` guard; fail-closed; rejected remainder →
+`safeSummary`). Two tests pin it. **Still required to finish this root cause:** (1) verify the turn
+orchestrator (`orchestrator/turn.ts`) + bridge actually thread the real UI `onDelta` into
+`generateGuardedNarration` and that the narrator provider streams deltas — otherwise the packaged app
+sees no change; add a packaged smoke check. (2) per-beat verification for *mechanical* beats (a
+deterministic-first fast path, not a model audit per beat) so combat prose also streams. (3) per-stage
+deadlines + a faster default narrator tier to attack the ~50s classifier stall / 38–54s Opus time —
+this foundation only improves time-to-first-*narrative*-prose, not total latency.
 
 ## Confirmed root cause 2 — NPCs have no same-turn agency pipeline
 
@@ -254,13 +266,21 @@ player's configured action allowance.
 
 ## Single next action
 
-**Implement the agency + progressive-authority-streaming foundation test-first.**
+Streaming test (b) is **done** (commit `d2f98dd`). Two things remain, in this order:
 
-Start with failing core tests for (a) a same-turn NPC reaction after a player ruling and (b) a
-verified paragraph arriving before narrator completion without exposing a contradictory paragraph.
-Then split `runTurnOperation` into explicit player-resolution, NPC-decision/resolution, narrative
-contract, and progressive guarded-narration stages. Add per-stage deadlines and duration/first-safe-
-chunk telemetry as part of the same pipeline change. Preserve bridge parity and atomic persistence.
+1. **NPC same-turn agency (root cause 2) — the larger, still-untouched half.** Start with a failing
+   core test: player attacks/threatens a tracked NPC → same-turn NPC reaction produces an
+   authoritative ruling before narration. Then split `runTurnOperation` into explicit
+   player-resolution → consequential-entity promotion → NPC-decision/resolution (deterministic
+   reactions first; a small bounded planner only for ambiguous choices) → narrative-contract →
+   progressive guarded narration. NPC actions use a separate encounter budget, never the player's.
+   Preserve bridge parity and atomic persistence.
+2. **Close out streaming end-to-end:** verify `orchestrator/turn.ts` + bridge thread the real UI
+   `onDelta` into `generateGuardedNarration` and the narrator streams deltas in the packaged app; add
+   per-stage deadlines + first-safe-chunk telemetry; make the default narrator a responsive tier.
+
+Do not polish the seven `act(...)` warnings, signing/updater/CSP, or cut another installer before the
+NPC-agency gap is fixed and the full suite/build are green.
 
 Do not spend the next cycle polishing the seven `act(...)` warnings, signing/updater/CSP, or producing
 another installer before this architectural gap is fixed and the full suite/build are green.

@@ -6,6 +6,48 @@ landed, why, verification, and any gotcha the next agent needs. Live state is in
 
 ---
 
+## 2026-07-29 — Root cause 1 foundation: progressive verified narration release
+
+Implemented the streaming half of the handoff's single next action, test-first.
+
+**What landed.** `orchestrator/authorityGuard.ts::generateGuardedNarration` no longer buffers the
+whole mechanical-turn draft behind an empty `onDelta`. During the streaming attempt it now releases
+each COMPLETE paragraph that asserts no mechanic (deterministic `assertsMechanic` vocabulary check)
+the instant it streams — such a beat cannot contradict a ruling — and holds the first mechanical
+paragraph + everything after it for the whole-draft audit. On accept the held remainder is released;
+on reject the held remainder is replaced by the deterministic `safeSummary` and never shown.
+Already-shown beats were safe by construction → nothing contradictory is ever exposed. Fail-closed.
+
+Two new tests in `authorityGuard.test.ts`: (a) a verified leading paragraph is released before the
+draft finishes (>=2 deltas, first delta is the safe beat only); (b) a rejected mechanical paragraph
+never reaches the UI or final prose. Both were written failing first, then made to pass.
+
+**Backward compatible.** Providers/tests whose `stream()` doesn't emit deltas (existing mocks) leave
+`releasedLen=0` and get the previous buffer-then-release path unchanged. All existing orchestrator
+tests green.
+
+**Verification.** typecheck clean; core 465 tests (was 463); orchestrator suite 43/43. UI untouched.
+
+**Honest scope / what this does NOT do (for the next agent):**
+- It cuts *time-to-first-visible-prose* for the narrative prefix (beats appear while the narrator is
+  still generating). It does NOT reduce total narrator time or the ~50s classifier stall in the
+  logged evidence — those need per-stage deadlines + a faster default narrator tier + the pipeline
+  split, all still pending.
+- Mechanical beats still wait for the single full-draft audit (no per-chunk model audit was added —
+  that would multiply latency). True per-beat verification with a deterministic-first fast path is a
+  later refinement.
+- End-to-end benefit depends on the narrator provider actually streaming deltas and the turn
+  orchestrator passing the real UI `onDelta` through to `generateGuardedNarration`. Verify that wire
+  in `orchestrator/turn.ts` + bridge before claiming packaged improvement; add a packaged smoke check.
+- `assertsMechanic` is intentionally conservative (holds combat words like "damage/wound/success"),
+  so combat prose may release little early. Tune the vocabulary if too aggressive.
+
+**Still open (root cause 2 + pipeline):** NPC same-turn agency and the `runTurnOperation` stage-split
+(player-resolution -> NPC-decision/resolution -> narrative contract -> progressive narration) are
+untouched. That remains the larger part of the single next action.
+
+---
+
 ## 2026-07-28 — Refresh handoff with packaged latency, streaming, and NPC-agency diagnosis
 
 Updated `docs/HANDOFF.md` as the complete sequential-agent baton after the latest v0.2.8 packaged
