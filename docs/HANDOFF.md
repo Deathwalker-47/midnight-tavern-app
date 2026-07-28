@@ -5,13 +5,14 @@
 > sequential-agent protocol is in [`/AGENTS.md`](../AGENTS.md).
 
 **Updated:** 2026-07-29
-**Branch / HEAD:** `main` at `c5b12d3` (`core(orchestrator): same-turn NPC agency — deterministic
-reaction stage`), docs baton commit on top — pushed
-**App version:** `0.2.8` (no rebuild since this change; core-only, no packaged artifact yet)
+**Branch / HEAD:** `main` at `d81bcab` (`core(orchestrator): register narrated NPCs before agency`),
+docs baton commit on top — local, not pushed
+**App version:** `0.2.8` (fresh unsigned MSI/NSIS rebuild after this change)
 **Tracked tree before this documentation update:** clean
 **User-owned/untracked:** `.codex/`, `opencode.json` — do not add, delete, or overwrite without
 explicit instruction
-**Baseline:** green — typecheck; **core 469 / 38 files + UI 136 / 25 files = 605 tests**
+**Baseline:** green — typecheck + production build; **core 473 / 38 files + UI 136 / 25 files = 609
+tests**
 **Known test noise:** seven React `act(...)` warnings (five `RulingBlock`, one `Play`, one `Overview`)
 **Active plan:** [`Plan/next-phase-internal-beta.md`](../Plan/next-phase-internal-beta.md)
 
@@ -42,6 +43,10 @@ explicit instruction
 - Starting equipment explicitly carried by the card/persona may be created at forge time. Do not
   pre-generate a universe-wide item catalog. Later loot is generated on demand from encounter
   context, validated by the engine, and awarded only when deserved.
+- Every actual NPC introduced into the fiction belongs in the character registry. Background
+  scenery, crowds-as-background, murals, statues, and other non-character nouns do not. Registry
+  membership alone must not bypass scene presence, hard-state validation, catalogs, gates, or
+  action budgets.
 - Engineering owns versioned progression/configuration. Do not ask Design AI or narrator prose to
   invent formulas, caps, universal actions, model defaults, or advancement policy.
 
@@ -67,9 +72,9 @@ explicit instruction
   longer causes an automatic second full narrator generation.
 - Current unsigned v0.2.8 artifacts:
   - NSIS: `packages/shell/src-tauri/target/release/bundle/nsis/Midnight Tavern_0.2.8_x64-setup.exe`
-    — SHA-256 `F747FDEADD5CE1EC38151445BE6FB74F52DF4A2851BAF579B547C62DB9680AC1`
+    — SHA-256 `DE84C91EAB90333F447EABD0D98A8865ADB54DFD2AAEFD4D80D167A47257A18B`
   - MSI: `packages/shell/src-tauri/target/release/bundle/msi/Midnight Tavern_0.2.8_x64_en-US.msi`
-    — SHA-256 `8D3C1C5D863FF9D359CA9B5A1213DFD5CDDA71789B8CC21F00234381CBF774BF`
+    — SHA-256 `FF8BFA3A912189061AEBC853E2EDF5370A38A646C63B68526FAF5EEF59F597B6`
 
 ## Latest packaged evidence — do not dismiss as a model-only problem
 
@@ -138,9 +143,9 @@ act. After resolving player intents, run an NPC decision stage against updated h
 personality, relationships, danger, scene presence, and the sealed action catalog. Resolve those
 NPC intents before narration, then give all rulings to the narrator. Obvious direct reactions
 (defend, counter, flee, surrender) should use deterministic policy when possible; only ambiguous
-social/tactical choices need a small, fast structured model call. Ambient extras may remain
-prose-only until promoted. NPC actions use a separate encounter budget and never consume the
-player's configured action allowance.
+social/tactical choices need a small, fast structured model call. Every actual NPC introduced in
+prose must enter the character registry; ambient non-characters remain prose-only. NPC actions use
+a separate encounter budget and never consume the player's configured action allowance.
 
 **DETERMINISTIC REACTION STAGE LANDED (2026-07-29).** `orchestrator/npcAgency.ts::planNpcReactions`
 + its wire in `turn.ts::runTurnOperation` now give a **present, living, already-persisted** NPC a
@@ -149,15 +154,25 @@ a `MechanicalIntent` (first sealed combat action the NPC's own gate permits), th
 it with full gate/dice/effects authority, and its ruling joins the narrative contract before
 narration. Own per-NPC encounter budget (`DEFAULT_NPC_ENCOUNTER_BUDGET`), independent of the
 player's `actionBudget`; loot/advancement are scoped to the player-ruling prefix so an NPC counter
-can't steal the player's reward anchor. Four tests pin it (surviving NPC reacts / slain NPC never
-acts / separate budget / narration-only stays quiet). **Still required to finish this root cause:**
-(1) **scene-entity promotion** — a consequential prose-only entity (the Jerusalem "hunched
-creature") still can't act because no character row exists; promote it via validated
-template/generic instantiation *before* it acts, and prove ambient prose extras never gain
-mechanics accidentally. (2) a **small bounded planner** for ambiguous social/tactical NPC choices
-(deterministic direct reactions are covered; goal-driven non-combat NPC action on a non-combat
-player turn is not). (3) widen the provoke predicate beyond combat targets (non-combat
-intimidation/"threatens") once promotion lands.
+can't steal the player's reward anchor.
+
+**NARRATED NPC REGISTRATION / PROMOTION FOUNDATION LANDED (2026-07-29, commit `d81bcab`).**
+`orchestrator/sceneEntityPromotion.ts::discoverNarratedSceneEntities` recognizes scene-grounded NPC
+templates, bounded described actors (for example "a hunched creature crawls"), and proper named
+actors (for example "Mara enters"). `runTurnOperation` catches up entities in recent narration
+before classification, so the sealed classifier can legally target them, and registers NPCs newly
+introduced by generated prose inside the same save transaction. Stable per-story ids prevent retry
+duplicates; `ensureHardState` chooses a matching template or generic bounded state. Eight agency
+tests now pin reaction policy plus promotion/registration: the prose-only hunched creature receives
+the player's ruling and a same-turn authoritative counter; an unprovoked guard and newly narrated
+Mara enter the registry; a painted mural guard/scenery/crowd does not.
+
+**Honest remaining root-cause-2 work:** the bounded deterministic recognizer cannot prove literal
+coverage for every possible linguistic NPC introduction. The user's rule is stronger: every actual
+NPC that appears must be in the registry. Add a structured, engine-validated entity-introduction
+contract/stage so narrator wording cannot evade registration, and distinguish registry membership
+from current scene presence before broadening the roster further. Then add a small bounded planner
+for ambiguous social/tactical choices and widen deterministic provocation beyond combat targets.
 
 ## Required next turn pipeline
 
@@ -283,31 +298,26 @@ intimidation/"threatens") once promotion lands.
 
 ## Single next action
 
-The deterministic same-turn NPC **reaction** stage is now landed (see root cause 2 above); a
-present, persisted NPC fights back with engine authority. Two things remain, in this order:
+The deterministic reaction stage and a bounded scene-entity registration/promotion foundation are
+landed. Two things remain, in this order:
 
-1. **Scene-entity promotion — finish root cause 2.** The still-broken half: a consequential entity
-   that exists only in narrator prose (the Jerusalem "hunched creature") cannot act because it has
-   no character row, so `planNpcReactions` never sees it. Start with a failing core test: the player
-   attacks/threatens an NPC that is named only in recent narration → the engine **promotes** it to a
-   persisted character (validated NPC template, else generic bounds via `ensureHardState`/bootstrap)
-   **before** it acts → it produces a same-turn authoritative ruling. Add the negative test too:
-   ambient prose nouns (scenery, crowd) must NOT be promoted or gain mechanics. Wire promotion into
-   `runTurnOperation` just before `planNpcReactions`. Then (optional, second slice) add a small
-   bounded structured planner for *ambiguous* social/tactical NPC choices — deterministic direct
-   reactions already cover defend/counter; goal-driven non-combat NPC action does not. Preserve
-   bridge parity and atomic persistence; keep the NPC encounter budget separate from the player's.
+1. **Make the all-NPC registry rule structurally complete — finish root cause 2.** Replace reliance
+   on bounded prose recognition with a structured, engine-validated NPC-introduction contract or
+   pre-narration entity stage. Any actual NPC the narrator introduces must atomically receive a
+   registry row; non-character scenery/crowds/depictions must not. Explicitly separate "registered
+   in this story" from "present in this scene" so the classifier, UI party strip, and reaction
+   planner do not treat every historical NPC as co-located forever. Prove named, generic/template,
+   departure/re-entry, retry, narrator failure, and ambient-negative cases. Then add the small
+   bounded planner for ambiguous social/tactical NPC choices and widen deterministic provocation
+   beyond combat targets. Keep mechanical choice and hard-state authority in the engine.
 2. **Close out streaming end-to-end (root cause 1 tail):** verify `orchestrator/turn.ts` + bridge
    thread the real UI `onDelta` into `generateGuardedNarration` and the narrator streams deltas in
    the packaged app; add per-stage deadlines + first-safe-chunk telemetry; make the default narrator
    a responsive tier (e.g. Sonnet). This is what attacks the ~50s classifier stall / 38–54s Opus
    time — neither NPC-agency change touched total latency.
 
-Do not polish the seven `act(...)` warnings, signing/updater/CSP, or cut another installer before the
-NPC-agency gap is fixed and the full suite/build are green.
-
-Do not spend the next cycle polishing the seven `act(...)` warnings, signing/updater/CSP, or producing
-another installer before this architectural gap is fixed and the full suite/build are green.
+Do not polish the seven `act(...)` warnings, signing/updater/CSP, or cut another installer before
+the all-NPC registry/presence contract is structurally complete and the full suite/build are green.
 
 ## Watch-outs
 

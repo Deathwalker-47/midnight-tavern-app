@@ -6,6 +6,52 @@ landed, why, verification, and any gotcha the next agent needs. Live state is in
 
 ---
 
+## 2026-07-29 — Narrated NPC registry + prose-only scene-entity promotion foundation
+
+Implemented the handoff's scene-entity promotion slice test-first, then expanded it for the product
+owner's clarification: every actual NPC introduced into the fiction belongs in the character
+registry; background scenery, crowds-as-background, murals, statues, and other non-character nouns
+do not.
+
+**What landed.** New
+`orchestrator/sceneEntityPromotion.ts::discoverNarratedSceneEntities` recognizes validated NPC
+templates, bounded described actors ("a hunched creature crawls"), and proper named actors ("Mara
+enters"). It assigns stable per-story ids. `runTurnOperation` uses it in two places:
+
+- before classification, it catches up NPCs found in recent narration through `ensureHardState`, so
+  the sealed classifier can legally emit the new id and the ordinary resolver/reaction pipeline can
+  adjudicate it;
+- after narration, it registers newly introduced NPCs inside the same save transaction as prose,
+  checkpoint, rulings, and hard-state updates, so a successful turn cannot persist prose without
+  the detected NPC's registry row.
+
+Templates are preferred; otherwise `instantiateGeneric` supplies bounded hard state. Registration
+does not create an action or bypass the catalog/gate/dice wall. The existing deterministic
+`planNpcReactions` remains the only chooser for obvious counter-attacks, with its separate NPC
+budget.
+
+**Red/green coverage.** `npcAgency.test.ts` grew from 4 to 8 tests. The new tests prove:
+
+- the Jerusalem-style "hunched creature" exists only in prior narrator prose, is promoted before
+  classification, receives the player's authoritative attack ruling, and counter-attacks this same
+  turn through engine dice;
+- a real but unprovoked described guard enters the registry;
+- a newly narrated proper-name NPC enters the registry in the same atomic turn;
+- a guard depicted only in a mural, plus scenery/crowd nouns, does not become a character.
+
+**Verification.** Fresh post-refactor typecheck clean; core **473 / 38 files** + UI **136 / 25
+files** = **609 tests** green (the same seven known React `act(...)` warnings); full production
+build green. Fresh unsigned v0.2.8 hashes: NSIS
+`DE84C91EAB90333F447EABD0D98A8865ADB54DFD2AAEFD4D80D167A47257A18B`; MSI
+`FF8BFA3A912189061AEBC853E2EDF5370A38A646C63B68526FAF5EEF59F597B6`.
+
+**Honest remaining work.** The recognizer is deliberately bounded and cannot guarantee every
+possible linguistic NPC introduction. The next slice must make the product rule structural with an
+engine-validated entity-introduction contract/stage and separate registry membership from current
+scene presence. Then add ambiguous goal-driven NPC planning and broaden non-combat provocation.
+
+---
+
 ## 2026-07-29 — Root cause 2: same-turn NPC agency (deterministic reaction stage)
 
 Implemented the larger half of the handoff's single next action, test-first: NPCs now act on
