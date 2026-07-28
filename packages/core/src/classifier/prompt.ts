@@ -43,31 +43,50 @@ export function buildClassifierSchema(
 ): ZodType<ClassifiedTurn> {
   const actionIds = [...schema.actions.map((a) => a.id), LEARN_SKILL_ACTION_ID];
   const skillIds = schema.skills.map((s) => s.id);
+  const trimString = (value: unknown) =>
+    typeof value === "string" ? value.trim() : value;
+  const normalizeOptional = (value: unknown) => {
+    const normalized = trimString(value);
+    return normalized === null || normalized === "" ? undefined : normalized;
+  };
+  const normalizeConfidence = (value: unknown) =>
+    typeof value === "string" && value.trim() !== ""
+      ? Number(value)
+      : value;
 
   // z.enum needs a non-empty tuple; fall back to z.string() only if a story somehow has
   // no actions (the bootstrapper guarantees ≥20, so this is a guard, not a live path).
-  const actionId: ZodType<string> =
-    actionIds.length > 0 ? z.enum(actionIds as [string, ...string[]]) : z.string();
-  const actorId: ZodType<string> =
+  const actionId =
+    actionIds.length > 0
+      ? z.preprocess(trimString, z.enum(actionIds as [string, ...string[]]))
+      : z.preprocess(trimString, z.string());
+  const actorId =
     presentCharacterIds.length > 0
-      ? z.enum(presentCharacterIds as [string, ...string[]])
-      : z.string();
-  const skillId: ZodType<string> =
-    skillIds.length > 0 ? z.enum(skillIds as [string, ...string[]]) : z.string();
+      ? z.preprocess(trimString, z.enum(presentCharacterIds as [string, ...string[]]))
+      : z.preprocess(trimString, z.string());
+  const skillId =
+    skillIds.length > 0
+      ? z.preprocess(trimString, z.enum(skillIds as [string, ...string[]]))
+      : z.preprocess(trimString, z.string());
 
   const intent = z.object({
     actorId,
     actionId,
-    targetId: actorId.optional(),
-    itemId: z.string().optional(),
-    skillId: skillId.optional(),
-    confidence: z.number().min(0).max(1),
+    // OpenAI-compatible JSON-mode models commonly emit null for an optional field.
+    // Null/empty means "not supplied"; identifiers are still validated against the
+    // sealed enums after normalization, so this does not broaden mechanical authority.
+    targetId: z.preprocess(normalizeOptional, actorId.optional()),
+    itemId: z.preprocess(normalizeOptional, z.string().optional()),
+    skillId: z.preprocess(normalizeOptional, skillId.optional()),
+    confidence: z.preprocess(normalizeConfidence, z.number().min(0).max(1)),
   });
 
   return z.object({
-    playerIntents: z.array(intent),
-    npcIntents: z.array(intent),
-    freeText: z.string(),
+    // Missing/null containers have an unambiguous conservative meaning. Defaulting
+    // them avoids repeated provider repairs while never creating a mechanical intent.
+    playerIntents: z.preprocess((value) => value ?? [], z.array(intent)),
+    npcIntents: z.preprocess((value) => value ?? [], z.array(intent)),
+    freeText: z.preprocess((value) => value ?? "", z.string()),
   }) as unknown as ZodType<ClassifiedTurn>;
 }
 

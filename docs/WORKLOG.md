@@ -6,6 +6,34 @@ landed, why, verification, and any gotcha the next agent needs. Live state is in
 
 ---
 
+## 2026-07-28 — Fix packaged classifier invalid-output regression
+
+The human's first successful packaged story then failed its first turn with **"Mechanics safely
+paused · Invalid response."** The app log proved the Electron Hub classifier returned non-empty JSON
+four times (initial + three repairs), but every response failed strict `ClassifiedTurn` validation.
+The persisted player message explicitly named two valid Jerusalem Man catalog actions:
+`Reload and Clean` and `Press the Ride`.
+
+**Fix.**
+- The classifier schema now normalizes harmless OpenAI-compatible JSON-mode variations: `null` or
+  empty optional ids become absent, enum strings are trimmed, numeric confidence strings are parsed,
+  and missing/null intent arrays or `freeText` take conservative empty defaults.
+- The sealed actor/action/skill enums still validate after normalization. Unknown ids remain invalid.
+- If all structured repairs still fail, a deterministic fallback can recover multiple actions only
+  when the player used an exact, uniquely owned sealed label, id, or alias. Shared phrases and
+  unresolved required targets fail closed. This recovered the reported two-action sentence without
+  granting the model any new mechanical authority.
+
+**Verification:** typecheck clean; core **458 / 36 files** + UI **133 / 25 files** = **591 tests**
+green; production build green; Windows v0.2.6 MSI + NSIS generated. SHA-256: NSIS
+`E3B0B867DCCEAE3ABCFA21C4E0D9CADB35BE2014C29DD758D72643B3F866ED6C`; MSI
+`715C7C4986BB91DA2C1C80BB73F60619A099A110259D39298487863CA21821E3`.
+
+**Still needs human verification:** retry a turn in v0.2.6. The saved v0.2.5 failed turn remains
+narration-only by design; submit a new message after installing.
+
+---
+
 ## 2026-07-28 — Fix forge "Failed to fetch" (native provider transport) + persona name + build
 
 Testing the installer, forge failed with **"Couldn't forge story / Failed to fetch."**

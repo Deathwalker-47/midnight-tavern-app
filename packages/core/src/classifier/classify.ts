@@ -31,7 +31,7 @@ const AMBIGUITY_NOTE =
 const RECOVERY_NOTE =
   "[mechanics unavailable for this turn: narrate conservatively; do not claim any roll, item award, resource change, skill progress, or other mechanical result]";
 const UNIVERSAL_RECOVERY_NOTE =
-  "[classifier provider unavailable: one unambiguous universal player action was recovered locally; obey its DM ruling and do not invent any additional mechanical result]";
+  "[classifier provider unavailable: one or more unambiguous sealed player actions were recovered locally; obey their DM rulings and do not invent any additional mechanical result]";
 
 export interface ClassifierRecoveryResult {
   turn: ClassifiedTurn;
@@ -80,8 +80,8 @@ interface ClassifiedDetail {
   droppedNpc: number;
 }
 
-interface UniversalFallback {
-  intent?: MechanicalIntent;
+interface CatalogFallback {
+  intents?: MechanicalIntent[];
   issue?: ClassifierRecoveryIssue;
 }
 
@@ -127,6 +127,108 @@ function actionNeedsTarget(
   );
 }
 
+interface ExplicitCatalogMatch {
+  action: StorySchema["actions"][number];
+  position: number;
+}
+
+/**
+ * Recover only actions the player names verbatim by sealed label, id, or alias. A phrase shared
+ * by multiple actions is ignored unless another unique phrase identifies the action. This is a
+ * deterministic fallback for structurally invalid model output, not semantic model replacement.
+ */
+function recoverExplicitCatalogPlayerIntents(
+  schema: StorySchema,
+  input: ClassifyInput
+): CatalogFallback {
+  const normalizedMessage = ` ${normalizePhrase(input.playerMessage)} `;
+  const phraseOwners = new Map<string, Set<string>>();
+  const phrasesByAction = new Map<string, string[]>();
+
+  for (const action of schema.actions) {
+    const phrases = [...new Set([action.id, action.label, ...(action.aliases ?? [])]
+      .map(normalizePhrase)
+      .filter(Boolean))];
+    phrasesByAction.set(action.id, phrases);
+    for (const phrase of phrases) {
+      if (!normalizedMessage.includes(` ${phrase} `)) continue;
+      const owners = phraseOwners.get(phrase) ?? new Set<string>();
+      owners.add(action.id);
+      phraseOwners.set(phrase, owners);
+    }
+  }
+
+  const matches: ExplicitCatalogMatch[] = [];
+  for (const action of schema.actions) {
+    const uniquePhrases = (phrasesByAction.get(action.id) ?? []).filter(
+      (phrase) => phraseOwners.get(phrase)?.size === 1
+    );
+    if (uniquePhrases.length === 0) continue;
+    matches.push({
+      action,
+      position: Math.min(
+        ...uniquePhrases.map((phrase) => normalizedMessage.indexOf(` ${phrase} `))
+      ),
+    });
+  }
+  if (matches.length === 0) {
+    return phraseOwners.size > 0
+      ? {
+          issue: issue(
+            "unresolved_action",
+            "An explicit catalog phrase matched more than one sealed action.",
+            true
+          ),
+        }
+      : {};
+  }
+
+  const players = input.presentCharacters.filter((character) => character.isPlayer);
+  if (players.length !== 1) {
+    return {
+      issue: issue(
+        "unresolved_target",
+        "Explicit catalog actions were recognized, but the active player character was ambiguous.",
+        true
+      ),
+    };
+  }
+
+  const otherCharacters = input.presentCharacters.filter(
+    (character) => character.id !== players[0]!.id
+  );
+  const namedTargets = otherCharacters.filter((character) =>
+    containsPhrase(input.playerMessage, character.name)
+  );
+  const intents: MechanicalIntent[] = [];
+  for (const { action } of matches.sort((left, right) => left.position - right.position)) {
+    const requiresTarget = actionNeedsTarget(action, false);
+    const target =
+      requiresTarget && namedTargets.length === 1
+        ? namedTargets[0]
+        : namedTargets.length === 0 && requiresTarget && otherCharacters.length === 1
+          ? otherCharacters[0]
+          : undefined;
+    if (requiresTarget && !target) {
+      return {
+        ...(intents.length > 0 ? { intents } : {}),
+        issue: issue(
+          "unresolved_target",
+          `The explicit action "${action.label}" requires one unambiguous present character target.`,
+          true
+        ),
+      };
+    }
+    intents.push({
+      actorId: players[0]!.id,
+      actionId: action.id,
+      ...(target ? { targetId: target.id } : {}),
+      confidence: 1,
+    });
+  }
+  return intents.length > 0 ? { intents } : {};
+}
+
 /**
  * Recover one crystal-clear universal action without letting free-form text bypass the sealed
  * catalog. Ambiguous action specializations, actors, and required targets deliberately fail
@@ -135,7 +237,7 @@ function actionNeedsTarget(
 function recoverUniversalPlayerIntent(
   schema: StorySchema,
   input: ClassifyInput
-): UniversalFallback {
+): CatalogFallback {
   const universal = matchUniversalAction(input.playerMessage);
   if (!universal) return {};
 
@@ -201,13 +303,22 @@ function recoverUniversalPlayerIntent(
   }
 
   return {
-    intent: {
+    intents: [{
       actorId: players[0]!.id,
       actionId: action.id,
       ...(target ? { targetId: target.id } : {}),
       confidence: 1,
-    },
+    }],
   };
+}
+
+function recoverPlayerIntents(
+  schema: StorySchema,
+  input: ClassifyInput
+): CatalogFallback {
+  const explicit = recoverExplicitCatalogPlayerIntents(schema, input);
+  if (explicit.intents || explicit.issue) return explicit;
+  return recoverUniversalPlayerIntent(schema, input);
 }
 
 async function classifyDetailed(
@@ -335,12 +446,12 @@ export async function classifyWithRecovery(
 ): Promise<ClassifierRecoveryResult> {
   try {
     const detail = await classifyDetailed(router, schema, input, opts);
-    const universalFallback =
+    const catalogFallback =
       detail.turn.playerIntents.length === 0
-        ? recoverUniversalPlayerIntent(schema, input)
+        ? recoverPlayerIntents(schema, input)
         : {};
-    if (universalFallback.intent) {
-      detail.turn.playerIntents = [universalFallback.intent];
+    if (catalogFallback.intents) {
+      detail.turn.playerIntents = catalogFallback.intents;
     }
     const dropped = detail.droppedPlayer + detail.droppedNpc;
     if (dropped > 0) {
@@ -362,13 +473,16 @@ export async function classifyWithRecovery(
         },
       };
     }
-    if (universalFallback.issue) {
+    if (catalogFallback.issue) {
       return {
         turn: detail.turn,
         recovered: true,
         recovery: {
-          policy: "narration_only",
-          issues: [universalFallback.issue],
+          policy:
+            detail.turn.playerIntents.length > 0
+              ? "partial_mechanics"
+              : "narration_only",
+          issues: [catalogFallback.issue],
         },
       };
     }
@@ -379,17 +493,17 @@ export async function classifyWithRecovery(
   } catch (error) {
     if (isCancellation(error, opts?.signal)) throw error;
     const issues = hardFailureIssues(error);
-    const universalFallback = recoverUniversalPlayerIntent(schema, input);
-    if (universalFallback.issue) issues.push(universalFallback.issue);
+    const catalogFallback = recoverPlayerIntents(schema, input);
+    if (catalogFallback.issue) issues.push(catalogFallback.issue);
     return {
       turn: {
-        playerIntents: universalFallback.intent ? [universalFallback.intent] : [],
+        playerIntents: catalogFallback.intents ?? [],
         npcIntents: [],
-        freeText: universalFallback.intent ? UNIVERSAL_RECOVERY_NOTE : RECOVERY_NOTE,
+        freeText: catalogFallback.intents ? UNIVERSAL_RECOVERY_NOTE : RECOVERY_NOTE,
       },
       recovered: true,
       recovery: {
-        policy: universalFallback.intent ? "partial_mechanics" : "narration_only",
+        policy: catalogFallback.intents ? "partial_mechanics" : "narration_only",
         issues,
       },
       errorKind: errorKind(error),

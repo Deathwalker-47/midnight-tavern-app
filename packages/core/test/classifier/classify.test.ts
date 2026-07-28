@@ -107,6 +107,46 @@ describe("buildClassifierSchema", () => {
     });
     expect(res.success).toBe(true);
   });
+
+  it("normalizes harmless JSON-mode nulls, whitespace, and numeric confidence", () => {
+    const res = schema.safeParse({
+      playerIntents: [{
+        actorId: " player ",
+        actionId: " pick_lock ",
+        targetId: null,
+        itemId: "   ",
+        skillId: null,
+        confidence: "0.9",
+      }],
+      npcIntents: null,
+      freeText: null,
+    });
+    expect(res.success).toBe(true);
+    if (!res.success) return;
+    expect(res.data).toEqual({
+      playerIntents: [{
+        actorId: "player",
+        actionId: "pick_lock",
+        confidence: 0.9,
+      }],
+      npcIntents: [],
+      freeText: "",
+    });
+  });
+
+  it("still rejects unknown ids after structural normalization", () => {
+    const res = schema.safeParse({
+      playerIntents: [{
+        actorId: " player ",
+        actionId: " cast_fireball ",
+        targetId: null,
+        confidence: "0.9",
+      }],
+      npcIntents: null,
+      freeText: null,
+    });
+    expect(res.success).toBe(false);
+  });
 });
 
 describe("classify — behavior", () => {
@@ -242,7 +282,72 @@ describe("classify — behavior", () => {
       actionId: "attack_melee",
       targetId: "guard",
     });
-    expect(out.turn.freeText).toContain("obey its DM ruling");
+    expect(out.turn.freeText).toContain("obey their DM rulings");
+  });
+
+  it("recovers multiple explicitly named sealed actions after invalid structured output", async () => {
+    const baseAction = story.actions.find((action) => action.id === "pick_lock")!;
+    const jerusalemStory = {
+      ...story,
+      actions: [
+        {
+          ...baseAction,
+          id: "social_press_the_ride",
+          label: "Press the Ride",
+          aliases: ["ride hard", "push the horse"],
+          universalFamily: "move" as const,
+          opposed: false,
+        },
+        {
+          ...baseAction,
+          id: "crafting_reload_and_clean",
+          label: "Reload and Clean",
+          aliases: ["reload", "clean the pistols"],
+          universalFamily: "interact" as const,
+          opposed: false,
+        },
+      ],
+    };
+    const out = await classifyWithRecovery(
+      scripted(["not json"]),
+      jerusalemStory,
+      {
+        playerMessage:
+          "Reload and Clean your pistols before continuing. Press the Ride toward the mountains.",
+        presentCharacters: present,
+        recentNarration: [],
+      },
+      { maxRepairs: 0 }
+    );
+    expect(out.recovered).toBe(true);
+    expect(out.recovery?.policy).toBe("partial_mechanics");
+    expect(out.turn.playerIntents.map((intent) => intent.actionId)).toEqual([
+      "crafting_reload_and_clean",
+      "social_press_the_ride",
+    ]);
+  });
+
+  it("does not guess between actions that share the same explicit phrase", async () => {
+    const baseAction = story.actions.find((action) => action.id === "pick_lock")!;
+    const ambiguousStory = {
+      ...story,
+      actions: [
+        { ...baseAction, id: "pray_one", label: "First Prayer", aliases: ["pray"] },
+        { ...baseAction, id: "pray_two", label: "Second Prayer", aliases: ["pray"] },
+      ],
+    };
+    const out = await classifyWithRecovery(
+      scripted(["not json"]),
+      ambiguousStory,
+      {
+        playerMessage: "I pray.",
+        presentCharacters: present,
+        recentNarration: [],
+      },
+      { maxRepairs: 0 }
+    );
+    expect(out.recovery?.policy).toBe("narration_only");
+    expect(out.turn.playerIntents).toEqual([]);
   });
 
   it("fails closed when a universal attack has an ambiguous target", async () => {

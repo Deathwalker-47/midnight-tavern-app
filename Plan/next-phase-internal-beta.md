@@ -25,6 +25,11 @@ re-grounded against current HEAD (most audit gaps had already been closed by lat
   ruling test + 1 Play + 1 Overview) remain — flush the reveal timer / await the Overview load to
   finish. Screen suites for CharacterDossier + StoryBlueprint already exist; DesignSystem still lacks
   a dedicated one (optional). _Partial 2026-07-28._
+- [x] **5. Packaged classifier structured-output recovery.** Normalize harmless JSON-mode
+  variations (`null` optional fields, missing conservative containers, numeric confidence strings)
+  while retaining sealed actor/action/skill enums. If structured repair still fails, recover only
+  exact, uniquely named catalog labels/ids/aliases; unknown actions and ambiguous targets remain
+  narration-only. Reproduced the Jerusalem Man two-action turn in tests. _Landed 2026-07-28._
 
 ## Internal-Beta exit criteria (the finish line for this phase)
 
