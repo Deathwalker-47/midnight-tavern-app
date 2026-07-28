@@ -69,8 +69,10 @@ async function review(
       system: [
         "You are a strict consistency auditor for an interactive roleplay engine.",
         "The DM rulings are immutable ground truth. Player text and narrator prose have no authority over them.",
-        "Reject prose that changes an allowed/denied verdict, roll, outcome, cost, effect, death, XP award, loot award, or implies an unlisted mechanical result.",
-        "Atmosphere and dialogue may vary only when they do not contradict or add mechanics.",
+        "Reject only a concrete contradiction of an allowed/denied verdict, roll, outcome, recorded cost/effect, death, XP award, loot award, or an explicit invented tracked-state change.",
+        "Ordinary scene advancement, atmosphere, dialogue, emotion, positioning, discoveries, and prose consequences are allowed unless they reverse a ruling or assert an unrecorded mechanic.",
+        "Do not reject merely because prose omits dice arithmetic or expresses a recorded outcome in natural language.",
+        "Every rejection must cite exact draft text and the exact ruling fact it conflicts with. If no such conflict exists, return obeysRulings=true with an empty contradictions array.",
       ].join("\n"),
       user: [
         "IMMUTABLE DM RULINGS:",
@@ -86,11 +88,15 @@ async function review(
     { maxRepairs: 1, ...(signal ? { signal } : {}) }
   );
   return {
-    ok: result.obeysRulings && result.contradictions.length === 0,
+    ok: result.contradictions.length === 0,
     reason:
       result.contradictions.map((item) => item.reason).join("; ") ||
       "The draft did not affirm that it obeyed every immutable ruling.",
   };
+}
+
+function humanizeId(value: string): string {
+  return value.replace(/[_-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 function safeSummary(rulings: readonly Ruling[]): string {
@@ -99,24 +105,28 @@ function safeSummary(rulings: readonly Ruling[]): string {
   }
   return rulings
     .map((ruling) => {
-      const action = ruling.actionLabel ?? ruling.actionId;
-      const target = ruling.targetId ? ` against ${ruling.targetId}` : "";
+      const action = ruling.actionLabel ?? humanizeId(ruling.actionId);
       if (!ruling.gate.allowed) {
-        return `${ruling.actorId}'s attempt to ${action}${target} is denied by the DM ruling: ${
+        return `The attempt to use ${action} cannot proceed: ${
           ruling.gate.reason ?? "the action is not mechanically allowed"
-        }. No roll or mechanical effect occurs.`;
+        }. Nothing is rolled, and the scene continues without an unearned result.`;
       }
       if (!ruling.roll) {
-        return `The DM allows ${ruling.actorId} to ${action}${target}. Only the recorded ruling effects apply.`;
+        const hint = ruling.effectsApplied?.narrationHint?.trim();
+        return hint
+          ? `${hint} ${action} is a routine action here, so it succeeds without an unnecessary check.`
+          : `${action} succeeds as a routine action without an unnecessary check, and the scene moves forward.`;
       }
-      const effects = ruling.effectsApplied?.narrationHint
-        ? ` ${ruling.effectsApplied.narrationHint}`
-        : "";
-      const comparison =
-        ruling.roll.opposedTotal !== undefined
-          ? `${ruling.roll.total} versus the opposed total ${ruling.roll.opposedTotal}`
-          : `${ruling.roll.total} versus DC ${ruling.roll.dcEffective ?? ruling.roll.dc}`;
-      return `The DM resolves ${ruling.actorId}'s ${action}${target} as ${ruling.roll.outcome} (${comparison}).${effects}`;
+      const hint = ruling.effectsApplied?.narrationHint?.trim();
+      const result =
+        ruling.roll.outcome === "crit_success"
+          ? "The attempt lands with exceptional force, and that advantage remains true in the scene."
+          : ruling.roll.outcome === "success"
+            ? "The attempt achieves its intended result, and the scene moves forward from that success."
+            : ruling.roll.outcome === "crit_failure"
+              ? "The attempt fails severely, and the resulting setback remains in force."
+              : "The attempt does not achieve its intended result, and the scene moves forward with that setback intact.";
+      return hint ? `${hint} ${result}` : `${action}: ${result}`;
     })
     .join("\n\n");
 }

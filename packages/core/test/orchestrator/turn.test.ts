@@ -147,7 +147,8 @@ describe("submitTurn — pipeline order & transaction", () => {
     const msgs = await store.messages.listByStory(storyId);
     expect(msgs.map((m) => m.role)).toEqual(["player", "narrator"]);
     expect(msgs[1]!.content).not.toContain("magic ring");
-    expect(msgs[1]!.content).toContain("DM resolves");
+    expect(msgs[1]!.content).toContain("The attempt achieves its intended result");
+    expect(msgs[1]!.content).not.toContain("kestrel:");
     expect(result.usedNarratorFallback).toBe(true);
 
     // The engine's ruling — not the prose — decided the outcome.

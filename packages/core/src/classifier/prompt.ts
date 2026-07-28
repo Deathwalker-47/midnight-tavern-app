@@ -69,17 +69,34 @@ export function buildClassifierSchema(
       ? z.preprocess(trimString, z.enum(skillIds as [string, ...string[]]))
       : z.preprocess(trimString, z.string());
 
-  const intent = z.object({
-    actorId,
-    actionId,
-    // OpenAI-compatible JSON-mode models commonly emit null for an optional field.
-    // Null/empty means "not supplied"; identifiers are still validated against the
-    // sealed enums after normalization, so this does not broaden mechanical authority.
-    targetId: z.preprocess(normalizeOptional, actorId.optional()),
-    itemId: z.preprocess(normalizeOptional, z.string().optional()),
-    skillId: z.preprocess(normalizeOptional, skillId.optional()),
-    confidence: z.preprocess(normalizeConfidence, z.number().min(0).max(1)),
-  });
+  const intent = z
+    .object({
+      actorId,
+      actionId,
+      // OpenAI-compatible JSON-mode models commonly emit null for an optional field.
+      // Null/empty means "not supplied"; identifiers are still validated against the
+      // sealed enums after normalization, so this does not broaden mechanical authority.
+      targetId: z.preprocess(normalizeOptional, actorId.optional()),
+      itemId: z.preprocess(normalizeOptional, z.string().optional()),
+      skillId: z.preprocess(normalizeOptional, skillId.optional()),
+      stakes: z
+        .preprocess(
+          normalizeOptional,
+          z
+            .enum(["none", "uncertain", "danger", "opposed", "time_pressure", "scarcity"])
+            .optional()
+        )
+        .transform((value) => value ?? "none"),
+      stakesReason: z.preprocess(normalizeOptional, z.string().max(240).optional()),
+      confidence: z.preprocess(normalizeConfidence, z.number().min(0).max(1)),
+    })
+    .transform(({ targetId, itemId, skillId: parsedSkillId, stakesReason, ...required }) => ({
+      ...required,
+      ...(targetId ? { targetId } : {}),
+      ...(itemId ? { itemId } : {}),
+      ...(parsedSkillId ? { skillId: parsedSkillId } : {}),
+      ...(stakesReason ? { stakesReason } : {}),
+    }));
 
   return z.object({
     // Missing/null containers have an unambiguous conservative meaning. Defaulting
@@ -112,6 +129,11 @@ export const CLASSIFIER_SYSTEM = [
   "- Use ONLY action ids from the catalog. Never invent an id.",
   "- Match by meaning and aliases, not merely exact wording. A concrete attack such as a knife lunge maps to the closest valid attack action.",
   "- Prefer narration (empty intents) over guessing. If no clear mechanical action is attempted, return empty playerIntents.",
+  "- Dialogue, thoughts, ordinary prayer, routine maintenance, safe travel, and atmospheric gestures are narration, not mechanical intents, unless the player seeks a tracked change or faces a concrete obstacle.",
+  "- For every intent set stakes to one of: none, uncertain, danger, opposed, time_pressure, scarcity.",
+  "- Use stakes=none for an unopposed routine action with no concrete risk. Future or atmospheric danger alone does not create stakes.",
+  "- Use non-none stakes only when the current attempt faces a specific obstacle, active opposition, immediate danger, deadline, or scarce resource; briefly explain it in stakesReason.",
+  "- Attacks and active deception always have concrete stakes.",
   "- Extract npcIntents ONLY when the recent narration clearly commits an NPC to a catalog action.",
   "- Set confidence honestly in [0,1]. Use < 0.6 when the mapping is uncertain.",
   "- actorId and targetId must be ids of present characters.",
@@ -140,6 +162,6 @@ export function buildClassifierUser(schema: StorySchema, input: ClassifyInput): 
     "PLAYER MESSAGE:",
     input.playerMessage,
     "",
-    "Return a ClassifiedTurn JSON object with playerIntents, npcIntents, and freeText.",
+    "Return a ClassifiedTurn JSON object with playerIntents, npcIntents, and freeText. Every intent must include stakes.",
   ].join("\n");
 }

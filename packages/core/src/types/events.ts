@@ -24,6 +24,14 @@ export const MechanicalIntentSchema = z.object({
   targetId: z.string().optional(),
   itemId: z.string().optional(), // item used, if relevant
   skillId: z.string().optional(), // for learn_skill: which skill to unlock
+  /**
+   * Scene-grounded reason this attempt is uncertain. Older persisted/provider
+   * payloads may omit it; the resolver treats omission conservatively as a roll.
+   */
+  stakes: z
+    .enum(["none", "uncertain", "danger", "opposed", "time_pressure", "scarcity"])
+    .optional(),
+  stakesReason: z.string().optional(),
   confidence: z.number().min(0).max(1), // < 0.6 ⇒ treat as narration, note ambiguity
 });
 export type MechanicalIntent = z.infer<typeof MechanicalIntentSchema>;

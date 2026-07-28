@@ -127,6 +127,7 @@ describe("buildClassifierSchema", () => {
       playerIntents: [{
         actorId: "player",
         actionId: "pick_lock",
+        stakes: "none",
         confidence: 0.9,
       }],
       npcIntents: [],
@@ -258,6 +259,7 @@ describe("classify — behavior", () => {
         actorId: "player",
         actionId: "attack_melee",
         targetId: "guard",
+        stakes: "none",
         confidence: 1,
       },
     ]);

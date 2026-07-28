@@ -210,7 +210,9 @@ async function recordRulingEvents(
       ? "action_budget_exceeded"
       : ruling.roll
         ? "roll"
-        : "denied",
+        : ruling.gate.allowed
+          ? "automatic"
+          : "denied",
     // Keep the originating player action beside the ruling so multi-turn
     // training/transformation evidence can be reconstructed deterministically.
     payload: { ruling, playerText },

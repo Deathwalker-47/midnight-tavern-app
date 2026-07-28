@@ -899,13 +899,12 @@ export function Play(props: PlayProps): JSX.Element {
     if (!storyId || historyBusy) return;
     setFeedbackState("generating");
     try {
-      await getBridge().swipeLastTurn({ storyId, feedback });
-      await load(storyId);
+      await swipeLast({ feedback });
       setFeedbackState("completed");
     } catch (reason) {
       setFeedbackState(/feedback|max|300|valid/i.test(String(reason)) ? "validation-error" : "provider-error");
     }
-  }, [storyId, historyBusy, load]);
+  }, [storyId, historyBusy, swipeLast]);
 
   // ── Drawer (LivingCard) ─────────────────────────────────────────────────────────────────────
   const [card, setCard] = useState<LivingCardView | undefined>(undefined);

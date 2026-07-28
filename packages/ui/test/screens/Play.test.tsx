@@ -108,6 +108,79 @@ describe("Play — error states", () => {
 });
 
 describe("Play — stream + composer", () => {
+  it("keeps an in-flight turn alive when Play is left and reopened", async () => {
+    let finishTurn!: (value: Awaited<ReturnType<CoreBridge["submitTurn"]>>) => void;
+    const pendingTurn = new Promise<Awaited<ReturnType<CoreBridge["submitTurn"]>>>(
+      (resolve) => {
+        finishTurn = resolve;
+      }
+    );
+    const narrator = {
+      id: "narrator-after-return",
+      storyId: "s1",
+      idx: 1,
+      role: "narrator" as const,
+      content: "The answer arrives while you are elsewhere.",
+      createdAt: 2,
+    };
+    const bridge = emptyBridge();
+    bridge.submitTurn = vi.fn(async (args) => {
+      args.onPhase?.("streaming");
+      args.onDelta?.("The answer arrives");
+      return pendingTurn;
+    });
+    bridge.listMessages = vi.fn(async () => [narrator]);
+    bridge.listStoryJournal = vi.fn(async () => ({ events: [] }));
+    bridge.inspectTurnRecovery = vi.fn(async () => undefined);
+    setBridge(bridge);
+    usePlayStore.setState({ storyId: "s1" });
+
+    const submitPromise = usePlayStore.getState().submit("I wait for the answer.");
+    expect(usePlayStore.getState().thinking).toBe(true);
+    expect(usePlayStore.getState().proseBuffer).toContain("The answer arrives");
+
+    await usePlayStore.getState().load("s1");
+    expect(bridge.listMessages).not.toHaveBeenCalled();
+    expect(usePlayStore.getState().thinking).toBe(true);
+
+    finishTurn({
+      prose: narrator.content,
+      rulings: [],
+      narratorIdx: 1,
+      classifierRecovered: false,
+      refusedActionCount: 0,
+      usedNarratorFallback: false,
+      attributeAdvancements: [],
+    });
+    await submitPromise;
+
+    expect(bridge.listMessages).toHaveBeenCalledTimes(1);
+    expect(usePlayStore.getState().thinking).toBe(false);
+    expect(usePlayStore.getState().messages).toEqual([narrator]);
+  });
+
+  it("routes feedback regeneration through the persistent Play operation", async () => {
+    const swipeLastTurn = vi.fn(async () => ({
+      variants: ["A more reflective telling."],
+      activeVariant: 0,
+    }));
+    const bridge = emptyBridge();
+    bridge.swipeLastTurn = swipeLastTurn;
+    bridge.listStoryJournal = vi.fn(async () => ({ events: [] }));
+    bridge.inspectTurnRecovery = vi.fn(async () => undefined);
+    setBridge(bridge);
+    usePlayStore.setState({ storyId: "s1" });
+
+    await usePlayStore.getState().swipeLast({ feedback: "Make the moment more reflective." });
+
+    expect(swipeLastTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        storyId: "s1",
+        feedback: "Make the moment more reflective.",
+      })
+    );
+  });
+
   it("renders rulings inline in the story stream (denied has no die)", () => {
     render(<Play storyId="s1" debugState="ruling" />);
     // The seeded demo transcript carries a denied ruling and a crit-success ruling.

@@ -30,6 +30,12 @@ re-grounded against current HEAD (most audit gaps had already been closed by lat
   while retaining sealed actor/action/skill enums. If structured repair still fails, recover only
   exact, uniquely named catalog labels/ids/aliases; unknown actions and ambiguous targets remain
   narration-only. Reproduced the Jerusalem Man two-action turn in tests. _Landed 2026-07-28._
+- [x] **6. Persistent in-flight play + low-friction rulings.** Re-entering the same Play route now
+  reuses its active global turn/regeneration operation instead of invalidating it. The classifier
+  records scene stakes; valid unopposed narration-only actions auto-succeed without dice or XP,
+  while attacks, deception, opposition, concrete danger, deadlines, scarcity, costs, and tracked
+  effects still roll. Authority-auditor false positives were narrowed and the deterministic fallback
+  now reads as story prose without UUIDs or debug arithmetic. _Landed 2026-07-28._
 
 ## Internal-Beta exit criteria (the finish line for this phase)
 

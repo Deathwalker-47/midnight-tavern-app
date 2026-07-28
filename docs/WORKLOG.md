@@ -123,3 +123,36 @@ mechanism (`AGENTS.md`, `docs/HANDOFF.md`, this log, the plan checklist).
 453.) Net test delta: −2 (CardCreator) +2 (new import tests) = 126 UI.
 
 **Next:** plan item 1 — de-duplicate the CoreBridge (`core.ts` vs `sqliteBridge.ts`).
+
+---
+
+## 2026-07-28 — Persist in-flight Play operations and rebalance routine rulings
+
+The packaged Jerusalem Man test showed that leaving Play during a long provider call and returning
+discarded the visible operation, while routine actions such as prayer and travel were unnecessarily
+rolled and could produce repeated failures.
+
+**Navigation fix.** `playStore.load(storyId)` previously minted a new operation generation on every
+Play mount. Returning to the same story therefore invalidated the still-running submit/swipe
+callbacks and replaced the stream with an incomplete backend snapshot. Same-story loads now reuse
+the active global Zustand operation. A deferred-bridge regression test proves the stream survives
+route re-entry and the completed authoritative transcript is published without resubmission.
+
+**Low-friction resolution.** `MechanicalIntent` now carries a scene-grounded stakes classification:
+`none`, `uncertain`, `danger`, `opposed`, `time_pressure`, or `scarcity`. Routine dialogue, thought,
+prayer, maintenance, safe travel, and atmospheric gestures are narration-only unless a concrete
+mechanical goal or obstacle exists. Valid unopposed narration-only actions with `stakes=none`
+auto-succeed without RNG or XP. Opposition, attacks, deception, non-none stakes, costs, or any
+tracked state effect still force deterministic resolution. Gates continue to deny unavailable
+skills/items. Automatic outcomes receive their own journal event kind instead of being mislabeled
+as denied.
+
+**Narration quality.** The authority auditor now requires an exact prose excerpt and ruling conflict
+before rejecting a draft; normal scene progression and natural-language consequences are explicitly
+allowed. The last-resort deterministic narrator no longer exposes UUIDs, internal actor IDs, or
+debug arithmetic and gives a fuller readable consequence.
+
+**Verification:** typecheck clean; full suite green at **core 460 / UI 135 = 595 tests**; production
+Tauri build clean. Unsigned v0.2.7 bundles: NSIS SHA-256
+`F4ADCC8C602514A08AA1C7E9D485F490FD286788AC2920ECCE25F8E5ED9312A7`; MSI SHA-256
+`4C522431E64159FF03F3E82093E11BEBA76E4F0A76F79D561A47FAB464D295DA`.

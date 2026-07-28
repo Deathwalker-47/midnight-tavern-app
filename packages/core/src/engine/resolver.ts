@@ -207,6 +207,32 @@ function stageCosts(action: ActionDef, actorId: string): StagedMutation[] {
   return muts;
 }
 
+function effectChangesTrackedState(effect: EffectSpec): boolean {
+  return Boolean(
+    effect.resourceDeltaSelf ||
+      effect.resourceDeltaTarget ||
+      effect.attributeDeltaSelf ||
+      effect.attributeDeltaTarget ||
+      effect.grantItem ||
+      effect.setFlag
+  );
+}
+
+/**
+ * Routine, unopposed fiction should not turn into a hostile dice gauntlet.
+ * Legacy intents without an explicit stakes assessment keep the old conservative
+ * behavior and roll. Mechanical consequences, attacks, deception, and opposed
+ * actions always remain uncertain regardless of classifier wording.
+ */
+function requiresCheck(action: ActionDef, intent: MechanicalIntent): boolean {
+  if (intent.stakes === undefined) return true;
+  if (action.opposed || action.costs) return true;
+  if (Object.values(action.effects).some(effectChangesTrackedState)) return true;
+  const family = action.universalFamily ?? action.id;
+  if (family.startsWith("attack_") || family === "deceive") return true;
+  return intent.stakes !== "none";
+}
+
 /**
  * Resolve one mechanical intent. `rng` is injected for deterministic tests; an
  * opposed contest consumes a second roll from the same source.
@@ -242,6 +268,37 @@ export function resolve(
 
   // 2. costs on attempt.
   const mutations: StagedMutation[] = stageCosts(action, actor.characterId);
+
+  // A valid, low-stakes action with narration-only effects succeeds without a
+  // roll. It grants no XP, preventing routine-action grinding.
+  if (!requiresCheck(action, intent)) {
+    const effect = action.effects.success;
+    const item =
+      (options.equipment
+        ? equippedItemDefinition(
+            actor,
+            options.equipment,
+            action.requiresItemKind,
+            intent.itemId
+          )
+        : undefined) ?? itemFor(schema, intent);
+    const itemPropValue =
+      effect.scaleByItemProp && item ? item.props[effect.scaleByItemProp] : undefined;
+    const stagedEffect = stageEffect(effect, actor, target, itemPropValue, difficulty);
+    mutations.push(...stagedEffect.mutations);
+    return {
+      ruling: {
+        ...baseRuling,
+        gate,
+        effectsApplied: effect,
+        difficulty,
+        ...(stagedEffect.damageAdjustments.length > 0
+          ? { damageAdjustments: stagedEffect.damageAdjustments }
+          : {}),
+      },
+      mutations,
+    };
+  }
 
   // 3. modifier.
   const skill = skillFor(actor, action);

@@ -3,6 +3,7 @@ import type { Db } from "../db.js";
 
 export const StoryEventKindSchema = z.enum([
   "roll",
+  "automatic",
   "denied",
   "action_budget_exceeded",
   "xp",

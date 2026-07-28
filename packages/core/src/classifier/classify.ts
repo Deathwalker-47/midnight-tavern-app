@@ -223,6 +223,7 @@ function recoverExplicitCatalogPlayerIntents(
       actorId: players[0]!.id,
       actionId: action.id,
       ...(target ? { targetId: target.id } : {}),
+      stakes: "none",
       confidence: 1,
     });
   }
@@ -307,6 +308,7 @@ function recoverUniversalPlayerIntent(
       actorId: players[0]!.id,
       actionId: action.id,
       ...(target ? { targetId: target.id } : {}),
+      stakes: "none",
       confidence: 1,
     }],
   };

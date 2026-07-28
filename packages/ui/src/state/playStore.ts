@@ -58,7 +58,11 @@ interface PlayState {
    * `proseBuffer` like a turn; the committed ruling is re-used verbatim so the mechanical outcome is
    * stable — only the prose changes. Re-pulls authoritative state on completion.
    */
-  swipeLast: (opts?: { personaBlock?: string; signal?: AbortSignal }) => Promise<void>;
+  swipeLast: (opts?: {
+    personaBlock?: string;
+    feedback?: string;
+    signal?: AbortSignal;
+  }) => Promise<void>;
   /** Cycle to an already-generated variant of a narrator message (no model call). */
   selectVariant: (messageIdx: number, variantIndex: number) => Promise<void>;
   /** Delete the last narrator turn + its player message, rolling state back to the turn checkpoint. */
@@ -156,6 +160,11 @@ export const usePlayStore = create<PlayState>((set, get) => ({
   recoveryInspection: undefined,
 
   load: async (storyId) => {
+    // Play is route-mounted. Returning to the same story while a turn or
+    // regeneration is running must re-use the global Zustand operation instead
+    // of invalidating it and replacing the stream with an in-progress snapshot.
+    const current = get();
+    if (current.storyId === storyId && current.thinking) return;
     const generation = beginOperation();
     set({ storyId, loading: true, turnError: undefined });
     try {
@@ -389,6 +398,7 @@ export const usePlayStore = create<PlayState>((set, get) => ({
           }
         },
         ...(opts.personaBlock ? { personaBlock: opts.personaBlock } : {}),
+        ...(opts.feedback ? { feedback: opts.feedback } : {}),
         ...(opts.signal ? { signal: opts.signal } : {}),
       });
       // The analyzer may re-derive soft state on the new prose; re-pull everything.

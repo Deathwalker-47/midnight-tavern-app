@@ -29,6 +29,57 @@ describe("resolve — gate denial", () => {
 });
 
 describe("resolve — outcome branches", () => {
+  it("lets a valid low-stakes narration-only action succeed without dice or XP", () => {
+    const story = makeStory();
+    story.actions.push({
+      id: "steady_spirit",
+      category: "utility",
+      label: "Steady the Spirit",
+      description: "Take a quiet breath or whisper a prayer.",
+      dc: 12,
+      effects: {
+        crit_success: { narrationHint: "Calm returns completely." },
+        success: { narrationHint: "The breath steadies." },
+        failure: { narrationHint: "Calm remains elusive." },
+        crit_failure: { narrationHint: "Fear closes in." },
+      },
+    });
+    const neverRoll = () => {
+      throw new Error("routine action must not consume RNG");
+    };
+
+    const r = resolve(
+      story,
+      makePlayer(),
+      undefined,
+      intent({
+        actionId: "steady_spirit",
+        targetId: undefined,
+        itemId: undefined,
+        stakes: "none",
+      }),
+      neverRoll
+    );
+
+    expect(r.ruling.gate.allowed).toBe(true);
+    expect(r.ruling.roll).toBeUndefined();
+    expect(r.ruling.effectsApplied?.narrationHint).toBe("The breath steadies.");
+    expect(r.ruling.xpAward).toBeUndefined();
+    expect(r.mutations).toEqual([]);
+  });
+
+  it("still rolls attacks even when a classifier understates their stakes", () => {
+    const r = resolve(
+      makeStory(),
+      makePlayer(),
+      makeEnemy(),
+      intent({ stakes: "none" }),
+      d20Sequence([11])
+    );
+
+    expect(r.ruling.roll?.outcome).toBe("success");
+  });
+
   it("combines the governing attribute and mastery modifiers", () => {
     const story = makeStory();
     story.attributes = [
