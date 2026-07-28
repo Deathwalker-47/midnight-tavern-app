@@ -147,7 +147,7 @@ export async function swipeLastTurn(
     // Rebuild the SAME context the turn used: committed rulings inline as authoritative facts.
     const rulingRecords = await store.rulings.listByMessage(narrator.id);
     const rulings: Ruling[] = rulingRecords.map((r) => r.ruling);
-    const roster = await store.characters.listByStory(storyId);
+    const roster = await store.characters.listPresentByStory(storyId);
     const presentIds = roster.map((c) => c.id);
     const styleInputs = blueprintToStyleInputs(story.blueprint);
     const context = await assembleContext(store, {

@@ -406,6 +406,14 @@ CREATE INDEX idx_characters_story_present
   ON characters(story_id, present, is_player, name);
 `,
   },
+  {
+    version: 12,
+    name: "checkpoint_scene_presence",
+    // Rewind/delete must restore scene membership independently from registry membership.
+    sql: `
+ALTER TABLE turn_checkpoints ADD COLUMN presence_pre_json TEXT NOT NULL DEFAULT '{}';
+`,
+  },
 ];
 
 /**

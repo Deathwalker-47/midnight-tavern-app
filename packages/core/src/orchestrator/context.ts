@@ -304,7 +304,7 @@ export async function assemblePlayerSuggestionContext(
 ): Promise<PlayerSuggestionContext> {
   const [messages, roster, world] = await Promise.all([
     store.messages.recent(story.id, 8),
-    store.characters.listByStory(story.id),
+    store.characters.listPresentByStory(story.id),
     store.worldSoft.get(story.id),
   ]);
   const latestNarrator = [...messages].reverse().find((message) => message.role === "narrator");
@@ -468,8 +468,9 @@ export async function assembleContext(
     (await store.settings.get("contextBudget", z.number().int().positive())) ??
     DEFAULT_CONTEXT_BUDGET;
 
-  const present = (await Promise.all(presentIds.map((id) => store.characters.get(id)))).filter(
-    (r): r is CharacterRecord => r !== undefined
+  const requestedIds = new Set(presentIds);
+  const present = (await store.characters.listPresentByStory(storyId)).filter(
+    (record) => requestedIds.has(record.id)
   );
   // Name lookup stays synchronous for the render helpers; back it with the records already fetched.
   const nameById = new Map(present.map((r) => [r.id, r.name]));

@@ -22,6 +22,8 @@ export interface CheckpointRecord {
   hardPreJson: string;
   /** JSON: { [characterId]: CharacterSoftState } for every character before this turn's patch. */
   softPreJson: string;
+  /** JSON: { [characterId]: boolean } for every registry character before this turn. */
+  presencePreJson: string;
   /** JSON: WorldSoftState before this turn, or null when the story had none yet. */
   worldPreJson: string | null;
   createdAt: number;
@@ -34,6 +36,7 @@ interface Row {
   turn_index: number;
   hard_pre_json: string;
   soft_pre_json: string;
+  presence_pre_json: string;
   world_pre_json: string | null;
   created_at: number;
 }
@@ -46,6 +49,7 @@ function toRecord(row: Row): CheckpointRecord {
     turnIndex: row.turn_index,
     hardPreJson: row.hard_pre_json,
     softPreJson: row.soft_pre_json,
+    presencePreJson: row.presence_pre_json,
     worldPreJson: row.world_pre_json,
     createdAt: row.created_at,
   };
@@ -69,14 +73,16 @@ export function makeCheckpointRepo(db: Db): CheckpointRepo {
     async insert(record) {
       await db.run(
         `INSERT INTO turn_checkpoints
-           (id, story_id, message_id, turn_index, hard_pre_json, soft_pre_json, world_pre_json, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+           (id, story_id, message_id, turn_index, hard_pre_json, soft_pre_json,
+            presence_pre_json, world_pre_json, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         record.id,
         record.storyId,
         record.messageId,
         record.turnIndex,
         record.hardPreJson,
         record.softPreJson,
+        record.presencePreJson,
         record.worldPreJson,
         record.createdAt
       );

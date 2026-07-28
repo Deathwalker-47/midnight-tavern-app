@@ -25,6 +25,9 @@ import { makePlayer, makeStory } from "../fixtures.js";
 
 /** Minimal V7 router: canned classifier + loot decline + a fixed narrator stream. */
 class AgencyRouter implements Router {
+  lastClassifierPrompt?: RolePrompt;
+  lastNarratorPrompt?: RolePrompt;
+
   constructor(
     readonly classified: ClassifiedTurn,
     readonly narration = "Blades cross in the dark; the creature does not yield."
@@ -39,11 +42,15 @@ class AgencyRouter implements Router {
     if (role === "classifier" && prompt.system.includes("DM loot adjudicator")) {
       return { content: JSON.stringify({ award: false, reason: "No completed encounter." }) };
     }
-    if (role === "classifier") return { content: JSON.stringify(this.classified) };
+    if (role === "classifier") {
+      this.lastClassifierPrompt = prompt;
+      return { content: JSON.stringify(this.classified) };
+    }
     if (role === "analyzer") return { content: JSON.stringify({ characterOps: [], worldOps: [] }) };
     return { content: "" };
   }
-  async stream(_role: Role, _prompt: RolePrompt, onDelta: StreamHandler): Promise<ChatResponse> {
+  async stream(_role: Role, prompt: RolePrompt, onDelta: StreamHandler): Promise<ChatResponse> {
+    this.lastNarratorPrompt = prompt;
     const content = this.narration;
     onDelta(content);
     return { content };
@@ -271,6 +278,32 @@ describe("same-turn NPC agency", () => {
     expect((await store.characters.get("wight"))!.hard.alive).toBe(false);
     expect(result.rulings.some((ruling) => ruling.actorId === "wight")).toBe(false);
     expect((await store.characters.get("kestrel"))!.hard.resources.hp!.current).toBe(20);
+  });
+
+  it("keeps an absent NPC registered but excludes it from active play", async () => {
+    await seedWightHp(12);
+    await store.characters.setPresent("wight", false);
+    const router = new AgencyRouter({
+      playerIntents: [PLAYER_ATTACK],
+      npcIntents: [],
+      freeText: "",
+    });
+
+    const result = await submitTurn(
+      router,
+      store,
+      storyId,
+      "I search the empty crypt.",
+      { rng: d20Sequence([15]) }
+    );
+    await result.background;
+
+    expect((await store.characters.get("wight"))?.present).toBe(false);
+    expect(result.rulings.some((ruling) =>
+      ruling.actorId === "wight" || ruling.targetId === "wight"
+    )).toBe(false);
+    expect(router.lastClassifierPrompt?.user).not.toContain("Grave-wight");
+    expect(router.lastNarratorPrompt?.user).not.toContain("Grave-wight");
   });
 
   it("reacts on the player's own budget-exhausting turn — NPC agency is a separate budget", async () => {

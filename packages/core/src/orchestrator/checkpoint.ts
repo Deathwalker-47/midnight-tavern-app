@@ -23,6 +23,7 @@ import {
 export interface CheckpointSnapshot {
   hard: Record<string, CharacterHardState>;
   soft: Record<string, CharacterSoftState>;
+  presence: Record<string, boolean>;
   world?: WorldSoftState;
 }
 
@@ -40,8 +41,10 @@ export async function capture(
   const roster = await store.characters.listByStory(storyId);
   const hard: Record<string, CharacterHardState> = {};
   const soft: Record<string, CharacterSoftState> = {};
+  const presence: Record<string, boolean> = {};
   for (const c of roster) {
     hard[c.id] = c.hard;
+    presence[c.id] = c.present;
     if (c.soft) soft[c.id] = c.soft;
   }
   const world = await store.worldSoft.get(storyId);
@@ -52,6 +55,7 @@ export async function capture(
     turnIndex,
     hardPreJson: JSON.stringify(hard),
     softPreJson: JSON.stringify(soft),
+    presencePreJson: JSON.stringify(presence),
     worldPreJson: world ? JSON.stringify(world) : null,
     createdAt: Date.now(),
   };
@@ -61,11 +65,14 @@ export async function capture(
 export function decodeSnapshot(record: CheckpointRecord): CheckpointSnapshot {
   const hardRaw = JSON.parse(record.hardPreJson) as Record<string, unknown>;
   const softRaw = JSON.parse(record.softPreJson) as Record<string, unknown>;
+  const presenceRaw = JSON.parse(record.presencePreJson) as Record<string, unknown>;
   const hard: Record<string, CharacterHardState> = {};
   for (const [id, v] of Object.entries(hardRaw)) hard[id] = CharacterHardStateSchema.parse(v);
   const soft: Record<string, CharacterSoftState> = {};
   for (const [id, v] of Object.entries(softRaw)) soft[id] = CharacterSoftStateSchema.parse(v);
-  const snapshot: CheckpointSnapshot = { hard, soft };
+  const presence: Record<string, boolean> = {};
+  for (const [id, value] of Object.entries(presenceRaw)) presence[id] = value === true;
+  const snapshot: CheckpointSnapshot = { hard, soft, presence };
   if (record.worldPreJson) snapshot.world = WorldSoftStateSchema.parse(JSON.parse(record.worldPreJson));
   return snapshot;
 }
@@ -101,7 +108,10 @@ export async function applyRestore(store: Store, record: CheckpointRecord): Prom
 
   for (const [id, hard] of Object.entries(snap.hard)) {
     const existing = await store.characters.get(id);
-    if (existing) await store.characters.updateHard(id, hard);
+    if (existing) {
+      await store.characters.updateHard(id, hard);
+      await store.characters.setPresent(id, snap.presence[id] ?? true);
+    }
   }
   await restoreSoftForSnapshot(store, snap);
 
@@ -136,8 +146,10 @@ export async function snapshotSoftWorld(
   const roster = await store.characters.listByStory(storyId);
   const hard: Record<string, CharacterHardState> = {};
   const soft: Record<string, CharacterSoftState> = {};
+  const presence: Record<string, boolean> = {};
   for (const c of roster) {
     hard[c.id] = c.hard;
+    presence[c.id] = c.present;
     if (c.soft) soft[c.id] = c.soft;
   }
   const world = await store.worldSoft.get(storyId);
@@ -148,6 +160,7 @@ export async function snapshotSoftWorld(
     turnIndex,
     hardPreJson: JSON.stringify(hard),
     softPreJson: JSON.stringify(soft),
+    presencePreJson: JSON.stringify(presence),
     worldPreJson: world ? JSON.stringify(world) : null,
     createdAt: Date.now(),
   };

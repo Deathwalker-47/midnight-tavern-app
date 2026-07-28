@@ -69,7 +69,10 @@ function fakeStore(parts: Record<string, unknown> = {}) {
     },
     stories: { list: vi.fn(async () => []), get: vi.fn(), update: vi.fn(), delete: vi.fn() },
     messages: { listByStory: vi.fn(async () => []) },
-    characters: { listByStory: vi.fn(async () => []) },
+    characters: {
+      listByStory: vi.fn(async () => []),
+      listPresentByStory: vi.fn(async () => []),
+    },
     rulings: { listByStory: vi.fn(async () => []) },
     personas: {
       list: vi.fn(async () => []),
@@ -219,7 +222,10 @@ describe("buildSqliteBridge", () => {
   it("listPresentCast condenses each LivingCardView to name/alive/hp/mood", async () => {
     const store = fakeStore({
       stories: { get: vi.fn(async () => ({ id: "s1", schema: { schema: true } })) },
-      characters: { listByStory: vi.fn(async () => [{ id: "c1" }, { id: "c2" }]) },
+      characters: {
+        listByStory: vi.fn(async () => [{ id: "c1" }, { id: "c2" }]),
+        listPresentByStory: vi.fn(async () => [{ id: "c1" }]),
+      },
     });
     const getLivingCard = vi.fn(async (_s: unknown, _sch: unknown, id: string) =>
       id === "c1"
@@ -247,7 +253,6 @@ describe("buildSqliteBridge", () => {
     const cast = await bridge.listPresentCast("s1");
     expect(cast).toEqual([
       { characterId: "c1", name: "Hero", isPlayer: true, alive: true, hp: { current: 8, max: 10, label: "Health" }, mood: "wary" },
-      { characterId: "c2", name: "Ghost", isPlayer: false, alive: false }, // no visible resource ⇒ no hp; no soft ⇒ no mood
     ]);
   });
 

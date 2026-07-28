@@ -140,6 +140,10 @@ describe("history ops — swipe / delete / rewind (§6)", () => {
       { resources: { hp: { current: number } } }
     >;
     expect(snap.wight!.resources.hp.current).toBe(12);
+    expect(JSON.parse(cp!.presencePreJson)).toMatchObject({
+      kestrel: true,
+      wight: true,
+    });
   });
 
   it("swipe regenerates prose as a new active variant without re-committing state", async () => {
@@ -238,6 +242,19 @@ describe("history ops — swipe / delete / rewind (§6)", () => {
     expect(await store.checkpoints.listByStory(storyId)).toHaveLength(1);
     expect(await store.rulings.listByStory(storyId)).toHaveLength(2);
     expect((await store.events.listByStory(storyId)).every((event) => event.turnIndex < 2)).toBe(true);
+  });
+
+  it("rewind restores the scene-presence pre-image without deleting the registry row", async () => {
+    await strike(router, store, storyId, "strike one");
+    router.script.classified = { playerIntents: [], npcIntents: [], freeText: "I wait." };
+    await strike(router, store, storyId, "wait one turn");
+    await store.characters.setPresent("wight", false);
+
+    await rewindTo(store, storyId, 0);
+
+    expect((await store.characters.get("wight"))?.present).toBe(true);
+    expect((await store.characters.listByStory(storyId)).map((character) => character.id))
+      .toContain("wight");
   });
 
   it("rewind restores the difficulty that preceded the truncated timeline", async () => {

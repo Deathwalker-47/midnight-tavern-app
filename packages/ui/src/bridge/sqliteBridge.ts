@@ -436,7 +436,7 @@ export function buildSqliteBridge(
 
     async listPresentCast(storyId): Promise<CastMember[]> {
       const story = await requireStory(storyId);
-      const roster = await store.characters.listByStory(storyId);
+      const roster = await store.characters.listPresentByStory(storyId);
       // Reuse core's hard/soft join (getLivingCard) rather than reimplementing it; the strip only
       // needs a condensed slice (name/alive, the player-visible resource as hp, and soft.mood).
       const cards = await Promise.all(

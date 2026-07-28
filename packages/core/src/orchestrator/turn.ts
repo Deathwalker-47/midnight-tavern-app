@@ -324,9 +324,13 @@ async function submitTurnLegacy(
     createdAt: Date.now(),
   });
 
-  // Present roster: everyone with a row for this story (players + observed NPCs).
   const roster = await store.characters.listByStory(storyId);
-  const presentCharacters = roster.map((c) => ({ id: c.id, name: c.name, isPlayer: c.isPlayer }));
+  const presentRoster = await store.characters.listPresentByStory(storyId);
+  const presentCharacters = presentRoster.map((c) => ({
+    id: c.id,
+    name: c.name,
+    isPlayer: c.isPlayer,
+  }));
 
   const rulings: Ruling[] = [];
   const staged: { ruling: Ruling; mutations: ReturnType<typeof resolve>["mutations"] }[] = [];
@@ -522,7 +526,8 @@ async function runTurnOperation(
 
   try {
     let roster = await store.characters.listByStory(storyId);
-    let presentCharacters = roster.map((character) => ({
+    let presentRoster = await store.characters.listPresentByStory(storyId);
+    let presentCharacters = presentRoster.map((character) => ({
       id: character.id,
       name: character.name,
       isPlayer: character.isPlayer,
@@ -558,7 +563,8 @@ async function runTurnOperation(
       }
       if (sceneEntities.length > 0) {
         roster = await store.characters.listByStory(storyId);
-        presentCharacters = roster.map((character) => ({
+        presentRoster = await store.characters.listPresentByStory(storyId);
+        presentCharacters = presentRoster.map((character) => ({
           id: character.id,
           name: character.name,
           isPlayer: character.isPlayer,
@@ -685,7 +691,7 @@ async function runTurnOperation(
         schema,
         priorRulings: rulings.slice(0, playerRulingCount),
         workingById,
-        present: new Map(roster.map((character) => [character.id, character.isPlayer])),
+        present: new Map(presentRoster.map((character) => [character.id, character.isPlayer])),
       });
       for (const intent of npcReactionIntents) {
         const actorHard = await workingState(intent.actorId);
@@ -1135,7 +1141,7 @@ async function runBackground(router: Router, store: Store, args: BackgroundArgs)
   try {
     // Fetch the roster once and derive both the soft-state slice and a synchronous name lookup
     // from it — `nameFor` is consumed inside the analyzer's sync patch path, so it can't await.
-    const roster = await store.characters.listByStory(storyId);
+    const roster = await store.characters.listPresentByStory(storyId);
     const nameById = new Map(roster.map((c) => [c.id, c.name]));
     const nameFor = (id: string) => nameById.get(id);
     const presentSoft = roster
