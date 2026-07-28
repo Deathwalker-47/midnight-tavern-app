@@ -6,6 +6,40 @@ landed, why, verification, and any gotcha the next agent needs. Live state is in
 
 ---
 
+## 2026-07-28 — Internal Beta exit: bridge drift guard, restart proof, act() cleanup
+
+Completed the remaining Internal-Beta-exit plan items (1, 3, 4). Final baseline:
+**core 454 / 36 files, ui 133 / 25 files = 587 tests**, typecheck clean.
+
+**Item 1 — CoreBridge de-duplication (drift guard).** The in-memory bridge (`bridge/core.ts`)
+hand-mirrors core's catalog because it must not value-import core's native runtime into the eager
+webview bundle (a deliberate, load-bearing boundary — see the static-type vs dynamic-runtime import
+split in that file). Rather than break that boundary, added
+`packages/ui/test/bridge/catalogParity.test.ts`, which asserts the in-memory bridge's public catalog
+surface is identical to canonical `@midnight-tavern/core`. It **immediately caught real drift**:
+`MEMORY_KNOWN_MODELS` listed 8 of core's 14 models and mis-tiered direct GPT-4o. Resynced it to
+canonical (source of truth: `core/src/router/model-recommendations.config.json`). Drift now fails CI.
+
+**Item 3 — restart persistence proof.** `packages/core/test/store/persistence.test.ts`: opens a real
+file-backed store (`openStore` over better-sqlite3), writes story+message+setting, closes, reopens a
+fresh connection to the same file, asserts all restored. Closes the audits' unproven beta gate at the
+durability-contract level (the packaged Tauri driver shares the same contract via `openStoreWith`).
+
+**Item 4 — React act() warnings 31 → 7.** Play: guarded the two mount-load effects when the
+`debugState` preview prop is set (preview must not do IO). StorySettings tests: flushed the mount
+config-load with a trailing `act()`. Residual 7 (5 `RulingBlock` reveal-timer + 1 Play + 1 Overview)
+are animation/async-reveal noise in two tests — left for a follow-up, tracked in the plan.
+
+**Caveat for next agent:** the item-1 commit shows large line churn on `core.ts` — that's CRLF vs LF
+noise (repo has no `.gitattributes`, `core.autocrlf=false`); content is correct. If you touch this a
+lot, consider adding a `.gitattributes` (`* text=auto eol=lf`) in a dedicated normalization commit.
+
+**Next:** Internal-Beta-exit code items are done. Remaining before calling the phase closed: (a) mop
+up the last 7 act() warnings if desired, (b) confirm the human's manual packaged-app pass. After
+that, the **later** phase is release/sellable (signing, updater, CSP, live-model acceptance).
+
+---
+
 ## 2026-07-28 — Internal Beta exit: kickoff + card-import consolidation
 
 **Context:** Full-code review (via codebase-memory graph) + next-phase decision. Chose the

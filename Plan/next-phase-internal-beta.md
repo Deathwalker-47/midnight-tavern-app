@@ -13,16 +13,18 @@ re-grounded against current HEAD (most audit gaps had already been closed by lat
 - [x] **2. Card-import consolidation.** Retire orphaned `CardCreator` screen; enrich Library's
   import modal (drag-drop, trait chips, sparse-card warning); prove import → Blueprint with tests.
   _Landed 2026-07-28._
-- [ ] **1. De-duplicate the CoreBridge.** `bridge/core.ts` (in-memory) and `bridge/sqliteBridge.ts`
-  (native) hand-mirror every capability and have drifted (JSON-capability bug in the audit). Extract
-  browser-safe shared modules (catalog, capability/sampler metadata, recommendations) so both
-  backends read one source of truth. Highest leverage; guarded entirely by the test suite.
-- [ ] **3. Packaged SQLite restart-persistence proof.** Automated where possible: create story →
-  (simulate close) → reopen → same story/messages/settings restored. Browser-memory tests cannot
-  prove packaged SQLite behavior, so target the sqlite bridge path.
-- [ ] **4. Remove React `act(...)` warnings** and add missing screen suites (Play at least emits
-  them; Character Dossier / Story Blueprint / Design System historically lacked dedicated suites —
-  re-check current state, some may now exist).
+- [x] **1. De-duplicate the CoreBridge (drift guard).** The eager/lazy import boundary in
+  `bridge/core.ts` is deliberate (keeps core's native runtime out of the webview bundle), so instead
+  of breaking it, `test/bridge/catalogParity.test.ts` now locks the in-memory catalog to canonical
+  core — it caught + fixed real `MEMORY_KNOWN_MODELS` drift. Drift now fails CI. _Landed 2026-07-28._
+- [x] **3. Packaged SQLite restart-persistence proof.** `packages/core/test/store/persistence.test.ts`
+  opens a real file-backed store, writes story/message/setting, closes, reopens, asserts survival.
+  _Landed 2026-07-28._
+- [~] **4. React `act(...)` warnings 31 → 7.** Play mount-loads guarded under `debugState`;
+  StorySettings tests flush the mount effect. Residual 7 (5 `RulingBlock` reveal-timer in the Play
+  ruling test + 1 Play + 1 Overview) remain — flush the reveal timer / await the Overview load to
+  finish. Screen suites for CharacterDossier + StoryBlueprint already exist; DesignSystem still lacks
+  a dedicated one (optional). _Partial 2026-07-28._
 
 ## Internal-Beta exit criteria (the finish line for this phase)
 
