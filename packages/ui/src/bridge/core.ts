@@ -662,39 +662,25 @@ const MEMORY_EQUIPMENT_LOOT_CONFIG: EquipmentLootConfig = {
   },
 };
 
+// MIRRORS core `KNOWN_MODELS`, which core derives from `router/model-recommendations.config.json`
+// (`models[]`). This browser stub can't value-import core (would pull the native graph into the
+// eager bundle), so it carries a synced copy. Parity with canonical core is enforced by
+// `test/bridge/catalogParity.test.ts` — if that test fails, resync this list from the JSON.
 const MEMORY_KNOWN_MODELS: KnownModel[] = [
-  {
-    provider: "openrouter",
-    model: "anthropic/claude-sonnet-4",
-    label: "Claude Sonnet 4",
-    tier: "recommended",
-    supportsJsonMode: true,
-  },
-  {
-    provider: "openrouter",
-    model: "openai/gpt-4o",
-    label: "GPT-4o",
-    tier: "recommended",
-    supportsJsonMode: true,
-  },
-  {
-    provider: "openrouter",
-    model: "google/gemini-2.0-flash-001",
-    label: "Gemini 2.0 Flash",
-    tier: "recommended",
-    supportsJsonMode: true,
-  },
-  {
-    provider: "openrouter",
-    model: "openai/gpt-4o-mini",
-    label: "GPT-4o mini",
-    tier: "recommended",
-    supportsJsonMode: true,
-  },
+  { provider: "openrouter", model: "anthropic/claude-sonnet-4", label: "Claude Sonnet 4", tier: "recommended", supportsJsonMode: true },
+  { provider: "openrouter", model: "anthropic/claude-opus-4", label: "Claude Opus 4", tier: "recommended", supportsJsonMode: true },
+  { provider: "openrouter", model: "openai/gpt-4o", label: "GPT-4o", tier: "recommended", supportsJsonMode: true },
+  { provider: "openrouter", model: "openai/gpt-4o-mini", label: "GPT-4o mini", tier: "recommended", supportsJsonMode: true },
+  { provider: "openrouter", model: "google/gemini-2.0-flash-001", label: "Gemini 2.0 Flash", tier: "recommended", supportsJsonMode: true },
+  { provider: "openrouter", model: "google/gemini-2.5-pro", label: "Gemini 2.5 Pro", tier: "recommended", supportsJsonMode: true },
   { provider: "openrouter", model: "deepseek/deepseek-chat", label: "DeepSeek V3", tier: "advanced", supportsJsonMode: true },
   { provider: "openrouter", model: "meta-llama/llama-3.3-70b-instruct", label: "Llama 3.3 70B", tier: "advanced", supportsJsonMode: true },
-  { provider: "openai", model: "gpt-4o", label: "GPT-4o (direct)", tier: "advanced", supportsJsonMode: true },
-  { provider: "anthropic", model: "claude-sonnet-4-20250514", label: "Claude Sonnet 4 (direct)", tier: "advanced", supportsJsonMode: false },
+  { provider: "openrouter", model: "meta-llama/llama-3.1-8b-instruct", label: "Llama 3.1 8B", tier: "advanced", supportsJsonMode: false },
+  { provider: "openai", model: "gpt-4o", label: "GPT-4o (direct)", tier: "recommended", supportsJsonMode: true },
+  { provider: "openai", model: "gpt-4o-mini", label: "GPT-4o mini (direct)", tier: "recommended", supportsJsonMode: true },
+  { provider: "anthropic", model: "claude-sonnet-4-20250514", label: "Claude Sonnet 4 (direct)", tier: "recommended", supportsJsonMode: false },
+  { provider: "google", model: "gemini-2.0-flash-001", label: "Gemini 2.0 Flash (direct)", tier: "recommended", supportsJsonMode: true },
+  { provider: "deepseek", model: "deepseek-chat", label: "DeepSeek V3 (direct)", tier: "advanced", supportsJsonMode: true },
 ];
 
 const TRIAL_DURATION_MS = 14 * 24 * 60 * 60 * 1000;
