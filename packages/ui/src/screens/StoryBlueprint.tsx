@@ -23,7 +23,9 @@ export function StoryBlueprint(props: ScreenProps): JSX.Element {
   const entitlement = useSettingsStore((state) => state.entitlement);
   const [state, setState] = useState<LoadState>({ phase: creating ? "ready" : "loading" });
   const [title, setTitle] = useState(storedDraft?.title ?? "");
-  const [playerName, setPlayerName] = useState(storedDraft?.playerName ?? "");
+  // Player name is derived from the chosen persona (no separate field); the draft value is only a
+  // fallback for a story forged without a persona.
+  const playerName = storedDraft?.playerName ?? "";
   const [premise, setPremise] = useState(storedDraft?.premise ?? "");
   const [statMode, setStatMode] = useState<"none" | "full" | undefined>(storedDraft?.statMode);
   const [blueprint, setBlueprint] = useState<Blueprint>(storedDraft?.blueprint ?? {});
@@ -164,10 +166,12 @@ export function StoryBlueprint(props: ScreenProps): JSX.Element {
       return;
     }
     const finalTitle = title.trim() || blueprint.name?.trim() || "Untitled story";
-    const finalPlayer = playerName.trim() || selectedPersona?.name.trim() || "";
+    // Name comes from the persona first; fall back to any draft value, then a neutral default so a
+    // no-persona story still has a player name.
+    const finalPlayer = selectedPersona?.name.trim() || playerName.trim() || "You";
     const finalPremise = premise.trim() || blueprint.scenario?.trim() || blueprint.description?.trim() || "";
-    if (!finalPlayer || !finalPremise || !statMode) {
-      setSaveError("Add your name, a premise, and choose No Stats or Full Stats before creating the story.");
+    if (!finalPremise || !statMode) {
+      setSaveError("Add a premise and choose No Stats or Full Stats before creating the story.");
       return;
     }
     if (!selectedPersona && !continueWithoutPersona) {
@@ -258,7 +262,7 @@ export function StoryBlueprint(props: ScreenProps): JSX.Element {
           <section style={PANEL}>
             <div style={SECTION_HEAD}>FOUNDATION</div>
             <label style={LABEL}>Story title<input aria-label="Story title" value={title} onChange={(event) => setTitle(event.target.value)} style={INPUT} /></label>
-            <label style={LABEL}>Your name in the story<input aria-label="Your name in the story" value={playerName} onChange={(event) => setPlayerName(event.target.value)} style={INPUT} /></label>
+            {/* No separate "your name" field — the player's name comes from the chosen persona below. */}
             <div style={{ marginBottom: 14 }}>
               <label style={LABEL}>
                 Persona for story creation
