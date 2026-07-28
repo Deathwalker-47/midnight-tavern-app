@@ -11,6 +11,7 @@ import {
   ItemTierSchema,
   MasteryRankSchema,
   EquipmentSlotSchema,
+  type StorySchema,
 } from "../types/index.js";
 
 const UniversalActionConfigSchema = z.object({
@@ -25,6 +26,13 @@ const UniversalActionConfigSchema = z.object({
       defaultRequiresItemKind: ItemKindSchema.optional(),
       /** Whether deterministic classifier recovery must resolve a present character target. */
       requiresCharacterTarget: z.boolean(),
+      /** Program-owned fallback damage when a generated attack omitted lethal-resource effects. */
+      defaultTargetDamage: z
+        .object({
+          success: z.number().int().positive(),
+          crit_success: z.number().int().positive(),
+        })
+        .optional(),
     })
   ),
 }).superRefine((config, ctx) => {
@@ -222,6 +230,53 @@ function normalizePhrase(value: string): string {
 
 export function findUniversalAction(id: string) {
   return UNIVERSAL_ACTIONS_CONFIG.actions.find((action) => action.id === id);
+}
+
+/**
+ * Install program-owned minimum damage for generated attack families that omitted it.
+ * Explicit negative lethal-resource effects always win; this only repairs a mechanically empty
+ * attack so old frozen stories and newly generated rulebooks share the same death contract.
+ */
+export function applyUniversalActionDefaults(schema: StorySchema): StorySchema {
+  if (schema.statMode !== "full") return schema;
+  const lethalId = schema.resources.find((resource) => resource.lethal)?.id;
+  if (!lethalId) return schema;
+
+  let changed = false;
+  const actions = schema.actions.map((action) => {
+    const family = action.universalFamily
+      ? findUniversalAction(action.universalFamily)
+      : undefined;
+    if (!family?.defaultTargetDamage) return action;
+
+    const effects = { ...action.effects };
+    let actionChanged = false;
+    for (const outcome of ["success", "crit_success"] as const) {
+      const current = effects[outcome];
+      const existingDamage = current.resourceDeltaTarget?.[lethalId];
+      if (typeof existingDamage === "number" && existingDamage < 0) continue;
+      effects[outcome] = {
+        ...current,
+        resourceDeltaTarget: {
+          ...(current.resourceDeltaTarget ?? {}),
+          [lethalId]: -family.defaultTargetDamage[outcome],
+        },
+      };
+      changed = true;
+      actionChanged = true;
+    }
+    return actionChanged ? { ...action, effects } : action;
+  });
+
+  if (!changed) return schema;
+  return {
+    ...schema,
+    actions,
+    mechanicsConfigVersions: {
+      ...(schema.mechanicsConfigVersions ?? MECHANICS_CONFIG_VERSIONS),
+      universalActions: UNIVERSAL_ACTIONS_CONFIG.version,
+    },
+  };
 }
 
 /**

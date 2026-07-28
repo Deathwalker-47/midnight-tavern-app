@@ -108,37 +108,45 @@ function humanizeId(value: string): string {
   return value.replace(/[_-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
+function sentence(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  const capitalized = trimmed[0]!.toLocaleUpperCase("en-US") + trimmed.slice(1);
+  return /[.!?…]$/.test(capitalized) ? capitalized : `${capitalized}.`;
+}
+
 function safeSummary(rulings: readonly Ruling[]): string {
   if (rulings.length === 0) {
-    return "The scene continues in fiction only; no mechanical outcome is resolved this turn.";
+    return "For a breath, the scene holds—then the moment moves on.";
   }
-  return rulings
+  const beats = rulings
     .map((ruling) => {
       const action = ruling.actionLabel ?? humanizeId(ruling.actionId);
       if (!ruling.gate.allowed) {
-        return `The attempt to use ${action} cannot proceed: ${
-          ruling.gate.reason ?? "the action is not mechanically allowed"
-        }. Nothing is rolled, and the scene continues without an unearned result.`;
-      }
-      if (!ruling.roll) {
-        const hint = ruling.effectsApplied?.narrationHint?.trim();
-        return hint
-          ? `${hint} ${action} is a routine action here, so it succeeds without an unnecessary check.`
-          : `${action} succeeds as a routine action without an unnecessary check, and the scene moves forward.`;
+        return sentence(
+          ruling.gate.reason
+            ? `${action} cannot begin; ${ruling.gate.reason}`
+            : `${action} cannot begin, and the moment slips away`
+        );
       }
       const hint = ruling.effectsApplied?.narrationHint?.trim();
-      const resolution = `${action} resolves as ${ruling.roll.outcome.replace("_", " ")} (${ruling.roll.total} vs DC ${ruling.roll.dc}; d20 ${ruling.roll.d20}, modifier ${ruling.roll.modifier >= 0 ? "+" : ""}${ruling.roll.modifier}).`;
-      const result =
-        ruling.roll.outcome === "crit_success"
-          ? "The attempt lands with exceptional force, and that advantage remains true in the scene."
-          : ruling.roll.outcome === "success"
-            ? "The attempt achieves its intended result, and the scene moves forward from that success."
-            : ruling.roll.outcome === "crit_failure"
-              ? "The attempt fails severely, and the resulting setback remains in force."
-              : "The attempt does not achieve its intended result, and the scene moves forward with that setback intact.";
-      return hint ? `${resolution} ${hint} ${result}` : `${resolution} ${result}`;
+      if (!ruling.roll) {
+        return hint
+          ? sentence(hint)
+          : sentence(`${action} carries through without resistance`);
+      }
+      if (hint) return sentence(hint);
+      if (ruling.roll.outcome === "crit_success") {
+        return sentence(`${action} lands with sudden, decisive force`);
+      }
+      if (ruling.roll.outcome === "success") return sentence(`${action} finds its mark`);
+      if (ruling.roll.outcome === "crit_failure") {
+        return sentence(`${action} goes badly awry, leaving a costly opening`);
+      }
+      return sentence(`${action} falters before it can achieve its aim`);
     })
-    .join("\n\n");
+    .filter(Boolean);
+  return [...new Set(beats)].join("\n\n");
 }
 
 /**
@@ -153,6 +161,20 @@ const MECHANICAL_VOCAB =
 
 function assertsMechanic(paragraph: string): boolean {
   return MECHANICAL_VOCAB.test(paragraph);
+}
+
+const DEATH_ASSERTION =
+  /\b(?:kill(?:ed|s)?|slay(?:s|ing|ed)?|dies?|falls?\s+dead|is\s+dead|lifeless\s+corpse)\b/i;
+
+function deterministicContradiction(
+  prose: string,
+  rulings: readonly Ruling[]
+): string | undefined {
+  const recordedDeaths = rulings.flatMap((ruling) => ruling.causedDeathOf ?? []);
+  if (recordedDeaths.length === 0 && DEATH_ASSERTION.test(prose)) {
+    return "The draft declares a death, but no ruling reduced a lethal resource to zero.";
+  }
+  return undefined;
 }
 
 /**
@@ -238,7 +260,10 @@ export async function generateGuardedNarration(
         : "";
 
     try {
-      const audited = await review(router, lastDraft, rulings, options.signal);
+      const deterministicReason = deterministicContradiction(lastDraft, rulings);
+      const audited = deterministicReason
+        ? { ok: false, reason: deterministicReason }
+        : await review(router, lastDraft, rulings, options.signal);
       if (audited.ok) {
         onDelta(releasedPrefix ? lastDraft.slice(releasedPrefix.length) : lastDraft);
         return { prose: lastDraft, repairCount: attempt, usedSafeFallback: false };

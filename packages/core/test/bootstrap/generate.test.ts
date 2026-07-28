@@ -1017,7 +1017,41 @@ describe("generateStorySchema — repair loop", () => {
     expect(terrainCondition).toBeUndefined();
     expect(setFlags.has("terrain_mapped")).toBe(false);
     expect(remainingDeadFlags).toEqual([]);
-    expect(out.actions.map((action) => action.effects)).toEqual(effectsBefore);
+    const effectsWithoutProgramDefaults = out.actions.map((action) => {
+      if (
+        action.universalFamily !== "attack_melee" &&
+        action.universalFamily !== "attack_ranged"
+      ) {
+        return action.effects;
+      }
+      return Object.fromEntries(
+        Object.entries(action.effects).map(([outcome, effect]) => {
+          const resourceDeltaTarget = { ...(effect.resourceDeltaTarget ?? {}) };
+          delete resourceDeltaTarget.hp;
+          return [
+            outcome,
+            {
+              ...effect,
+              resourceDeltaTarget:
+                Object.keys(resourceDeltaTarget).length > 0
+                  ? resourceDeltaTarget
+                  : undefined,
+            },
+          ];
+        })
+      );
+    });
+    expect(JSON.parse(JSON.stringify(effectsWithoutProgramDefaults))).toEqual(
+      JSON.parse(JSON.stringify(effectsBefore))
+    );
+    for (const action of out.actions.filter(
+      (candidate) =>
+        candidate.universalFamily === "attack_melee" ||
+        candidate.universalFamily === "attack_ranged"
+    )) {
+      expect(action.effects.success.resourceDeltaTarget?.hp).toBe(-4);
+      expect(action.effects.crit_success.resourceDeltaTarget?.hp).toBe(-8);
+    }
     expect(validateStorySchema(out)).toEqual([]);
     expect(counts).toEqual({ a: 1, b: 3 });
   });
@@ -1176,7 +1210,7 @@ describe("generateStorySchema — repair loop", () => {
     expect(out.npcTemplates.every((template) => template.inventory.length === 0)).toBe(true);
     expect(out.actionBudget).toBe(2);
     expect(out.mechanicsConfigVersions).toEqual({
-      universalActions: 1,
+      universalActions: 2,
       progression: 1,
       equipmentLoot: 1,
       attributeAdvancement: 1,

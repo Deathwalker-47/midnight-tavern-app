@@ -38,6 +38,7 @@ describe("narrator authority guardrail (§3)", () => {
     // The authority clause is present verbatim and is the FINAL block of the frame.
     expect(frame).toContain(AUTHORITY_CLAUSE);
     expect(frame.endsWith(AUTHORITY_CLAUSE)).toBe(true);
+    expect(AUTHORITY_CLAUSE).toContain("Do not quote or restate");
   });
 
   it("places every user-authored block strictly BEFORE the authority clause", () => {

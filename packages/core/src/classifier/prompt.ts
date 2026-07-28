@@ -135,6 +135,7 @@ export const CLASSIFIER_SYSTEM = [
   "- Use non-none stakes only when the current attempt faces a specific obstacle, active opposition, immediate danger, deadline, or scarce resource; briefly explain it in stakesReason.",
   "- Attacks and active deception always have concrete stakes.",
   "- Extract npcIntents ONLY when the recent narration clearly commits an NPC to a catalog action.",
+  "- Every playerIntent actorId MUST be the one present character marked isPlayer=true. Never assign the player's words to an NPC.",
   "- Set confidence honestly in [0,1]. Use < 0.6 when the mapping is uncertain.",
   "- actorId and targetId must be ids of present characters.",
   "- itemId is the item used, if any. For learn_skill, set skillId.",

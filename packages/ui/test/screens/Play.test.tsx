@@ -273,7 +273,9 @@ describe("Play — stream + composer", () => {
   it("renders rulings inline in the story stream (denied has no die)", () => {
     render(<Play storyId="s1" debugState="ruling" />);
     // The seeded demo transcript carries a denied ruling and a crit-success ruling.
-    expect(screen.getAllByTestId("ruling-label").length).toBeGreaterThan(0);
+    const labels = screen.getAllByTestId("ruling-label");
+    expect(labels.length).toBeGreaterThan(0);
+    expect(labels.some((label) => label.textContent?.includes("KESTREL"))).toBe(true);
     expect(screen.getByTestId("ruling-denied-glyph")).toHaveTextContent("⊘");
     // A rolled verdict stamps its outcome.
     expect(screen.getAllByTestId("ruling-stamp").length).toBeGreaterThan(0);

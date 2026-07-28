@@ -136,6 +136,7 @@ const VARIANT_BY_OUTCOME: Record<ReturnType<typeof fromCoreOutcome>, RulingArtif
 
 interface RulingArtifactVM {
   variant: RulingArtifactVariant;
+  label?: string;
   roll?: RulingRoll;
   reason?: string;
   resultLine?: string;
@@ -152,10 +153,18 @@ interface RulingArtifactVM {
 function rulingToArtifact(r: Ruling, nameOf: (id: string) => string): RulingArtifactVM | undefined {
   if (!r.gate.allowed) {
     const reason = r.gate.reason ?? "The action was refused by the rules engine.";
+    const actorName = nameOf(r.actorId);
+    const variant = /action budget|actions per turn|overflow/i.test(reason)
+      ? "budget-exceeded"
+      : /target|clarif/i.test(reason)
+        ? "unresolved"
+        : "denied";
     return {
-      variant: /action budget|actions per turn|overflow/i.test(reason) ? "budget-exceeded" : /target|clarif/i.test(reason) ? "unresolved" : "denied",
+      variant,
+      label: `${variant === "denied" ? "RULING" : "DM RULING"} · ${actorName.toUpperCase()} · ${variant === "budget-exceeded" ? "ACTION BUDGET" : variant === "unresolved" ? "NEEDS CLARIFICATION" : "DENIED"}`,
       reason,
       detailRows: [
+        { label: "ACTOR", value: actorName },
         { label: "ACTION", value: r.actionLabel ?? humanize(r.actionId) },
         ...(r.targetId ? [{ label: "TARGET", value: nameOf(r.targetId) }] : []),
         { label: "CONSEQUENCE", value: "No roll, cost, XP, loot, equipment change, or mechanical consequence." },
@@ -1344,6 +1353,7 @@ function RulingBlock(props: {
     <div style={S.rulingWrap}>
       <RulingArtifact
         variant={vm.variant}
+        {...(vm.label ? { label: vm.label } : {})}
         {...(vm.roll ? { roll: vm.roll } : {})}
         {...(vm.reason ? { reason: vm.reason } : {})}
         {...(vm.resultLine ? { resultLine: vm.resultLine } : {})}

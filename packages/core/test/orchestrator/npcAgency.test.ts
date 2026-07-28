@@ -22,6 +22,7 @@ import type {
 } from "../../src/index.js";
 import { openStore, type Store } from "../../src/store/index.js";
 import { makePlayer, makeStory } from "../fixtures.js";
+import type { NpcIntroductionProposal } from "../../src/orchestrator/npcIntroduction.js";
 
 /** Minimal V7 router: canned classifier + loot decline + a fixed narrator stream. */
 class AgencyRouter implements Router {
@@ -30,12 +31,17 @@ class AgencyRouter implements Router {
 
   constructor(
     readonly classified: ClassifiedTurn,
-    readonly narration = "Blades cross in the dark; the creature does not yield."
+    readonly narration = "Blades cross in the dark; the creature does not yield.",
+    readonly transitions: readonly NpcIntroductionProposal[] = [],
+    readonly narrationFailure?: Error
   ) {}
   bindingFor(_role: Role): RoleBinding {
     return { provider: "openrouter", model: "test", source: "recommended", samplersDirty: false };
   }
   async complete(role: Role, prompt: RolePrompt): Promise<ChatResponse> {
+    if (role === "classifier" && prompt.system.includes("NPC presence registrar")) {
+      return { content: JSON.stringify({ transitions: this.transitions }) };
+    }
     if (role === "classifier" && prompt.system.includes("strict consistency auditor")) {
       return { content: JSON.stringify({ obeysRulings: true, contradictions: [] }) };
     }
@@ -51,6 +57,7 @@ class AgencyRouter implements Router {
   }
   async stream(_role: Role, prompt: RolePrompt, onDelta: StreamHandler): Promise<ChatResponse> {
     this.lastNarratorPrompt = prompt;
+    if (this.narrationFailure) throw this.narrationFailure;
     const content = this.narration;
     onDelta(content);
     return { content };
@@ -197,6 +204,79 @@ describe("same-turn NPC agency", () => {
     });
   });
 
+  it("registers the current undocumented creature before classifying two player strikes", async () => {
+    await store.characters.insert({
+      id: "old-dead-man",
+      storyId,
+      name: "Dead man",
+      isPlayer: false,
+      present: true,
+      hard: {
+        characterId: "old-dead-man",
+        isPlayer: false,
+        attributes: {},
+        resources: { hp: { current: 10, max: 10 } },
+        skills: [],
+        inventory: [],
+        flags: {},
+        alive: true,
+      },
+    });
+    await store.messages.insert({
+      id: "new-threat",
+      storyId,
+      idx: 0,
+      role: "narrator",
+      content: "A hulking creature drops from the vaulted dark and bears down on you.",
+      createdAt: 0,
+    });
+    const creatureId = `${storyId}:scene:hulking-creature`;
+    const attack = {
+      ...PLAYER_ATTACK,
+      targetId: creatureId,
+    };
+    const router = new AgencyRouter(
+      { playerIntents: [attack, attack], npcIntents: [], freeText: "" },
+      "Both cuts bite into the creature as it crashes down.",
+      [{
+        operation: "introduce",
+        name: "Hulking creature",
+        grounding: "A hulking creature drops from the vaulted dark",
+      }]
+    );
+
+    const result = await submitTurn(
+      router,
+      store,
+      storyId,
+      "I strike the creature twice.",
+      { rng: d20Sequence([15]) }
+    );
+    await result.background;
+
+    expect(await store.characters.get(creatureId)).toMatchObject({
+      name: "Hulking creature",
+      present: true,
+      isPlayer: false,
+    });
+    expect(result.refusedActionCount).toBe(0);
+    expect(result.rulings.slice(0, 2)).toEqual([
+      expect.objectContaining({
+        actorId: "kestrel",
+        targetId: creatureId,
+        gate: { allowed: true },
+      }),
+      expect.objectContaining({
+        actorId: "kestrel",
+        targetId: creatureId,
+        gate: { allowed: true },
+      }),
+    ]);
+    expect(result.rulings.some((ruling) => ruling.targetId === "old-dead-man")).toBe(false);
+    expect(router.lastClassifierPrompt?.user).toContain("Hulking creature");
+    expect(router.lastNarratorPrompt?.user).toContain("Hulking creature");
+  });
+
   it("does not promote an ambient depiction even when the player names it", async () => {
     await store.messages.insert({
       id: "ambient-scene",
@@ -245,15 +325,20 @@ describe("same-turn NPC agency", () => {
     expect(result.rulings).toHaveLength(0);
   });
 
-  it("registers a newly narrated named NPC in the same turn it appears", async () => {
+  it("registers a grounded named NPC before narration portrays it", async () => {
     const result = await submitTurn(
       new AgencyRouter(
         { playerIntents: [], npcIntents: [], freeText: "I wait." },
-        "Mara enters the crypt and raises a lantern."
+        "Mara enters the crypt and raises a lantern.",
+        [{
+          operation: "introduce",
+          name: "Mara",
+          grounding: "Mara",
+        }]
       ),
       store,
       storyId,
-      "I wait and listen.",
+      "I call for Mara and wait.",
       { rng: d20Sequence([15]) }
     );
     await result.background;
@@ -262,6 +347,29 @@ describe("same-turn NPC agency", () => {
       name: "Mara",
       isPlayer: false,
     });
+  });
+
+  it("does not persist a proposed NPC when narration fails before the turn commits", async () => {
+    const maraId = `${storyId}:scene:mara`;
+    await expect(
+      submitTurn(
+        new AgencyRouter(
+          { playerIntents: [], npcIntents: [], freeText: "I wait." },
+          "Mara enters the crypt.",
+          [{
+            operation: "introduce",
+            name: "Mara",
+            grounding: "Mara",
+          }],
+          new Error("Narrator unavailable")
+        ),
+        store,
+        storyId,
+        "I call for Mara.",
+        { rng: d20Sequence([15]) }
+      )
+    ).rejects.toThrow("Narrator unavailable");
+    expect(await store.characters.get(maraId)).toBeUndefined();
   });
 
   it("never lets a slain NPC act", async () => {

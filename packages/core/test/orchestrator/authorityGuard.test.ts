@@ -157,6 +157,35 @@ describe("generateGuardedNarration — progressive verified streaming", () => {
 });
 
 describe("generateGuardedNarration", () => {
+  it("rejects a narrated kill when no lethal resource reached zero", async () => {
+    const falseKillRouter: Router = {
+      bindingFor: () => ({
+        provider: "electronhub",
+        model: "test",
+        source: "recommended",
+        samplersDirty: false,
+      }),
+      async complete() {
+        // Even a permissive model auditor cannot override the deterministic death guard.
+        return { content: JSON.stringify({ obeysRulings: true, contradictions: [] }) };
+      },
+      async stream() {
+        return { content: "The creature falls dead. You finally kill it." };
+      },
+    };
+
+    const result = await generateGuardedNarration(
+      falseKillRouter,
+      { system: "Narrate.", user: "I try to kill it." },
+      [ruling],
+      { maxNarratorRepairs: 0 }
+    );
+
+    expect(result.usedSafeFallback).toBe(true);
+    expect(result.prose).not.toMatch(/\b(?:falls dead|kill it)\b/i);
+    expect(result.prose).toContain("Twin shots land");
+  });
+
   it("accepts harmless JSON-mode variants from the authority auditor", async () => {
     const { router, counts } = routerFor(
       JSON.stringify({ obeysRulings: "true", contradictions: null })
@@ -183,7 +212,8 @@ describe("generateGuardedNarration", () => {
     );
 
     expect(result.usedSafeFallback).toBe(true);
-    expect(result.prose).toContain("16 vs DC 15");
+    expect(result.prose).toContain("Twin shots land");
+    expect(result.prose).not.toMatch(/\b(?:d20|DC|modifier|resolves as)\b/i);
     expect(counts).toEqual({ narrator: 1, auditor: 1 });
   });
 });

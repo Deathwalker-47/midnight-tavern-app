@@ -155,6 +155,7 @@ export const PHASE_B_ACTION_BATCH_SYSTEM = [
   "requiresSkill must be a Phase A skill id; requiresItemKind is optional.",
   "governingAttribute should be a Phase A attribute id for capability-based actions; omit only for flat luck.",
   "Resource deltas/costs use Phase A resource ids.",
+  "Every attack_melee and attack_ranged action MUST reduce the target's lethal resource on success and crit_success.",
   "Do not grant or consume item ids. Loot is generated and validated on demand during play.",
   "Prefix every action id with its category so ids remain unique across batches.",
   "Use every REQUIRED SKILL ID at least once and set every REQUIRED TRIAL FLAG at least once.",

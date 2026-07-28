@@ -7,6 +7,7 @@ import {
   UNIVERSAL_ACTIONS_CONFIG,
   findUniversalAction,
   matchUniversalAction,
+  applyUniversalActionDefaults,
   AttributeDefSchema,
   StorySchemaSchema,
 } from "../src/index.js";
@@ -15,7 +16,7 @@ import { makeStory } from "./fixtures.js";
 describe("V7 mechanics configuration registry", () => {
   it("loads versioned action, progression, and equipment assets", () => {
     expect(MECHANICS_CONFIG_VERSIONS).toEqual({
-      universalActions: 1,
+      universalActions: 2,
       progression: 1,
       equipmentLoot: 1,
       attributeAdvancement: 1,
@@ -50,6 +51,25 @@ describe("V7 mechanics configuration registry", () => {
     expect(matchUniversalAction("I lunge with my knife")?.id).toBe("attack_melee");
     expect(matchUniversalAction("search")?.id).toBe("search");
     expect(findUniversalAction("wait")?.description).toContain("scene");
+  });
+
+  it("gives generated attack families deterministic lethal-resource damage", () => {
+    const story = makeStory();
+    story.actions[0] = {
+      ...story.actions[0]!,
+      universalFamily: "attack_melee",
+      effects: {
+        crit_success: { narrationHint: "A devastating blow lands." },
+        success: { setFlag: { flagId: "awakened", value: true }, narrationHint: "A clean hit." },
+        failure: { narrationHint: "The strike misses." },
+        crit_failure: { narrationHint: "The attacker overextends." },
+      },
+    };
+
+    const normalized = applyUniversalActionDefaults(story);
+    expect(normalized.actions[0]!.effects.success.resourceDeltaTarget).toEqual({ hp: -4 });
+    expect(normalized.actions[0]!.effects.crit_success.resourceDeltaTarget).toEqual({ hp: -8 });
+    expect(story.actions[0]!.effects.success.resourceDeltaTarget).toBeUndefined();
   });
 });
 

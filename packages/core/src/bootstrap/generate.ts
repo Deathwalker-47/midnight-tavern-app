@@ -41,6 +41,7 @@ import {
 import {
   MECHANICS_CONFIG_VERSIONS,
   UNIVERSAL_ACTIONS_CONFIG,
+  applyUniversalActionDefaults,
 } from "../config/index.js";
 import {
   mapCardToImportWithOptions,
@@ -1126,7 +1127,7 @@ export function resolveBootstrapCreationInput(
 
 /** Assemble a candidate StorySchema from the two phase outputs (unlocked). */
 function assemble(input: BootstrapInput, a: PhaseA, b: PhaseB): StorySchema {
-  return {
+  return applyUniversalActionDefaults({
     schemaVersion: 2,
     storyId: input.storyId,
     title: input.title,
@@ -1143,7 +1144,7 @@ function assemble(input: BootstrapInput, a: PhaseA, b: PhaseB): StorySchema {
     actionBudget: Math.max(1, Math.min(5, Math.round(input.actionBudget ?? 2))),
     mechanicsConfigVersions: MECHANICS_CONFIG_VERSIONS,
     locked: false,
-  };
+  });
 }
 
 function applyImportedStartingState(

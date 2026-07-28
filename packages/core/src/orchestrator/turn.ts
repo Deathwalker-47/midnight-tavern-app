@@ -36,11 +36,16 @@ import { runAnalyzer } from "../memory/index.js";
 import { maybeSummarizeChapter, maybeSummarizeArc } from "../summarizer/index.js";
 import { instantiateFromTemplate, instantiateGeneric } from "../bootstrap/instantiate.js";
 import { blueprintToStyleInputs, STANDARD_DIFFICULTY } from "../types/index.js";
+import { applyUniversalActionDefaults } from "../config/index.js";
 import { assembleContext } from "./context.js";
 import { capture } from "./checkpoint.js";
 import { generateGuardedNarration } from "./authorityGuard.js";
 import { planNpcReactions } from "./npcAgency.js";
 import { discoverNarratedSceneEntities } from "./sceneEntityPromotion.js";
+import {
+  planNpcTransitions,
+  type ApprovedNpcTransition,
+} from "./npcIntroduction.js";
 import { determineLootAwards, type PendingLootAward } from "./loot.js";
 import {
   determineAttributeAdvancements,
@@ -99,7 +104,7 @@ export interface SubmitTurnResult {
 export async function requireStory(store: Store, storyId: string): Promise<StoryRecord> {
   const story = await store.stories.get(storyId);
   if (!story) throw new Error(`requireStory: unknown story ${storyId}`);
-  return story;
+  return { ...story, schema: applyUniversalActionDefaults(story.schema) };
 }
 
 /** True when a hard-state shell actually carries engine state (not an analyzer stub). */
@@ -548,30 +553,55 @@ async function runTurnOperation(
     let refusedActionCount = 0;
     let lootAwards: PendingLootAward[] = [];
     let attributeAdvancements: AttributeAdvancementDecision[] = [];
+    let npcTransitions: ApprovedNpcTransition[] = [];
 
     if (schema.statMode === "full") {
       const recentMessages = await store.messages.recent(storyId, 6);
       const recentNarration = recentMessages
         .filter((message) => message.role === "narrator")
         .map((message) => message.content);
-      const sceneEntities = discoverNarratedSceneEntities({
-        storyId,
-        schema,
-        recentNarration,
-        roster,
-      });
-      for (const entity of sceneEntities) {
-        await ensureHardState(store, schema, storyId, entity.id, entity.name);
-      }
-      if (sceneEntities.length > 0) {
-        roster = await store.characters.listByStory(storyId);
-        presentRoster = await store.characters.listPresentByStory(storyId);
-        presentCharacters = presentRoster.map((character) => ({
-          id: character.id,
-          name: character.name,
-          isPlayer: character.isPlayer,
+      npcTransitions = await planNpcTransitions(
+        router,
+        { storyId, schema, playerText, recentNarration, roster },
+        opts.signal
+      );
+      // Transitional deterministic fallback for older/smaller classifier routes. It is staged
+      // through the same atomic contract; narrator prose itself no longer writes the registry.
+      if (npcTransitions.length === 0) {
+        npcTransitions = discoverNarratedSceneEntities({
+          storyId,
+          schema,
+          recentNarration,
+          roster,
+        }).map((entity) => ({
+          operation: "introduce" as const,
+          character: {
+            id: entity.id,
+            storyId,
+            name: entity.name,
+            isPlayer: false,
+            present: true,
+            hard: instantiateGeneric(schema, entity.id),
+          },
         }));
       }
+      const transitionById = new Map(
+        npcTransitions.map((transition) => [transition.character.id, transition])
+      );
+      roster = roster.map(
+        (character) => transitionById.get(character.id)?.character ?? character
+      );
+      for (const transition of npcTransitions) {
+        if (!roster.some((character) => character.id === transition.character.id)) {
+          roster.push(transition.character);
+        }
+      }
+      presentRoster = roster.filter((character) => character.present);
+      presentCharacters = presentRoster.map((character) => ({
+        id: character.id,
+        name: character.name,
+        isPlayer: character.isPlayer,
+      }));
       const classifier = await classifyWithRecovery(
         router,
         schema,
@@ -608,17 +638,22 @@ async function runTurnOperation(
       const budget = enforceActionBudget(classified.playerIntents, story.actionBudget ?? 2);
       refusedActionCount = budget.refused.length;
       const nameById = new Map(roster.map((character) => [character.id, character.name]));
+      const stagedCharacters = new Map(
+        npcTransitions.map((transition) => [transition.character.id, transition.character])
+      );
 
       const workingState = async (characterId: string): Promise<CharacterHardState> => {
         const cached = workingById.get(characterId);
         if (cached) return cached;
-        const hard = await ensureHardState(
-          store,
-          schema,
-          storyId,
-          characterId,
-          nameById.get(characterId)
-        );
+        const hard =
+          stagedCharacters.get(characterId)?.hard ??
+          (await ensureHardState(
+            store,
+            schema,
+            storyId,
+            characterId,
+            nameById.get(characterId)
+          ));
         const copy = structuredClone(hard);
         const [ownedInstances, assignments] = await Promise.all([
           store.runtimeItems.listInventory(characterId),
@@ -772,6 +807,7 @@ async function runTurnOperation(
       playerText: classifierRecovered ? `${playerText}\n\n${classified.freeText}` : playerText,
       styleInputs,
       attributeAdvancements,
+      presentCharacters: presentRoster,
       ...(opts.personaBlock ? { personaBlock: opts.personaBlock } : {}),
     });
 
@@ -791,17 +827,17 @@ async function runTurnOperation(
     const prose = narration.prose;
     const narratorIdx = playerIdx + 1;
     const narratorMessageId = randomUUID();
-    const introducedSceneEntities = discoverNarratedSceneEntities({
-      storyId,
-      schema,
-      recentNarration: [prose],
-      roster,
-    });
 
     await setPhase("saving", { prose, narratorMessageId });
     await store.transaction(async () => {
-      for (const entity of introducedSceneEntities) {
-        await ensureHardState(store, schema, storyId, entity.id, entity.name);
+      for (const transition of npcTransitions) {
+        if (transition.operation !== "introduce") continue;
+        await store.characters.insert({
+          ...transition.character,
+          // Capture the registered-but-not-yet-present pre-image. Rewind keeps identity history
+          // without pretending the reverted turn left the actor in the scene.
+          present: false,
+        });
       }
       const checkpoint = await capture(store, storyId, narratorMessageId, narratorIdx);
       await store.messages.insert({
@@ -815,6 +851,13 @@ async function runTurnOperation(
         activeVariant: 0,
       });
       await store.checkpoints.insert(checkpoint);
+
+      for (const transition of npcTransitions) {
+        await store.characters.setPresent(
+          transition.character.id,
+          transition.operation !== "leave"
+        );
+      }
 
       for (const stagedRuling of staged) {
         stagedRuling.ruling.messageId = narratorMessageId;

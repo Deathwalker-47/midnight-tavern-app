@@ -63,6 +63,12 @@ export {
   type DetermineAttributeAdvancementArgs,
 } from "./attributeAdvancement.js";
 export {
+  planNpcTransitions,
+  type NpcIntroductionProposal,
+  type ApprovedNpcTransition,
+  type NpcIntroductionInput,
+} from "./npcIntroduction.js";
+export {
   SuggestedActionSchema,
   suggestPlayerActions,
   type SuggestedAction,

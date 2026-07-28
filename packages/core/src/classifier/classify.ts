@@ -344,10 +344,23 @@ async function classifyDetailed(
   const player = filterConfident(raw.playerIntents);
   const npc = filterConfident(raw.npcIntents);
   const anyDropped = player.dropped + npc.dropped > 0;
+  const activePlayers = input.presentCharacters.filter((character) => character.isPlayer);
+  const activePlayerId = activePlayers.length === 1 ? activePlayers[0]!.id : undefined;
+  const playerIntents = activePlayerId
+    ? player.kept.map((intent) => {
+        if (intent.actorId === activePlayerId) return intent;
+        const mistakenActorId = intent.actorId;
+        return {
+          ...intent,
+          actorId: activePlayerId,
+          ...(intent.targetId === activePlayerId ? { targetId: mistakenActorId } : {}),
+        };
+      })
+    : player.kept;
 
   return {
     turn: {
-      playerIntents: player.kept,
+      playerIntents,
       npcIntents: npc.kept,
       freeText: anyDropped
         ? `${raw.freeText}${raw.freeText ? " " : ""}${AMBIGUITY_NOTE}`.trim()

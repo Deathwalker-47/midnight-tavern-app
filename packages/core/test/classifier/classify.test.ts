@@ -167,6 +167,39 @@ describe("classify — behavior", () => {
     expect(out.freeText).not.toContain("ambiguous");
   });
 
+  it("deterministically assigns player intents to the active player and repairs a swapped target", async () => {
+    const router = scripted([
+      turn({
+        playerIntents: [
+          {
+            actorId: "guard",
+            actionId: "attack_melee",
+            targetId: "player",
+            confidence: 0.95,
+          },
+          {
+            actorId: "guard",
+            actionId: "attack_melee",
+            targetId: "player",
+            confidence: 0.95,
+          },
+        ],
+      }),
+    ]);
+
+    const out = await classify(router, story, {
+      playerMessage: "I strike the guard twice.",
+      presentCharacters: present,
+      recentNarration: [],
+    });
+
+    expect(out.playerIntents).toHaveLength(2);
+    expect(out.playerIntents).toEqual([
+      expect.objectContaining({ actorId: "player", targetId: "guard" }),
+      expect.objectContaining({ actorId: "player", targetId: "guard" }),
+    ]);
+  });
+
   it("drops sub-0.6 intents to narration and appends the ambiguity note", async () => {
     const router = scripted([
       turn({
