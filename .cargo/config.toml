@@ -1,0 +1,10 @@
+# Cargo build config for this repo.
+#
+# This machine/network fetches crates through a proxy whose TLS certificate revocation endpoint is
+# unreachable, so cargo's Windows (schannel) revocation check fails while updating the crates.io
+# index — build aborts with `CRYPT_E_NO_REVOCATION_CHECK` the first time a new crate is added
+# (e.g. tauri-plugin-http). This disables only the CRL/OCSP *revocation* check; the certificate
+# chain and hostname are still fully verified. Safe accommodation for the proxy; remove if building
+# on a network that can reach the revocation servers.
+[http]
+check-revoke = false
