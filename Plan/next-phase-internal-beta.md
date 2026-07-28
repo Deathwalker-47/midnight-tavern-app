@@ -50,9 +50,12 @@ re-grounded against current HEAD (most audit gaps had already been closed by lat
   immutable narrative contracts, progressively verified paragraph/beat delivery, bounded stage
   deadlines/fallbacks, and first-safe-chunk telemetry. _Partial 2026-07-29: deterministic
   counter-reactions, bounded narrated-NPC registration/promotion, separate NPC budget, and safe
-  narrative-prefix streaming landed. Still open: a structured introduction contract that guarantees
-  every actual NPC enters the registry, ambiguous goal-driven planning, mechanical-beat streaming,
-  deadlines/telemetry, and responsive default models._
+  narrative-prefix streaming landed. _Task 1 completed 2026-07-29:_ registry membership and active
+  scene presence are now separate persisted facts (`characters.present`) with filtered repository
+  access and safe default migration behavior. Still open: making presence authoritative and
+  rollback-safe, a structured introduction contract that guarantees every actual NPC enters the
+  registry, ambiguous goal-driven planning, mechanical-beat streaming, deadlines/telemetry, and
+  responsive default models._
 
 ## Internal-Beta exit criteria (the finish line for this phase)
 

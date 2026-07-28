@@ -5,16 +5,17 @@
 > sequential-agent protocol is in [`/AGENTS.md`](../AGENTS.md).
 
 **Updated:** 2026-07-29
-**Branch / HEAD:** `main` at `d81bcab` (`core(orchestrator): register narrated NPCs before agency`),
-docs baton commit on top — local, not pushed
+**Branch / HEAD:** `main` at `c284b1d` (`core(store): separate character registry from scene
+presence`), docs baton commit on top — local, not pushed
 **App version:** `0.2.8` (fresh unsigned MSI/NSIS rebuild after this change)
 **Tracked tree before this documentation update:** clean
 **User-owned/untracked:** `.codex/`, `opencode.json` — do not add, delete, or overwrite without
 explicit instruction
-**Baseline:** green — typecheck + production build; **core 473 / 38 files + UI 136 / 25 files = 609
-tests**
+**Baseline:** green — typecheck; **core 475 / 38 files + UI 136 / 25 files = 611 tests**
 **Known test noise:** seven React `act(...)` warnings (five `RulingBlock`, one `Play`, one `Overview`)
 **Active plan:** [`Plan/next-phase-internal-beta.md`](../Plan/next-phase-internal-beta.md)
+**Detailed execution plan:**
+[`docs/superpowers/plans/2026-07-29-internal-beta-completion.md`](superpowers/plans/2026-07-29-internal-beta-completion.md)
 
 ## Read these sources before changing behavior
 
@@ -22,7 +23,8 @@ tests**
 2. [`Design/HANDOFF-V7-DESIGN-INSTRUCTIONS.md`](../Design/HANDOFF-V7-DESIGN-INSTRUCTIONS.md) and
    [`Design/handoff-v7/00-V7-DESIGN-SPEC.md`](../Design/handoff-v7/00-V7-DESIGN-SPEC.md).
 3. [`Plan/competitive-adoptions.md`](../Plan/competitive-adoptions.md),
-   [`Plan/attribute-integration.md`](../Plan/attribute-integration.md), and the active plan.
+   [`Plan/attribute-integration.md`](../Plan/attribute-integration.md), the active plan, and the
+   detailed execution plan linked above.
 4. Treat `Design/handoff-v2` through `handoff-v7` as read-only historical/design reference. Runtime
    code is the authority for what is actually implemented.
 
@@ -174,6 +176,15 @@ contract/stage so narrator wording cannot evade registration, and distinguish re
 from current scene presence before broadening the roster further. Then add a small bounded planner
 for ambiguous social/tactical choices and widen deterministic provocation beyond combat targets.
 
+**REGISTRY / SCENE-PRESENCE STORAGE FOUNDATION LANDED (2026-07-29, commit `c284b1d`).**
+Migration 11 adds `characters.present` with a safe default of present for existing rows.
+`CharacterRecord` exposes the persisted fact; `listByStory` remains the complete registry while
+`listPresentByStory` filters the active scene, and `setPresent` changes presence without deleting
+the character. Newly materialized encounter NPCs explicitly start present. Repository and migration
+tests cover registry retention, filtering, toggling, safe defaults, and missing-id failure.
+Consumers still intentionally use their existing behavior until Task 2 changes them atomically with
+checkpoint/rewind support.
+
 ## Required next turn pipeline
 
 1. Persist player text and restore/reuse the operation.
@@ -298,23 +309,11 @@ for ambiguous social/tactical choices and widen deterministic provocation beyond
 
 ## Single next action
 
-The deterministic reaction stage and a bounded scene-entity registration/promotion foundation are
-landed. Two things remain, in this order:
-
-1. **Make the all-NPC registry rule structurally complete — finish root cause 2.** Replace reliance
-   on bounded prose recognition with a structured, engine-validated NPC-introduction contract or
-   pre-narration entity stage. Any actual NPC the narrator introduces must atomically receive a
-   registry row; non-character scenery/crowds/depictions must not. Explicitly separate "registered
-   in this story" from "present in this scene" so the classifier, UI party strip, and reaction
-   planner do not treat every historical NPC as co-located forever. Prove named, generic/template,
-   departure/re-entry, retry, narrator failure, and ambient-negative cases. Then add the small
-   bounded planner for ambiguous social/tactical NPC choices and widen deterministic provocation
-   beyond combat targets. Keep mechanical choice and hard-state authority in the engine.
-2. **Close out streaming end-to-end (root cause 1 tail):** verify `orchestrator/turn.ts` + bridge
-   thread the real UI `onDelta` into `generateGuardedNarration` and the narrator streams deltas in
-   the packaged app; add per-stage deadlines + first-safe-chunk telemetry; make the default narrator
-   a responsive tier (e.g. Sonnet). This is what attacks the ~50s classifier stall / 38–54s Opus
-   time — neither NPC-agency change touched total latency.
+Execute the detailed plan sequentially. Start with **Task 2: Make Presence Authoritative and
+Rollback-Safe**. Add checkpoint presence pre-images and restore behavior, then switch the
+orchestrator, NPC agency, context assembly, and both bridge implementations to the persisted
+present-cast query with parity tests. Keep the complete registry available for dossier/history
+views, and prove absent NPCs cannot act or enter active context.
 
 Do not polish the seven `act(...)` warnings, signing/updater/CSP, or cut another installer before
 the all-NPC registry/presence contract is structurally complete and the full suite/build are green.

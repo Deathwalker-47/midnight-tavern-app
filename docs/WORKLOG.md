@@ -6,6 +6,30 @@ landed, why, verification, and any gotcha the next agent needs. Live state is in
 
 ---
 
+## 2026-07-29 — Character registry and scene presence storage split
+
+Created the detailed sequential Internal Beta completion plan at
+`docs/superpowers/plans/2026-07-29-internal-beta-completion.md`, linked it from the live handoff, and
+completed its first task test-first.
+
+**What landed.** Migration 11 adds the persisted `characters.present` fact and a composite lookup
+index. `CharacterRecord` now distinguishes active-scene presence from permanent registry
+membership. `CharacterRepo.listByStory` continues to return the complete dossier/history registry;
+`listPresentByStory` returns only the active cast; and `setPresent` toggles presence without deleting
+the record. Inserts default to present for compatibility, while NPCs materialized by
+`ensureHardState` explicitly start present.
+
+**Red/green coverage.** The repository test first failed because `listPresentByStory` did not exist.
+The completed coverage proves absent NPCs remain registered, are excluded from the present-cast
+query, can re-enter the scene, and reject presence updates for missing ids. Migration tests track
+version 11 and prove omitted presence defaults to true.
+
+**Verification.** Fresh post-change `npm run typecheck` passed. Fresh `npm test` passed: core
+**475 / 38 files** + UI **136 / 25 files** = **611 tests**. The same seven known React `act(...)`
+warnings remain. Code landed as `c284b1d`; local documentation baton follows. No installer was
+rebuilt and nothing was pushed. Task 2 is the sole next action: make presence authoritative across
+checkpoints, rewind, orchestrator/context consumers, NPC agency, and both bridges.
+
 ## 2026-07-29 — Narrated NPC registry + prose-only scene-entity promotion foundation
 
 Implemented the handoff's scene-entity promotion slice test-first, then expanded it for the product
