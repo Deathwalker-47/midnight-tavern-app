@@ -53,6 +53,21 @@ const ACTOR_VERBS = [
   "watches",
 ];
 
+/** Capitalized sentence starters that can satisfy the proper-name grammar but never name an NPC. */
+const NON_CHARACTER_PROPER_ACTORS = new Set([
+  "anybody",
+  "anyone",
+  "anything",
+  "everybody",
+  "everyone",
+  "everything",
+  "nobody",
+  "nothing",
+  "somebody",
+  "someone",
+  "something",
+]);
+
 function normalize(value: string): string {
   return value
     .toLocaleLowerCase("en-US")
@@ -88,7 +103,7 @@ function narratedActors(narration: string, schema: StorySchema): string[] {
   );
   for (const match of narration.matchAll(properActor)) {
     const actor = normalize(match[1] ?? "");
-    if (actor) actors.add(actor);
+    if (actor && !NON_CHARACTER_PROPER_ACTORS.has(actor)) actors.add(actor);
   }
 
   const normalizedNarration = normalize(narration);

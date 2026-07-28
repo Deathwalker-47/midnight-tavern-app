@@ -152,6 +152,51 @@ describe("Play — error states", () => {
 });
 
 describe("Play — stream + composer", () => {
+  it("shows the DM ruling before the first streamed narrator prose", async () => {
+    const bridge = emptyBridge();
+    bridge.listPresentCast = vi.fn(async () => [
+      { characterId: "hero", name: "Jinwoo", isPlayer: true, alive: true },
+    ]);
+    bridge.submitTurn = vi.fn(async (args) => {
+      const liveArgs = args as typeof args & {
+        onRulings?: (rulings: Array<{
+          turnId: string;
+          actorId: string;
+          actionId: string;
+          actionLabel: string;
+          gate: { allowed: boolean; reason: string };
+        }>) => void;
+      };
+      liveArgs.onRulings?.([
+        {
+          turnId: "turn-1",
+          actorId: "hero",
+          actionId: "leap_chasm",
+          actionLabel: "Leap the chasm",
+          gate: { allowed: false, reason: "The far ledge is beyond reach." },
+        },
+      ]);
+      args.onPhase?.("streaming");
+      args.onDelta?.("The darkness rises");
+      return new Promise<never>(() => {});
+    });
+    setBridge(bridge);
+
+    render(<Play storyId="s1" />);
+    await screen.findByText("Your story waits");
+    const composer = screen.getByTestId("play-composer");
+    fireEvent.change(composer, {
+      target: { value: "I leap across the impossible chasm." },
+    });
+    fireEvent.click(screen.getByTestId("play-send"));
+
+    const ruling = await screen.findByText("The far ledge is beyond reach.");
+    const prose = screen.getByTestId("play-prose-buffer");
+    expect(
+      ruling.compareDocumentPosition(prose) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+  });
+
   it("keeps an in-flight turn alive when Play is left and reopened", async () => {
     let finishTurn!: (value: Awaited<ReturnType<CoreBridge["submitTurn"]>>) => void;
     const pendingTurn = new Promise<Awaited<ReturnType<CoreBridge["submitTurn"]>>>(

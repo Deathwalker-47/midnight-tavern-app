@@ -43,6 +43,8 @@ interface PlayState {
   operationPhase: TurnOperationPhase;
   /** Live narrator prose accumulated from stream deltas during a turn. */
   proseBuffer: string;
+  /** Deterministic rulings visible while their narrator prose is still streaming. */
+  pendingRulings: Ruling[];
   turnError?: TurnError;
   classifierRecovery?: ClassifierRecoveryMetadata;
   recoveryInspection?: TurnOperationRecoveryInspection;
@@ -155,6 +157,7 @@ export const usePlayStore = create<PlayState>((set, get) => ({
   thinking: false,
   operationPhase: "idle",
   proseBuffer: "",
+  pendingRulings: [],
   turnError: undefined,
   classifierRecovery: undefined,
   recoveryInspection: undefined,
@@ -166,7 +169,7 @@ export const usePlayStore = create<PlayState>((set, get) => ({
     const current = get();
     if (current.storyId === storyId && current.thinking) return;
     const generation = beginOperation();
-    set({ storyId, loading: true, turnError: undefined });
+    set({ storyId, loading: true, pendingRulings: [], turnError: undefined });
     try {
       const snapshot = await readPlaySnapshot(storyId);
       if (!isCurrentOperation(generation, storyId, get)) return;
@@ -208,6 +211,7 @@ export const usePlayStore = create<PlayState>((set, get) => ({
       thinking: true,
       operationPhase: "classifying",
       proseBuffer: "",
+      pendingRulings: [],
       turnError: undefined,
       classifierRecovery: undefined,
       recoveryInspection: undefined,
@@ -220,6 +224,11 @@ export const usePlayStore = create<PlayState>((set, get) => ({
         onDelta: (delta) => {
           if (isCurrentOperation(generation, storyId, get)) {
             set((s) => ({ proseBuffer: s.proseBuffer + delta }));
+          }
+        },
+        onRulings: (pendingRulings) => {
+          if (isCurrentOperation(generation, storyId, get)) {
+            set({ pendingRulings });
           }
         },
         onPhase: (operationPhase) => {
@@ -244,6 +253,7 @@ export const usePlayStore = create<PlayState>((set, get) => ({
         thinking: false,
         operationPhase: phaseForRecovery(snapshot.recoveryInspection),
         proseBuffer: "",
+        pendingRulings: [],
         classifierRecovery:
           outcome.classifierRecovery ??
           snapshot.recoveryInspection?.operation.classifierRecovery,
@@ -275,6 +285,7 @@ export const usePlayStore = create<PlayState>((set, get) => ({
             ? "error"
             : phaseForRecovery(inspection),
         proseBuffer: "",
+        pendingRulings: [],
         turnError: classifyError(err),
         classifierRecovery: inspection?.operation.classifierRecovery,
         recoveryInspection: inspection,
@@ -294,6 +305,7 @@ export const usePlayStore = create<PlayState>((set, get) => ({
           ? "classifying"
           : "thinking",
       proseBuffer: "",
+      pendingRulings: [],
       turnError: undefined,
       classifierRecovery: undefined,
       recoveryInspection: undefined,
@@ -304,6 +316,11 @@ export const usePlayStore = create<PlayState>((set, get) => ({
         onDelta: (delta) => {
           if (isCurrentOperation(generation, storyId, get)) {
             set((state) => ({ proseBuffer: state.proseBuffer + delta }));
+          }
+        },
+        onRulings: (pendingRulings) => {
+          if (isCurrentOperation(generation, storyId, get)) {
+            set({ pendingRulings });
           }
         },
         onPhase: (operationPhase) => {
@@ -333,6 +350,7 @@ export const usePlayStore = create<PlayState>((set, get) => ({
         thinking: false,
         operationPhase: phaseForRecovery(snapshot.recoveryInspection),
         proseBuffer: "",
+        pendingRulings: [],
         classifierRecovery:
           outcome.classifierRecovery ??
           snapshot.recoveryInspection?.operation.classifierRecovery,
@@ -364,6 +382,7 @@ export const usePlayStore = create<PlayState>((set, get) => ({
             ? "error"
             : phaseForRecovery(nextInspection),
         proseBuffer: "",
+        pendingRulings: [],
         turnError: classifyError(err),
         classifierRecovery: nextInspection?.operation.classifierRecovery,
         recoveryInspection: nextInspection,
@@ -387,6 +406,7 @@ export const usePlayStore = create<PlayState>((set, get) => ({
       thinking: true,
       operationPhase: "thinking",
       proseBuffer: "",
+      pendingRulings: [],
       turnError: undefined,
     });
     try {
@@ -412,6 +432,7 @@ export const usePlayStore = create<PlayState>((set, get) => ({
         thinking: false,
         operationPhase: "idle",
         proseBuffer: "",
+        pendingRulings: [],
       });
     } catch (err) {
       if (!isCurrentOperation(generation, storyId, get)) return;
@@ -419,6 +440,7 @@ export const usePlayStore = create<PlayState>((set, get) => ({
         thinking: false,
         operationPhase: opts.signal?.aborted ? "cancelled" : "error",
         proseBuffer: "",
+        pendingRulings: [],
         turnError: classifyError(err),
       });
     }
@@ -492,6 +514,7 @@ export const usePlayStore = create<PlayState>((set, get) => ({
       thinking: false,
       operationPhase: "idle",
       proseBuffer: "",
+      pendingRulings: [],
       turnError: undefined,
       classifierRecovery: undefined,
       recoveryInspection: undefined,

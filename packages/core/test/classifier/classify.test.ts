@@ -329,7 +329,7 @@ describe("classify — behavior", () => {
     ]);
   });
 
-  it("bounds classifier repair latency before recovering a sealed action locally", async () => {
+  it("allows a second repair before falling back to sealed local recovery", async () => {
     let attempts = 0;
     const router: Router = {
       bindingFor: () => ({
@@ -340,7 +340,21 @@ describe("classify — behavior", () => {
       }),
       async complete() {
         attempts += 1;
-        return { content: "not json" };
+        return {
+          content:
+            attempts < 3
+              ? "not json"
+              : turn({
+                  playerIntents: [
+                    {
+                      actorId: "player",
+                      actionId: "attack_melee",
+                      targetId: "guard",
+                      confidence: 1,
+                    },
+                  ],
+                }),
+        };
       },
       async stream() {
         throw new Error("classifier never streams");
@@ -354,7 +368,8 @@ describe("classify — behavior", () => {
     });
 
     expect(out.turn.playerIntents[0]?.actionId).toBe("attack_melee");
-    expect(attempts).toBe(2);
+    expect(out.recovered).toBe(false);
+    expect(attempts).toBe(3);
   });
 
   it("does not guess between actions that share the same explicit phrase", async () => {

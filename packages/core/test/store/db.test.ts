@@ -37,7 +37,7 @@ const EXPECTED_TABLES = [
 ];
 
 /** Number of embedded migrations. Bump when adding one. */
-const MIGRATION_COUNT = 12;
+const MIGRATION_COUNT = 13;
 
 async function tableNames(db: Db): Promise<string[]> {
   const rows = await db.all<{ name: string }>(
@@ -69,6 +69,7 @@ describe("openDb / migrations", () => {
       { version: 10, name: "v7_rulebook_snapshots" },
       { version: 11, name: "character_scene_presence" },
       { version: 12, name: "checkpoint_scene_presence" },
+      { version: 13, name: "remove_false_nothing_character" },
     ]);
     await db.close();
   });
@@ -99,6 +100,78 @@ describe("openDb / migrations", () => {
     );
     expect(row?.present).toBe(1);
     await db.close();
+  });
+
+  it("removes the auto-promoted Nothing phantom on upgrade", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "mt-db-"));
+    const path = join(dir, "nothing-upgrade.db");
+    try {
+      const seeded = await openDb(path);
+      await seeded.run(
+        "INSERT INTO stories (id, title, created_at, schema_json, locked) VALUES (?,?,?,?,?)",
+        "s1",
+        "S",
+        0,
+        "{}",
+        1
+      );
+      await seeded.run(
+        `INSERT INTO characters (id, story_id, name, is_player, hard_json)
+         VALUES (?, ?, ?, ?, ?)`,
+        "s1:scene:nothing",
+        "s1",
+        "Nothing",
+        0,
+        "{}"
+      );
+      await seeded.run(
+        "INSERT INTO messages (id, story_id, idx, role, content, created_at) VALUES (?,?,?,?,?,?)",
+        "m1",
+        "s1",
+        0,
+        "narrator",
+        "Nothing moves in the vast quiet.",
+        0
+      );
+      await seeded.run(
+        `INSERT INTO turn_checkpoints (
+           id, story_id, message_id, turn_index, hard_pre_json, soft_pre_json,
+           world_pre_json, presence_pre_json, created_at
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        "cp1",
+        "s1",
+        "m1",
+        0,
+        '{"s1:scene:nothing":{},"keep":{}}',
+        '{"s1:scene:nothing":null}',
+        null,
+        '{"s1:scene:nothing":true,"keep":true}',
+        0
+      );
+      // Recreate the exact v12-to-v13 upgrade boundary.
+      await seeded.run("DELETE FROM schema_migrations WHERE version = 13");
+      await seeded.close();
+
+      const upgraded = await openDb(path);
+      expect(
+        await upgraded.get("SELECT id FROM characters WHERE id = ?", "s1:scene:nothing")
+      ).toBeUndefined();
+      const checkpoint = await upgraded.get<{
+        hard_pre_json: string;
+        soft_pre_json: string;
+        presence_pre_json: string;
+      }>("SELECT hard_pre_json, soft_pre_json, presence_pre_json FROM turn_checkpoints");
+      expect(JSON.parse(checkpoint!.hard_pre_json)).toEqual({ keep: {} });
+      expect(JSON.parse(checkpoint!.soft_pre_json)).toEqual({});
+      expect(JSON.parse(checkpoint!.presence_pre_json)).toEqual({ keep: true });
+      await upgraded.close();
+    } finally {
+      try {
+        rmSync(dir, { recursive: true, force: true });
+      } catch {
+        // Windows may hold the native SQLite handle briefly; OS temp cleanup will reclaim it.
+      }
+    }
   });
 
   it("is idempotent: reopening a file DB re-applies nothing", async () => {

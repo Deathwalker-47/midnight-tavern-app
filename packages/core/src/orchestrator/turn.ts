@@ -64,6 +64,8 @@ export interface SubmitTurnOptions {
   signal?: AbortSignal;
   /** Streaming sink for narrator deltas (UI live-render); optional. */
   onDelta?: (delta: string) => void;
+  /** Final deterministic rulings, emitted before narrator streaming begins. */
+  onRulings?: (rulings: Ruling[]) => void;
   /** Player persona + protagonist essentials block (§7.3 item 4). */
   personaBlock?: string;
   /** Called (never throwing) if async post-processing fails; for logging/telemetry. */
@@ -773,6 +775,7 @@ async function runTurnOperation(
       ...(opts.personaBlock ? { personaBlock: opts.personaBlock } : {}),
     });
 
+    opts.onRulings?.(structuredClone(rulings));
     await setPhase("thinking", { classified, rulings, staged });
     await setPhase("streaming");
     const narration = await generateGuardedNarration(

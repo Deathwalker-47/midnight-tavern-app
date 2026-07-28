@@ -246,6 +246,8 @@ export interface SubmitTurnArgs {
   playerText: string;
   /** Live narrator deltas for word-by-word render; the store buffers these. */
   onDelta?: (delta: string) => void;
+  /** Final deterministic rulings, delivered before the first narrator delta. */
+  onRulings?: (rulings: Ruling[]) => void;
   /** Player persona + protagonist essentials block (§7.3). */
   personaBlock?: string;
   /** Persisted V7 operation state, mapped to reader-facing UI phases. */
@@ -285,6 +287,7 @@ export interface SubmitTurnOutcome {
 export interface RetryTurnOperationArgs {
   operationId: string;
   onDelta?: (delta: string) => void;
+  onRulings?: (rulings: Ruling[]) => void;
   personaBlock?: string;
   onPhase?: (phase: TurnOperationPhase) => void;
   signal?: AbortSignal;
@@ -1219,6 +1222,7 @@ export function makeMemoryBridge(): CoreBridge {
       const prose =
         "The lamp gutters as you speak, and the room leans in to listen. " +
         "Somewhere below the floorboards, something old turns over in its sleep.";
+      args.onRulings?.([]);
       args.onPhase?.("thinking");
       args.onPhase?.("streaming");
       await streamProse(prose, args.onDelta, args.signal);

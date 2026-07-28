@@ -414,6 +414,47 @@ CREATE INDEX idx_characters_story_present
 ALTER TABLE turn_checkpoints ADD COLUMN presence_pre_json TEXT NOT NULL DEFAULT '{}';
 `,
   },
+  {
+    version: 13,
+    name: "remove_false_nothing_character",
+    // The former proper-name heuristic treated sentence-initial "Nothing moves ..." as an NPC.
+    // Remove only that auto-promoted id when it never participated in mechanics, and scrub its
+    // checkpoint keys so future rewind/delete cannot try to restore the deleted phantom.
+    sql: `
+UPDATE turn_checkpoints
+SET hard_pre_json = json_remove(
+      hard_pre_json,
+      '$."' || story_id || ':scene:nothing"'
+    ),
+    soft_pre_json = json_remove(
+      soft_pre_json,
+      '$."' || story_id || ':scene:nothing"'
+    ),
+    presence_pre_json = json_remove(
+      presence_pre_json,
+      '$."' || story_id || ':scene:nothing"'
+    )
+WHERE EXISTS (
+  SELECT 1
+  FROM characters c
+  WHERE c.story_id = turn_checkpoints.story_id
+    AND c.id = c.story_id || ':scene:nothing'
+    AND lower(c.name) = 'nothing'
+    AND c.is_player = 0
+    AND NOT EXISTS (SELECT 1 FROM story_events e WHERE e.actor_id = c.id)
+    AND NOT EXISTS (SELECT 1 FROM item_instances i WHERE i.owner_character_id = c.id)
+);
+
+DELETE FROM characters
+WHERE id = story_id || ':scene:nothing'
+  AND lower(name) = 'nothing'
+  AND is_player = 0
+  AND NOT EXISTS (SELECT 1 FROM story_events e WHERE e.actor_id = characters.id)
+  AND NOT EXISTS (
+    SELECT 1 FROM item_instances i WHERE i.owner_character_id = characters.id
+  );
+`,
+  },
 ];
 
 /**

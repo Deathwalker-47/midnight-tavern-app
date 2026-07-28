@@ -531,6 +531,7 @@ export function Play(props: PlayProps): JSX.Element {
   const storeThinking = usePlayStore((s) => s.thinking);
   const storeOperationPhase = usePlayStore((s) => s.operationPhase);
   const storeProse = usePlayStore((s) => s.proseBuffer);
+  const storePendingRulings = usePlayStore((s) => s.pendingRulings);
   const storeError = usePlayStore((s) => s.turnError);
   const storeClassifierRecovery = usePlayStore((s) => s.classifierRecovery);
   const storeRecoveryInspection = usePlayStore((s) => s.recoveryInspection);
@@ -596,6 +597,7 @@ export function Play(props: PlayProps): JSX.Element {
   let thinking = storeThinking;
   let operationPhase: TurnOperationPhase = storeOperationPhase;
   let proseBuffer = storeProse;
+  let pendingRulings = storePendingRulings;
   let turnError: TurnError | undefined = storeError;
   let classifierRecovery = storeClassifierRecovery;
   let canRetryPersistedTurn = Boolean(storeRecoveryInspection?.recoverable);
@@ -611,6 +613,7 @@ export function Play(props: PlayProps): JSX.Element {
     classifierRecovery = undefined;
     canRetryPersistedTurn = false;
     proseBuffer = "";
+    pendingRulings = [];
     cast = DEMO_CAST;
     messages = DEMO_MESSAGES;
     rulings = [];
@@ -1078,6 +1081,16 @@ export function Play(props: PlayProps): JSX.Element {
 
                   {operationPhase !== "idle" && (
                     <div style={S.thinking} data-testid="play-thinking">
+                      {pendingRulings.map((ruling, index) => (
+                        <RulingBlock
+                          key={`pending-ruling:${ruling.turnId}:${index}`}
+                          ruling={ruling}
+                          nameOf={nameOf}
+                          animate={!reduced}
+                          story={storyRecord}
+                          onEditRetry={() => editBudgetTurn(ruling)}
+                        />
+                      ))}
                       {proseBuffer && (operationPhase === "streaming" || operationPhase === "saving") ? (
                         <p style={S.prose} data-testid="play-prose-buffer">
                           {proseBuffer}

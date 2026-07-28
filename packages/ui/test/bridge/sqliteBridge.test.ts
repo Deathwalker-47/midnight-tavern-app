@@ -208,12 +208,24 @@ describe("buildSqliteBridge", () => {
   it("submitTurn returns the outcome and swallows a rejected background promise", async () => {
     const errSpy = vi.spyOn(diagnosticsLogger, "error").mockImplementation(() => {});
     const background = Promise.reject(new Error("analyzer boom"));
-    const submitTurn = vi.fn(async () => ({ prose: "text", rulings: [], narratorIdx: 5, background }));
+    const submitTurn = vi.fn(
+      async (
+        _router: unknown,
+        _store: unknown,
+        _storyId: string,
+        _playerText: string,
+        _opts: unknown
+      ) => ({ prose: "text", rulings: [], narratorIdx: 5, background })
+    );
+    const onRulings = vi.fn();
     const bridge = buildSqliteBridge(fakeStore({
       stories: { get: vi.fn(async () => ({ id: "s1", schema: { statMode: "full" } })) },
     }), fakeCore({ submitTurn }));
-    const out = await bridge.submitTurn({ storyId: "s1", playerText: "hi" });
+    const out = await bridge.submitTurn({ storyId: "s1", playerText: "hi", onRulings });
     expect(out).toEqual({ prose: "text", rulings: [], narratorIdx: 5 });
+    expect(submitTurn.mock.calls[0]?.[4]).toEqual(
+      expect.objectContaining({ onRulings })
+    );
     await new Promise((r) => setTimeout(r, 0)); // let the .catch run
     expect(errSpy).toHaveBeenCalledWith("turn.background.failed", expect.objectContaining({ operationId: "s1" }));
     errSpy.mockRestore();

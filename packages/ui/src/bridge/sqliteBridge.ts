@@ -342,6 +342,7 @@ export function buildSqliteBridge(
         const router = await currentRouter(story.schema.statMode === "none" ? ["narrator"] : core.ROLES);
         const result = await core.submitTurn(router, store, args.storyId, args.playerText, {
           ...(args.onDelta ? { onDelta: args.onDelta } : {}),
+          ...(args.onRulings ? { onRulings: args.onRulings } : {}),
           ...(args.personaBlock ? { personaBlock: args.personaBlock } : {}),
           ...(args.onPhase
             ? { onPhase: (phase: TurnOperationState) => args.onPhase!(toUiPhase(phase)) }
@@ -400,6 +401,7 @@ export function buildSqliteBridge(
       );
       const result = await core.retryTurnOperation(router, store, args.operationId, {
         ...(args.onDelta ? { onDelta: args.onDelta } : {}),
+        ...(args.onRulings ? { onRulings: args.onRulings } : {}),
         ...(args.personaBlock ? { personaBlock: args.personaBlock } : {}),
         ...(args.onPhase
           ? {

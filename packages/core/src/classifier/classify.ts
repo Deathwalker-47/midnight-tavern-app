@@ -334,10 +334,10 @@ async function classifyDetailed(
   const prompt = { system: CLASSIFIER_SYSTEM, user: buildClassifierUser(schema, input) };
 
   const raw = await callStructured(router, "classifier", prompt, zodSchema, {
-    // One repair is enough to correct an ordinary JSON-mode mistake. If it
-    // still fails, sealed catalog recovery is faster and safer than making the
-    // player wait through two more identical provider responses.
-    maxRepairs: opts?.maxRepairs ?? 1,
+    // Some OpenAI-compatible routes need one correction to produce valid JSON and a second
+    // correction to satisfy the sealed ids. Two repairs still keep latency bounded while avoiding
+    // an unnecessary narration-only fallback after an otherwise recoverable response.
+    maxRepairs: opts?.maxRepairs ?? 2,
     signal: opts?.signal,
   });
 

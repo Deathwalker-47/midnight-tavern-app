@@ -138,8 +138,11 @@ describe("submitTurn — pipeline order & transaction", () => {
     });
 
     // d20=15, +1 blade = 16 ≥ DC 12 ⇒ success ⇒ -4 base * sword damage(6) = -10 hp.
+    const liveEvents: string[] = [];
     const result = await submitTurn(router, store, storyId, "I strike the wight", {
       rng: d20Sequence([15]),
+      onRulings: (rulings) => liveEvents.push(`rulings:${rulings.length}`),
+      onDelta: () => liveEvents.push("prose"),
     });
     await result.background;
 
@@ -176,6 +179,8 @@ describe("submitTurn — pipeline order & transaction", () => {
 
     // Pipeline order: classifier before narrator (rulings computed before prose).
     expect(router.calls.indexOf("classifier")).toBeLessThan(router.calls.indexOf("narrator"));
+    expect(liveEvents[0]).toBe("rulings:2");
+    expect(liveEvents[1]).toBe("prose");
   });
 
   it("treats a narration-only turn (no intents) as prose with no rulings and no state change", async () => {
