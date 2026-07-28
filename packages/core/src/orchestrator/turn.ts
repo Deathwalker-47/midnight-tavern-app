@@ -39,6 +39,7 @@ import { blueprintToStyleInputs, STANDARD_DIFFICULTY } from "../types/index.js";
 import { assembleContext } from "./context.js";
 import { capture } from "./checkpoint.js";
 import { generateGuardedNarration } from "./authorityGuard.js";
+import { planNpcReactions } from "./npcAgency.js";
 import { determineLootAwards, type PendingLootAward } from "./loot.js";
 import {
   determineAttributeAdvancements,
@@ -652,13 +653,49 @@ async function runTurnOperation(
         staged.push({ ruling, mutations: [] });
       }
 
+      // Everything staged so far is the player's this turn. Loot and attribute advancement
+      // are player-earned, so they read only this prefix; NPC reactions appended below feed
+      // only the narrative contract, never the player's rewards.
+      const playerRulingCount = rulings.length;
+
+      // NPC same-turn agency (§7.5–6): a present, living NPC struck this turn answers with
+      // its own engine ruling BEFORE narration. Deterministic reactions are planned once
+      // over the player's rulings, then resolved with the same gate/dice authority against
+      // the same working ledger. Their own encounter budget never touches the player's.
+      const npcReactionIntents = planNpcReactions({
+        schema,
+        priorRulings: rulings.slice(0, playerRulingCount),
+        workingById,
+        present: new Map(roster.map((character) => [character.id, character.isPlayer])),
+      });
+      for (const intent of npcReactionIntents) {
+        const actorHard = await workingState(intent.actorId);
+        const targetHard = intent.targetId ? await workingState(intent.targetId) : undefined;
+        const result = resolve(schema, actorHard, targetHard, intent, rng, {
+          ...(story.difficulty ? { difficulty: story.difficulty } : {}),
+          ...(equipmentDefinitions.length > 0
+            ? {
+                equipment: {
+                  definitions: equipmentDefinitions,
+                  instances: equipmentInstances,
+                },
+              }
+            : {}),
+        });
+        const died = commit(schema, result.mutations, workingById);
+        if (died.length) result.ruling.causedDeathOf = died;
+        rulings.push(result.ruling);
+        staged.push(result);
+      }
+
       await setPhase("generating_loot", { rulings, staged });
+      const playerRulings = rulings.slice(0, playerRulingCount);
       lootAwards = await determineLootAwards(
         router,
         store,
         story,
         playerText,
-        rulings,
+        playerRulings,
         opts.signal
       );
       for (const award of lootAwards) {
@@ -687,7 +724,7 @@ async function runTurnOperation(
       const advancement = await determineAttributeAdvancements(router, store, {
         story,
         playerText,
-        rulings,
+        rulings: playerRulings,
         turnIndex: playerIdx + 1,
         hardStates: workingById,
         ...(opts.signal ? { signal: opts.signal } : {}),

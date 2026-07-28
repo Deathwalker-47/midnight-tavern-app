@@ -122,12 +122,16 @@ describe("V7 ordered turn semantics", () => {
     await result.background;
 
     expect(result.refusedActionCount).toBe(1);
-    expect(result.rulings).toHaveLength(3);
+    // Player: one landed strike, one denied (no stamina), one refused (budget). The surviving
+    // wight then answers on its own separate encounter budget — a fourth ruling.
+    expect(result.rulings).toHaveLength(4);
     expect(result.rulings[0]!.gate.allowed).toBe(true);
     expect(result.rulings[1]!.gate.allowed).toBe(false);
     expect(result.rulings[1]!.gate.reason).toMatch(/stamina|resource|cost/i);
     expect(result.rulings[2]!.gate.allowed).toBe(false);
     expect(result.rulings[2]!.gate.reason).toMatch(/turn allows 2/i);
+    expect(result.rulings[3]).toMatchObject({ actorId: "wight", targetId: "kestrel" });
+    expect(result.rulings[3]!.gate.allowed).toBe(true);
     expect((await store.characters.get("kestrel"))!.hard.resources.stamina!.current).toBe(1);
 
     const operation = await store.turnOperations.getByPlayerMessage(
@@ -152,11 +156,17 @@ describe("V7 ordered turn semantics", () => {
     );
     await result.background;
 
-    expect(result.rulings).toHaveLength(1);
+    // The recovered player strike, plus the surviving wight's same-turn counter.
+    expect(result.rulings).toHaveLength(2);
     expect(result.rulings[0]).toMatchObject({
       actorId: "kestrel",
       actionId: "attack_melee",
       targetId: "wight",
+      gate: { allowed: true },
+    });
+    expect(result.rulings[1]).toMatchObject({
+      actorId: "wight",
+      targetId: "kestrel",
       gate: { allowed: true },
     });
   });

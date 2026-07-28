@@ -233,9 +233,10 @@ describe("history ops — swipe / delete / rewind (§6)", () => {
     const after = await store.messages.listByStory(storyId);
     expect(after).toHaveLength(2);
     expect(after.every((m) => m.idx < secondNarratorIdx)).toBe(true);
-    // Later turn checkpoint + ruling are gone; the selected exchange's remain.
+    // Later turn checkpoint + rulings are gone; the selected exchange's remain (the player
+    // strike plus the surviving wight's same-turn counter = two rulings).
     expect(await store.checkpoints.listByStory(storyId)).toHaveLength(1);
-    expect(await store.rulings.listByStory(storyId)).toHaveLength(1);
+    expect(await store.rulings.listByStory(storyId)).toHaveLength(2);
     expect((await store.events.listByStory(storyId)).every((event) => event.turnIndex < 2)).toBe(true);
   });
 
@@ -272,7 +273,8 @@ describe("history ops — swipe / delete / rewind (§6)", () => {
       "First telling.",
     ]);
     expect(await store.checkpoints.listByStory(storyId)).toHaveLength(1);
-    expect(await store.rulings.listByStory(storyId)).toHaveLength(1);
+    // Player strike + surviving wight's same-turn counter both belong to the kept exchange.
+    expect(await store.rulings.listByStory(storyId)).toHaveLength(2);
     expect((await store.events.listByStory(storyId)).every((event) => event.turnIndex < 2)).toBe(true);
   });
 

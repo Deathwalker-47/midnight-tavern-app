@@ -152,8 +152,14 @@ describe("submitTurn — pipeline order & transaction", () => {
     expect(result.usedNarratorFallback).toBe(true);
 
     // The engine's ruling — not the prose — decided the outcome.
-    expect(result.rulings).toHaveLength(1);
+    expect(result.rulings).toHaveLength(2);
     expect(result.rulings[0]!.roll?.outcome).toBe("success");
+    // The struck-but-surviving wight answers this same turn with its own engine ruling.
+    expect(result.rulings[1]).toMatchObject({
+      actorId: "wight",
+      targetId: "kestrel",
+      gate: { allowed: true },
+    });
 
     // Ledger reflects the ENGINE (wight took 10 dmg → 2 hp), NOT the prose ("untouched").
     const wight = (await store.characters.get("wight"))!;
