@@ -6,6 +6,38 @@ landed, why, verification, and any gotcha the next agent needs. Live state is in
 
 ---
 
+## 2026-07-28 — Fix forge "Failed to fetch" (native provider transport) + persona name + build
+
+Testing the installer, forge failed with **"Couldn't forge story / Failed to fetch."**
+
+**Root cause (transport, not response-handling).** Provider calls used the webview's browser `fetch`
+from `tauri://localhost`; provider APIs send no CORS headers for browser origins → blocked. Evidence:
+`core.makeRouter` at `sqliteBridge.ts:110` was called with no `fetchImpl`, so it defaulted to global
+`fetch` (`router.ts:183`), and the Rust shell registered no HTTP plugin.
+
+**Fix.** Perform provider HTTP natively (Rust/reqwest) via `tauri-plugin-http`, injected into core:
+- shell: add `tauri-plugin-http`, register `.plugin(tauri_plugin_http::init())`, add an `http:default`
+  scope to `capabilities/default.json` (`https://**` + localhost).
+- ui: `@tauri-apps/plugin-http` `fetch` injected into `core.makeRouter({ fetchImpl })` (covers all
+  forge/turn/role calls) + the two `makeProvider` sites (key validation, model listing).
+- The in-memory/browser-dev bridge keeps global `fetch` (unchanged).
+
+**Also:** removed the redundant "Your name in the story" field in StoryBlueprint — the player name now
+comes from the chosen persona (`selectedPersona.name`, fallback draft value then "You").
+
+**Build gotcha (environment, documented so the next agent doesn't burn a cycle):** the rebuild first
+FAILED at cargo's crates.io fetch with schannel `CRYPT_E_NO_REVOCATION_CHECK` — the proxy's TLS
+revocation endpoint is unreachable, and it only surfaces when a *new* crate is added (cached crates
+hid it before). Fixed with `.cargo/config.toml` → `[http] check-revoke = false` (skips only
+revocation; cert chain still verified). With that, both installers built (plugin confirmed in
+Cargo.lock). Fresh v0.2.5 hashes: NSIS `b9a8cca0…`, MSI `84364cb4…`.
+
+**Verification:** typecheck clean; core 454 + ui 133 green; Windows MSI+NSIS bundles produced.
+**Unverified (needs human):** the live provider call now actually succeeding end-to-end in the
+packaged app — that's the test. If it still fails, capture Settings → Open Logs (role + error).
+
+---
+
 ## 2026-07-28 — Internal Beta exit: bridge drift guard, restart proof, act() cleanup
 
 Completed the remaining Internal-Beta-exit plan items (1, 3, 4). Final baseline:

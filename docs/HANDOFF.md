@@ -4,24 +4,31 @@
 > History goes in [`WORKLOG.md`](WORKLOG.md). Protocol is in [`/AGENTS.md`](../AGENTS.md).
 
 **Updated:** 2026-07-28
-**Branch:** `main` (all work below committed)
+**Branch:** `main` (all work below committed + pushed)
 **Suite:** green — **core 454 / 36 files, ui 133 / 25 files = 587 tests**; `npm run typecheck` clean.
 **Active plan:** [`Plan/next-phase-internal-beta.md`](../Plan/next-phase-internal-beta.md) — Internal Beta exit.
 
 ## Where we are
 
-All four Internal-Beta-exit **code** items are landed:
+All four Internal-Beta-exit **code** items landed (bridge drift guard, card import, restart
+persistence, act() 31→7). **Plus a critical packaged-app fix from the human's first test:**
 
-1. **CoreBridge drift guard** — `test/bridge/catalogParity.test.ts` locks the in-memory bridge's
-   catalog to canonical core; caught + fixed real `MEMORY_KNOWN_MODELS` drift.
-2. **Card import** — single path via Library's modal; dead `CardCreator` retired.
-3. **Restart persistence** — `packages/core/test/store/persistence.test.ts` proves file-backed
-   SQLite survives close + reopen.
-4. **act() warnings** — cut 31 → 7 (residual noise only).
+- **Forge "Failed to fetch" → fixed.** Provider HTTP now runs natively (Rust) via
+  `tauri-plugin-http`, injected into `core.makeRouter`/`makeProvider` on the sqlite path — browser
+  CORS no longer blocks provider calls. Browser-dev bridge unchanged.
+- **Player name** now derives from the persona (removed the separate Blueprint field).
+- **Build reproducibility:** `.cargo/config.toml` sets `http.check-revoke=false` (proxy's TLS
+  revocation endpoint is unreachable; new crates otherwise fail to fetch).
+- Fresh installers built: **v0.2.5**, NSIS `b9a8cca0…`, MSI `84364cb4…` under
+  `packages/shell/src-tauri/target/release/bundle/`.
 
 ## Next action (pick one)
 
-The phase's code work is done. Two things remain before declaring Internal Beta exit *met*:
+**FIRST: the human must confirm forging actually works end-to-end** in the new build (live provider
+call). The transport fix compiles + tests pass, but a real provider round-trip is unverified here.
+If it still fails, get Settings → Open Logs (role + error) — could be key/endpoint/model config.
+
+Then, before declaring Internal Beta exit *met*:
 
 - **(human) manual packaged-app pass** — follow the acceptance sequence in
   `Audit/V5_IMPLEMENTATION_STATUS_2026-07-23.md` §"Recommended packaged-app acceptance sequence":
