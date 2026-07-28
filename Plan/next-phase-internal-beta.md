@@ -62,6 +62,14 @@ re-grounded against current HEAD (most audit gaps had already been closed by lat
   registry, ambiguous goal-driven planning, mechanical-beat streaming, deadlines/telemetry, and
   responsive default models._
 
+  _Tasks 3–4 completed 2026-07-29 (`350f805`): one bounded, engine-validated NPC
+  introduction/presence stage now runs before classification and narration; transitions commit
+  atomically, narrator-only prose cannot create characters, and a pre-existing undocumented
+  creature can be registered and targeted instead of misrouting attacks to an older NPC. Player
+  intents are normalized to the active player, and denied ruling cards identify their actor.
+  Engine-owned universal attack defaults now damage the lethal resource; death remains authoritative
+  only when that resource reaches zero._
+
 ## Internal-Beta exit criteria (the finish line for this phase)
 
 - A user can create **or import** a story, play it, close the app, reopen it, and continue.

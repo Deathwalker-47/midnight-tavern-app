@@ -241,24 +241,24 @@ interface ApprovedNpcTransition {
 }
 ```
 
-- [ ] **Step 1: Write failing structured-stage tests**
+- [x] **Step 1: Write failing structured-stage tests**
 
 Cover template introduction, generic bounded introduction, duplicate-name reuse, leave/re-entry,
 invalid template rejection, mural/crowd rejection, cancellation, and malformed provider output.
 
-- [ ] **Step 2: Observe failures**
+- [x] **Step 2: Observe failures**
 
 ```powershell
 npm --prefix packages/core test -- test/orchestrator/npcIntroduction.test.ts
 ```
 
-- [ ] **Step 3: Implement one bounded structured request and deterministic validation**
+- [x] **Step 3: Implement one bounded structured request and deterministic validation**
 
 Use the classifier role with a strict Zod schema. The model may propose; the engine verifies that
 the name/grounding appears in player text, recent narration, blueprint, or an approved template.
 Reuse an existing registry row by normalized name before creating a stable per-story id.
 
-- [ ] **Step 4: Stage transitions before narration and commit them atomically**
+- [x] **Step 4: Stage transitions before narration and commit them atomically**
 
 Pass approved present characters into `assembleContext`. Add this narrator rule:
 
@@ -267,7 +267,7 @@ You may portray only the registered present characters listed below. Do not intr
 person, creature, speaking intelligence, or named NPC in prose.
 ```
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 ```powershell
 npm run typecheck
@@ -275,6 +275,10 @@ npm --prefix packages/core test -- test/orchestrator/npcIntroduction.test.ts tes
 npm test
 git commit -am "core(orchestrator): validate NPC introductions before narration"
 ```
+
+Completed in `350f805`. The bounded registrar validates template/generic identity and grounding,
+reuses normalized registry rows, stages introduce/enter/leave before classification and narration,
+and commits only with the complete turn. A narrator failure leaves no proposed row behind.
 
 ### Task 4: Retire Heuristic Promotion as an Authority Path
 
@@ -287,12 +291,15 @@ git commit -am "core(orchestrator): validate NPC introductions before narration"
 - `discoverNarratedSceneEntities` becomes legacy catch-up only.
 - New turns rely exclusively on `ApprovedNpcTransition`.
 
-- [ ] **Step 1: Write a failing test proving unknown narrator prose cannot create a row**
-- [ ] **Step 2: Observe the current heuristic creating the row**
-- [ ] **Step 3: Remove post-narration heuristic writes; retain bounded migration/catch-up behind an
+- [x] **Step 1: Write a failing test proving unknown narrator prose cannot create a row**
+- [x] **Step 2: Observe the current heuristic creating the row**
+- [x] **Step 3: Remove post-narration heuristic writes; retain bounded migration/catch-up behind an
   explicit legacy-story path**
-- [ ] **Step 4: Run introduction, agency, authority, history, and persistence suites**
-- [ ] **Step 5: Commit with `core(orchestrator): close heuristic NPC authority path`**
+- [x] **Step 4: Run introduction, agency, authority, history, and persistence suites**
+- [x] **Step 5: Commit with `core(orchestrator): close heuristic NPC authority path`**
+
+Completed as part of `350f805`. Generated prose cannot create registry rows. The old deterministic
+recognizer remains only as a pre-classification catch-up for already-persisted narration.
 
 ### Task 5: Add Goal-Driven Bounded NPC Planning
 

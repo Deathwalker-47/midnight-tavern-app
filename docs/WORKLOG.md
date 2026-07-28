@@ -402,3 +402,35 @@ remains seven React `act(...)` warnings. Fresh unsigned v0.2.8 bundles:
 Added `docs/NEXT-AGENT-PROMPT.md` as a copy-ready continuation brief. The single next action is
 detailed-plan Task 3: the engine-validated NPC introduction/presence contract, followed by retiring
 post-narration heuristic creation as an authority path.
+
+---
+
+## 2026-07-29 — Validate creature identity, attack ownership, damage, and death prose
+
+Packaged testing exposed four connected failures: an undocumented current creature was absent from
+the registry, the classifier redirected two player strikes through an older `Dead man` row, the
+narrator repeated mechanical boilerplate, and prose declared a kill although the successful strike
+had no health effect.
+
+Commit `350f805` completes detailed-plan Tasks 3–4. A bounded classifier-role NPC registrar proposes
+`introduce | enter | leave`; deterministic validation checks grounding/templates, rejects ambient
+murals/statues/crowds and quantifier phantoms, reuses normalized rows, stages the resulting roster
+before classification/context, and commits it atomically with the turn. Generated narrator prose no
+longer writes registry rows. A narration failure test proves a proposed character is not persisted.
+
+Player intents are normalized to the single present player. If a malformed classifier response
+reverses actor and target, the engine restores the player as actor and the mistaken NPC as target,
+so two strikes within the configured action budget remain two legal attempts. Denied ruling cards
+now identify the actor.
+
+Universal actions config v2 gives mechanically empty melee/ranged attacks program-owned lethal
+resource damage (`-4` success, `-8` critical success), applied to both generated and older persisted
+full-stat rulebooks without mutating explicit damage. The ledger treats a lethal resource at zero
+as death; the narrator authority guard rejects kill/death assertions unless the ruling contains
+`causedDeathOf`. Private ruling facts are no longer copied into prose, and the deterministic
+fallback is natural narrative rather than dice/DC boilerplate.
+
+**Verification:** `npm run typecheck` clean; core **494 / 40 files** and UI **137 / 25 files** green
+(**631 tests** total). Known noise remains seven React `act(...)` warnings. Per the human's
+instruction, no installer was rebuilt; packaging is deferred until the remaining Internal Beta work
+is complete.
