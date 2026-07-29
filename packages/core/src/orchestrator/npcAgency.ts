@@ -14,7 +14,9 @@
  * later refinement. NPC reactions use their own encounter budget and never consume the
  * player's configured action allowance.
  */
+import { z } from "zod";
 import { checkGate } from "../engine/index.js";
+import { callStructured, type Router } from "../router/index.js";
 import type {
   ActionDef,
   CharacterHardState,
@@ -120,6 +122,163 @@ export function planNpcReactions(ctx: NpcReactionContext): MechanicalIntent[] {
 
     intents.push(reaction);
     spent.set(targetId, (spent.get(targetId) ?? 0) + 1);
+  }
+
+  return intents;
+}
+
+// ── Goal-driven bounded NPC planning (plan Task 5) ─────────────────────────────
+//
+// Deterministic counters (above) cover the obvious "someone hit me, hit back" case. A present,
+// living NPC that did NOT deterministically react may still have a reason to act this turn — aid an
+// ally, converse, flee, surrender, or exploit an opening the player left. Those are ambiguous, so a
+// single bounded structured request proposes them and deterministic code validates every proposal
+// against present scene state and the sealed catalogs before the engine resolves it. The model may
+// propose; it can never invent an actor, action, target, item, or skill, or bypass a gate. Any
+// timeout / malformed / cancelled output degrades to NO NPC action so narration is never blocked.
+
+/** A model-proposed NPC action, before engine validation. */
+export interface NpcActionProposal {
+  actorId: string;
+  actionId: string;
+  targetId?: string;
+  itemId?: string;
+  skillId?: string;
+  reason: string;
+  confidence: number;
+}
+
+const NpcActionProposalSchema = z.object({
+  actorId: z.string().min(1),
+  actionId: z.string().min(1),
+  targetId: z.string().min(1).optional(),
+  itemId: z.string().min(1).optional(),
+  skillId: z.string().min(1).optional(),
+  reason: z.string().trim().min(1).max(300),
+  confidence: z.number().min(0).max(1),
+});
+const NpcActionPlanSchema = z.object({
+  actions: z.array(NpcActionProposalSchema).max(6),
+});
+
+export interface NpcPlanInput {
+  schema: StorySchema;
+  playerText: string;
+  recentNarration: readonly string[];
+  /** Present, living, non-player NPCs that have NOT already acted this turn. */
+  candidates: readonly CharacterHardState[];
+  /** Display names for the prompt, keyed by characterId. */
+  nameById: Map<string, string>;
+  /** Present roster (characterId → isPlayer). A proposed target must be present. */
+  present: Map<string, boolean>;
+}
+
+function nameOf(id: string, nameById: Map<string, string>): string {
+  return nameById.get(id) ?? id;
+}
+
+function plannerPrompt(input: NpcPlanInput) {
+  const catalog = input.schema.actions.map((action) => ({
+    id: action.id,
+    label: action.label,
+    category: action.category,
+    ...(action.requiresSkill ? { requiresSkill: action.requiresSkill } : {}),
+    ...(action.requiresItemKind ? { requiresItemKind: action.requiresItemKind } : {}),
+  }));
+  return {
+    system: [
+      "You are the NPC action planner for a deterministic roleplay engine.",
+      "For each present NPC that has a grounded reason to act this turn, choose at most one goal:",
+      "aid an ally, converse, flee, surrender, or exploit an opening the player left.",
+      "Only propose sealed catalog actions for actors that are present and alive.",
+      "Never invent an action, actor, target, item, or skill. Target only a present character by id.",
+      "Return { actions: [...] }. Return an empty array when no present NPC has a grounded reason.",
+    ].join("\n"),
+    user: [
+      `PLAYER ACTION:\n${input.playerText}`,
+      `RECENT NARRATION:\n${input.recentNarration.slice(-4).join("\n") || "(none)"}`,
+      `PRESENT NPCS (may act):\n${
+        input.candidates
+          .map((npc) =>
+            JSON.stringify({
+              id: npc.characterId,
+              name: nameOf(npc.characterId, input.nameById),
+              resources: npc.resources,
+            })
+          )
+          .join("\n") || "(none)"
+      }`,
+      `PRESENT CHARACTERS (valid targets):\n${
+        [...input.present.entries()]
+          .map(([id, isPlayer]) =>
+            JSON.stringify({ id, name: nameOf(id, input.nameById), isPlayer })
+          )
+          .join("\n") || "(none)"
+      }`,
+      `SEALED ACTION CATALOG:\n${catalog.map((action) => JSON.stringify(action)).join("\n")}`,
+    ].join("\n\n"),
+  };
+}
+
+/**
+ * Plan bounded goal-driven NPC actions. Fires one structured request only when there is at least
+ * one candidate NPC, validates every proposal (actor is a present living candidate; action/item/
+ * skill are sealed; target is present; the actor's gate permits it), and returns engine-ready
+ * intents — one per NPC ({@link DEFAULT_NPC_ENCOUNTER_BUDGET}). Fails closed to `[]` on any
+ * malformed/timeout output; only an actual abort propagates.
+ */
+export async function planNpcActions(
+  router: Router,
+  input: NpcPlanInput,
+  signal?: AbortSignal
+): Promise<MechanicalIntent[]> {
+  if (input.candidates.length === 0) return [];
+  if (signal?.aborted) throw signal.reason ?? new DOMException("Cancelled", "AbortError");
+
+  let proposals: NpcActionProposal[];
+  try {
+    const response = await callStructured(
+      router,
+      "classifier",
+      plannerPrompt(input),
+      NpcActionPlanSchema,
+      { maxRepairs: 0, maxTokens: 1_200, ...(signal ? { signal } : {}) }
+    );
+    proposals = response.actions;
+  } catch (error) {
+    if (signal?.aborted) throw signal.reason ?? error;
+    return []; // fail closed: no NPC goal action, narration proceeds unblocked
+  }
+
+  const candidateById = new Map(input.candidates.map((npc) => [npc.characterId, npc]));
+  const intents: MechanicalIntent[] = [];
+  const spent = new Map<string, number>();
+
+  for (const proposal of proposals) {
+    const actor = candidateById.get(proposal.actorId);
+    if (!actor || !actor.alive) continue; // only a present, living, not-yet-acted NPC
+    if ((spent.get(proposal.actorId) ?? 0) >= DEFAULT_NPC_ENCOUNTER_BUDGET) continue;
+
+    const action = input.schema.actions.find((candidate) => candidate.id === proposal.actionId);
+    if (!action) continue; // sealed catalog only
+    if (proposal.targetId && !input.present.has(proposal.targetId)) continue; // present targets only
+    if (proposal.itemId && !input.schema.items.some((item) => item.id === proposal.itemId)) continue;
+    if (proposal.skillId && !input.schema.skills.some((skill) => skill.id === proposal.skillId)) {
+      continue;
+    }
+
+    const intent: MechanicalIntent = {
+      actorId: proposal.actorId,
+      actionId: proposal.actionId,
+      ...(proposal.targetId ? { targetId: proposal.targetId } : {}),
+      ...(proposal.itemId ? { itemId: proposal.itemId } : {}),
+      stakes: action.category === "combat" ? "danger" : "uncertain",
+      confidence: proposal.confidence,
+    };
+    if (!checkGate(input.schema, actor, intent).allowed) continue; // engine gate is authoritative
+
+    intents.push(intent);
+    spent.set(proposal.actorId, (spent.get(proposal.actorId) ?? 0) + 1);
   }
 
   return intents;

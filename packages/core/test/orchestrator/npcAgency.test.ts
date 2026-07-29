@@ -23,11 +23,15 @@ import type {
 import { openStore, type Store } from "../../src/store/index.js";
 import { makePlayer, makeStory } from "../fixtures.js";
 import type { NpcIntroductionProposal } from "../../src/orchestrator/npcIntroduction.js";
+import type { NpcActionProposal } from "../../src/orchestrator/npcAgency.js";
 
 /** Minimal V7 router: canned classifier + loot decline + a fixed narrator stream. */
 class AgencyRouter implements Router {
   lastClassifierPrompt?: RolePrompt;
   lastNarratorPrompt?: RolePrompt;
+  lastPlannerPrompt?: RolePrompt;
+  plannedActions: readonly NpcActionProposal[] = [];
+  plannerFailure?: Error;
 
   constructor(
     readonly classified: ClassifiedTurn,
@@ -41,6 +45,11 @@ class AgencyRouter implements Router {
   async complete(role: Role, prompt: RolePrompt): Promise<ChatResponse> {
     if (role === "classifier" && prompt.system.includes("NPC presence registrar")) {
       return { content: JSON.stringify({ transitions: this.transitions }) };
+    }
+    if (role === "classifier" && prompt.system.includes("NPC action planner")) {
+      this.lastPlannerPrompt = prompt;
+      if (this.plannerFailure) throw this.plannerFailure;
+      return { content: JSON.stringify({ actions: this.plannedActions }) };
     }
     if (role === "classifier" && prompt.system.includes("strict consistency auditor")) {
       return { content: JSON.stringify({ obeysRulings: true, contradictions: [] }) };
@@ -452,5 +461,122 @@ describe("same-turn NPC agency", () => {
 
     expect(result.rulings.some((ruling) => ruling.actorId === "wight")).toBe(false);
     expect((await store.characters.get("wight"))!.hard.resources.hp!.current).toBe(12);
+  });
+
+  // ── Task 5: goal-driven bounded NPC planning ────────────────────────────────────────────
+
+  it("lets a present NPC exploit an opening on a non-combat player turn", async () => {
+    await seedWightHp(12); // present, alive, and NOT attacked this turn → a planner candidate
+    const router = new AgencyRouter({ playerIntents: [], npcIntents: [], freeText: "I search the shelves." });
+    router.plannedActions = [
+      {
+        actorId: "wight",
+        actionId: "attack_wild",
+        targetId: "kestrel",
+        reason: "The intruder turned their back to rummage — an opening.",
+        confidence: 0.9,
+      },
+    ];
+    const result = await submitTurn(
+      router,
+      store,
+      storyId,
+      "I rummage through the shelves.",
+      { rng: d20Sequence([15]) }
+    );
+    await result.background;
+
+    // No deterministic reaction fired (the player never attacked); the goal planner did.
+    const action = result.rulings.find(
+      (ruling) => ruling.actorId === "wight" && ruling.targetId === "kestrel"
+    );
+    expect(action, "the present wight should act on its goal this turn").toBeDefined();
+    expect(action!.actionId).toBe("attack_wild");
+    expect(action!.gate.allowed).toBe(true);
+    expect(action!.roll).toBeDefined(); // engine dice, not prose
+    expect((await store.characters.get("kestrel"))!.hard.resources.hp!.current).toBeLessThan(20);
+    // The planner ran through the classifier role WITHOUT clobbering the player-classify prompt.
+    expect(router.lastPlannerPrompt?.system).toContain("NPC action planner");
+  });
+
+  it("lets an ally NPC aid the wounded player with a sealed support action", async () => {
+    await store.characters.insert({
+      id: "medic",
+      storyId,
+      name: "Field medic",
+      isPlayer: false,
+      present: true,
+      hard: {
+        characterId: "medic",
+        isPlayer: false,
+        attributes: {},
+        resources: { hp: { current: 12, max: 12 } },
+        skills: [],
+        inventory: [{ itemId: "potion", qty: 1 }], // a consumable, so mend_ally's gate passes
+        flags: {},
+        alive: true,
+      },
+    });
+    const wounded = makePlayer();
+    wounded.resources.hp!.current = 8;
+    await store.characters.updateHard("kestrel", wounded);
+
+    const router = new AgencyRouter({ playerIntents: [], npcIntents: [], freeText: "I catch my breath." });
+    router.plannedActions = [
+      {
+        actorId: "medic",
+        actionId: "mend_ally",
+        targetId: "kestrel",
+        itemId: "potion",
+        reason: "The medic tends the wounded companion.",
+        confidence: 0.95,
+      },
+    ];
+    const result = await submitTurn(router, store, storyId, "I steady myself.", {
+      rng: d20Sequence([15]),
+    });
+    await result.background;
+
+    const aid = result.rulings.find(
+      (ruling) => ruling.actorId === "medic" && ruling.actionId === "mend_ally"
+    );
+    expect(aid, "the ally should aid the player this turn").toBeDefined();
+    expect(aid!.gate.allowed).toBe(true);
+    expect((await store.characters.get("kestrel"))!.hard.resources.hp!.current).toBeGreaterThan(8);
+  });
+
+  it("rejects goal proposals that violate the sealed catalog or scene", async () => {
+    await seedWightHp(12);
+    const router = new AgencyRouter({ playerIntents: [], npcIntents: [], freeText: "I hold still." });
+    router.plannedActions = [
+      { actorId: "wight", actionId: "cast_meteor", targetId: "kestrel", reason: "invented action", confidence: 1 },
+      { actorId: "ghost", actionId: "attack_wild", targetId: "kestrel", reason: "actor not present", confidence: 1 },
+      { actorId: "wight", actionId: "attack_wild", targetId: "phantom", reason: "target not present", confidence: 1 },
+      { actorId: "wight", actionId: "master_strike", targetId: "kestrel", reason: "gate fails on rank", confidence: 1 },
+    ];
+    const result = await submitTurn(router, store, storyId, "I hold still.", {
+      rng: d20Sequence([15]),
+    });
+    await result.background;
+
+    // Every proposal is invalid (unknown action / absent actor / absent target / failed gate),
+    // so nothing reaches the ledger.
+    expect(result.rulings).toHaveLength(0);
+    expect((await store.characters.get("kestrel"))!.hard.resources.hp!.current).toBe(20);
+  });
+
+  it("fails closed to no NPC action when the planner errors, without blocking narration", async () => {
+    await seedWightHp(12);
+    const router = new AgencyRouter({ playerIntents: [], npcIntents: [], freeText: "I wait." });
+    router.plannerFailure = new Error("planner timeout");
+
+    const result = await submitTurn(router, store, storyId, "I wait in the dark.", {
+      rng: d20Sequence([15]),
+    });
+    await result.background;
+
+    expect(result.rulings.some((ruling) => ruling.actorId === "wight")).toBe(false);
+    expect((await store.characters.get("wight"))!.hard.resources.hp!.current).toBe(12);
+    expect(result.prose.length).toBeGreaterThan(0); // narration is never blocked by the planner
   });
 });

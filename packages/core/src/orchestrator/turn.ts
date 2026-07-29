@@ -40,7 +40,7 @@ import { applyUniversalActionDefaults } from "../config/index.js";
 import { assembleContext } from "./context.js";
 import { capture } from "./checkpoint.js";
 import { generateGuardedNarration } from "./authorityGuard.js";
-import { planNpcReactions } from "./npcAgency.js";
+import { planNpcReactions, planNpcActions } from "./npcAgency.js";
 import { discoverNarratedSceneEntities } from "./sceneEntityPromotion.js";
 import {
   planNpcTransitions,
@@ -731,6 +731,50 @@ async function runTurnOperation(
         present: new Map(presentRoster.map((character) => [character.id, character.isPlayer])),
       });
       for (const intent of npcReactionIntents) {
+        const actorHard = await workingState(intent.actorId);
+        const targetHard = intent.targetId ? await workingState(intent.targetId) : undefined;
+        const result = resolve(schema, actorHard, targetHard, intent, rng, {
+          ...(story.difficulty ? { difficulty: story.difficulty } : {}),
+          ...(equipmentDefinitions.length > 0
+            ? {
+                equipment: {
+                  definitions: equipmentDefinitions,
+                  instances: equipmentInstances,
+                },
+              }
+            : {}),
+        });
+        const died = commit(schema, result.mutations, workingById);
+        if (died.length) result.ruling.causedDeathOf = died;
+        rulings.push(result.ruling);
+        staged.push(result);
+      }
+
+      // Goal-driven bounded NPC planning (Task 5): a present, living NPC that did NOT
+      // deterministically react may still pursue a goal this turn (aid, converse, flee,
+      // surrender, exploit an opening). One bounded structured request proposes; deterministic
+      // code validates each proposal against present state + sealed catalog + gate; the engine
+      // resolves it. Fail-closed to no action — narration is never blocked on this stage.
+      const reactedNpcIds = new Set(npcReactionIntents.map((intent) => intent.actorId));
+      const plannerCandidates: CharacterHardState[] = [];
+      for (const character of presentRoster) {
+        if (character.isPlayer || reactedNpcIds.has(character.id)) continue;
+        const hard = await workingState(character.id);
+        if (hard.alive) plannerCandidates.push(hard);
+      }
+      const npcActionIntents = await planNpcActions(
+        router,
+        {
+          schema,
+          playerText,
+          recentNarration,
+          candidates: plannerCandidates,
+          nameById,
+          present: new Map(presentRoster.map((character) => [character.id, character.isPlayer])),
+        },
+        opts.signal
+      );
+      for (const intent of npcActionIntents) {
         const actorHard = await workingState(intent.actorId);
         const targetHard = intent.targetId ? await workingState(intent.targetId) : undefined;
         const result = resolve(schema, actorHard, targetHard, intent, rng, {
