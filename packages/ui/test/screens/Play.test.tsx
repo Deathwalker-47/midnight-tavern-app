@@ -21,6 +21,9 @@ import { useRoute } from "../../src/app/router";
 
 /** The default bridge, captured so tests that swap it in can restore it afterward. */
 const defaultBridge = getBridge();
+const originalConsoleError = console.error.bind(console);
+let actWarnings: string[] = [];
+let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
 
 /** A bridge whose Play methods return an empty story, letting the empty state render. */
 function emptyBridge(): CoreBridge {
@@ -35,14 +38,29 @@ function emptyBridge(): CoreBridge {
 
 beforeEach(() => {
   cleanup();
+  actWarnings = [];
+  consoleErrorSpy = vi.spyOn(console, "error").mockImplementation((...args: unknown[]) => {
+    const message = args.map(String).join(" ");
+    if (message.includes("not wrapped in act")) {
+      actWarnings.push(message);
+      return;
+    }
+    originalConsoleError(...args);
+  });
   usePlayStore.getState().reset();
   useUiStore.getState().closeDrawer();
 });
 
-afterEach(() => {
+afterEach(async () => {
+  cleanup();
   // Restore the shared singleton so a swapped-in stub can't leak into other suites.
   setBridge(defaultBridge);
-  useRoute.setState({ route: "library", params: {} });
+  await act(async () => {
+    useRoute.setState({ route: "library", params: {} });
+    await Promise.resolve();
+  });
+  consoleErrorSpy.mockRestore();
+  expect(actWarnings, "React updates must settle inside act before test cleanup").toEqual([]);
 });
 
 describe("Play — empty state", () => {
