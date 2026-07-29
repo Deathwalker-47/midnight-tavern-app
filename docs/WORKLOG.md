@@ -752,3 +752,28 @@ produced.
 **Next:** detailed-plan Task 14, beginning by turning the seven current React `act(...)` warnings
 into focused test failures, then fixing test synchronization without changing correct runtime
 behavior.
+
+---
+
+## 2026-07-29 - Eliminate the remaining React test warnings
+
+Completed detailed-plan Task 14 in commit `f1d8a4a`.
+
+Play and Overview now install a focused warning guard that records React's `not wrapped in act(...)`
+diagnostic and fails the owning test. The first guarded run reproduced the Overview failure while
+confirming that explicit Play cleanup cancels the ruling reveal/count-up work before it can update an
+unmounted test. Play also wraps the subscribed route reset in `act`. Overview's synchronous error
+assertion now waits for the already-started mount promises inside `act`.
+
+No runtime source change was needed: the warnings were caused by test teardown and pending async
+work, not a product lifecycle defect. Keeping the guards means future leaked updates cannot silently
+return.
+
+**Verification:** focused Play + Overview **20 tests** passed with no warning output; complete UI
+suite **147 / 25 files** passed with clean stderr. Fresh `npm run typecheck` and `npm test` passed:
+core **528 / 42 files** + UI **147 / 25 files** = **675 tests**. Direct UI production build passed.
+No installer was produced during Task 14.
+
+**Next:** detailed-plan Task 15: run every Internal Beta exit command independently, build the
+unsigned packaged app, execute the create/import/play/restart/continue and authority acceptance
+matrix, and record exact artifact paths and SHA-256 hashes.

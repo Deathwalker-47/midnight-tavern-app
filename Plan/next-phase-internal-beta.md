@@ -20,11 +20,11 @@ re-grounded against current HEAD (most audit gaps had already been closed by lat
 - [x] **3. Packaged SQLite restart-persistence proof.** `packages/core/test/store/persistence.test.ts`
   opens a real file-backed store, writes story/message/setting, closes, reopens, asserts survival.
   _Landed 2026-07-28._
-- [~] **4. React `act(...)` warnings 31 → 7.** Play mount-loads guarded under `debugState`;
-  StorySettings tests flush the mount effect. Residual 7 (5 `RulingBlock` reveal-timer in the Play
-  ruling test + 1 Play + 1 Overview) remain — flush the reveal timer / await the Overview load to
-  finish. Screen suites for CharacterDossier + StoryBlueprint already exist; DesignSystem still lacks
-  a dedicated one (optional). _Partial 2026-07-28._
+- [x] **4. React `act(...)` warnings 31 → 0.** Play tests explicitly unmount before shared
+  store/route reset and wrap subscribed route updates in `act`; Overview awaits its pending mount
+  work inside `act`. Both suites fail if the warning class returns, and the complete UI suite is
+  clean on stderr. Screen suites for CharacterDossier + StoryBlueprint already exist; DesignSystem
+  still lacks a dedicated one (optional). _Completed 2026-07-29 in `f1d8a4a`._
 - [x] **5. Packaged classifier structured-output recovery.** Normalize harmless JSON-mode
   variations (`null` optional fields, missing conservative containers, numeric confidence strings)
   while retaining sealed actor/action/skill enums. If structured repair still fails, recover only

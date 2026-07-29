@@ -18,10 +18,10 @@ Use codebase-memory-mcp before text search for code discovery and re-index the c
 Run `npm run typecheck` and `npm test` before editing. Use test-driven development for every
 behavioral change and verification-before-completion before claiming success.
 
-Current runtime HEAD is `75dfe6c` on local `main`, followed by a docs-only handoff commit. The fresh
+Current runtime HEAD is `f1d8a4a` on local `main`, followed by a docs-only handoff commit. The fresh
 baseline is core 528/42 files + UI 147/25 files = **675 tests**, with clean typecheck. Direct UI
-production build and `cargo check` pass. Seven known React `act(...)` warnings remain. The app is
-unsigned v0.2.8.
+production build and `cargo check` pass. The complete UI suite has clean stderr, guarded against
+future React `act(...)` warnings. The app is unsigned v0.2.8.
 
 The human explicitly said not to build an installer until all remaining Internal Beta work is done.
 Do not run the root `npm run build`, because the shell workspace invokes `tauri build`. Use direct
@@ -87,6 +87,9 @@ What is already implemented:
   roster tests prove dossier/loadout routes carry the selected registry id; and regeneration
   failure leaves installed mechanics plus unsaved settings visible before retrying from the retained
   checkpoint.
+- Task 14 (`f1d8a4a`): Play explicitly unmounts and settles subscribed route reset inside `act`;
+  Overview awaits its pending mount work; both suites fail if an out-of-act warning returns. The
+  complete UI suite now emits clean stderr.
 
 Important semantic detail: an ordinary narrator/provider error now completes the turn using safe
 deterministic prose. Approved staged NPC transitions therefore commit with that successful fallback
@@ -97,25 +100,19 @@ Do not add encounter gating to the NPC planner yet. There is no authoritative en
 and combat-ruling heuristics would suppress the accepted non-combat agency from Task 5. The planner
 call is bounded and measured; revisit only after a sealed encounter-state model exists.
 
-Your immediate task is detailed-plan Task 14: eliminate all seven React `act(...)` warnings without
-masking real lifecycle failures.
+Your immediate task is detailed-plan Task 15: complete the Internal Beta exit gate.
 
-1. Trace `packages/ui/src/screens/Play.tsx` (`RulingBlock` reveal timer and drawer/mount async work)
-   and `packages/ui/src/screens/Overview.tsx` with codebase-memory-mcp.
-2. In the focused Play and Overview suites, make React's `not wrapped in act(...)` console error
-   fail the test so each warning is observable as a red contract.
-3. Fix test synchronization first: drive reveal timers inside `act`, await pending store/bridge
-   work, and ensure every mounted screen settles before cleanup. Change runtime code only if this
-   exposes a genuine lifecycle bug.
-4. Run the complete UI suite and confirm there is no warning stderr, then run full typecheck/tests
-   and the direct production UI build.
-5. Commit coherently and record exact warning-free evidence in WORKLOG.
+1. Run `npm run typecheck`, `npm test`, coverage, direct core/UI production builds, and
+   `cargo check` independently. Record exact counts, durations, and warnings.
+2. Run the root packaging flow only now. Capture exact NSIS/MSI artifact paths, sizes, and SHA-256.
+3. Use the packaged app or the strongest available local harness to exercise create/import -> play
+   -> close -> reopen -> continue; NPC introduction/presence/agency; ruling-before-prose and safe
+   streaming; Forge resume/recovery; suggestions; macros; and cross-card starting gear.
+4. Check an exit criterion only with direct evidence. If a step truly requires human credentials or
+   visual interaction that cannot be automated, record it explicitly instead of claiming it passed.
+5. Update the plan, worklog, handoff, and this prompt with final evidence and installer paths.
 
-Then continue in order without waiting for the human:
-
-- Task 15: full Internal Beta verification and packaged manual acceptance; only then build the final
-  installer and report its exact path and SHA-256.
-- Do not start Task 16 signing/updater/CSP.
+Do not start Task 16 signing/updater/CSP.
 
 Before every stop: keep tests green, make coherent commits, tick the detailed plan, append
 `docs/WORKLOG.md`, overwrite `docs/HANDOFF.md` with one next action, and refresh this prompt with the

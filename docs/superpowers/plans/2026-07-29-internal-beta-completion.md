@@ -561,11 +561,18 @@ production build, and `cargo check` passed. Seven known React `act(...)` warning
 - Modify: `packages/ui/test/screens/Overview.test.tsx`
 - Modify only if behavior is wrong: `packages/ui/src/screens/Play.tsx`, `Overview.tsx`
 
-- [ ] **Step 1: Make stderr warnings fail the focused tests**
-- [ ] **Step 2: Observe five `RulingBlock`, one `Play`, and one `Overview` failures**
-- [ ] **Step 3: Flush reveal timers and await mount loads inside React `act`**
-- [ ] **Step 4: Run the complete UI suite and confirm clean stderr**
-- [ ] **Step 5: Commit with `test(ui): eliminate remaining act warnings`**
+- [x] **Step 1: Make stderr warnings fail the focused tests**
+- [x] **Step 2: Observe five `RulingBlock`, one `Play`, and one `Overview` failures**
+- [x] **Step 3: Flush reveal timers and await mount loads inside React `act`**
+- [x] **Step 4: Run the complete UI suite and confirm clean stderr**
+- [x] **Step 5: Commit with `test(ui): eliminate remaining act warnings`**
+
+Completed in `f1d8a4a`. Play explicitly unmounts before shared-store reset, wraps route reset in
+`act`, and fails if a React out-of-act warning returns; this cancels reveal/count-up animation work
+instead of letting it update after a test ends. Overview awaits its pending mount promises inside
+`act` and carries the same warning guard. The RED warning guard isolated one remaining Overview
+failure after Play cleanup was corrected. The complete UI suite is now clean on stderr. Core 528 +
+UI 147 = 675 tests, typecheck, and the direct UI production build pass.
 
 ### Task 15: Internal Beta Exit Gate
 
