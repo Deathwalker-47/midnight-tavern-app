@@ -323,12 +323,23 @@ interface NpcActionProposal {
 }
 ```
 
-- [ ] **Step 1: Write failing tests for aid, flee, surrender, converse, and exploit-opening choices**
-- [ ] **Step 2: Observe no goal-driven ruling on a non-combat player turn**
-- [ ] **Step 3: Keep counter/flee/surrender deterministic; use one small structured request only for
+- [x] **Step 1: Write failing tests for aid, flee, surrender, converse, and exploit-opening choices**
+- [x] **Step 2: Observe no goal-driven ruling on a non-combat player turn**
+- [x] **Step 3: Keep counter/flee/surrender deterministic; use one small structured request only for
   ambiguous choices; validate actor/target/action/item/skill against present state and sealed catalogs**
-- [ ] **Step 4: Prove timeout/malformed output becomes no action without blocking narration**
-- [ ] **Step 5: Verify and commit with `core(orchestrator): add bounded goal-driven NPC planning`**
+- [x] **Step 4: Prove timeout/malformed output becomes no action without blocking narration**
+- [x] **Step 5: Verify and commit with `core(orchestrator): add bounded goal-driven NPC planning`**
+
+Completed in `04e83b7`. `planNpcActions` fires one bounded classifier request only when a present,
+living, non-player NPC has not already reacted; deterministic code validates actor/action/target/
+item/skill against present scene state, the sealed catalog, and the actor's gate before the engine
+resolves each intent. Separate per-NPC encounter budget; fail-closed to no action on
+malformed/timeout so narration is never blocked. Four tests cover exploit-opening on a non-combat
+turn, ally aid via a sealed support action, validation rejection, and planner-error fail-closed.
+NOTE for next agent: the planner issues a model call on every full-stat turn that has an idle
+present NPC — Task 9 (stage deadlines/telemetry) should bound and instrument it. Deterministic
+flee/surrender remain catalog-dependent; the fixture catalog has no flee/surrender action, so those
+goals flow through the validated model path today.
 
 ### Task 6: Extend Deterministic Provocation Beyond Combat
 

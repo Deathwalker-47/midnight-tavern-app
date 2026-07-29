@@ -6,6 +6,49 @@ landed, why, verification, and any gotcha the next agent needs. Live state is in
 
 ---
 
+## 2026-07-29 — Task 5: goal-driven bounded NPC planning
+
+Implemented plan Task 5 test-first. Present, living NPCs that did not deterministically react can
+now pursue a goal on the same turn — including a non-combat player turn.
+
+**What landed (`04e83b7`).** `orchestrator/npcAgency.ts::planNpcActions` + wiring in
+`turn.ts::runTurnOperation`. After the deterministic reaction stage, the turn builds a candidate set
+(present, living, non-player NPCs that have not already acted) and, only if non-empty, issues ONE
+bounded classifier-role structured request (`{ actions: NpcActionProposal[] }`, max 6). Deterministic
+code then validates each proposal — actor is a present living candidate, action/item/skill are in the
+sealed catalog, target is a present character, and the actor's own `checkGate` permits it — before the
+engine resolves it through the ordinary gate/dice/effects path into the working ledger and the
+narrative contract. The model may propose; it can never invent an actor/action/target/item/skill or
+bypass a gate. Own per-NPC encounter budget (`DEFAULT_NPC_ENCOUNTER_BUDGET`), independent of the
+player budget. Any malformed/timeout output fails closed to `[]`; only a real abort propagates, so
+narration is never blocked.
+
+**Tests (`npcAgency.test.ts`, +4 → 15).** exploit-opening on a non-combat turn; ally aid via a sealed
+support action (`mend_ally` + consumable); validation rejects invented action / absent actor / absent
+target / gate-failing rank; planner error fails closed with prose intact. `AgencyRouter` gained a
+non-clobbering `"NPC action planner"` branch (`plannedActions`/`plannerFailure` fields) so the extra
+model call never overwrites the player-classify prompt other tests assert on.
+
+**Verification.** typecheck clean; **core 498 / 40 (was 494) + UI 137 / 25 = 635** green. No
+regressions — the planner's fail-closed path leaves every existing suite green even when it fires with
+an idle present NPC (unrecognized router payloads parse-fail to `[]`).
+
+**Gotchas for the next agent.**
+- The planner issues a model call on EVERY full-stat turn with an idle present NPC. That is per the
+  plan but is a latency/cost surface — Task 9 (stage deadlines + telemetry) should bound and
+  instrument it, and consider a cheaper trigger (e.g. only when an encounter is active).
+- Deterministic flee/surrender are catalog-dependent; the fixture catalog has no flee/surrender
+  action, so those goals currently flow through the validated model path rather than a deterministic
+  policy. Task 6 adds the sealed provocation predicate; revisit deterministic flee/surrender if/when
+  such actions exist in a real rulebook.
+- The gate pre-check in `planNpcActions` runs without equipment context (mirrors the counter path);
+  `resolve` re-gates with equipment context in `turn.ts`, so it stays authoritative.
+
+**Next:** plan Task 6 — extend deterministic provocation beyond combat (sealed threat/intimidation
+predicate; no reaction to harmless dialogue).
+
+---
+
 ## 2026-07-29 — Character registry and scene presence storage split
 
 Created the detailed sequential Internal Beta completion plan at
