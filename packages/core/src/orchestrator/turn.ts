@@ -666,6 +666,9 @@ async function runTurnOperation(
       };
 
       const intents: MechanicalIntent[] = [...budget.accepted, ...classified.npcIntents];
+      // Sealed hostility grade per landed ruling, so deterministic provocation (Task 6) can
+      // factor in the classifier's `stakes` alongside the action's category/opposed/effects.
+      const stakesByTurnId = new Map<string, MechanicalIntent["stakes"]>();
       for (const intent of intents) {
         const actorHard = await workingState(intent.actorId);
         const targetHard = intent.targetId ? await workingState(intent.targetId) : undefined;
@@ -700,6 +703,7 @@ async function runTurnOperation(
         if (died.length) result.ruling.causedDeathOf = died;
         rulings.push(result.ruling);
         staged.push(result);
+        stakesByTurnId.set(result.ruling.turnId, intent.stakes);
       }
 
       for (let index = 0; index < budget.refused.length; index++) {
@@ -729,6 +733,7 @@ async function runTurnOperation(
         priorRulings: rulings.slice(0, playerRulingCount),
         workingById,
         present: new Map(presentRoster.map((character) => [character.id, character.isPlayer])),
+        stakesByTurnId,
       });
       for (const intent of npcReactionIntents) {
         const actorHard = await workingState(intent.actorId);

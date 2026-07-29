@@ -12,6 +12,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { d20Sequence } from "../../src/engine/dice.js";
 import { submitTurn } from "../../src/orchestrator/index.js";
 import type {
+  ActionDef,
   ChatResponse,
   ClassifiedTurn,
   Role,
@@ -578,5 +579,190 @@ describe("same-turn NPC agency", () => {
     expect(result.rulings.some((ruling) => ruling.actorId === "wight")).toBe(false);
     expect((await store.characters.get("wight"))!.hard.resources.hp!.current).toBe(12);
     expect(result.prose.length).toBeGreaterThan(0); // narration is never blocked by the planner
+  });
+
+  // ── Task 6: deterministic provocation beyond combat ─────────────────────────────────────
+
+  const INTIMIDATE: ActionDef = {
+    id: "intimidate",
+    category: "social",
+    label: "Intimidate",
+    dc: 12,
+    effects: {
+      crit_success: { resourceDeltaTarget: { hp: -3 }, narrationHint: "it recoils in fear" },
+      success: { resourceDeltaTarget: { hp: -1 }, narrationHint: "it flinches" },
+      failure: { narrationHint: "it holds firm" },
+      crit_failure: { narrationHint: "it scoffs at you" },
+    },
+  };
+  const MENACE: ActionDef = {
+    id: "menace",
+    category: "social",
+    label: "Menace",
+    dc: 10,
+    opposed: true, // a contest of wills — a sealed hostile signal even with no damage
+    effects: {
+      crit_success: { setFlag: { flagId: "cowed", value: true }, narrationHint: "it cowers" },
+      success: { narrationHint: "it wavers" },
+      failure: { narrationHint: "it resists" },
+      crit_failure: { narrationHint: "it laughs you off" },
+    },
+  };
+  const GREET: ActionDef = {
+    id: "greet",
+    category: "social",
+    label: "Greet",
+    dc: 5,
+    effects: {
+      crit_success: { setFlag: { flagId: "rapport", value: true }, narrationHint: "a warm greeting" },
+      success: { narrationHint: "a polite nod" },
+      failure: { narrationHint: "it ignores you" },
+      crit_failure: { narrationHint: "an awkward silence" },
+    },
+  };
+
+  async function addActions(...actions: ActionDef[]): Promise<void> {
+    const current = (await store.stories.get(storyId))!;
+    await store.stories.update({
+      ...current,
+      schema: { ...current.schema, actions: [...current.schema.actions, ...actions] },
+    });
+  }
+
+  it("reacts to a sealed non-combat provocation that can harm the target", async () => {
+    await addActions(INTIMIDATE);
+    await seedWightHp(12);
+    const result = await submitTurn(
+      new AgencyRouter({
+        playerIntents: [
+          { actorId: "kestrel", actionId: "intimidate", targetId: "wight", stakes: "danger", confidence: 1 },
+        ],
+        npcIntents: [],
+        freeText: "",
+      }),
+      store,
+      storyId,
+      "I loom over the wight and snarl a threat.",
+      { rng: d20Sequence([15]) }
+    );
+    await result.background;
+
+    // Intimidation is 'social', not 'combat', but its sealed outcome table can harm the target,
+    // so the engine treats it as hostile and the wight answers this same turn.
+    const reaction = result.rulings.find(
+      (ruling) => ruling.actorId === "wight" && ruling.targetId === "kestrel"
+    );
+    expect(reaction, "a threatened NPC should answer a non-combat provocation").toBeDefined();
+    expect(reaction!.gate.allowed).toBe(true);
+  });
+
+  it("reacts to an opposed contest even when it deals no direct damage", async () => {
+    await addActions(MENACE);
+    // A properly-attributed wight so the opposed contest can roll a defense.
+    await store.characters.insert({
+      id: "wight",
+      storyId,
+      name: "Grave-wight",
+      isPlayer: false,
+      present: true,
+      hard: {
+        characterId: "wight",
+        isPlayer: false,
+        attributes: { str: 12, dex: 10 },
+        resources: { hp: { current: 12, max: 12 } },
+        skills: [{ skillId: "blade", rank: "adept", successCount: 0 }],
+        inventory: [{ itemId: "sword", qty: 1 }],
+        flags: {},
+        alive: true,
+      },
+    });
+    const result = await submitTurn(
+      new AgencyRouter({
+        playerIntents: [
+          { actorId: "kestrel", actionId: "menace", targetId: "wight", stakes: "opposed", confidence: 1 },
+        ],
+        npcIntents: [],
+        freeText: "",
+      }),
+      store,
+      storyId,
+      "I stare the wight down and dare it to move.",
+      { rng: d20Sequence([15]) }
+    );
+    await result.background;
+
+    expect(
+      result.rulings.some((ruling) => ruling.actorId === "wight" && ruling.targetId === "kestrel"),
+      "an opposed contest is a sealed provocation"
+    ).toBe(true);
+  });
+
+  it("does not react to harmless, non-hostile dialogue", async () => {
+    await addActions(GREET);
+    await seedWightHp(12);
+    const result = await submitTurn(
+      new AgencyRouter({
+        playerIntents: [
+          { actorId: "kestrel", actionId: "greet", targetId: "wight", stakes: "none", confidence: 1 },
+        ],
+        npcIntents: [],
+        freeText: "",
+      }),
+      store,
+      storyId,
+      "I offer the wight a civil greeting.",
+      { rng: d20Sequence([15]) }
+    );
+    await result.background;
+
+    // A permitted, non-opposed, harmless social action is NOT a provocation.
+    expect(result.rulings.some((ruling) => ruling.actorId === "wight")).toBe(false);
+  });
+
+  it("does not treat aid or healing as provocation", async () => {
+    // Wounded (6) but with headroom (max 12) so a heal is observable.
+    await store.characters.insert({
+      id: "wight",
+      storyId,
+      name: "Grave-wight",
+      isPlayer: false,
+      present: true,
+      hard: {
+        characterId: "wight",
+        isPlayer: false,
+        templateId: "wight",
+        attributes: {},
+        resources: { hp: { current: 6, max: 12 } },
+        skills: [{ skillId: "blade", rank: "adept", successCount: 0 }],
+        inventory: [{ itemId: "sword", qty: 1 }],
+        flags: {},
+        alive: true,
+      },
+    });
+    const healer = makePlayer({
+      inventory: [
+        { itemId: "sword", qty: 1 },
+        { itemId: "potion", qty: 1 },
+      ],
+    });
+    await store.characters.updateHard("kestrel", healer);
+    const result = await submitTurn(
+      new AgencyRouter({
+        playerIntents: [
+          { actorId: "kestrel", actionId: "mend_ally", targetId: "wight", itemId: "potion", stakes: "none", confidence: 1 },
+        ],
+        npcIntents: [],
+        freeText: "",
+      }),
+      store,
+      storyId,
+      "I press a healing draught to the wounded creature.",
+      { rng: d20Sequence([15]) }
+    );
+    await result.background;
+
+    // Healing raises the target's resource — a positive delta is never a provocation.
+    expect(result.rulings.some((ruling) => ruling.actorId === "wight")).toBe(false);
+    expect((await store.characters.get("wight"))!.hard.resources.hp!.current).toBeGreaterThan(6);
   });
 });

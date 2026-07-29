@@ -43,12 +43,48 @@ export interface NpcReactionContext {
   workingById: Map<string, CharacterHardState>;
   /** Present roster: characterId → isPlayer. Only characters with a row here may react. */
   present: Map<string, boolean>;
+  /**
+   * Optional `ruling.turnId → intent.stakes` for the player's rulings this turn, so provocation
+   * can factor in the classifier's sealed hostility grade (Task 6). Omission is safe — the
+   * predicate still fires on combat/opposed/target-harm signals.
+   */
+  stakesByTurnId?: ReadonlyMap<string, MechanicalIntent["stakes"]>;
 }
 
 /** True when an action can reduce a target resource — i.e. it is genuinely offensive. */
 function dealsTargetHarm(action: ActionDef): boolean {
   return Object.values(action.effects).some((effect) =>
     Object.values(effect.resourceDeltaTarget ?? {}).some((delta) => delta < 0)
+  );
+}
+
+/** True when the committed ruling actually reduced a target resource this turn. */
+function dealtCommittedTargetHarm(ruling: Ruling): boolean {
+  return Object.values(ruling.effectsApplied?.resourceDeltaTarget ?? {}).some((delta) => delta < 0);
+}
+
+/**
+ * Is a landed player action hostile toward its target (plan Task 6)? The decision uses only SEALED
+ * signals — never raw prose:
+ *  - `category === "combat"` — the classic attack;
+ *  - `opposed === true` — a direct contest of force/will against the target (intimidation, a
+ *    duel of nerve), adversarial even when it deals no damage;
+ *  - the sealed outcome table can reduce a target resource, or the committed effect actually did;
+ *  - the classifier marked the attempt with hostile stakes (`danger`/`opposed`).
+ * Beneficial acts (healing, aid), harmless dialogue, and self-directed actions are not provocations.
+ */
+export function isProvocation(
+  action: ActionDef,
+  ruling: Ruling,
+  stakes?: MechanicalIntent["stakes"]
+): boolean {
+  return (
+    action.category === "combat" ||
+    action.opposed === true ||
+    dealsTargetHarm(action) ||
+    dealtCommittedTargetHarm(ruling) ||
+    stakes === "danger" ||
+    stakes === "opposed"
   );
 }
 
@@ -96,7 +132,7 @@ function chooseCounterAction(
  * computed once over `priorRulings`, so a reaction can never trigger further reactions.
  */
 export function planNpcReactions(ctx: NpcReactionContext): MechanicalIntent[] {
-  const { schema, priorRulings, workingById, present } = ctx;
+  const { schema, priorRulings, workingById, present, stakesByTurnId } = ctx;
   const intents: MechanicalIntent[] = [];
   const spent = new Map<string, number>();
 
@@ -107,7 +143,9 @@ export function planNpcReactions(ctx: NpcReactionContext): MechanicalIntent[] {
     if (present.get(targetId) !== false) continue; // must be a present NON-player NPC
 
     const action = schema.actions.find((candidate) => candidate.id === ruling.actionId);
-    if (!action || action.category !== "combat") continue; // only hostile acts provoke a reaction
+    // Only a SEALED hostile act provokes — combat, an opposed contest, target harm, or hostile
+    // stakes. Harmless dialogue and beneficial acts (healing/aid) never trigger a reaction.
+    if (!action || !isProvocation(action, ruling, stakesByTurnId?.get(ruling.turnId))) continue;
 
     const npc = workingById.get(targetId);
     if (!npc || !npc.alive) continue; // dead/off-scene NPCs never act
