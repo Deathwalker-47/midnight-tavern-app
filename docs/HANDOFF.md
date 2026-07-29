@@ -1,7 +1,7 @@
 # HANDOFF - current live state
 
 **Updated:** 2026-07-29
-**Branch / runtime HEAD:** `main` at `a803f76` before the following docs commit; local, not pushed
+**Branch / runtime HEAD:** `main` at `a2656e4` before the following docs commit; local, not pushed
 **App version:** `0.2.8`, unsigned
 **User-owned/untracked:** `.codex/`, `opencode.json` - preserve
 **Active plan:** `Plan/next-phase-internal-beta.md`
@@ -10,13 +10,23 @@
 ## Fresh verification
 
 - `npm run typecheck`: passed.
-- `npm test`: core 518/41 files + UI 140/25 files = **658 tests**, passed.
+- `npm test`: core 519/41 files + UI 141/25 files = **660 tests**, passed.
 - Focused core/UI production builds and `cargo check`: passed.
 - Known noise: seven existing React `act(...)` warnings.
 - No installer was produced. A generic root build was stopped when it entered Tauri packaging; do not
   package again until the remaining Internal Beta work and Task 15 acceptance are complete.
 
-## What just landed - Task 9b (`a803f76`)
+## What just landed - Task 10 (`a2656e4`)
+
+Recommendation config v2 makes `google/gemini-2.0-flash-001` the shipped narrator default and labels
+it `Gemini 2.0 Flash · Fast`. `anthropic/claude-opus-4` remains available as the visible
+`Claude Opus 4 · Quality` choice; Sonnet and other curated models remain selectable.
+
+This is a versioned catalog/default change, not UI-only routing. Core, the browser-safe bridge
+mirror, Role Matrix reset behavior, and catalog parity tests move together. New setups and explicit
+reset-to-recommended use the responsive narrator. Existing custom bindings remain untouched.
+
+## Task 9b runtime foundation (`a803f76`)
 
 All five provider-backed turn stages are now bounded by `runStage`:
 
@@ -76,26 +86,24 @@ sealed encounter-state model exists.
 6. Task 8 (`09da205`): verified mechanical beat release.
 7. Task 9a (`2b43325`): reusable stage deadline policy and bounded NPC planner.
 8. Task 9b (`a803f76`): remaining stages, persisted metrics, restart/retry/cancel coverage.
+9. Task 10 (`a2656e4`): responsive narrator default with explicit fast/quality labels.
 
 ## Remaining ordered work
 
-1. Task 10: make responsive models the versioned defaults while retaining Opus-class quality
-   choices.
-2. Task 11: make Forge progress truthful, bounded, durable, resumable, and cancellable.
-3. Tasks 12-13: card attributes/macros/starting gear and remaining UX acceptance.
-4. Task 14: eliminate all seven React `act(...)` warnings.
-5. Task 15: full Internal Beta gate, packaged manual acceptance, then create the final installer.
-6. Task 16 signing/updater/CSP remains later and out of scope.
+1. Task 11: make Forge progress truthful, bounded, durable, resumable, and cancellable.
+2. Tasks 12-13: card attributes/macros/starting gear and remaining UX acceptance.
+3. Task 14: eliminate all seven React `act(...)` warnings.
+4. Task 15: full Internal Beta gate, packaged manual acceptance, then create the final installer.
+5. Task 16 signing/updater/CSP remains later and out of scope.
 
 ## Single next action
 
-Start detailed-plan **Task 10** test-first. In
-`packages/core/test/router/modelConfig.test.ts` and
-`packages/ui/test/bridge/catalogParity.test.ts`, write failing expectations that the recommended
-narrator default is a responsive model and that labels clearly distinguish speed from explicit
-quality choices. Update only the versioned
-`packages/core/src/config/model-recommendations.json`; keep Opus-class models available but not the
-default. Run focused tests, full typecheck/tests, direct core/UI builds, and `cargo check`, then commit
-`core(config): prefer responsive narrator defaults`.
+Start detailed-plan **Task 11** test-first. Trace the existing bootstrap/generation persistence and
+bridge flows with codebase-memory-mcp. Add failing tests for truthful per-stage timing/progress, one
+bounded repair, timeout fallback, cancellation, restart/resume, and navigation away/re-entry. Persist
+a Forge operation with explicit stage/progress/detail/timing and preserve the prior story/rulebook
+until the replacement validates and commits completely. Keep native/browser bridge parity. Run
+focused tests, full typecheck/tests, direct core/UI builds, and `cargo check`, then commit
+`core(bootstrap): make forge bounded and resumable`.
 
 Do not build an installer yet.

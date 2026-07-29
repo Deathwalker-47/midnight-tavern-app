@@ -474,15 +474,22 @@ sealed encounter-state model exists. Core 518 + UI 140 = 658 tests green.
 ### Task 10: Make Responsive Models the Default
 
 **Files:**
-- Modify: `packages/core/src/config/model-recommendations.json`
+- Modify: `packages/core/src/router/model-recommendations.config.json`
 - Modify: `packages/core/test/router/modelConfig.test.ts`
 - Modify: `packages/ui/test/bridge/catalogParity.test.ts`
 
-- [ ] **Step 1: Write failing expectations for a responsive narrator preset and speed/quality label**
-- [ ] **Step 2: Observe the slower default**
-- [ ] **Step 3: Update versioned configuration; keep Opus-class models as explicit quality choices**
-- [ ] **Step 4: Run model config and bridge parity tests**
-- [ ] **Step 5: Commit with `core(config): prefer responsive narrator defaults`**
+- [x] **Step 1: Write failing expectations for a responsive narrator preset and speed/quality label**
+- [x] **Step 2: Observe the slower default**
+- [x] **Step 3: Update versioned configuration; keep Opus-class models as explicit quality choices**
+- [x] **Step 4: Run model config and bridge parity tests**
+- [x] **Step 5: Commit with `core(config): prefer responsive narrator defaults`**
+
+Completed in `a2656e4`. Recommendation config v2 makes `google/gemini-2.0-flash-001`
+(`Gemini 2.0 Flash - Fast`) the shipped interactive narrator default while retaining
+`anthropic/claude-opus-4` as the visible `Quality` choice. The in-memory bridge mirror, Role Matrix
+reset behavior, version display, and catalog parity tests move together. Existing custom bindings
+remain user-owned; new stories and explicit reset-to-recommended use the responsive model. Core 519
++ UI 141 = 660 tests green.
 
 ### Task 11: Make Forge Progress Truthful, Bounded, and Recoverable
 

@@ -18,8 +18,8 @@ Use codebase-memory-mcp before text search for code discovery and re-index the c
 Run `npm run typecheck` and `npm test` before editing. Use test-driven development for every
 behavioral change and verification-before-completion before claiming success.
 
-Current runtime HEAD is `a803f76` on local `main`, followed by a docs-only handoff commit. The fresh
-baseline is core 518/41 files + UI 140/25 files = **658 tests**, with clean typecheck. Direct core/UI
+Current runtime HEAD is `a2656e4` on local `main`, followed by a docs-only handoff commit. The fresh
+baseline is core 519/41 files + UI 141/25 files = **660 tests**, with clean typecheck. Direct core/UI
 production builds and `cargo check` pass. Seven known React `act(...)` warnings remain. The app is
 unsigned v0.2.8.
 
@@ -65,6 +65,9 @@ What is already implemented:
   `StageMetric[]` on turn operations; restart retains metrics; retry clears and re-records them;
   submit/retry native bridge callbacks are parity-tested. Genuine user cancellation propagates
   immediately even if a provider ignores abort.
+- Task 10 (`a2656e4`): recommendation config v2 makes Gemini Flash the shipped responsive narrator
+  default, labels it `Fast`, retains Claude Opus as the explicit `Quality` choice, and keeps the
+  browser mirror and Role Matrix reset contract in parity.
 
 Important semantic detail: an ordinary narrator/provider error now completes the turn using safe
 deterministic prose. Approved staged NPC transitions therefore commit with that successful fallback
@@ -75,23 +78,26 @@ Do not add encounter gating to the NPC planner yet. There is no authoritative en
 and combat-ruling heuristics would suppress the accepted non-combat agency from Task 5. The planner
 call is bounded and measured; revisit only after a sealed encounter-state model exists.
 
-Your immediate task is detailed-plan Task 10: make responsive models the versioned defaults.
+Your immediate task is detailed-plan Task 11: make Forge progress truthful, bounded, durable,
+resumable, and cancellable.
 
-1. Inspect `packages/core/src/config/model-recommendations.json` and its core/UI parity consumers.
-2. Add failing tests in `packages/core/test/router/modelConfig.test.ts` and
-   `packages/ui/test/bridge/catalogParity.test.ts` proving the recommended narrator default favors
-   responsiveness and labels distinguish speed from quality.
-3. Observe the current slower default.
-4. Make the smallest versioned configuration change. Keep Opus-class models available as explicit
-   quality choices; do not remove them or hard-code UI-only alternatives.
-5. Run focused tests, `npm run typecheck`, `npm test`, direct core/UI workspace builds, and
+1. Trace `packages/core/src/bootstrap/generate.ts`, `bootstrap/repair.ts`, existing bootstrap
+   persistence, both bridge implementations, and the StoryBlueprint/Wizard progress surfaces with
+   codebase-memory-mcp.
+2. Add failing tests for explicit stage/progress/detail/timing, one bounded repair, timeout fallback,
+   genuine cancellation, restart/resume, and navigation away/re-entry.
+3. Observe where current progress stalls, lies, or disappears.
+4. Persist a Forge operation and keep the previous story/rulebook untouched until the replacement
+   validates and commits completely. A timeout/error must expose a deterministic recoverable state;
+   cancellation must not leave a partial rulebook.
+5. Keep native and browser bridge contracts in parity and make the UI rehydrate the durable state.
+6. Run focused tests, `npm run typecheck`, `npm test`, direct core/UI workspace builds, and
    `cargo check`.
-6. Commit `core(config): prefer responsive narrator defaults` with the required
+7. Commit `core(bootstrap): make forge bounded and resumable` with the required
    `Co-Authored-By: Codex <noreply@openai.com>` trailer.
 
 Then continue in order without waiting for the human:
 
-- Task 11: truthful bounded durable/resumable/cancellable Forge operations.
 - Task 12: card attributes, macros, and starting gear acceptance.
 - Task 13: remaining UX acceptance and bridge parity.
 - Task 14: eliminate the seven React `act(...)` warnings.

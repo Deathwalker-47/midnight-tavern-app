@@ -627,3 +627,25 @@ suppress accepted non-combat NPC agency. The call is deadline-bounded and measur
 passed (**658 tests** total). Focused production UI/core builds and `cargo check` passed. Seven
 pre-existing React `act(...)` warnings remain. No installer was produced; packaging remains deferred
 until the Internal Beta exit gate.
+
+---
+
+## 2026-07-29 - Prefer a responsive narrator default
+
+Completed detailed-plan Task 10 in `a2656e4`. Recommendation config v2 changes the shipped
+OpenRouter narrator binding from Claude Sonnet to `google/gemini-2.0-flash-001`, labeled
+`Gemini 2.0 Flash · Fast`. `anthropic/claude-opus-4` remains available and is now visibly labeled
+`Claude Opus 4 · Quality`; Sonnet and other curated choices remain available as well.
+
+The change is versioned data rather than UI selection logic. The browser-safe bridge mirror, Role
+Matrix version copy, reset-to-recommended behavior, and canonical catalog parity tests were updated
+together. Existing custom bindings stay untouched; new defaults and explicit resets receive the
+responsive narrator.
+
+Focused RED tests first observed config v1, the Sonnet default, and missing speed/quality labels.
+The first full run also identified two legitimate stale Role Matrix expectations, which now assert
+the v2 reset contract.
+
+**Verification:** `npm run typecheck` passed; core **519 / 41 files** and UI **141 / 25 files**
+passed (**660 tests** total). Direct core/UI production builds and `cargo check` passed. Seven
+pre-existing React `act(...)` warnings remain. No installer was built.
