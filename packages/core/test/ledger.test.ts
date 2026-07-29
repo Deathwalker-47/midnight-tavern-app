@@ -156,6 +156,29 @@ describe("commit — flags & skills", () => {
     );
     expect(p.skills.find((s) => s.skillId === "lockpicking")).toMatchObject({ rank: "novice" });
   });
+
+  it("retains explicit XP when adding a newly learned skill", () => {
+    const p = makePlayer();
+    commit(
+      makeStory(),
+      [
+        {
+          kind: "setSkill",
+          characterId: "kestrel",
+          skillId: "runes",
+          rank: "adept",
+          successCount: 2,
+          xp: 125,
+        },
+      ],
+      mapOf(p)
+    );
+    expect(p.skills.find((s) => s.skillId === "runes")).toMatchObject({
+      rank: "adept",
+      successCount: 2,
+      xp: 125,
+    });
+  });
 });
 
 describe("commit — death derivation", () => {

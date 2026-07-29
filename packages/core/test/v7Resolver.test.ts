@@ -225,4 +225,235 @@ describe("V7 resolver integration", () => {
       opposedNatural: 3,
     });
   });
+
+  it("uses equipped attributes, checks, and skill enablement for both opposed actors", () => {
+    const action = configuredAction({
+      opposed: true,
+      governingAttribute: "might",
+    });
+    const story = makeStory({
+      attributes: [
+        {
+          id: "might",
+          name: "Might",
+          abbrev: "MIG",
+          description: "Physical power.",
+          defaultScore: 10,
+        },
+      ],
+      actions: [action],
+    });
+    const equipment: EquipmentRuntimeCatalog = {
+      definitions: [
+        {
+          id: "focus-def",
+          storyId: story.storyId,
+          name: "Duelist Focus",
+          description: "Makes the bearer unnaturally precise.",
+          kind: "accessory",
+          tier: "rare",
+          slotCompatibility: ["accessory_1"],
+          handsRequired: 0,
+          unique: false,
+          effects: [
+            { type: "attribute_score", attributeId: "might", amount: 2 },
+            { type: "skill_enable", skillId: "blade", rank: "expert" },
+            { type: "skill_check", skillId: "blade", amount: 1 },
+          ],
+          props: {},
+          tags: [],
+          createdAt: "2026-07-29T00:00:00.000Z",
+          configVersion: 1,
+        },
+      ],
+      instances: [
+        {
+          id: "hero-focus",
+          storyId: story.storyId,
+          definitionId: "focus-def",
+          ownerCharacterId: "kestrel",
+          quantity: 1,
+          acquiredAt: "2026-07-29T00:00:00.000Z",
+          provenance: {
+            sourceType: "quest",
+            sourceLabel: "Duel",
+            rulingId: "r1",
+            turnId: "t1",
+            tierBudget: "rare",
+            eligibilityReasons: [],
+            policyVersion: 1,
+            grantedAt: "2026-07-29T00:00:00.000Z",
+          },
+        },
+        {
+          id: "foe-focus",
+          storyId: story.storyId,
+          definitionId: "focus-def",
+          ownerCharacterId: "wight",
+          quantity: 1,
+          acquiredAt: "2026-07-29T00:00:00.000Z",
+          provenance: {
+            sourceType: "quest",
+            sourceLabel: "Duel",
+            rulingId: "r2",
+            turnId: "t1",
+            tierBudget: "rare",
+            eligibilityReasons: [],
+            policyVersion: 1,
+            grantedAt: "2026-07-29T00:00:00.000Z",
+          },
+        },
+      ],
+    };
+    const actor = makePlayer({
+      attributes: { might: 12 },
+      skills: [],
+      equipment: [
+        { characterId: "kestrel", slot: "accessory_1", itemInstanceId: "hero-focus" },
+      ],
+    });
+    const target = makeEnemy({
+      attributes: { might: 8 },
+      skills: [],
+      equipment: [
+        { characterId: "wight", slot: "accessory_1", itemInstanceId: "foe-focus" },
+      ],
+    });
+
+    const result = resolve(
+      story,
+      actor,
+      target,
+      attackIntent,
+      d20Sequence([10, 10]),
+      { equipment }
+    );
+
+    expect(result.ruling.roll).toMatchObject({
+      attributeScore: 14,
+      attributeModifier: 2,
+      equipmentAttributeBonus: 2,
+      masteryModifier: 5,
+      equipmentModifier: 1,
+      modifier: 8,
+      opposedAttributeScore: 10,
+      opposedAttributeModifier: 0,
+      opposedEquipmentAttributeBonus: 2,
+      opposedMasteryModifier: 5,
+      opposedEquipmentModifier: 1,
+      opposedModifier: 6,
+    });
+  });
+
+  it("applies every opposed natural-roll precedence branch", () => {
+    const story = makeStory({ actions: [configuredAction({ opposed: true })] });
+    expect(
+      resolve(
+        story,
+        makePlayer(),
+        makeEnemy(),
+        attackIntent,
+        d20Sequence([1, 10])
+      ).ruling.roll?.outcome
+    ).toBe("crit_failure");
+    expect(
+      resolve(
+        story,
+        makePlayer(),
+        makeEnemy(),
+        attackIntent,
+        d20Sequence([10, 20])
+      ).ruling.roll?.outcome
+    ).toBe("failure");
+    expect(
+      resolve(
+        story,
+        makePlayer(),
+        makeEnemy(),
+        attackIntent,
+        d20Sequence([2, 1])
+      ).ruling.roll?.outcome
+    ).toBe("success");
+  });
+
+  it("stages self and target attribute mutations from an authoritative effect", () => {
+    const reshape: ActionDef = {
+      id: "reshape",
+      category: "utility",
+      label: "Reshape",
+      dc: 2,
+      effects: {
+        crit_success: {
+          attributeDeltaSelf: { might: 1 },
+          attributeDeltaTarget: { might: -1 },
+          narrationHint: "Power shifts.",
+        },
+        success: {
+          attributeDeltaSelf: { might: 1 },
+          attributeDeltaTarget: { might: -1 },
+          narrationHint: "Power shifts.",
+        },
+        failure: { narrationHint: "Nothing shifts." },
+        crit_failure: { narrationHint: "The rite recoils." },
+      },
+    };
+    const story = makeStory({ actions: [reshape] });
+    const result = resolve(
+      story,
+      makePlayer(),
+      makeEnemy(),
+      {
+        actorId: "kestrel",
+        actionId: "reshape",
+        targetId: "wight",
+        confidence: 1,
+      },
+      d20Sequence([10])
+    );
+    expect(result.mutations).toEqual(
+      expect.arrayContaining([
+        {
+          kind: "attributeDelta",
+          characterId: "kestrel",
+          attributeId: "might",
+          delta: 1,
+        },
+        {
+          kind: "attributeDelta",
+          characterId: "wight",
+          attributeId: "might",
+          delta: -1,
+        },
+      ])
+    );
+  });
+
+  it("keeps sealed deception uncertain even when classified as low stakes", () => {
+    const deceive: ActionDef = {
+      id: "deceive",
+      category: "social",
+      label: "Deceive",
+      dc: 10,
+      effects: {
+        crit_success: { narrationHint: "The lie is flawless." },
+        success: { narrationHint: "The lie holds." },
+        failure: { narrationHint: "The lie is doubted." },
+        crit_failure: { narrationHint: "The lie collapses." },
+      },
+    };
+    const result = resolve(
+      makeStory({ actions: [deceive] }),
+      makePlayer(),
+      makeEnemy(),
+      {
+        actorId: "kestrel",
+        actionId: "deceive",
+        targetId: "wight",
+        confidence: 1,
+        stakes: "none",
+      },
+      d20Sequence([10])
+    );
+    expect(result.ruling.roll).toBeDefined();
+  });
 });

@@ -208,9 +208,9 @@ export function validateLoadout(
   }
 
   for (const [instanceId, count] of assignedCounts) {
-    const instance = instances.get(instanceId);
-    const definition = instance ? definitions.get(instance.definitionId) : undefined;
-    if (!definition) continue;
+    // assignedCounts is populated only after both records were resolved above.
+    const instance = instances.get(instanceId)!;
+    const definition = definitions.get(instance.definitionId)!;
     if (definition.handsRequired === 2) {
       const assignedSlots = normalized
         .filter((assignment) => assignment.itemInstanceId === instanceId)

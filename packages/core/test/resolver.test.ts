@@ -26,6 +26,18 @@ describe("resolve — gate denial", () => {
     expect(r.ruling.effectsApplied).toBeNull();
     expect(r.mutations).toHaveLength(0);
   });
+
+  it("omits catalog labels for an unknown denied action", () => {
+    const r = resolve(
+      makeStory(),
+      makePlayer(),
+      undefined,
+      intent({ actionId: "unknown_action", targetId: undefined, itemId: undefined }),
+      d20Sequence([15])
+    );
+    expect(r.ruling.gate.allowed).toBe(false);
+    expect(r.ruling.actionLabel).toBeUndefined();
+  });
 });
 
 describe("resolve — outcome branches", () => {

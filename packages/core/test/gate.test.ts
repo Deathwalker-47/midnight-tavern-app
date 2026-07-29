@@ -4,7 +4,11 @@
  */
 import { describe, it, expect } from "vitest";
 import { checkGate, canAfford, conditionHolds } from "../src/index.js";
-import type { MechanicalIntent } from "../src/index.js";
+import type {
+  ActionDef,
+  EquipmentRuntimeCatalog,
+  MechanicalIntent,
+} from "../src/index.js";
 import { makeStory, makePlayer, learned } from "./fixtures.js";
 
 const intent = (over: Partial<MechanicalIntent> = {}): MechanicalIntent => ({
@@ -110,6 +114,85 @@ describe("checkGate — ordered checks", () => {
     expect(v.allowed).toBe(true);
     expect(v.reason).toBeUndefined();
   });
+
+  it("accepts equipment-provided skills and action enablers only while equipped", () => {
+    const equipment: EquipmentRuntimeCatalog = {
+      definitions: [
+        {
+          id: "focus-def",
+          storyId: "story-fixture",
+          name: "Ritual Focus",
+          description: "A sealed focus.",
+          kind: "tool",
+          tier: "rare",
+          slotCompatibility: ["utility"],
+          handsRequired: 0,
+          unique: true,
+          effects: [
+            { type: "skill_enable", skillId: "phantom", rank: "expert" },
+            { type: "action_enable", actionId: "sealed_rite" },
+          ],
+          props: {},
+          tags: [],
+          createdAt: "2026-07-29T00:00:00.000Z",
+          configVersion: 1,
+        },
+      ],
+      instances: [
+        {
+          id: "focus-1",
+          storyId: "story-fixture",
+          definitionId: "focus-def",
+          ownerCharacterId: "kestrel",
+          quantity: 1,
+          acquiredAt: "2026-07-29T00:00:00.000Z",
+          provenance: {
+            sourceType: "quest",
+            sourceLabel: "Rite",
+            rulingId: "r1",
+            turnId: "t1",
+            tierBudget: "rare",
+            eligibilityReasons: [],
+            policyVersion: 1,
+            grantedAt: "2026-07-29T00:00:00.000Z",
+          },
+        },
+      ],
+    };
+    const sealedRite: ActionDef = {
+      id: "sealed_rite",
+      category: "utility",
+      label: "Sealed Rite",
+      requiresSkill: "phantom",
+      minRank: "adept",
+      requiresEquipmentEnabler: true,
+      dc: 10,
+      effects: {
+        crit_success: { narrationHint: "The seal answers." },
+        success: { narrationHint: "The seal answers." },
+        failure: { narrationHint: "The seal stays quiet." },
+        crit_failure: { narrationHint: "The seal recoils." },
+      },
+    };
+    const schema = makeStory({ actions: [...makeStory().actions, sealedRite] });
+    const bare = makePlayer({ skills: [], equipment: [] });
+    expect(
+      checkGate(schema, bare, intent({ actionId: "sealed_rite" })).code
+    ).toBe("item_required");
+    expect(
+      checkGate(schema, bare, intent({ actionId: "sealed_rite" }), { equipment }).code
+    ).toBe("item_required");
+
+    const equipped = makePlayer({
+      skills: [],
+      equipment: [
+        { characterId: "kestrel", slot: "utility", itemInstanceId: "focus-1" },
+      ],
+    });
+    expect(
+      checkGate(schema, equipped, intent({ actionId: "sealed_rite" }), { equipment })
+    ).toEqual({ allowed: true });
+  });
 });
 
 describe("canAfford", () => {
@@ -128,6 +211,7 @@ describe("canAfford", () => {
     const p = makePlayer({ inventory: [{ itemId: "gold", qty: 3 }] });
     expect(canAfford(p, { items: [{ itemId: "gold", qty: 3 }] })).toBe(true);
     expect(canAfford(p, { items: [{ itemId: "gold", qty: 4 }] })).toBe(false);
+    expect(canAfford(p, { items: [{ itemId: "missing", qty: 1 }] })).toBe(false);
   });
 });
 

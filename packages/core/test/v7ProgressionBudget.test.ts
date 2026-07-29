@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   computeXpAward,
   enforceActionBudget,
+  minimumXpForRank,
+  modifierForRank,
   rankForXp,
   type MechanicalIntent,
+  type ProgressionConfig,
 } from "../src/index.js";
 
 describe("V7 XP progression", () => {
@@ -20,6 +23,34 @@ describe("V7 XP progression", () => {
     expect(computeXpAward("failure", 8, 0).amount).toBe(5);
     expect(computeXpAward("crit_success", 25, 0).amount).toBe(20);
     expect(computeXpAward("success", 15, 3).amount).toBe(0);
+  });
+
+  it("uses safe fallbacks for sparse versioned progression configuration", () => {
+    const sparse: ProgressionConfig = {
+      version: 99,
+      ranks: [],
+      outcomeBaseXp: {
+        crit_failure: 4,
+        failure: 6,
+        success: 10,
+        crit_success: 15,
+      },
+      challengeBands: [],
+      repetitionWindowTurns: 5,
+      repetitionMultipliers: [],
+      maximumAward: 20,
+    };
+    expect(minimumXpForRank("master", sparse)).toBe(0);
+    expect(modifierForRank("master", sparse)).toBe(0);
+    expect(computeXpAward("success", 99, -3, sparse)).toMatchObject({
+      amount: 0,
+      challengeMultiplier: 1,
+      repetitionMultiplier: 0,
+    });
+  });
+
+  it("uses the final configured challenge band above its declared ceiling", () => {
+    expect(computeXpAward("success", 99, 0).challengeMultiplier).toBe(1.5);
   });
 });
 

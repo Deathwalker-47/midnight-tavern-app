@@ -66,9 +66,9 @@ function skillFor(actor: CharacterHardState, action: ActionDef): LearnedSkill | 
     : undefined;
 }
 
-/** d20 modifier from a learned skill's rank (0 when no skill applies). */
-function modifierFor(skill: LearnedSkill | undefined): number {
-  return skill ? modifierForRank(skill.rank) : 0;
+/** d20 modifier from a learned skill's rank. */
+function modifierFor(skill: LearnedSkill): number {
+  return modifierForRank(skill.rank);
 }
 
 /** The item the intent uses, resolved against the schema table (if any). */
@@ -273,18 +273,9 @@ export function resolve(
   // roll. It grants no XP, preventing routine-action grinding.
   if (!requiresCheck(action, intent)) {
     const effect = action.effects.success;
-    const item =
-      (options.equipment
-        ? equippedItemDefinition(
-            actor,
-            options.equipment,
-            action.requiresItemKind,
-            intent.itemId
-          )
-        : undefined) ?? itemFor(schema, intent);
-    const itemPropValue =
-      effect.scaleByItemProp && item ? item.props[effect.scaleByItemProp] : undefined;
-    const stagedEffect = stageEffect(effect, actor, target, itemPropValue, difficulty);
+    // requiresCheck already proved this effect cannot mutate tracked state, so equipment/item
+    // scaling and damage provenance are inapplicable on this narration-only path.
+    const stagedEffect = stageEffect(effect, actor, target, undefined, difficulty);
     mutations.push(...stagedEffect.mutations);
     return {
       ruling: {
@@ -292,9 +283,6 @@ export function resolve(
         gate,
         effectsApplied: effect,
         difficulty,
-        ...(stagedEffect.damageAdjustments.length > 0
-          ? { damageAdjustments: stagedEffect.damageAdjustments }
-          : {}),
       },
       mutations,
     };

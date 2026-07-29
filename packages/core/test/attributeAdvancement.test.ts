@@ -3,7 +3,9 @@ import {
   applyAttributeAdvancement,
   attributeAdvancementBandForScore,
   attributeAdvancementProposalKey,
+  clampAttribute,
   evaluateAttributeAdvancement,
+  maximumAttributeScore,
   type AttributeAdvancementEvidence,
   type AttributeAdvancementProposal,
   type AttributeAdvancementSource,
@@ -386,5 +388,132 @@ describe("attribute advancement policy", () => {
       ).effectiveChancePercent;
     });
     expect(chances).toEqual([95, 75, 55, 35, 15]);
+  });
+
+  it("rejects unknown and locked subjects plus stale or mismatched evidence", () => {
+    const base = makeStory();
+    const lockedSchema = makeStory({
+      attributes: base.attributes.map((attribute) =>
+        attribute.id === "str"
+          ? { ...attribute, defaultScore: 0, lockedAtZero: true }
+          : attribute
+      ),
+    });
+    const evidence = rulingEvidence("mismatch", 1, "blessing", {
+      characterId: "other",
+      qualifyingSources: ["transformation"],
+    });
+    const unknownCharacter = evaluateAttributeAdvancement(
+      proposal("blessing", [evidence.id], { characterId: "missing" }),
+      {
+        storyId: base.storyId,
+        schema: base,
+        character: undefined,
+        currentTurnIndex: 100,
+        evidence: [evidence],
+        prior: [],
+      }
+    );
+    expect(unknownCharacter.denialCodes).toContain("unknown_character");
+    expect(unknownCharacter.denialCodes).toContain("evidence_not_recent");
+
+    const unknownAttribute = evaluateAttributeAdvancement(
+      proposal("blessing", [evidence.id], { attributeId: "unknown" }),
+      {
+        storyId: base.storyId,
+        schema: base,
+        character: makePlayer(),
+        currentTurnIndex: 30,
+        evidence: [evidence],
+        prior: [],
+      }
+    );
+    expect(unknownAttribute.scoreBefore).toBe(0);
+    expect(unknownAttribute.denialCodes).toContain("unknown_attribute");
+    expect(unknownAttribute.denialCodes).toContain("evidence_wrong_character");
+    expect(unknownAttribute.denialCodes).toContain("evidence_does_not_support_source");
+
+    const wrongSource = rulingEvidence("wrong-source", 30, "transformation", {
+      qualifyingSources: ["transformation"],
+    });
+    expect(
+      evaluate(proposal("blessing", [wrongSource.id]), [wrongSource]).denialCodes
+    ).toContain("evidence_does_not_support_source");
+
+    const locked = evaluateAttributeAdvancement(
+      proposal("blessing", [evidence.id]),
+      {
+        storyId: lockedSchema.storyId,
+        schema: lockedSchema,
+        character: makePlayer(),
+        currentTurnIndex: 30,
+        evidence: [evidence],
+        prior: [],
+      }
+    );
+    expect(locked.denialCodes).toContain("attribute_locked");
+
+    const exceptionalWithoutDc = rulingEvidence(
+      "exceptional-no-dc",
+      30,
+      "exceptional_action",
+      { highStakes: true, materialChange: true, difficultyDc: undefined }
+    );
+    expect(
+      evaluate(
+        proposal("exceptional_action", [exceptionalWithoutDc.id]),
+        [exceptionalWithoutDc]
+      ).denialCodes
+    ).toContain("evidence_does_not_support_source");
+  });
+
+  it("does not apply denied decisions or an approved decision to another character", () => {
+    const hard = makePlayer({ attributes: { str: 10, dex: 12 } });
+    const evidence = rulingEvidence("denied-apply", 30, "transformation");
+    const denied = evaluate(
+      proposal("transformation", [evidence.id]),
+      [evidence],
+      30
+    );
+    expect(applyAttributeAdvancement(hard, denied)).toBe(hard);
+
+    const approved = findApproved("transformation", 10, (suffix) => [
+      rulingEvidence(`apply-other-${suffix}`, 30, "transformation"),
+    ]);
+    const other = makePlayer({ characterId: "other", attributes: { str: 10, dex: 12 } });
+    expect(applyAttributeAdvancement(other, approved)).toBe(other);
+  });
+
+  it("honors locked and implicit superhuman attribute boundaries", () => {
+    expect(
+      maximumAttributeScore({
+        id: "zero",
+        name: "Zero",
+        abbrev: "ZER",
+        description: "Permanently unavailable.",
+        defaultScore: 0,
+        lockedAtZero: true,
+      })
+    ).toBe(0);
+    expect(
+      maximumAttributeScore({
+        id: "mythic",
+        name: "Mythic",
+        abbrev: "MYT",
+        description: "Beyond mortal range.",
+        defaultScore: 24,
+        superhuman: true,
+      })
+    ).toBe(24);
+    expect(
+      clampAttribute(18, {
+        id: "zero",
+        name: "Zero",
+        abbrev: "ZER",
+        description: "Permanently unavailable.",
+        defaultScore: 0,
+        lockedAtZero: true,
+      })
+    ).toBe(0);
   });
 });
