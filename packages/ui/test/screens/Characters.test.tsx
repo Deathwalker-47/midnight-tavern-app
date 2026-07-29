@@ -4,7 +4,7 @@
  * We assert through the rendered LivingCardView (names, FALLEN marker, section grouping).
  */
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { Characters } from "../../src/screens/Characters";
 import { setBridge, type CoreBridge, type CastMember, type LivingCardView } from "../../src/bridge/core";
 import { useRoute } from "../../src/app/router";
@@ -162,6 +162,45 @@ describe("Characters screen", () => {
     expect(useRoute.getState()).toMatchObject({
       route: "loadout",
       params: { storyId: "s1", characterId: "p1" },
+    });
+  });
+
+  it("opens the selected registry member when several character cards are visible", async () => {
+    const kestrel = card({ characterId: "p1", name: "Kestrel Vane", isPlayer: true });
+    const wren = card({ characterId: "a1", name: "Wren Callow" });
+    setBridge(
+      fakeBridge(
+        [
+          { characterId: "p1", name: "Kestrel Vane", isPlayer: true, alive: true },
+          { characterId: "a1", name: "Wren Callow", isPlayer: false, alive: true },
+        ],
+        new Map([
+          ["p1", kestrel],
+          ["a1", wren],
+        ])
+      )
+    );
+    useRoute.setState({ route: "characters", params: { storyId: "s1" } });
+
+    render(<Characters storyId="s1" />);
+
+    const wrenCard = (await screen.findByText("Wren Callow")).closest(
+      '[data-testid="living-card"]'
+    );
+    expect(wrenCard).not.toBeNull();
+    fireEvent.click(within(wrenCard as HTMLElement).getByRole("button", { name: /Open full profile/ }));
+    expect(useRoute.getState()).toMatchObject({
+      route: "dossier",
+      params: { storyId: "s1", characterId: "a1" },
+    });
+
+    await act(async () => {
+      useRoute.setState({ route: "characters", params: { storyId: "s1" } });
+    });
+    fireEvent.click(within(wrenCard as HTMLElement).getByRole("button", { name: "Equipment & loadout" }));
+    expect(useRoute.getState()).toMatchObject({
+      route: "loadout",
+      params: { storyId: "s1", characterId: "a1" },
     });
   });
 
