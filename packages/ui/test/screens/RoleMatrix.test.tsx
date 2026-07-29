@@ -50,10 +50,10 @@ describe("RoleMatrix", () => {
 
     await waitFor(() => expect(screen.queryByTestId("rolematrix-loading")).not.toBeInTheDocument());
     fireEvent.click(screen.getAllByRole("button", { name: /Samplers/i })[0]!);
-    expect(screen.getByText(/Recommended parameters · config v1/i)).toHaveTextContent(
+    expect(screen.getByText(/Recommended parameters · config v2/i)).toHaveTextContent(
       "temperature 0.8"
     );
-    expect(screen.getByText(/Recommended parameters · config v1/i)).toHaveTextContent(
+    expect(screen.getByText(/Recommended parameters · config v2/i)).toHaveTextContent(
       "maxTokens 1200"
     );
   });
@@ -85,7 +85,7 @@ describe("RoleMatrix", () => {
     await waitFor(() =>
       expect(useSettingsStore.getState().roleMap?.narrator).toMatchObject({
         provider: "openrouter",
-        model: "anthropic/claude-sonnet-4",
+        model: "google/gemini-2.0-flash-001",
         source: "recommended",
         samplersDirty: false,
       })

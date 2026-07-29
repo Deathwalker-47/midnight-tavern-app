@@ -29,6 +29,22 @@ describe("in-memory bridge catalog stays in sync with canonical core", () => {
     expect(bridge.knownModels()).toEqual(core.KNOWN_MODELS);
   });
 
+  it("exposes the responsive narrator default and explicit quality label", () => {
+    expect(bridge.defaultRoleMap().narrator.model).toBe(
+      "google/gemini-2.0-flash-001"
+    );
+    expect(
+      bridge
+        .knownModels()
+        .find((model) => model.model === "google/gemini-2.0-flash-001")?.label
+    ).toMatch(/fast/i);
+    expect(
+      bridge
+        .knownModels()
+        .find((model) => model.model === "anthropic/claude-opus-4")?.label
+    ).toMatch(/quality/i);
+  });
+
   it("universal actions config matches core.UNIVERSAL_ACTIONS_CONFIG", async () => {
     expect(await bridge.universalActionsConfig()).toEqual(core.UNIVERSAL_ACTIONS_CONFIG);
   });

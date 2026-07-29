@@ -546,7 +546,7 @@ const MEMORY_PROVIDER_IDS: readonly ProviderId[] = [
 ];
 
 const MEMORY_DEFAULT_ROLE_MAP: RoleMap = {
-  narrator: { provider: "openrouter", model: "anthropic/claude-sonnet-4", source: "recommended", samplersDirty: false, samplers: { temperature: 0.8, topP: 0.95, presencePenalty: 0.3, frequencyPenalty: 0.3, maxTokens: 1200 } },
+  narrator: { provider: "openrouter", model: "google/gemini-2.0-flash-001", source: "recommended", samplersDirty: false, samplers: { temperature: 0.8, topP: 0.95, presencePenalty: 0.3, frequencyPenalty: 0.3, maxTokens: 1200 } },
   classifier: { provider: "openrouter", model: "openai/gpt-4o-mini", source: "recommended", samplersDirty: false, samplers: { temperature: 0, topP: 1, maxTokens: 500 } },
   analyzer: { provider: "openrouter", model: "openai/gpt-4o-mini", source: "recommended", samplersDirty: false, samplers: { temperature: 0.2, topP: 1, maxTokens: 800 } },
   summarizer: { provider: "openrouter", model: "openai/gpt-4o", source: "recommended", samplersDirty: false, samplers: { temperature: 0.5, topP: 0.95, maxTokens: 1200 } },
@@ -565,7 +565,7 @@ function memoryRoleMapForPrimary(map: RoleMap, primary: ProviderId): RoleMap {
 }
 
 const MEMORY_MODEL_RECOMMENDATION_CONFIG: ModelRecommendationConfigView = {
-  version: 1,
+  version: 2,
   samplerPresets: {
     Precise: {
       temperature: 0,
@@ -676,10 +676,10 @@ const MEMORY_EQUIPMENT_LOOT_CONFIG: EquipmentLootConfig = {
 // `test/bridge/catalogParity.test.ts` — if that test fails, resync this list from the JSON.
 const MEMORY_KNOWN_MODELS: KnownModel[] = [
   { provider: "openrouter", model: "anthropic/claude-sonnet-4", label: "Claude Sonnet 4", tier: "recommended", supportsJsonMode: true },
-  { provider: "openrouter", model: "anthropic/claude-opus-4", label: "Claude Opus 4", tier: "recommended", supportsJsonMode: true },
+  { provider: "openrouter", model: "anthropic/claude-opus-4", label: "Claude Opus 4 · Quality", tier: "recommended", supportsJsonMode: true },
   { provider: "openrouter", model: "openai/gpt-4o", label: "GPT-4o", tier: "recommended", supportsJsonMode: true },
   { provider: "openrouter", model: "openai/gpt-4o-mini", label: "GPT-4o mini", tier: "recommended", supportsJsonMode: true },
-  { provider: "openrouter", model: "google/gemini-2.0-flash-001", label: "Gemini 2.0 Flash", tier: "recommended", supportsJsonMode: true },
+  { provider: "openrouter", model: "google/gemini-2.0-flash-001", label: "Gemini 2.0 Flash · Fast", tier: "recommended", supportsJsonMode: true },
   { provider: "openrouter", model: "google/gemini-2.5-pro", label: "Gemini 2.5 Pro", tier: "recommended", supportsJsonMode: true },
   { provider: "openrouter", model: "deepseek/deepseek-chat", label: "DeepSeek V3", tier: "advanced", supportsJsonMode: true },
   { provider: "openrouter", model: "meta-llama/llama-3.3-70b-instruct", label: "Llama 3.3 70B", tier: "advanced", supportsJsonMode: true },

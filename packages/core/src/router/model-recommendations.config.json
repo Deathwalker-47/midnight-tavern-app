@@ -1,5 +1,5 @@
 {
-  "configVersion": 1,
+  "configVersion": 2,
   "defaultProvider": "openrouter",
   "models": [
     {
@@ -15,12 +15,12 @@
     {
       "id": "anthropic/claude-opus-4",
       "provider": "openrouter",
-      "label": "Claude Opus 4",
+      "label": "Claude Opus 4 · Quality",
       "recommendedFor": ["narrator", "bootstrapper"],
       "tier": "recommended",
       "contextTokens": 200000,
       "supportsJsonMode": true,
-      "notes": "Highest-quality prose; higher cost."
+      "notes": "Explicit highest-quality prose choice; slower and higher cost."
     },
     {
       "id": "openai/gpt-4o",
@@ -43,11 +43,12 @@
     {
       "id": "google/gemini-2.0-flash-001",
       "provider": "openrouter",
-      "label": "Gemini 2.0 Flash",
-      "recommendedFor": ["classifier", "analyzer", "summarizer"],
+      "label": "Gemini 2.0 Flash · Fast",
+      "recommendedFor": ["narrator", "classifier", "analyzer", "summarizer"],
       "tier": "recommended",
       "contextTokens": 1000000,
-      "supportsJsonMode": true
+      "supportsJsonMode": true,
+      "notes": "Responsive default for interactive narration and structured utility roles."
     },
     {
       "id": "google/gemini-2.5-pro",
@@ -168,7 +169,7 @@
   "defaultRoleMap": {
     "narrator": {
       "provider": "openrouter",
-      "model": "anthropic/claude-sonnet-4",
+      "model": "google/gemini-2.0-flash-001",
       "samplers": {
         "temperature": 0.8,
         "topP": 0.95,

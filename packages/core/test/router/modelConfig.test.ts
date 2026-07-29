@@ -123,7 +123,7 @@ describe("provider sampler support", () => {
 
 describe("model catalog", () => {
   it("loads recommendations, role defaults, and samplers from one versioned config", () => {
-    expect(MODEL_RECOMMENDATION_CONFIG_VERSION).toBe(1);
+    expect(MODEL_RECOMMENDATION_CONFIG_VERSION).toBe(2);
     expect(MODEL_RECOMMENDATION_CONFIG.models).toHaveLength(MODEL_CATALOG.length);
     expect(MODEL_RECOMMENDATION_CONFIG.defaultRoleMap.narrator.model).toBe(
       DEFAULT_ROLE_MAP.narrator.model
@@ -142,6 +142,15 @@ describe("model catalog", () => {
   it("has no duplicate ids", () => {
     const ids = MODEL_CATALOG.map((m) => m.id);
     expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("ships a responsive narrator default and labels the explicit quality choice", () => {
+    expect(DEFAULT_ROLE_MAP.narrator.model).toBe("google/gemini-2.0-flash-001");
+    expect(catalogModel(DEFAULT_ROLE_MAP.narrator.model)).toMatchObject({
+      label: expect.stringMatching(/fast/i),
+      recommendedFor: expect.arrayContaining(["narrator"]),
+    });
+    expect(catalogModel("anthropic/claude-opus-4")?.label).toMatch(/quality/i);
   });
 
   it("lookups by id and provider work", () => {
