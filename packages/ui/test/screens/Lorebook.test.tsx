@@ -87,6 +87,59 @@ describe("Lorebook — book hierarchy", () => {
     expect(await screen.findByText("NEN")).toBeInTheDocument();
     expect(screen.getByTestId("lorebook-book-editor")).toBeInTheDocument();
   });
+
+  it("keeps an unsaved entry draft visible and retries the same draft after a save failure", async () => {
+    const book = books[0]!;
+    let saved: LorebookEntry | undefined;
+    const saveEntry = vi.fn(async (_bookId: string, entry: LorebookEntry) => {
+      if (saveEntry.mock.calls.length === 1) {
+        throw new Error("lorebook drive temporarily unavailable");
+      }
+      saved = { ...entry, lorebookId: book.id };
+    });
+    setBridge(
+      stubBridge({
+        listLorebooks: vi.fn(async () => [book]),
+        listAttachedLorebooks: vi.fn(async () => [{ ...book, linkEnabled: true }]),
+        listLorebookEntries: vi.fn(async () => saved ? [saved] : []),
+        saveLorebookEntryIn: saveEntry,
+      })
+    );
+
+    render(<Lorebook storyId="story-1" />);
+    fireEvent.click(await screen.findByRole("button", { name: /Lorebook 1/i }));
+    await waitFor(() =>
+      expect(screen.getByTestId("lorebook-book-editor")).toBeInTheDocument()
+    );
+    fireEvent.click(screen.getByRole("button", { name: /New entry/i }));
+    fireEvent.change(screen.getByLabelText("Content"), {
+      target: { value: "The drowned bell rings only for oathbreakers." },
+    });
+    fireEvent.change(screen.getByLabelText("Add trigger keyword"), {
+      target: { value: "drowned bell" },
+    });
+    fireEvent.keyDown(screen.getByLabelText("Add trigger keyword"), {
+      key: "Enter",
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save entry" }));
+
+    expect(await screen.findByText("Couldn't save entry")).toBeInTheDocument();
+    expect(screen.getByLabelText("Content")).toHaveValue(
+      "The drowned bell rings only for oathbreakers."
+    );
+    expect(screen.getByText("drowned bell")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Try saving again" }));
+
+    await waitFor(() => expect(saveEntry).toHaveBeenCalledTimes(2));
+    expect(saveEntry.mock.calls[1]?.[1]).toMatchObject({
+      content: "The drowned bell rings only for oathbreakers.",
+      keys: ["drowned bell"],
+    });
+    expect(
+      await screen.findByText(/The drowned bell rings only for oathbreak/)
+    ).toBeInTheDocument();
+  });
 });
 
 describe("lorebook JSON compatibility", () => {

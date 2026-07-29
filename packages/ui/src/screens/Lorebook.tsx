@@ -904,6 +904,8 @@ function BookEntryEditor(props: { book: LorebookLibraryEntry; onBack: () => void
   const [isNew, setIsNew] = useState(false);
   const [keywordInput, setKeywordInput] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string>();
 
   const load = useCallback(async () => {
     setStatus("loading");
@@ -923,13 +925,22 @@ function BookEntryEditor(props: { book: LorebookLibraryEntry; onBack: () => void
     setDraft(emptyEntry());
     setIsNew(true);
     setKeywordInput("");
+    setSaveError(undefined);
   };
   const save = async (): Promise<void> => {
-    if (!draft) return;
-    await getBridge().saveLorebookEntryIn(book.id, draft);
-    await load();
-    setDraft(null);
-    setIsNew(false);
+    if (!draft || saving) return;
+    setSaving(true);
+    setSaveError(undefined);
+    try {
+      await getBridge().saveLorebookEntryIn(book.id, draft);
+      await load();
+      setDraft(null);
+      setIsNew(false);
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "The lorebook entry could not be saved.");
+    } finally {
+      setSaving(false);
+    }
   };
   const doDelete = async (): Promise<void> => {
     if (!draft) return;
@@ -970,6 +981,15 @@ function BookEntryEditor(props: { book: LorebookLibraryEntry; onBack: () => void
           <InlineNotice severity="error" title="Couldn't load entries" detail="The lorebook store didn't respond." />
         ) : draft ? (
           <div style={{ maxWidth: 640 }}>
+            {saveError ? (
+              <div style={{ marginBottom: 16 }}>
+                <InlineNotice
+                  severity="error"
+                  title="Couldn't save entry"
+                  detail={`Your draft is still here. ${saveError}`}
+                />
+              </div>
+            ) : null}
             <div style={styles.editorLabel}>{isNew ? "NEW ENTRY" : "EDITING ENTRY"}</div>
             <label style={styles.fieldLabel} htmlFor="book-content">Content</label>
             <textarea
@@ -1035,11 +1055,11 @@ function BookEntryEditor(props: { book: LorebookLibraryEntry; onBack: () => void
                 <span />
               )}
               <div style={{ display: "flex", gap: 9 }}>
-                <Button variant="ghost" onClick={() => { setDraft(null); setIsNew(false); }}>
+                <Button variant="ghost" disabled={saving} onClick={() => { setDraft(null); setIsNew(false); setSaveError(undefined); }}>
                   Cancel
                 </Button>
-                <Button variant="primary" onClick={() => void save()}>
-                  Save entry
+                <Button variant="primary" disabled={saving} onClick={() => void save()}>
+                  {saving ? "Saving…" : saveError ? "Try saving again" : "Save entry"}
                 </Button>
               </div>
             </div>
@@ -1058,7 +1078,7 @@ function BookEntryEditor(props: { book: LorebookLibraryEntry; onBack: () => void
               <button
                 key={e.id}
                 type="button"
-                onClick={() => { setDraft({ ...e, keys: [...e.keys] }); setIsNew(false); }}
+                onClick={() => { setDraft({ ...e, keys: [...e.keys] }); setIsNew(false); setSaveError(undefined); }}
                 style={{ ...styles.row, borderLeftColor: "transparent", background: "var(--bg1-panel)", borderRadius: 8, border: "1px solid var(--hairline)" }}
               >
                 <div style={styles.rowTop}>
