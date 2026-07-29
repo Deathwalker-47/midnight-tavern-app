@@ -398,12 +398,21 @@ interface NarrativeBeat {
 }
 ```
 
-- [ ] **Step 1: Write failing accepted/rejected mechanical-beat tests**
-- [ ] **Step 2: Observe whole-draft buffering**
-- [ ] **Step 3: Verify each complete beat deterministically against immutable rulings; release safe
+- [x] **Step 1: Write failing accepted/rejected mechanical-beat tests**
+- [x] **Step 2: Observe whole-draft buffering**
+- [x] **Step 3: Verify each complete beat deterministically against immutable rulings; release safe
   beats, replace unsafe beats with `safeSummary`, and never expose rejected text**
-- [ ] **Step 4: Run authority and turn suites**
-- [ ] **Step 5: Commit with `core(orchestrator): stream verified mechanical beats`**
+- [x] **Step 4: Run authority and turn suites**
+- [x] **Step 5: Commit with `core(orchestrator): stream verified mechanical beats`**
+
+Completed in `09da205`. On authority-audit acceptance, `generateGuardedNarration` releases the
+mechanical remainder beat-by-beat (`splitBeats`), running the deterministic death guard PER BEAT.
+Clean beats stream incrementally; the first beat asserting a death with no lethal ruling is replaced
+by `safeSummary`, earlier verified beats survive, and the offending beat + everything after are never
+shown (the old whole-draft guard discarded the whole remainder). The model whole-draft audit still
+gates fabricated non-death mechanics before any beat releases. NOTE: per-beat verification here is
+deterministic (no extra model calls); a true per-beat *model* re-audit was intentionally NOT added —
+the whole-draft model audit remains the model-level authority. Core 505 (+2) + UI 139 = 644 green.
 
 ### Task 9: Add Stage Deadlines, Fallbacks, and Telemetry
 

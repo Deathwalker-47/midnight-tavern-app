@@ -1,7 +1,7 @@
 # HANDOFF — current live state
 
 **Updated:** 2026-07-29
-**Branch / runtime HEAD:** `main` at `fccab2c` (Task 7) before this docs commit; local, not pushed
+**Branch / runtime HEAD:** `main` at `09da205` (Task 8) before this docs commit; local, not pushed
 **App version:** `0.2.8`, unsigned
 **User-owned/untracked:** `.codex/`, `opencode.json` — preserve
 **Active plan:** `Plan/next-phase-internal-beta.md`
@@ -10,7 +10,7 @@
 ## Fresh verification
 
 - `npm run typecheck`: passed.
-- `npm test`: core 503/40 files + UI 139/25 files = **642 tests**, passed (Tasks 5–7 added 11).
+- `npm test`: core 505/40 files + UI 139/25 files = **644 tests**, passed (Tasks 5–8 added 13).
 - Known noise: seven existing React `act(...)` warnings.
 - Build/cargo/installer were intentionally not rerun after `350f805`; the human asked to defer the
   installer until all remaining Internal Beta work is complete.
@@ -66,7 +66,8 @@ had no health delta, so a successful strike could never kill mechanically; confi
    opposed / target-harm / hostile-stakes; healing/aid and harmless talk draw no reaction.
 3. Task 7: end-to-end verified streaming — **DONE (`fccab2c`)**, proof-only, no source changed;
    `onDelta` already threaded provider → core → bridge → store → Play.
-4. Task 8: progressively verify and release mechanical beats.
+4. Task 8: progressively verify and release mechanical beats — **DONE (`09da205`)**; per-beat
+   deterministic release + death guard, whole-draft model audit retained.
 5. Tasks 9–10: stage deadlines/telemetry and responsive model defaults.
 6. Tasks 11–13: resumable Forge, card/persona/starting-gear acceptance, and remaining UX acceptance.
 7. Task 14: eliminate seven React warnings.
@@ -75,14 +76,16 @@ had no health delta, so a successful strike could never kill mechanically; confi
 
 ## Single next action
 
-Start detailed-plan **Task 8: Release Verified Mechanical Beats Incrementally** in
-`packages/core/src/orchestrator/authorityGuard.ts`. Today the first mechanical paragraph and
-everything after it are held for a single whole-draft audit. Change this to verify each COMPLETE
-mechanical beat against the immutable rulings and release safe beats as they pass, replacing an
-unsafe beat with `safeSummary` and never exposing rejected text. Write failing accepted/rejected
-mechanical-beat tests first (`authorityGuard.test.ts`), then implement. Keep the deterministic death
-guard and the existing safe-prefix behavior. Commit `core(orchestrator): stream verified mechanical
-beats`.
+Start detailed-plan **Task 9: Add Stage Deadlines, Fallbacks, and Telemetry**. Create
+`packages/core/src/orchestrator/stagePolicy.ts` with `TurnStage` and `StageMetric`, then wrap each
+turn stage (`classifier`, `npc_introduction`, `npc_planner`, `narrator`, `authority_audit`) in
+`turn.ts` with a configured deadline + deterministic fallback (fail-closed to no-op / safeSummary,
+never blocking the turn), and persist metrics via `turnOperations` WITHOUT leaking provider internals
+into prose. Write fake-clock timeout + duplicate-turn tests first (`turn.test.ts`); verify
+restart/retry/cancel still work. **Watch-out from Task 5:** the goal-driven NPC planner issues a model
+call every full-stat turn with an idle present NPC — Task 9's `npc_planner` deadline should bound it,
+and consider only firing it when an encounter is active. Commit `core(orchestrator): bound turn stages
+and record latency`.
 
 Do not build an installer yet. Generate it only after the remaining Internal Beta tasks (through Task
 15) and complete verification, as requested by the human.

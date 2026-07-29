@@ -6,6 +6,35 @@ landed, why, verification, and any gotcha the next agent needs. Live state is in
 
 ---
 
+## 2026-07-29 — Task 8: release verified mechanical beats incrementally
+
+**What landed (`09da205`).** `authorityGuard.ts::generateGuardedNarration` no longer dumps the whole
+mechanical remainder after one whole-draft deterministic pre-check. On authority-audit acceptance it
+now iterates `splitBeats(remainder)` and releases each beat via `onDelta`, running the deterministic
+death guard PER BEAT. A beat asserting a death with no `causedDeathOf` is replaced by `safeSummary`;
+every earlier verified beat is preserved, and the offending beat + everything after it is never
+shown. If nothing is on screen yet and a repair remains, it regenerates instead. The removed
+whole-draft `deterministicContradiction` pre-check is now the per-beat guard; the model whole-draft
+audit still runs and gates fabricated non-death mechanics before any beat releases.
+
+**Why it matters.** Before, a single fabricated death anywhere in the draft sent the ENTIRE
+mechanical remainder to `safeSummary` — losing good prose. Now the good prefix survives.
+
+**Tests (+2 → 8 in file).** Accepted mechanical beats arrive as separate deltas (incremental, not one
+blob); a later beat fabricating a death is dropped while the earlier verified beat survives (RED
+before: the whole-draft guard discarded both). Existing reject/repair/auditor-unavailable/false-kill
+tests unchanged and green.
+
+**Verification.** typecheck clean; **core 505 / 40 (+2) + UI 139 / 25 = 644** green.
+
+**Design note.** Per-beat verification is deterministic (no extra model calls); a per-beat *model*
+re-audit was deliberately not added (latency). The whole-draft model audit stays the model authority.
+
+**Next:** plan Task 9 — stage deadlines, deterministic fallbacks, and latency telemetry
+(`stagePolicy.ts` + `turn.ts`/classifier/authorityGuard/turnOperations).
+
+---
+
 ## 2026-07-29 — Task 7: prove end-to-end verified streaming
 
 Proof task (`fccab2c`) — added tests only, no source changed. The streamed-delta path was already
