@@ -360,27 +360,29 @@ describe("same-turn NPC agency", () => {
     });
   });
 
-  it("does not persist a proposed NPC when narration fails before the turn commits", async () => {
+  it("commits an approved NPC with deterministic fallback when narration is unavailable", async () => {
     const maraId = `${storyId}:scene:mara`;
-    await expect(
-      submitTurn(
-        new AgencyRouter(
-          { playerIntents: [], npcIntents: [], freeText: "I wait." },
-          "Mara enters the crypt.",
-          [{
-            operation: "introduce",
-            name: "Mara",
-            grounding: "Mara",
-          }],
-          new Error("Narrator unavailable")
-        ),
-        store,
-        storyId,
-        "I call for Mara.",
-        { rng: d20Sequence([15]) }
-      )
-    ).rejects.toThrow("Narrator unavailable");
-    expect(await store.characters.get(maraId)).toBeUndefined();
+    const result = await submitTurn(
+      new AgencyRouter(
+        { playerIntents: [], npcIntents: [], freeText: "I wait." },
+        "Mara enters the crypt.",
+        [{
+          operation: "introduce",
+          name: "Mara",
+          grounding: "Mara",
+        }],
+        new Error("Narrator unavailable")
+      ),
+      store,
+      storyId,
+      "I call for Mara.",
+      { rng: d20Sequence([15]) }
+    );
+    expect(result.usedNarratorFallback).toBe(true);
+    expect(await store.characters.get(maraId)).toMatchObject({
+      name: "Mara",
+      present: true,
+    });
   });
 
   it("never lets a slain NPC act", async () => {

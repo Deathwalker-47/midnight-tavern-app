@@ -347,6 +347,7 @@ export function buildSqliteBridge(
           ...(args.onPhase
             ? { onPhase: (phase: TurnOperationState) => args.onPhase!(toUiPhase(phase)) }
             : {}),
+          ...(args.onStageMetric ? { onStageMetric: args.onStageMetric } : {}),
           ...(args.signal ? { signal: args.signal } : {}),
         });
         diagnosticsLogger.info("turn.submit.completed", {
@@ -409,6 +410,7 @@ export function buildSqliteBridge(
                 args.onPhase!(toUiPhase(phase)),
             }
           : {}),
+        ...(args.onStageMetric ? { onStageMetric: args.onStageMetric } : {}),
         ...(args.signal ? { signal: args.signal } : {}),
       });
       void result.background.then(

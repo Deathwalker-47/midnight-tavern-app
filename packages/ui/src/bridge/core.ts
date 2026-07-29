@@ -55,6 +55,7 @@ export type {
   BootstrapResumeState,
   ImportedMechanics,
   ClassifierRecoveryMetadata,
+  StageMetric,
   TurnOperationRecoveryInspection,
   UniversalActionConfig,
   EquipmentLootConfig,
@@ -135,6 +136,7 @@ import type {
   BootstrapResumeState,
   ImportedMechanics,
   ClassifierRecoveryMetadata,
+  StageMetric,
   TurnOperationRecoveryInspection,
   UniversalActionConfig,
   EquipmentLootConfig,
@@ -252,6 +254,8 @@ export interface SubmitTurnArgs {
   personaBlock?: string;
   /** Persisted V7 operation state, mapped to reader-facing UI phases. */
   onPhase?: (phase: TurnOperationPhase) => void;
+  /** Per-stage latency/outcome telemetry from the bounded turn pipeline. */
+  onStageMetric?: (metric: StageMetric) => void;
   signal?: AbortSignal;
 }
 
@@ -290,6 +294,7 @@ export interface RetryTurnOperationArgs {
   onRulings?: (rulings: Ruling[]) => void;
   personaBlock?: string;
   onPhase?: (phase: TurnOperationPhase) => void;
+  onStageMetric?: (metric: StageMetric) => void;
   signal?: AbortSignal;
 }
 

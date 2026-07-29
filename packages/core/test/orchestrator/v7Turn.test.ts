@@ -50,11 +50,16 @@ class V7Router implements Router {
   }
 }
 
-class NarratorFailureRouter extends V7Router {
+class NarratorCancellationRouter extends V7Router {
+  constructor(
+    classified: ClassifiedTurn,
+    private readonly controller: AbortController
+  ) {
+    super(classified);
+  }
   override async stream(): Promise<ChatResponse> {
-    const error = new Error("Narrator connection failed.");
-    error.name = "NarratorConnectionError";
-    throw error;
+    this.controller.abort(new DOMException("Player cancelled narration.", "AbortError"));
+    throw this.controller.signal.reason;
   }
 }
 
@@ -227,27 +232,29 @@ describe("V7 ordered turn semantics", () => {
     expect(await store.events.listByStory(storyId)).toHaveLength(0);
   });
 
-  it("retries a failed operation with its persisted player message and creates no duplicate", async () => {
+  it("retries a cancelled operation with its persisted player message and creates no duplicate", async () => {
     const classified: ClassifiedTurn = {
       playerIntents: [],
       npcIntents: [],
       freeText: "The player studies the room.",
     };
+    const controller = new AbortController();
     await expect(
       submitTurn(
-        new NarratorFailureRouter(classified),
+        new NarratorCancellationRouter(classified, controller),
         store,
         storyId,
-        "I study the room."
+        "I study the room.",
+        { signal: controller.signal }
       )
-    ).rejects.toThrow("Narrator connection failed");
+    ).rejects.toThrow("Player cancelled narration");
 
     const afterFailure = await store.messages.listByStory(storyId);
     expect(afterFailure.map((message) => message.role)).toEqual(["player"]);
     const failedOperation = await store.turnOperations.getByPlayerMessage(
       afterFailure[0]!.id
     );
-    expect(failedOperation?.state).toBe("error");
+    expect(failedOperation?.state).toBe("cancelled");
 
     const inspection = await inspectTurnOperationRecovery(store, storyId);
     expect(inspection).toMatchObject({

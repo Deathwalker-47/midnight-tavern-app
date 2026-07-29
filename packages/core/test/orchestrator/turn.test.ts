@@ -77,6 +77,24 @@ class ScriptedRouter implements Router {
   }
 }
 
+function controllableStageSchedule() {
+  const pending = new Map<number, () => void>();
+  return {
+    schedule: (ms: number, fire: () => void) => {
+      pending.set(ms, fire);
+      return () => {
+        if (pending.get(ms) === fire) pending.delete(ms);
+      };
+    },
+    has: (ms: number) => pending.has(ms),
+    trigger: (ms: number) => {
+      const fire = pending.get(ms);
+      if (!fire) throw new Error(`No stage deadline is pending at ${ms}ms.`);
+      fire();
+    },
+  };
+}
+
 /** Seed a store with the fixture story + player + a present enemy, and return it. */
 async function seedStore(): Promise<{ store: Store; storyId: string }> {
   const store = await openStore(":memory:");
@@ -181,6 +199,16 @@ describe("submitTurn — pipeline order & transaction", () => {
     expect(router.calls.indexOf("classifier")).toBeLessThan(router.calls.indexOf("narrator"));
     expect(liveEvents[0]).toBe("rulings:2");
     expect(liveEvents[1]).toBe("prose");
+    const operation = await store.turnOperations.getByPlayerMessage(msgs[0]!.id);
+    expect(operation?.stageMetrics?.map(({ stage, outcome }) => ({ stage, outcome }))).toEqual(
+      expect.arrayContaining([
+        { stage: "npc_introduction", outcome: "ok" },
+        { stage: "classifier", outcome: "ok" },
+        { stage: "npc_planner", outcome: "ok" },
+        { stage: "narrator", outcome: "ok" },
+        { stage: "authority_audit", outcome: "ok" },
+      ])
+    );
   });
 
   it("treats a narration-only turn (no intents) as prose with no rulings and no state change", async () => {
@@ -233,5 +261,148 @@ describe("submitTurn — pipeline order & transaction", () => {
     expect(result.rulings).toEqual([]);
     expect(await store.rulings.listByStory(storyId)).toEqual([]);
     expect((await store.characters.get("wight"))!.hard.resources.hp!.current).toBe(12);
+  });
+
+  it("times out a hung classifier, persists the metric, and completes one narration-only exchange", async () => {
+    await store.characters.setPresent("wight", false);
+    const clock = controllableStageSchedule();
+    let classifierAborted = false;
+    const router: Router = {
+      bindingFor: () => ({
+        provider: "openrouter",
+        model: "test",
+        source: "recommended",
+        samplersDirty: false,
+      }),
+      async complete(_role, prompt, opts) {
+        if (prompt.system.includes("NPC presence registrar")) {
+          return { content: JSON.stringify({ transitions: [] }) };
+        }
+        if (prompt.system.includes("strict consistency auditor")) {
+          return {
+            content: JSON.stringify({ obeysRulings: true, contradictions: [] }),
+          };
+        }
+        return new Promise<ChatResponse>((_resolve, reject) => {
+          opts?.signal?.addEventListener("abort", () => {
+            classifierAborted = true;
+            reject(opts.signal?.reason);
+          });
+        });
+      },
+      async stream(_role, _prompt, onDelta) {
+        const content = "The empty crypt waits, silent and watchful.";
+        onDelta(content);
+        return { content };
+      },
+    };
+
+    const pending = submitTurn(router, store, storyId, "I listen to the silence.", {
+      stagePolicy: {
+        deadlines: {
+          npc_introduction: 101,
+          classifier: 102,
+          npc_planner: 103,
+          narrator: 104,
+          authority_audit: 105,
+        },
+        schedule: clock.schedule,
+      },
+    });
+    for (let index = 0; index < 10 && !clock.has(102); index++) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    expect(clock.has(102)).toBe(true);
+    clock.trigger(102);
+
+    const result = await pending;
+    expect(classifierAborted).toBe(true);
+    expect(result.classifierRecovered).toBe(true);
+    expect(result.classifierRecovery?.issues).toEqual([
+      expect.objectContaining({ kind: "timeout" }),
+    ]);
+    expect(result.rulings).toEqual([]);
+    expect(result.prose).toContain("empty crypt");
+    const messages = await store.messages.listByStory(storyId);
+    expect(messages.map((message) => message.role)).toEqual(["player", "narrator"]);
+    const operation = await store.turnOperations.getByPlayerMessage(messages[0]!.id);
+    expect(operation?.stageMetrics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ stage: "classifier", outcome: "timeout" }),
+        expect.objectContaining({ stage: "narrator", outcome: "ok" }),
+        expect.objectContaining({ stage: "authority_audit", outcome: "ok" }),
+      ])
+    );
+  });
+
+  it("times out NPC introduction to no transitions without blocking classification or narration", async () => {
+    await store.characters.setPresent("wight", false);
+    const clock = controllableStageSchedule();
+    let introductionAborted = false;
+    const router: Router = {
+      bindingFor: () => ({
+        provider: "openrouter",
+        model: "test",
+        source: "recommended",
+        samplersDirty: false,
+      }),
+      async complete(_role, prompt, opts) {
+        if (prompt.system.includes("NPC presence registrar")) {
+          return new Promise<never>((_resolve, reject) => {
+            opts?.signal?.addEventListener("abort", () => {
+              introductionAborted = true;
+              reject(opts.signal?.reason);
+            });
+          });
+        }
+        return {
+          content: JSON.stringify({
+            playerIntents: [],
+            npcIntents: [],
+            freeText: "I remember home.",
+          }),
+        };
+      },
+      async stream(_role, _prompt, onDelta) {
+        const content = "Dust drifts through the empty passage.";
+        onDelta(content);
+        return { content };
+      },
+    };
+
+    const pending = submitTurn(router, store, storyId, "I remember home.", {
+      stagePolicy: {
+        deadlines: {
+          npc_introduction: 201,
+          classifier: 202,
+          npc_planner: 203,
+          narrator: 204,
+          authority_audit: 205,
+        },
+        schedule: clock.schedule,
+      },
+    });
+    for (let index = 0; index < 10 && !clock.has(201); index++) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    clock.trigger(201);
+    const result = await pending;
+
+    expect(introductionAborted).toBe(true);
+    expect(result.classifierRecovered).toBe(false);
+    expect(result.prose).toContain("Dust drifts");
+    expect(await store.characters.listByStory(storyId)).toHaveLength(2);
+    const messages = await store.messages.listByStory(storyId);
+    const operation = await store.turnOperations.getByPlayerMessage(messages[0]!.id);
+    expect(operation?.stageMetrics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          stage: "npc_introduction",
+          outcome: "timeout",
+        }),
+        expect.objectContaining({ stage: "classifier", outcome: "ok" }),
+        expect.objectContaining({ stage: "narrator", outcome: "ok" }),
+      ])
+    );
   });
 });

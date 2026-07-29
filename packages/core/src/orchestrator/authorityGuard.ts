@@ -1,6 +1,12 @@
 import { z } from "zod";
 import { callStructured, type RolePrompt, type Router } from "../router/index.js";
 import type { Ruling } from "../types/index.js";
+import {
+  DEFAULT_STAGE_DEADLINES,
+  runStage,
+  type CancelTimer,
+  type StageMetric,
+} from "./stagePolicy.js";
 
 const AuthorityReviewSchema = z.object({
   // JSON-mode providers sometimes serialize booleans as strings and empty
@@ -31,6 +37,13 @@ export interface GuardedNarrationOptions {
   /** Audit prose even without rulings (No Stats or classifier-recovery safety boundary). */
   auditWithoutRulings?: boolean;
   onRepair?: (attempt: number, reason: string) => void;
+  /** Stage metrics are persisted by the owning turn operation and may also feed diagnostics. */
+  onStageMetric?: (metric: StageMetric) => void;
+  /** Optional deadline overrides for deployment tuning and deterministic tests. */
+  stageDeadlines?: Partial<Record<"narrator" | "authority_audit", number>>;
+  /** Injectable timing seams shared with runStage. */
+  stageNow?: () => number;
+  stageSchedule?: (ms: number, fire: () => void) => CancelTimer;
 }
 
 export interface GuardedNarrationResult {
@@ -212,13 +225,45 @@ export async function generateGuardedNarration(
   options: GuardedNarrationOptions = {}
 ): Promise<GuardedNarrationResult> {
   const onDelta = options.onDelta ?? (() => {});
-  if (rulings.length === 0 && !options.auditWithoutRulings) {
-    const response = await router.stream(
+  const runNarrator = (
+    rolePrompt: RolePrompt,
+    sink: (delta: string) => void
+  ) =>
+    runStage(
       "narrator",
-      prompt,
-      onDelta,
-      options.signal ? { signal: options.signal } : {}
+      (signal) => router.stream("narrator", rolePrompt, sink, { signal }),
+      {
+        deadlineMs:
+          options.stageDeadlines?.narrator ?? DEFAULT_STAGE_DEADLINES.narrator,
+        fallback: () => undefined,
+        ...(options.signal ? { signal: options.signal } : {}),
+        ...(options.onStageMetric ? { onMetric: options.onStageMetric } : {}),
+        ...(options.stageNow ? { now: options.stageNow } : {}),
+        ...(options.stageSchedule ? { schedule: options.stageSchedule } : {}),
+      }
     );
+  const runAudit = (prose: string) =>
+    runStage(
+      "authority_audit",
+      (signal) => review(router, prose, rulings, signal),
+      {
+        deadlineMs:
+          options.stageDeadlines?.authority_audit ??
+          DEFAULT_STAGE_DEADLINES.authority_audit,
+        fallback: () => undefined,
+        ...(options.signal ? { signal: options.signal } : {}),
+        ...(options.onStageMetric ? { onMetric: options.onStageMetric } : {}),
+        ...(options.stageNow ? { now: options.stageNow } : {}),
+        ...(options.stageSchedule ? { schedule: options.stageSchedule } : {}),
+      }
+    );
+  if (rulings.length === 0 && !options.auditWithoutRulings) {
+    const response = await runNarrator(prompt, onDelta);
+    if (!response) {
+      const prose = safeSummary(rulings);
+      onDelta(prose);
+      return { prose, repairCount: 0, usedSafeFallback: true };
+    }
     return { prose: response.content, repairCount: 0, usedSafeFallback: false };
   }
 
@@ -260,17 +305,24 @@ export async function generateGuardedNarration(
             "Rewrite the entire response. Obey the immutable rulings exactly and do not add mechanical results.",
             `Rejected draft:\n${lastDraft}`,
           ].join("\n");
-    const response = await router.stream(
-      "narrator",
+    const response = await runNarrator(
       { system: prompt.system, user: prompt.user + repair },
       streaming
         ? (delta: string) => {
             streamed += delta;
             releaseSafeParagraphs();
           }
-        : () => {},
-      options.signal ? { signal: options.signal } : {}
+        : () => {}
     );
+    if (!response) {
+      const summary = safeSummary(rulings);
+      onDelta(summary);
+      return {
+        prose: streamed.slice(0, releasedLen) + summary,
+        repairCount: attempt,
+        usedSafeFallback: true,
+      };
+    }
     lastDraft = response.content;
     // What we have already shown, but only if it is genuinely a prefix of the final draft (real
     // providers return content === concat(deltas); this guards the defensive case).
@@ -280,7 +332,16 @@ export async function generateGuardedNarration(
         : "";
 
     try {
-      const audited = await review(router, lastDraft, rulings, options.signal);
+      const audited = await runAudit(lastDraft);
+      if (!audited) {
+        const summary = safeSummary(rulings);
+        onDelta(summary);
+        return {
+          prose: releasedPrefix + summary,
+          repairCount: attempt,
+          usedSafeFallback: true,
+        };
+      }
       if (audited.ok) {
         // Release the accepted remainder BEAT BY BEAT (not one dump), with the deterministic death
         // guard as a per-beat net for a false death the model auditor let through. Clean beats stream

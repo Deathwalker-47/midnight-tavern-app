@@ -95,7 +95,18 @@ export async function runStage<T>(
   const abortStage = (reason: unknown): void => {
     if (!controller.signal.aborted) controller.abort(reason);
   };
-  const onCallerAbort = (): void => abortStage(options.signal?.reason);
+  let rejectCallerCancellation: (reason?: unknown) => void = () => {};
+  const callerCancellation = new Promise<never>((_, reject) => {
+    rejectCallerCancellation = reject;
+  });
+  const onCallerAbort = (): void => {
+    const reason =
+      options.signal?.reason ?? new DOMException("Cancelled", "AbortError");
+    abortStage(reason);
+    // Do not rely on provider code observing the stage signal. Cancellation must release the turn
+    // immediately even when a provider leaves its promise pending forever.
+    rejectCallerCancellation(reason);
+  };
   options.signal?.addEventListener("abort", onCallerAbort, { once: true });
 
   let timedOut = false;
@@ -115,7 +126,11 @@ export async function runStage<T>(
   };
 
   try {
-    const value = await Promise.race([run(controller.signal), deadline]);
+    const value = await Promise.race([
+      run(controller.signal),
+      deadline,
+      ...(options.signal ? [callerCancellation] : []),
+    ]);
     finish();
     emit("ok");
     return value;

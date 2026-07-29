@@ -218,13 +218,19 @@ describe("buildSqliteBridge", () => {
       ) => ({ prose: "text", rulings: [], narratorIdx: 5, background })
     );
     const onRulings = vi.fn();
+    const onStageMetric = vi.fn();
     const bridge = buildSqliteBridge(fakeStore({
       stories: { get: vi.fn(async () => ({ id: "s1", schema: { statMode: "full" } })) },
     }), fakeCore({ submitTurn }));
-    const out = await bridge.submitTurn({ storyId: "s1", playerText: "hi", onRulings });
+    const out = await bridge.submitTurn({
+      storyId: "s1",
+      playerText: "hi",
+      onRulings,
+      onStageMetric,
+    });
     expect(out).toEqual({ prose: "text", rulings: [], narratorIdx: 5 });
     expect(submitTurn.mock.calls[0]?.[4]).toEqual(
-      expect.objectContaining({ onRulings })
+      expect.objectContaining({ onRulings, onStageMetric })
     );
     await new Promise((r) => setTimeout(r, 0)); // let the .catch run
     expect(errSpy).toHaveBeenCalledWith("turn.background.failed", expect.objectContaining({ operationId: "s1" }));
@@ -283,6 +289,44 @@ describe("buildSqliteBridge", () => {
     releaseTurn();
     const out = await pending;
     expect(out.prose).toContain("The gunman broke and ran.");
+  });
+
+  it("forwards stage telemetry when retrying a persisted turn operation", async () => {
+    const retryTurnOperation = vi.fn(
+      async (
+        _router: unknown,
+        _store: unknown,
+        _operationId: string,
+        _opts: unknown
+      ) => ({
+        prose: "Recovered.",
+        rulings: [],
+        narratorIdx: 2,
+        background: Promise.resolve(),
+        classifierRecovered: false,
+        refusedActionCount: 0,
+        usedNarratorFallback: false,
+        attributeAdvancements: [],
+      })
+    );
+    const onStageMetric = vi.fn();
+    const bridge = buildSqliteBridge(
+      fakeStore({
+        stories: {
+          get: vi.fn(async () => ({ id: "s1", schema: { statMode: "full" } })),
+        },
+        turnOperations: {
+          get: vi.fn(async () => ({ id: "op-1", storyId: "s1" })),
+        },
+      }),
+      fakeCore({ retryTurnOperation })
+    );
+
+    await bridge.retryTurnOperation({ operationId: "op-1", onStageMetric });
+
+    expect(retryTurnOperation.mock.calls[0]?.[3]).toEqual(
+      expect.objectContaining({ onStageMetric })
+    );
   });
 
   it("listPresentCast condenses each LivingCardView to name/alive/hp/mood", async () => {

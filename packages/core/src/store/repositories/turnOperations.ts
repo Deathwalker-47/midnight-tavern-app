@@ -17,6 +17,19 @@ export const TurnOperationStateSchema = z.enum([
 ]);
 export type TurnOperationState = z.infer<typeof TurnOperationStateSchema>;
 
+const StageMetricSchema = z.object({
+  stage: z.enum([
+    "classifier",
+    "npc_introduction",
+    "npc_planner",
+    "narrator",
+    "authority_audit",
+  ]),
+  startedAt: z.number().int().nonnegative(),
+  durationMs: z.number().nonnegative(),
+  outcome: z.enum(["ok", "fallback", "timeout", "cancelled", "error"]),
+});
+
 export const TurnOperationSchema = z.object({
   id: z.string().min(1),
   storyId: z.string().min(1),
@@ -29,6 +42,7 @@ export const TurnOperationSchema = z.object({
   staged: z.unknown().optional(),
   prose: z.string().optional(),
   errorKind: z.string().optional(),
+  stageMetrics: z.array(StageMetricSchema).max(100).optional(),
   createdAt: z.number().int().nonnegative(),
   updatedAt: z.number().int().nonnegative(),
 });
@@ -48,6 +62,7 @@ interface Row {
   staged_json: string | null;
   prose: string | null;
   error_kind: string | null;
+  stage_metrics_json: string | null;
   created_at: number;
   updated_at: number;
 }
@@ -93,6 +108,9 @@ function toRecord(row: Row): TurnOperation {
     ...(row.staged_json ? { staged: parseJson(row.staged_json) } : {}),
     ...(row.prose != null ? { prose: row.prose } : {}),
     ...(row.error_kind ? { errorKind: row.error_kind } : {}),
+    ...(row.stage_metrics_json
+      ? { stageMetrics: parseJson(row.stage_metrics_json) }
+      : {}),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }) as TurnOperation;
@@ -129,8 +147,8 @@ export function makeTurnOperationRepo(db: Db): TurnOperationRepo {
       await db.run(
         `INSERT INTO turn_operations
           (id, story_id, player_message_id, narrator_message_id, state, classified_json,
-           rulings_json, staged_json, prose, error_kind, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           rulings_json, staged_json, prose, error_kind, stage_metrics_json, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
            narrator_message_id = excluded.narrator_message_id,
            state = excluded.state,
@@ -139,6 +157,7 @@ export function makeTurnOperationRepo(db: Db): TurnOperationRepo {
            staged_json = excluded.staged_json,
            prose = excluded.prose,
            error_kind = excluded.error_kind,
+           stage_metrics_json = excluded.stage_metrics_json,
            updated_at = excluded.updated_at`,
         parsed.id,
         parsed.storyId,
@@ -150,6 +169,7 @@ export function makeTurnOperationRepo(db: Db): TurnOperationRepo {
         parsed.staged === undefined ? null : JSON.stringify(parsed.staged),
         parsed.prose ?? null,
         parsed.errorKind ?? null,
+        parsed.stageMetrics === undefined ? null : JSON.stringify(parsed.stageMetrics),
         parsed.createdAt,
         parsed.updatedAt
       );
@@ -201,6 +221,7 @@ export function makeTurnOperationRepo(db: Db): TurnOperationRepo {
              staged_json = NULL,
              prose = NULL,
              error_kind = NULL,
+             stage_metrics_json = NULL,
              updated_at = ?
          WHERE id = ? AND updated_at = ? AND state IN (
            'classifying','classifier_error','ruling','generating_loot','thinking',

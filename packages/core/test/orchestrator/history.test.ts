@@ -343,7 +343,7 @@ describe("history ops — swipe / delete / rewind (§6)", () => {
     expect((await store.characters.get("wight"))!.soft?.current.mood).toBe("First telling.");
   });
 
-  it("failed swipe restores the active variant's soft state and leaves variants unchanged", async () => {
+  it("narrator-unavailable swipe adds a safe variant without changing mechanical state", async () => {
     const moodRouter = new ScriptedRouter({ classified: strikeIntent, narratorProse: "First telling." });
     moodRouter.complete = async (role: Role, prompt: RolePrompt) => {
       if (role === "classifier" && prompt.system.includes("strict consistency auditor")) {
@@ -373,14 +373,16 @@ describe("history ops — swipe / delete / rewind (§6)", () => {
     moodRouter.stream = async () => {
       throw new Error("network down");
     };
-    await expect(swipeLastTurn(moodRouter, store, storyId)).rejects.toThrow("network down");
+    const swipe = await swipeLastTurn(moodRouter, store, storyId);
 
     expect((await store.characters.get("wight"))!.soft?.current.mood).toBe("First telling.");
     expect(await wightHp(store)).toBe(hpAfterTurn);
     const narratorIdx = (await store.messages.nextIdx(storyId)) - 1;
     const narrator = await store.messages.getByIndex(storyId, narratorIdx);
-    expect(narrator!.variants).toEqual(["First telling."]);
-    expect(narrator!.activeVariant).toBe(0);
+    expect(swipe.variants).toHaveLength(2);
+    expect(swipe.variants[1]).toContain("solid blow");
+    expect(JSON.stringify(narrator!.variants)).toContain("A solid blow lands.");
+    expect(narrator!.activeVariant).toBe(1);
   });
 
   it("deleteLastTurn invalidates chapters/arcs built from the removed messages", async () => {

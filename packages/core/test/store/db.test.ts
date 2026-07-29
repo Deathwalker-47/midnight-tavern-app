@@ -37,7 +37,7 @@ const EXPECTED_TABLES = [
 ];
 
 /** Number of embedded migrations. Bump when adding one. */
-const MIGRATION_COUNT = 13;
+const MIGRATION_COUNT = 14;
 
 async function tableNames(db: Db): Promise<string[]> {
   const rows = await db.all<{ name: string }>(
@@ -70,6 +70,7 @@ describe("openDb / migrations", () => {
       { version: 11, name: "character_scene_presence" },
       { version: 12, name: "checkpoint_scene_presence" },
       { version: 13, name: "remove_false_nothing_character" },
+      { version: 14, name: "turn_operation_stage_metrics" },
     ]);
     await db.close();
   });

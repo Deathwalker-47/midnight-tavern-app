@@ -455,6 +455,15 @@ WHERE id = story_id || ':scene:nothing'
   );
 `,
   },
+  {
+    version: 14,
+    name: "turn_operation_stage_metrics",
+    // Stage timings are persisted with the durable operation so restart/recovery diagnostics retain
+    // the same bounded-provider evidence that the live callback observes.
+    sql: `
+ALTER TABLE turn_operations ADD COLUMN stage_metrics_json TEXT;
+`,
+  },
 ];
 
 /**

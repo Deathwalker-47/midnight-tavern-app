@@ -99,6 +99,31 @@ describe("runStage — deadlines, fallbacks, telemetry", () => {
     expect(metrics[0]).toMatchObject({ outcome: "cancelled" });
   });
 
+  it("propagates caller cancellation even when the stage ignores its abort signal", async () => {
+    const controller = new AbortController();
+    const metrics: StageMetric[] = [];
+    const pending = runStage(
+      "authority_audit",
+      async () => new Promise<string>(() => {}),
+      {
+        deadlineMs: 10,
+        fallback: () => "fallback",
+        signal: controller.signal,
+        onMetric: (metric) => metrics.push(metric),
+      }
+    );
+    await Promise.resolve();
+    controller.abort(new DOMException("Stop now", "AbortError"));
+
+    await expect(pending).rejects.toThrow("Stop now");
+    expect(metrics).toEqual([
+      expect.objectContaining({
+        stage: "authority_audit",
+        outcome: "cancelled",
+      }),
+    ]);
+  });
+
   it("does not start the stage when the caller signal is already aborted", async () => {
     const controller = new AbortController();
     controller.abort(new DOMException("gone", "AbortError"));

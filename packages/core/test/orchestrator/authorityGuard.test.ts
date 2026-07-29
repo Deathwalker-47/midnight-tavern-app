@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { generateGuardedNarration } from "../../src/orchestrator/authorityGuard.js";
 import type { Router } from "../../src/router/index.js";
 import type { Ruling } from "../../src/types/index.js";
+import type { StageMetric } from "../../src/orchestrator/stagePolicy.js";
 
 const ruling: Ruling = {
   turnId: "player:both-pistols",
@@ -104,6 +105,24 @@ const SAFE_PARAGRAPH =
   "Shannow eased between the shattered pews, boots silent on the ash. The wind carried the smell of cordite and old rain.";
 const MECHANICAL_LIE =
   "He rolled a natural 20 and the DC 30 check crushed the creature for 45 damage, awarding him a legendary rifle.";
+
+function controllableStageSchedule() {
+  const pending = new Map<number, () => void>();
+  return {
+    schedule: (ms: number, fire: () => void) => {
+      pending.set(ms, fire);
+      return () => {
+        if (pending.get(ms) === fire) pending.delete(ms);
+      };
+    },
+    has: (ms: number) => pending.has(ms),
+    trigger: (ms: number) => {
+      const fire = pending.get(ms);
+      if (!fire) throw new Error(`No stage deadline is pending at ${ms}ms.`);
+      fire();
+    },
+  };
+}
 
 describe("generateGuardedNarration — progressive verified streaming", () => {
   it("releases a verified leading paragraph before the draft finishes", async () => {
@@ -252,6 +271,139 @@ describe("generateGuardedNarration — progressive verified streaming", () => {
 });
 
 describe("generateGuardedNarration", () => {
+  it("aborts a hung narrator at its deadline and returns deterministic prose", async () => {
+    const clock = controllableStageSchedule();
+    const metrics: StageMetric[] = [];
+    let aborted = false;
+    const router: Router = {
+      bindingFor: () => ({
+        provider: "electronhub",
+        model: "test",
+        source: "recommended",
+        samplersDirty: false,
+      }),
+      async complete() {
+        return { content: JSON.stringify({ obeysRulings: true, contradictions: [] }) };
+      },
+      async stream(_role, _prompt, _onDelta, opts) {
+        return new Promise<never>((_resolve, reject) => {
+          opts?.signal?.addEventListener("abort", () => {
+            aborted = true;
+            reject(opts.signal?.reason);
+          });
+        });
+      },
+    };
+
+    const pending = generateGuardedNarration(
+      router,
+      { system: "Narrate.", user: "Both pistols fire." },
+      [ruling],
+      {
+        onStageMetric: (metric) => metrics.push(metric),
+        stageDeadlines: { narrator: 11, authority_audit: 12 },
+        stageSchedule: clock.schedule,
+      }
+    );
+    await Promise.resolve();
+    expect(clock.has(11)).toBe(true);
+    clock.trigger(11);
+    const result = await pending;
+
+    expect(aborted).toBe(true);
+    expect(result.usedSafeFallback).toBe(true);
+    expect(result.prose).toContain("Twin shots land");
+    expect(metrics).toEqual([
+      expect.objectContaining({ stage: "narrator", outcome: "timeout" }),
+    ]);
+  });
+
+  it("aborts a hung authority audit and fails closed to deterministic prose", async () => {
+    const clock = controllableStageSchedule();
+    const metrics: StageMetric[] = [];
+    let auditAborted = false;
+    const router: Router = {
+      bindingFor: () => ({
+        provider: "electronhub",
+        model: "test",
+        source: "recommended",
+        samplersDirty: false,
+      }),
+      async complete(_role, _prompt, opts) {
+        return new Promise<never>((_resolve, reject) => {
+          opts?.signal?.addEventListener("abort", () => {
+            auditAborted = true;
+            reject(opts.signal?.reason);
+          });
+        });
+      },
+      async stream() {
+        return { content: "The pistols crack and the gunmen stagger into cover." };
+      },
+    };
+
+    const pending = generateGuardedNarration(
+      router,
+      { system: "Narrate.", user: "Both pistols fire." },
+      [ruling],
+      {
+        onStageMetric: (metric) => metrics.push(metric),
+        stageDeadlines: { narrator: 21, authority_audit: 22 },
+        stageSchedule: clock.schedule,
+      }
+    );
+    for (let index = 0; index < 10 && !clock.has(22); index++) {
+      await Promise.resolve();
+    }
+    expect(clock.has(22)).toBe(true);
+    clock.trigger(22);
+    const result = await pending;
+
+    expect(auditAborted).toBe(true);
+    expect(result.usedSafeFallback).toBe(true);
+    expect(result.prose).toContain("Twin shots land");
+    expect(metrics).toEqual([
+      expect.objectContaining({ stage: "narrator", outcome: "ok" }),
+      expect.objectContaining({ stage: "authority_audit", outcome: "timeout" }),
+    ]);
+  });
+
+  it("falls back to deterministic prose and records the narrator stage when streaming fails", async () => {
+    const metrics: StageMetric[] = [];
+    const failingRouter: Router = {
+      bindingFor: () => ({
+        provider: "electronhub",
+        model: "test",
+        source: "recommended",
+        samplersDirty: false,
+      }),
+      async complete() {
+        return { content: JSON.stringify({ obeysRulings: true, contradictions: [] }) };
+      },
+      async stream() {
+        throw new Error("narrator provider unavailable");
+      },
+    };
+    const options: Parameters<typeof generateGuardedNarration>[3] & {
+      onStageMetric: (metric: StageMetric) => void;
+    } = {
+      onStageMetric: (metric) => metrics.push(metric),
+    };
+
+    const result = await generateGuardedNarration(
+      failingRouter,
+      { system: "Narrate.", user: "Both pistols fire." },
+      [ruling],
+      options
+    );
+
+    expect(result.usedSafeFallback).toBe(true);
+    expect(result.prose).toContain("Twin shots land");
+    expect(metrics).toEqual([
+      expect.objectContaining({ stage: "narrator", outcome: "error" }),
+    ]);
+  });
+
   it("rejects a narrated kill when no lethal resource reached zero", async () => {
     const falseKillRouter: Router = {
       bindingFor: () => ({
@@ -299,16 +451,27 @@ describe("generateGuardedNarration", () => {
 
   it("does not regenerate a full narrator draft when the auditor is unavailable", async () => {
     const { router, counts } = routerFor("not json");
+    const metrics: StageMetric[] = [];
+    const options: Parameters<typeof generateGuardedNarration>[3] & {
+      onStageMetric: (metric: StageMetric) => void;
+    } = {
+      onStageMetric: (metric) => metrics.push(metric),
+    };
 
     const result = await generateGuardedNarration(
       router,
       { system: "Narrate.", user: "Both pistols fire." },
-      [ruling]
+      [ruling],
+      options
     );
 
     expect(result.usedSafeFallback).toBe(true);
     expect(result.prose).toContain("Twin shots land");
     expect(result.prose).not.toMatch(/\b(?:d20|DC|modifier|resolves as)\b/i);
     expect(counts).toEqual({ narrator: 1, auditor: 1 });
+    expect(metrics).toEqual([
+      expect.objectContaining({ stage: "narrator", outcome: "ok" }),
+      expect.objectContaining({ stage: "authority_audit", outcome: "error" }),
+    ]);
   });
 });

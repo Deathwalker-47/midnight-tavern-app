@@ -41,7 +41,13 @@ import { assembleContext } from "./context.js";
 import { capture } from "./checkpoint.js";
 import { generateGuardedNarration } from "./authorityGuard.js";
 import { planNpcReactions, planNpcActions } from "./npcAgency.js";
-import { runStage, DEFAULT_STAGE_DEADLINES, type StageMetric } from "./stagePolicy.js";
+import {
+  runStage,
+  DEFAULT_STAGE_DEADLINES,
+  type CancelTimer,
+  type StageMetric,
+  type TurnStage,
+} from "./stagePolicy.js";
 import { discoverNarratedSceneEntities } from "./sceneEntityPromotion.js";
 import {
   planNpcTransitions,
@@ -80,6 +86,12 @@ export interface SubmitTurnOptions {
   onPhase?: (phase: TurnOperationState) => void;
   /** Per-stage latency/outcome telemetry (deadlines, fallbacks); never throws into the turn. */
   onStageMetric?: (metric: StageMetric) => void;
+  /** Optional stage deadline overrides plus deterministic clock seams. */
+  stagePolicy?: {
+    deadlines?: Partial<Record<TurnStage, number>>;
+    now?: () => number;
+    schedule?: (ms: number, fire: () => void) => CancelTimer;
+  };
 }
 
 export interface SubmitTurnResult {
@@ -524,6 +536,18 @@ async function runTurnOperation(
         createdAt: Date.now(),
         updatedAt: Date.now(),
       };
+  const stageMetrics: StageMetric[] = [];
+  const recordStageMetric = (metric: StageMetric): void => {
+    stageMetrics.push(metric);
+    operation = { ...operation, stageMetrics: structuredClone(stageMetrics) };
+    try {
+      opts.onStageMetric?.(metric);
+    } catch {
+      /* telemetry must never break a turn */
+    }
+  };
+  const stageDeadline = (stage: TurnStage): number =>
+    opts.stagePolicy?.deadlines?.[stage] ?? DEFAULT_STAGE_DEADLINES[stage];
   const setPhase = async (
     state: TurnOperationState,
     patch: Partial<TurnOperation> = {}
@@ -563,10 +587,24 @@ async function runTurnOperation(
       const recentNarration = recentMessages
         .filter((message) => message.role === "narrator")
         .map((message) => message.content);
-      npcTransitions = await planNpcTransitions(
-        router,
-        { storyId, schema, playerText, recentNarration, roster },
-        opts.signal
+      npcTransitions = await runStage(
+        "npc_introduction",
+        (signal) =>
+          planNpcTransitions(
+            router,
+            { storyId, schema, playerText, recentNarration, roster },
+            signal
+          ),
+        {
+          deadlineMs: stageDeadline("npc_introduction"),
+          fallback: () => [],
+          ...(opts.signal ? { signal: opts.signal } : {}),
+          onMetric: recordStageMetric,
+          ...(opts.stagePolicy?.now ? { now: opts.stagePolicy.now } : {}),
+          ...(opts.stagePolicy?.schedule
+            ? { schedule: opts.stagePolicy.schedule }
+            : {}),
+        }
       );
       // Transitional deterministic fallback for older/smaller classifier routes. It is staged
       // through the same atomic contract; narrator prose itself no longer writes the registry.
@@ -605,11 +643,53 @@ async function runTurnOperation(
         name: character.name,
         isPlayer: character.isPlayer,
       }));
-      const classifier = await classifyWithRecovery(
-        router,
-        schema,
-        { playerMessage: playerText, presentCharacters, recentNarration },
-        { signal: opts.signal }
+      const classifierInput = {
+        playerMessage: playerText,
+        presentCharacters,
+        recentNarration,
+      };
+      const classifier = await runStage<
+        Awaited<ReturnType<typeof classifyWithRecovery>>
+      >(
+        "classifier",
+        (signal) =>
+          classifyWithRecovery(router, schema, classifierInput, { signal }),
+        {
+          deadlineMs: stageDeadline("classifier"),
+          fallback: () => {
+            const timedOut =
+              stageMetrics.at(-1)?.stage === "classifier" &&
+              stageMetrics.at(-1)?.outcome === "timeout";
+            return {
+              turn: {
+                playerIntents: [],
+                npcIntents: [],
+                freeText:
+                  "The mechanical classifier did not complete; continue this turn as narration only.",
+              },
+              recovered: true,
+              recovery: {
+                policy: "narration_only" as const,
+                issues: [
+                  {
+                    kind: timedOut ? ("timeout" as const) : ("provider_error" as const),
+                    message: timedOut
+                      ? "The classifier exceeded its deadline and the turn continued without mechanics."
+                      : "The classifier failed and the turn continued without mechanics.",
+                    retryable: true,
+                  },
+                ],
+              },
+              errorKind: timedOut ? "StageTimeout" : "ClassifierError",
+            };
+          },
+          ...(opts.signal ? { signal: opts.signal } : {}),
+          onMetric: recordStageMetric,
+          ...(opts.stagePolicy?.now ? { now: opts.stagePolicy.now } : {}),
+          ...(opts.stagePolicy?.schedule
+            ? { schedule: opts.stagePolicy.schedule }
+            : {}),
+        }
       );
       classified = classifier.turn;
       classifierRecovered = classifier.recovered;
@@ -788,10 +868,14 @@ async function runTurnOperation(
             signal
           ),
         {
-          deadlineMs: DEFAULT_STAGE_DEADLINES.npc_planner,
+          deadlineMs: stageDeadline("npc_planner"),
           fallback: () => [],
           ...(opts.signal ? { signal: opts.signal } : {}),
-          ...(opts.onStageMetric ? { onMetric: opts.onStageMetric } : {}),
+          onMetric: recordStageMetric,
+          ...(opts.stagePolicy?.now ? { now: opts.stagePolicy.now } : {}),
+          ...(opts.stagePolicy?.schedule
+            ? { schedule: opts.stagePolicy.schedule }
+            : {}),
         }
       );
       for (const intent of npcActionIntents) {
@@ -886,6 +970,15 @@ async function runTurnOperation(
         ...(opts.signal ? { signal: opts.signal } : {}),
         ...(opts.onDelta ? { onDelta: opts.onDelta } : {}),
         auditWithoutRulings: classifierRecovered,
+        onStageMetric: recordStageMetric,
+        stageDeadlines: {
+          narrator: stageDeadline("narrator"),
+          authority_audit: stageDeadline("authority_audit"),
+        },
+        ...(opts.stagePolicy?.now ? { stageNow: opts.stagePolicy.now } : {}),
+        ...(opts.stagePolicy?.schedule
+          ? { stageSchedule: opts.stagePolicy.schedule }
+          : {}),
       }
     );
     const prose = narration.prose;

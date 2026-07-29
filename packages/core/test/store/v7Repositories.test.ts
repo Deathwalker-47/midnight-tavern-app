@@ -233,6 +233,20 @@ describe("V7 persistence repositories", () => {
           },
         ],
       },
+      stageMetrics: [
+        {
+          stage: "classifier",
+          startedAt: 100,
+          durationMs: 250,
+          outcome: "ok",
+        },
+        {
+          stage: "narrator",
+          startedAt: 350,
+          durationMs: 60_000,
+          outcome: "timeout",
+        },
+      ],
       createdAt: 1,
       updatedAt: 2,
     });
@@ -261,11 +275,26 @@ describe("V7 persistence repositories", () => {
     expect((await store.turnOperations.get("op1"))?.classifierRecovery).toMatchObject({
       issues: [{ kind: "no_content" }],
     });
+    expect((await store.turnOperations.get("op1"))?.stageMetrics).toEqual([
+      {
+        stage: "classifier",
+        startedAt: 100,
+        durationMs: 250,
+        outcome: "ok",
+      },
+      {
+        stage: "narrator",
+        startedAt: 350,
+        durationMs: 60_000,
+        outcome: "timeout",
+      },
+    ]);
     expect((await store.turnOperations.latestRecoverable(schema.storyId))?.id).toBe("op1");
     expect(await store.turnOperations.claimRetry("op1", 2, 3)).toBe(true);
     expect(await store.turnOperations.claimRetry("op1", 2, 4)).toBe(false);
     expect((await store.turnOperations.get("op1"))?.state).toBe("classifying");
     expect((await store.turnOperations.get("op1"))?.classifierRecovery).toBeUndefined();
+    expect((await store.turnOperations.get("op1"))?.stageMetrics).toBeUndefined();
     expect((await store.events.listByStory(schema.storyId))[0]?.kind).toBe("item_gained");
     const markdown = await exportStoryJournalMarkdown(store, schema.storyId);
     expect(markdown).toContain("Item Gained");
