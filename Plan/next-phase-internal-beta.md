@@ -93,6 +93,13 @@ re-grounded against current HEAD (most audit gaps had already been closed by lat
   reevaluation, and installs only deterministically verified carried/worn gear when card/persona
   prose is attached. Scenery and model-proposed display gear are excluded._
 
+  _Task 13 completed 2026-07-29 (`3ebd58d` through `75dfe6c`): action suggestions reject absent
+  registry characters; lorebook save failures retain the exact draft and offer a safe retry;
+  multi-character roster tests lock dossier/loadout selection to the clicked registry id; and
+  rulebook regeneration tests prove failed replacement leaves installed mechanics and unsaved UI
+  context intact before resuming from the retained checkpoint. Lorebook hierarchy and
+  dossier-to-loadout navigation are acceptance-tested. Core 528 + UI 147 = 675 tests pass._
+
 ## Internal-Beta exit criteria (the finish line for this phase)
 
 - A user can create **or import** a story, play it, close the app, reopen it, and continue.

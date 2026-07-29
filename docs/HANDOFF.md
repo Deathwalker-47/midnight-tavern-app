@@ -1,7 +1,7 @@
 # HANDOFF - current live state
 
 **Updated:** 2026-07-29
-**Branch / runtime HEAD:** `main` at `b348f83` before the following docs commit; local, not pushed
+**Branch / runtime HEAD:** `main` at `75dfe6c` before the following docs commit; local, not pushed
 **App version:** `0.2.8`, unsigned
 **User-owned/untracked:** `.codex/`, `opencode.json` - preserve
 **Active plan:** `Plan/next-phase-internal-beta.md`
@@ -10,30 +10,29 @@
 ## Fresh verification
 
 - `npm run typecheck`: passed.
-- `npm test`: core 527/42 files + UI 144/25 files = **671 tests**, passed.
-- Direct core/UI production builds and `cargo check`: passed.
-- Known noise: seven existing React `act(...)` warnings, reserved for Task 14.
+- `npm test`: core 528/42 files + UI 147/25 files = **675 tests**, passed.
+- Direct UI production build and `cargo check`: passed.
+- Known noise: seven React `act(...)` warnings, now the sole target of Task 14.
 - No installer was produced. Do not run the root build/package flow until Task 15.
 
-## What just landed - Task 12 (`b348f83`)
+## What just landed - Task 13 (`3ebd58d` through `75dfe6c`)
 
-Card imports now retain identity and only install possessions actually established by their source:
+The remaining product acceptance paths are now explicit and regression-tested:
 
-- three literal V2/V3 card/persona fixtures cover supported macros, typed attribute names/scores,
-  exact multi-word possessions, scenery decoys, model-proposed decoys, and source immutability;
-- persona/card macros are reevaluated immediately before Forge prompts, including accepted mechanics
-  that would otherwise reuse stale import-preview substitutions;
-- raw card/persona data remains unexpanded in the creation snapshot for future regeneration;
-- transient resolved prose reaches actor-foundation prompts and deterministic gear installation;
-- multi-word and possessive names such as `Saint Orra Compass`, `Moon-Eater Blade`,
-  `Ash-Warden's Ring`, `Vesper Key Dagger`, and `Blue Glass Amulet` survive exactly;
-- only carried/wielded/worn/kept/holstered/strapped/packed gear is installed from attached sources;
-  room displays, racks, generic ownership wording, and unverified model additions are excluded;
-- premise-only Forge can still use bounded actor-foundation gear, while an empty verified source gets
-  neutral basic personal effects.
+- suggestions reject and repair text that names a registry character absent from the current scene;
+- lorebook entry save failure is caught, displays recovery context, retains exact content/keywords,
+  blocks duplicate requests while saving, and retries the same draft;
+- existing lorebook tests prove shelf -> selected book -> child-entry loading;
+- a two-character roster test proves dossier and equipment/loadout navigation use the clicked
+  registry member rather than whichever card loaded first;
+- rulebook regeneration failure leaves the sealed schema and unsaved settings visible, and retry
+  receives the same duplicate/in-place mode plus the retained validated checkpoint;
+- existing CharacterDossier coverage proves the selected dossier drills into that character's
+  loadout.
 
-RED evidence captured stale `{{user}}` mechanics, genericized named gear, incorrect apostrophe
-capitalization, and a museum-display sword entering player inventory.
+The runtime fixes are `3ebd58d` (absent-character suggestion repair) and `e0f210d` (lorebook
+draft-safe recovery). `6dab752` and `75dfe6c` harden already-correct navigation and regeneration
+behavior with acceptance tests.
 
 ## Runtime foundation already complete
 
@@ -49,6 +48,8 @@ capitalization, and a museum-display sword entering player inventory.
 7. Task 10 (`a2656e4`): responsive Gemini Flash narrator default with explicit fast/quality labels.
 8. Task 11 (`80e3b44`): bounded, durable, resumable Forge.
 9. Task 12 (`b348f83`): macro-safe card acceptance and source-authoritative starting gear.
+10. Task 13 (`3ebd58d` through `75dfe6c`): grounded suggestions and product recovery/navigation
+    acceptance.
 
 ## Non-negotiable product and authority rules
 
@@ -66,22 +67,22 @@ capitalization, and a museum-display sword entering player inventory.
 
 ## Remaining ordered work
 
-1. Task 13: remaining product/UX acceptance and bridge parity.
-2. Task 14: eliminate all seven React `act(...)` warnings.
-3. Task 15: full Internal Beta gate, packaged manual acceptance, then create the final installer.
-4. Task 16 signing/updater/CSP remains later and out of scope.
+1. Task 14: eliminate all seven React `act(...)` warnings.
+2. Task 15: full Internal Beta gate, packaged manual acceptance, then create the final installer.
+3. Task 16 signing/updater/CSP remains later and out of scope.
 
 ## Single next action
 
-Start detailed-plan **Task 13** test-first. Independently pin and inspect:
+Start detailed-plan **Task 14** test-first:
 
-1. suggestions grounded in the current scene and legal sealed actions;
-2. retry/regenerate preserving the user's draft and visible recovery context;
-3. lorebook hierarchy and parent/child navigation;
-4. Characters -> dossier -> loadout navigation with the correct character selected;
-5. Story Settings rulebook regeneration retaining the preserved creation source and installed state
-   until full replacement success.
+1. instrument the focused Play and Overview tests so any `console.error` containing the React
+   `not wrapped in act(...)` warning fails the test;
+2. reproduce the five `RulingBlock` timer warnings, one additional Play async warning, and one
+   Overview mount-load warning independently;
+3. fix test synchronization first by using fake timers/`act` for reveal timers and awaiting pending
+   loads; modify runtime code only if a real lifecycle error is exposed;
+4. run the complete UI suite with clean stderr, then full typecheck/tests and direct UI build;
+5. commit coherently and update the plan, worklog, handoff, and next-agent prompt.
 
-Fix one failing behavior at a time and keep native/browser bridge parity. Run focused suites after
-each slice, then full typecheck/tests, direct core/UI build, and update all handoffs. Do not build an
-installer yet.
+Do not build an installer yet. Task 15 owns the root build/package flow and packaged manual
+acceptance.

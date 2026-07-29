@@ -537,12 +537,22 @@ remain user-owned; new stories and explicit reset-to-recommended use the respons
 - Modify/test: `packages/ui/src/screens/CharacterDossier.tsx`
 - Modify/test: `packages/ui/src/screens/StorySettings.tsx`
 
-- [ ] **Step 1: Add acceptance tests for grounded suggestions, retry preserving draft, lorebook
+- [x] **Step 1: Add acceptance tests for grounded suggestions, retry preserving draft, lorebook
   hierarchy, dossier/loadout navigation, and regeneration persistence**
-- [ ] **Step 2: Observe each failing behavior independently**
-- [ ] **Step 3: Implement one failing behavior at a time, committing each screen/service slice**
-- [ ] **Step 4: Run all core/UI tests and production UI build**
-- [ ] **Step 5: Record packaged acceptance evidence in WORKLOG**
+- [x] **Step 2: Observe each failing behavior independently**
+- [x] **Step 3: Implement one failing behavior at a time, committing each screen/service slice**
+- [x] **Step 4: Run all core/UI tests and production UI build**
+- [x] **Step 5: Record acceptance evidence in WORKLOG**
+
+Completed in `3ebd58d`, `e0f210d`, `6dab752`, and `75dfe6c`. Suggestions now reject a
+registry-backed but absent character and use the bounded repair path. Lorebook save failures are
+caught without an unhandled rejection, retain the exact content and keywords, expose a visible
+retry, and prevent duplicate saves. Multi-card Characters acceptance proves dossier/loadout
+navigation carries the selected registry id. Rulebook regeneration acceptance proves a failed
+replacement leaves the current sealed catalog and unsaved settings visible, then retries the same
+mode from the retained validated checkpoint. Existing tests already covered lorebook parent/child
+loading and dossier-to-loadout navigation. Core 528 + UI 147 = 675 tests green; typecheck, direct UI
+production build, and `cargo check` passed. Seven known React `act(...)` warnings remain for Task 14.
 
 ### Task 14: Eliminate the Seven React Test Warnings
 

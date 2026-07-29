@@ -717,3 +717,38 @@ React `act(...)` warnings remain reserved for Task 14. No installer was produced
 **Next:** detailed-plan Task 13, beginning with independent acceptance tests for grounded
 suggestions, retry draft retention, lorebook hierarchy, character dossier/loadout navigation, and
 rulebook-regeneration persistence.
+
+---
+
+## 2026-07-29 - Close remaining product acceptance risks
+
+Completed detailed-plan Task 13 in commits `3ebd58d`, `e0f210d`, `6dab752`, and `75dfe6c`.
+
+- Suggested player actions now load the complete registry only to identify absent names, then reject
+  and repair any suggestion that names a registered character who is not in the live scene.
+  Suggestions remain constrained to current-scene context and legal sealed actions.
+- A lorebook entry save failure is handled on-screen instead of becoming an unhandled promise
+  rejection. The exact content and trigger keywords remain editable, duplicate clicks are blocked
+  during the request, and the same draft can be retried.
+- Existing hierarchy acceptance proves the global lorebook shelf opens one selected parent and
+  fetches only that book's child entries.
+- A new two-character acceptance test clicks the non-player card and proves both dossier and
+  equipment/loadout routes receive that selected registry id. The dossier suite continues to prove
+  correct loadout drill-in and cumulative progression rendering.
+- Rulebook regeneration acceptance now simulates a provider failure after a validated checkpoint.
+  The installed `Blade Adept`/`Strike` catalog and an unsaved title remain visible; retry uses the
+  same story, duplicate mode, and retained checkpoint before reporting installation success.
+
+RED evidence was observed for absent-character suggestions (accepted without repair) and lorebook
+save failure (no visible recovery plus an unhandled rejection). The character and regeneration
+paths already behaved correctly, so their new multi-entity and failure/retry tests harden those
+contracts without unnecessary runtime changes.
+
+**Verification:** `npm run typecheck` passed; core **528 / 42 files** and UI **147 / 25 files**
+passed (**675 tests** total). Direct UI production build and `cargo check` passed. The only stderr
+noise is the known seven React `act(...)` warnings, now the sole target of Task 14. No installer was
+produced.
+
+**Next:** detailed-plan Task 14, beginning by turning the seven current React `act(...)` warnings
+into focused test failures, then fixing test synchronization without changing correct runtime
+behavior.
