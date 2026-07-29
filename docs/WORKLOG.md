@@ -592,3 +592,38 @@ fallback is natural narrative rather than dice/DC boilerplate.
 (**631 tests** total). Known noise remains seven React `act(...)` warnings. Per the human's
 instruction, no installer was rebuilt; packaging is deferred until the remaining Internal Beta work
 is complete.
+
+---
+
+## 2026-07-29 - Complete NPC agency, progressive authority streaming, and bounded turn stages
+
+Completed detailed-plan Tasks 5-9 in commits `04e83b7`, `b753de3`, `fccab2c`, `09da205`,
+`2b43325`, and `a803f76`.
+
+- Goal-driven NPC planning now uses one bounded structured request for present idle NPCs, validates
+  every proposal against the sealed action/item/skill catalogs and present targets, and resolves
+  under a separate NPC budget. Invalid, dead, absent, malformed, timed-out, or failed-gate proposals
+  become no NPC action.
+- Deterministic provocation extends beyond combat to opposed contests, committed target harm, and
+  sealed danger/opposition stakes without treating harmless aid or conversation as hostile.
+- Provider-to-Play temporal tests prove safe prose is visible before the provider promise resolves.
+  Accepted mechanical prose releases beat-by-beat behind the whole-draft authority audit, with a
+  per-beat deterministic guard against unrecorded death.
+- `runStage` now bounds classifier, NPC introduction, NPC planner, narrator, and authority audit.
+  Timeouts/provider failures use deterministic narration-only, no-transition, no-NPC-action, or
+  authority-safe prose fallbacks. Genuine caller cancellation propagates immediately, including when
+  provider code ignores the abort signal.
+- Migration 14 persists `StageMetric[]` on durable turn operations. Restart inspection retains the
+  evidence, retry clears the previous attempt before recording new metrics, and both submit/retry
+  bridge paths expose live telemetry.
+
+Ordinary narrator failure now completes with safe deterministic prose, so already approved atomic
+NPC transitions commit with that successful fallback turn. Genuine cancellation/failed operations
+still leave no partial exchange or registry mutation. Planner encounter-gating remains deferred
+because there is no authoritative encounter-active fact; using combat rulings as a proxy would
+suppress accepted non-combat NPC agency. The call is deadline-bounded and measured meanwhile.
+
+**Verification:** `npm run typecheck` passed; core **518 / 41 files** and UI **140 / 25 files**
+passed (**658 tests** total). Focused production UI/core builds and `cargo check` passed. Seven
+pre-existing React `act(...)` warnings remain. No installer was produced; packaging remains deferred
+until the Internal Beta exit gate.

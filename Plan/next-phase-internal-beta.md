@@ -58,9 +58,7 @@ re-grounded against current HEAD (most audit gaps had already been closed by lat
   authoritative across active consumers and rollback-safe through checkpoint pre-images. Live DM
   rulings are delivered to Play before the first narrator delta. The sentence-initial “Nothing
   moves…” false-positive is rejected, and migration 13 removes the existing unused phantom.
-  Still open: a structured introduction contract that guarantees every actual NPC enters the
-  registry, ambiguous goal-driven planning, mechanical-beat streaming, deadlines/telemetry, and
-  responsive default models._
+  Still open: responsive default models._
 
   _Tasks 3–4 completed 2026-07-29 (`350f805`): one bounded, engine-validated NPC
   introduction/presence stage now runs before classification and narration; transitions commit
@@ -69,6 +67,12 @@ re-grounded against current HEAD (most audit gaps had already been closed by lat
   intents are normalized to the active player, and denied ruling cards identify their actor.
   Engine-owned universal attack defaults now damage the lethal resource; death remains authoritative
   only when that resource reaches zero._
+
+  _Tasks 5-9 completed 2026-07-29 (`04e83b7` through `a803f76`): present NPCs can pursue validated
+  sealed goals under a separate budget; sealed non-combat provocation is deterministic; safe prose
+  reaches Play before provider completion; verified mechanical prose releases beat-by-beat; and all
+  five provider-backed turn stages are deadline-bounded with authority-safe fallbacks and persisted
+  latency/outcome telemetry. Genuine cancellation wins even when a provider ignores abort._
 
 ## Internal-Beta exit criteria (the finish line for this phase)
 

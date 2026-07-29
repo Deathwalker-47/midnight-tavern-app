@@ -447,18 +447,29 @@ abort / error / caller-cancel / already-cancelled / defaults). Applied to the NP
 test proves it is measured. `DEFAULT_STAGE_DEADLINES` covers all five stages. Exported from the
 orchestrator barrel. core 512 (+7) + UI 139 = 651 green.
 
-**9b — REMAINING:**
-- [ ] Wrap the `classifier`, `npc_introduction`, `narrator`, and `authority_audit` stages in
+**9b — DONE (`a803f76`):**
+- [x] Wrap the `classifier`, `npc_introduction`, `narrator`, and `authority_audit` stages in
   `turn.ts` with `runStage` (deadlines from `DEFAULT_STAGE_DEADLINES`, deterministic fallbacks:
   classifier → narration-only recovery, introduction → no transitions, narrator → `safeSummary`,
   audit → treat as fail-closed). The narrator/audit live inside `generateGuardedNarration`, so thread
   a deadline/onMetric option through `GuardedNarrationOptions`.
-- [ ] Persist `StageMetric[]` on the turn operation: migration `stage_metrics_json` on
+- [x] Persist `StageMetric[]` on the turn operation: migration `stage_metrics_json` on
   `turn_operations` (+ `TurnOperationSchema` field, `toRecord`/`upsert`, and bridge parity in
   `ui/src/bridge/core.ts` + `sqliteBridge.ts`).
-- [ ] Fake-clock timeout + duplicate-turn tests in `turn.test.ts`; verify restart/retry/cancel.
-- [ ] Consider only firing the planner when an encounter is active (cost), noted since Task 5.
-- [ ] Commit `core(orchestrator): bound remaining turn stages and persist latency`.
+- [x] Fake-clock timeout + duplicate-turn tests in `turn.test.ts`; verify restart/retry/cancel.
+- [x] Consider only firing the planner when an encounter is active (cost), noted since Task 5.
+- [x] Commit `core(orchestrator): bound remaining turn stages and persist latency`.
+
+Completed in `a803f76`. All five provider-backed turn stages now have explicit deadlines and
+authority-safe deterministic fallbacks. Migration 14 persists stage timing/outcomes with the durable
+turn operation; retry clears stale metrics and records a new attempt. Native bridge callbacks cover
+both submit and retry. Fake-clock tests prove classifier/introduction/narrator/audit timeouts cannot
+duplicate an exchange, and restart/retry/cancel retain the operation contract. Cancellation also
+races independently of provider cooperation, so an ignored abort signal cannot be misreported as a
+timeout. Planner encounter-gating was considered but intentionally deferred: the engine has no
+authoritative encounter-active fact, and gating on combat rulings would suppress the accepted
+non-combat aid/converse/exploit agency from Task 5. The call remains bounded and measured until a
+sealed encounter-state model exists. Core 518 + UI 140 = 658 tests green.
 
 ### Task 10: Make Responsive Models the Default
 
