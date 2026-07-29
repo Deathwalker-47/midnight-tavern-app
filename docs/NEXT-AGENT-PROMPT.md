@@ -18,8 +18,8 @@ Use codebase-memory-mcp before text search for code discovery and re-index the c
 Run `npm run typecheck` and `npm test` before editing. Use test-driven development for every
 behavioral change and verification-before-completion before claiming success.
 
-Current runtime HEAD is `a2656e4` on local `main`, followed by a docs-only handoff commit. The fresh
-baseline is core 519/41 files + UI 141/25 files = **660 tests**, with clean typecheck. Direct core/UI
+Current runtime HEAD is `80e3b44` on local `main`, followed by a docs-only handoff commit. The fresh
+baseline is core 524/41 files + UI 144/25 files = **668 tests**, with clean typecheck. Direct core/UI
 production builds and `cargo check` pass. Seven known React `act(...)` warnings remain. The app is
 unsigned v0.2.8.
 
@@ -68,6 +68,13 @@ What is already implemented:
 - Task 10 (`a2656e4`): recommendation config v2 makes Gemini Flash the shipped responsive narrator
   default, labels it `Fast`, retains Claude Opus as the explicit `Quality` choice, and keeps the
   browser mirror and Role Matrix reset contract in parity.
+- Task 11 (`80e3b44`): bootstrap permits one structured repair by default and bounds every
+  provider-backed fragment to 45 seconds. Immediate caller cancellation is distinct from timeout
+  even when a provider ignores abort. Validated fragments are stored in a versioned Forge operation
+  (native SQLite settings, browser local storage), writes are serialized and ID-safe, installed
+  stories cannot be duplicated by stale recovery state, and Wizard/Blueprint creation offer
+  truthful resume or discard/edit controls after navigation or restart. Failed rulebook replacement
+  leaves the installed schema/version untouched.
 
 Important semantic detail: an ordinary narrator/provider error now completes the turn using safe
 deterministic prose. Approved staged NPC transitions therefore commit with that successful fallback
@@ -78,27 +85,24 @@ Do not add encounter gating to the NPC planner yet. There is no authoritative en
 and combat-ruling heuristics would suppress the accepted non-combat agency from Task 5. The planner
 call is bounded and measured; revisit only after a sealed encounter-state model exists.
 
-Your immediate task is detailed-plan Task 11: make Forge progress truthful, bounded, durable,
-resumable, and cancellable.
+Your immediate task is detailed-plan Task 12: lock card attributes, macros, and starting gear.
 
-1. Trace `packages/core/src/bootstrap/generate.ts`, `bootstrap/repair.ts`, existing bootstrap
-   persistence, both bridge implementations, and the StoryBlueprint/Wizard progress surfaces with
-   codebase-memory-mcp.
-2. Add failing tests for explicit stage/progress/detail/timing, one bounded repair, timeout fallback,
-   genuine cancellation, restart/resume, and navigation away/re-entry.
-3. Observe where current progress stalls, lies, or disappears.
-4. Persist a Forge operation and keep the previous story/rulebook untouched until the replacement
-   validates and commits completely. A timeout/error must expose a deterministic recoverable state;
-   cancellation must not leave a partial rulebook.
-5. Keep native and browser bridge contracts in parity and make the UI rehydrate the durable state.
-6. Run focused tests, `npm run typecheck`, `npm test`, direct core/UI workspace builds, and
-   `cargo check`.
-7. Commit `core(bootstrap): make forge bounded and resumable` with the required
+1. Trace `packages/core/src/bootstrap/prompts.ts`, `bootstrap/generate.ts`,
+   `bootstrap/startingGear.ts`, and `macros/engine.ts` with codebase-memory-mcp before editing.
+2. Add three literal card/persona fixtures with explicit attribute concepts and names, possessions
+   the protagonist explicitly carries, and `{{user}}` / `{{char}}` macros.
+3. Run the current path and record any concept substitution, dropped macro/identity, or missing
+   carried gear. Keep fixtures literal and expectations hand-derived.
+4. Preserve explicit card/persona concepts and names through prompt assembly and schema generation.
+   Instantiate only gear explicitly described as carried; do not pre-generate the wider item/loot
+   catalog.
+5. Run bootstrap, macro, starting-gear/equipment, and the new cross-card acceptance suites, then
+   `npm run typecheck`, `npm test`, direct core/UI workspace builds, and `cargo check`.
+6. Commit `core(bootstrap): preserve card identity and starting gear` with the required
    `Co-Authored-By: Codex <noreply@openai.com>` trailer.
 
 Then continue in order without waiting for the human:
 
-- Task 12: card attributes, macros, and starting gear acceptance.
 - Task 13: remaining UX acceptance and bridge parity.
 - Task 14: eliminate the seven React `act(...)` warnings.
 - Task 15: full Internal Beta verification and packaged manual acceptance; only then build the final

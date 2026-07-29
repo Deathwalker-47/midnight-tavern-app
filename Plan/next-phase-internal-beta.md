@@ -58,8 +58,8 @@ re-grounded against current HEAD (most audit gaps had already been closed by lat
   authoritative across active consumers and rollback-safe through checkpoint pre-images. Live DM
   rulings are delivered to Play before the first narrator delta. The sentence-initial “Nothing
   moves…” false-positive is rejected, and migration 13 removes the existing unused phantom.
-  Remaining in this phase: resumable Forge, import/starting-gear and UX acceptance, warning cleanup,
-  and the final packaged Internal Beta gate._
+  Remaining in this phase: import/starting-gear and UX acceptance, warning cleanup, and the final
+  packaged Internal Beta gate._
 
   _Tasks 3–4 completed 2026-07-29 (`350f805`): one bounded, engine-validated NPC
   introduction/presence stage now runs before classification and narration; transitions commit
@@ -78,6 +78,13 @@ re-grounded against current HEAD (most audit gaps had already been closed by lat
   _Task 10 completed 2026-07-29 (`a2656e4`): recommendation config v2 uses Gemini Flash as the
   responsive narrator default and labels the retained Opus option as the explicit quality choice.
   Native and browser bridge catalogs remain parity-tested._
+
+  _Task 11 completed 2026-07-29 (`80e3b44`): Forge uses one bounded structured repair and a
+  per-fragment deadline, distinguishes immediate caller cancellation from timeout even when a
+  provider ignores abort, and retains validated checkpoints in a durable Forge operation. Wizard
+  and Blueprint creation rehydrate, resume, or explicitly discard retained work after navigation
+  or restart. Native SQLite and browser storage paths are parity-tested, and failed replacement
+  generation leaves the installed rulebook untouched._
 
 ## Internal-Beta exit criteria (the finish line for this phase)
 

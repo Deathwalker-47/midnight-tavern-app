@@ -504,12 +504,12 @@ remain user-owned; new stories and explicit reset-to-recommended use the respons
 - Test: `packages/ui/test/screens/StoryBlueprint.test.tsx`
 - Test: `packages/ui/test/screens/Wizard.test.tsx`
 
-- [ ] **Step 1: Write tests for stage timing, one bounded repair, timeout fallback, resume, and cancel**
-- [ ] **Step 2: Observe stalled or non-durable progress**
-- [ ] **Step 3: Persist a Forge operation with explicit stage/progress/detail/timing; keep the old
+- [x] **Step 1: Write tests for stage timing, one bounded repair, timeout fallback, resume, and cancel**
+- [x] **Step 2: Observe stalled or non-durable progress**
+- [x] **Step 3: Persist a Forge operation with explicit stage/progress/detail/timing; keep the old
   story/rulebook until complete success**
-- [ ] **Step 4: Verify navigation away/re-entry and native/browser bridge parity**
-- [ ] **Step 5: Commit with `core(bootstrap): make forge bounded and resumable`**
+- [x] **Step 4: Verify navigation away/re-entry and native/browser bridge parity**
+- [x] **Step 5: Commit with `core(bootstrap): make forge bounded and resumable`**
 
 ### Task 12: Lock Card Attributes, Macros, and Starting Gear
 

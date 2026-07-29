@@ -649,3 +649,39 @@ the v2 reset contract.
 **Verification:** `npm run typecheck` passed; core **519 / 41 files** and UI **141 / 25 files**
 passed (**660 tests** total). Direct core/UI production builds and `cargo check` passed. Seven
 pre-existing React `act(...)` warnings remain. No installer was built.
+
+---
+
+## 2026-07-29 - Make Forge bounded, durable, and resumable
+
+Completed detailed-plan Task 11 in commit `80e3b44`.
+
+- Bootstrap structured output now permits one model repair by default, including the cross-schema
+  repair pass. Every provider-backed fragment has an independent 45-second deadline with injectable
+  clock/scheduler hooks for deterministic tests.
+- `BootstrapTimeoutError` identifies the exact timed-out fragment. Caller cancellation remains a
+  distinct `AbortError` and wins immediately even if provider code ignores the aborted signal.
+- Progress reports real phase, fragment, attempt, validation detail, total elapsed time, and
+  per-fragment duration. Validated Phase A, actor-foundation, and action-batch checkpoints remain
+  resumable after failure, timeout, cancellation, navigation, or restart.
+- The shared bridge now owns a versioned Forge operation contract. Packaged/native state persists in
+  SQLite settings; the browser/test bridge mirrors it in local storage. Writes are serialized so a
+  late checkpoint cannot resurrect an operation after successful installation, and clear operations
+  are ID-guarded so stale completions cannot erase a newer Forge.
+- Wizard and Story Blueprint creation rehydrate retained work, show the real last event/timing,
+  resume the retained request, or let the user explicitly discard it before editing. A completed
+  story causes any stale retained operation to be ignored and cleaned instead of duplicated.
+- A regression test proves failed full-stat rulebook replacement leaves the installed schema,
+  rulebook version, and snapshot history untouched.
+
+RED evidence was observed for the previous three-repair default, missing deadline scheduling,
+provider-ignored cancellation, absent durable bridge methods, and both creation screens failing to
+rehydrate retained work.
+
+**Verification:** `npm run typecheck` passed. Core **524 / 41 files** and UI **144 / 25 files**
+passed (**668 tests** total). Direct core and UI production builds passed; `cargo check` passed.
+Seven pre-existing React `act(...)` warnings remain and are reserved for Task 14. No installer was
+produced.
+
+**Next:** detailed-plan Task 12, beginning with three literal card/persona fixtures that cover
+explicit attributes, named possessions, and `{{user}}` / `{{char}}` macros.
