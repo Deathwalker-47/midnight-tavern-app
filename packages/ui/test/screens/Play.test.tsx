@@ -7,7 +7,7 @@
  *     produce on its own).
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { render, screen, fireEvent, waitFor, cleanup } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, cleanup, act } from "@testing-library/react";
 import { Play } from "../../src/screens/Play";
 import {
   setBridge,
@@ -60,6 +60,50 @@ describe("Play — empty state", () => {
     const composer = screen.getByTestId("play-composer") as HTMLTextAreaElement;
     expect(composer).toBeInTheDocument();
     expect(composer.disabled).toBe(false);
+  });
+});
+
+describe("Play — verified streaming end to end", () => {
+  it("renders the first streamed paragraph before the turn's promise resolves", async () => {
+    // The bridge enters the streaming phase, emits one safe paragraph, then HANGS on a gate. If any
+    // boundary buffered the stream, the live prose would not be on screen yet.
+    let releaseTurn!: () => void;
+    const turnGate = new Promise<void>((resolve) => {
+      releaseTurn = resolve;
+    });
+    const bridge = emptyBridge();
+    bridge.submitTurn = vi.fn(async (args: Parameters<CoreBridge["submitTurn"]>[0]) => {
+      args.onPhase?.("streaming");
+      args.onDelta?.("Shannow eased between the shattered pews.");
+      await turnGate; // the turn promise stays pending after the delta is emitted
+      return {
+        prose: "Shannow eased between the shattered pews.",
+        rulings: [],
+        narratorIdx: 1,
+        classifierRecovered: false,
+        refusedActionCount: 0,
+        usedNarratorFallback: false,
+        attributeAdvancements: [],
+      };
+    });
+    setBridge(bridge);
+    render(<Play storyId="s1" />);
+    await screen.findByText("Your story waits"); // mount load done → storyId is set in the store
+
+    await act(async () => {
+      void usePlayStore.getState().submit("fire both pistols");
+      await Promise.resolve();
+    });
+
+    // The provider promise is still gated, yet the first safe paragraph is already on screen.
+    const buffer = await screen.findByTestId("play-prose-buffer");
+    expect(buffer).toHaveTextContent("eased between the shattered pews");
+
+    // Let the turn settle so the operation completes cleanly (no act warnings / dangling promise).
+    await act(async () => {
+      releaseTurn();
+      await Promise.resolve();
+    });
   });
 });
 

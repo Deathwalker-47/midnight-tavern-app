@@ -128,6 +128,50 @@ describe("generateGuardedNarration — progressive verified streaming", () => {
     expect(result.prose).toContain("broke and ran");
   });
 
+  it("delivers the first safe paragraph before the narrator stream promise resolves", async () => {
+    // The provider emits two safe deltas, then its stream promise HANGS on a gate. If the release
+    // point buffered until completion, the sink would still be empty here.
+    let releaseStream!: () => void;
+    const streamGate = new Promise<void>((resolve) => {
+      releaseStream = resolve;
+    });
+    const deltas: string[] = [];
+    const router: Router = {
+      bindingFor: () => ({
+        provider: "electronhub",
+        model: "test",
+        source: "recommended",
+        samplersDirty: false,
+      }),
+      async complete() {
+        return { content: JSON.stringify({ obeysRulings: true, contradictions: [] }) };
+      },
+      async stream(_role: unknown, _prompt: unknown, onDelta: (delta: string) => void) {
+        onDelta(SAFE_PARAGRAPH);
+        onDelta("\n\nThe second gunman broke and ran for the treeline.");
+        await streamGate; // provider promise stays pending after the deltas are emitted
+        return { content: `${SAFE_PARAGRAPH}\n\nThe second gunman broke and ran for the treeline.` };
+      },
+    } as unknown as Router;
+
+    const pending = generateGuardedNarration(
+      router,
+      { system: "Narrate.", user: "Advance." },
+      [ruling],
+      { onDelta: (delta) => deltas.push(delta) }
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0)); // drain microtasks, not the gate
+
+    expect(deltas.join(""), "safe beat should reach the UI before the stream resolves").toContain(
+      "eased between the shattered pews"
+    );
+
+    releaseStream();
+    const result = await pending;
+    expect(result.usedSafeFallback).toBe(false);
+    expect(result.prose).toContain("broke and ran");
+  });
+
   it("never exposes a mechanical paragraph the auditor rejects", async () => {
     const { router } = streamingRouterFor(
       [SAFE_PARAGRAPH, MECHANICAL_LIE],

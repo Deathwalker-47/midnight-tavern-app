@@ -231,6 +231,60 @@ describe("buildSqliteBridge", () => {
     errSpy.mockRestore();
   });
 
+  it("streams narrator deltas straight through to the caller before the turn resolves", async () => {
+    // Prove the bridge boundary does not buffer or coalesce safe deltas: it forwards the caller's
+    // onDelta to core.submitTurn, so each delta reaches the UI as the provider emits it — before the
+    // turn's promise settles.
+    let releaseTurn!: () => void;
+    const turnGate = new Promise<void>((resolve) => {
+      releaseTurn = resolve;
+    });
+    const submitTurn = vi.fn(
+      async (
+        _router: unknown,
+        _store: unknown,
+        _storyId: string,
+        _playerText: string,
+        opts: { onDelta?: (delta: string) => void }
+      ) => {
+        opts.onDelta?.("Shannow eased forward.\n\n");
+        opts.onDelta?.("The gunman broke and ran.");
+        await turnGate; // core promise stays pending after the deltas are emitted
+        return {
+          prose: "Shannow eased forward.\n\nThe gunman broke and ran.",
+          rulings: [],
+          narratorIdx: 1,
+          background: Promise.resolve(),
+          classifierRecovered: false,
+          refusedActionCount: 0,
+          usedNarratorFallback: false,
+          attributeAdvancements: [],
+        };
+      }
+    );
+    const deltasSeen: string[] = [];
+    const bridge = buildSqliteBridge(
+      fakeStore({ stories: { get: vi.fn(async () => ({ id: "s1", schema: { statMode: "full" } })) } }),
+      fakeCore({ submitTurn })
+    );
+    const pending = bridge.submitTurn({
+      storyId: "s1",
+      playerText: "fire both pistols",
+      onDelta: (delta) => deltasSeen.push(delta),
+    });
+    await new Promise((r) => setTimeout(r, 0)); // drain microtasks; the turn is still gated
+
+    expect(deltasSeen).toEqual(["Shannow eased forward.\n\n", "The gunman broke and ran."]);
+    // The exact same onDelta the caller passed is threaded into core (no wrapping/buffering).
+    expect(submitTurn.mock.calls[0]?.[4]).toEqual(
+      expect.objectContaining({ onDelta: expect.any(Function) })
+    );
+
+    releaseTurn();
+    const out = await pending;
+    expect(out.prose).toContain("The gunman broke and ran.");
+  });
+
   it("listPresentCast condenses each LivingCardView to name/alive/hp/mood", async () => {
     const store = fakeStore({
       stories: { get: vi.fn(async () => ({ id: "s1", schema: { schema: true } })) },
