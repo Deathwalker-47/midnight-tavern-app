@@ -3,12 +3,18 @@
  * with the sealed-rulebook banner and the read-only rulebook facts. Drives the stores directly; a
  * minimal frozen schema stands in for a bootstrapped story.
  */
-import { describe, it, expect, beforeEach } from "vitest";
-import { render, screen, act } from "@testing-library/react";
+import { describe, it, expect, beforeEach, vi } from "vitest";
+import { render, screen, act, fireEvent, waitFor } from "@testing-library/react";
 import { StorySettings } from "../../src/screens/StorySettings";
 import { useStoriesStore } from "../../src/state/storiesStore";
 import { useSettingsStore } from "../../src/state/settingsStore";
-import type { StoryRecord, RoleMap } from "../../src/bridge/core";
+import { makeMemoryBridge, setBridge } from "../../src/bridge/core";
+import type {
+  BootstrapResumeState,
+  CoreBridge,
+  StoryRecord,
+  RoleMap,
+} from "../../src/bridge/core";
 
 const roleMap = {
   narrator: { provider: "openrouter", model: "anthropic/claude-sonnet-4" },
@@ -34,6 +40,7 @@ function story(id: string, locked = true): StoryRecord {
 }
 
 beforeEach(() => {
+  setBridge(makeMemoryBridge());
   useStoriesStore.setState({ current: undefined, currentStatus: "idle" });
   useSettingsStore.setState({
     roleMap,
@@ -85,5 +92,70 @@ describe("StorySettings", () => {
     render(<StorySettings storyId="s1" />);
     expect(screen.getByRole("button", { name: /delete story/i })).toBeInTheDocument();
     await flush();
+  });
+
+  it("keeps the current rulebook visible after a failed replacement and retries from its checkpoint", async () => {
+    const checkpoint: BootstrapResumeState = {
+      startedAt: 77,
+      sourceFingerprint: "sealed-source-v1",
+    };
+    const regenerateRulebook = vi.fn(
+      async (args: Parameters<CoreBridge["regenerateRulebook"]>[0]) => {
+        if (regenerateRulebook.mock.calls.length === 1) {
+          args.onCheckpoint?.(checkpoint);
+          throw new Error("replacement provider unavailable");
+        }
+        return { ...story("s1-copy"), title: "Embers of the Silent Vale — regenerated" };
+      }
+    );
+    setBridge(
+      Object.assign(makeMemoryBridge(), {
+        previewRulebookRegenerationImpact: vi.fn(async () => ({
+          attributes: 2,
+          skills: 1,
+          skillProgressions: 1,
+          storyActions: 1,
+          universalActions: 1,
+          resources: 1,
+          flags: 0,
+          runtimeItemDefinitions: 1,
+          runtimeItemInstances: 1,
+          equippedSlots: 1,
+          actionBudget: 2,
+          rulings: 3,
+          journalEvents: 2,
+          checkpoints: 1,
+          characters: 1,
+        })),
+        regenerateRulebook,
+      })
+    );
+    useStoriesStore.setState({ current: story("s1"), currentStatus: "ready" });
+
+    render(<StorySettings storyId="s1" />);
+
+    fireEvent.change(screen.getByLabelText("Story title"), {
+      target: { value: "Unsaved working title" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Regenerate rulebook/ }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: /Duplicate & regenerate/ })
+    );
+
+    expect(await screen.findByText("Replacement rolled back")).toBeInTheDocument();
+    expect(screen.getByText("Blade Adept")).toBeInTheDocument();
+    expect(screen.getByText("Strike")).toBeInTheDocument();
+    expect(screen.getByLabelText("Story title")).toHaveValue("Unsaved working title");
+    expect(regenerateRulebook.mock.calls[0]?.[0].resume).toBeUndefined();
+
+    fireEvent.click(screen.getByRole("button", { name: "Retry failed fragment" }));
+
+    await waitFor(() => expect(regenerateRulebook).toHaveBeenCalledTimes(2));
+    expect(regenerateRulebook.mock.calls[1]?.[0]).toMatchObject({
+      storyId: "s1",
+      mode: "duplicate",
+      resume: checkpoint,
+    });
+    expect(await screen.findByText("Rulebook replacement installed")).toBeInTheDocument();
   });
 });
