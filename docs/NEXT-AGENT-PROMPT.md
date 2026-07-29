@@ -18,8 +18,8 @@ Use codebase-memory-mcp before text search for code discovery and re-index the c
 Run `npm run typecheck` and `npm test` before editing. Use test-driven development for every
 behavioral change and verification-before-completion before claiming success.
 
-Current runtime HEAD is `80e3b44` on local `main`, followed by a docs-only handoff commit. The fresh
-baseline is core 524/41 files + UI 144/25 files = **668 tests**, with clean typecheck. Direct core/UI
+Current runtime HEAD is `b348f83` on local `main`, followed by a docs-only handoff commit. The fresh
+baseline is core 527/42 files + UI 144/25 files = **671 tests**, with clean typecheck. Direct core/UI
 production builds and `cargo check` pass. Seven known React `act(...)` warnings remain. The app is
 unsigned v0.2.8.
 
@@ -75,6 +75,12 @@ What is already implemented:
   stories cannot be duplicated by stale recovery state, and Wizard/Blueprint creation offer
   truthful resume or discard/edit controls after navigation or restart. Failed rulebook replacement
   leaves the installed schema/version untouched.
+- Task 12 (`b348f83`): three literal V2/V3 card/persona fixtures lock prompt-time macro expansion,
+  accepted attribute terminology, exact named possessions, scenery/model-decoy exclusion, and raw
+  creation-source preservation. Forge refreshes mechanics from the preserved card instead of stale
+  preview values. With attached card/persona prose, runtime inventory accepts only deterministically
+  verified carried/wielded/worn/kept/holstered/strapped/packed gear; premise-only Forge can still use
+  bounded actor-foundation proposals.
 
 Important semantic detail: an ordinary narrator/provider error now completes the turn using safe
 deterministic prose. Approved staged NPC transitions therefore commit with that successful fallback
@@ -85,25 +91,20 @@ Do not add encounter gating to the NPC planner yet. There is no authoritative en
 and combat-ruling heuristics would suppress the accepted non-combat agency from Task 5. The planner
 call is bounded and measured; revisit only after a sealed encounter-state model exists.
 
-Your immediate task is detailed-plan Task 12: lock card attributes, macros, and starting gear.
+Your immediate task is detailed-plan Task 13: close the remaining product acceptance risks.
 
-1. Trace `packages/core/src/bootstrap/prompts.ts`, `bootstrap/generate.ts`,
-   `bootstrap/startingGear.ts`, and `macros/engine.ts` with codebase-memory-mcp before editing.
-2. Add three literal card/persona fixtures with explicit attribute concepts and names, possessions
-   the protagonist explicitly carries, and `{{user}}` / `{{char}}` macros.
-3. Run the current path and record any concept substitution, dropped macro/identity, or missing
-   carried gear. Keep fixtures literal and expectations hand-derived.
-4. Preserve explicit card/persona concepts and names through prompt assembly and schema generation.
-   Instantiate only gear explicitly described as carried; do not pre-generate the wider item/loot
-   catalog.
-5. Run bootstrap, macro, starting-gear/equipment, and the new cross-card acceptance suites, then
-   `npm run typecheck`, `npm test`, direct core/UI workspace builds, and `cargo check`.
-6. Commit `core(bootstrap): preserve card identity and starting gear` with the required
-   `Co-Authored-By: Codex <noreply@openai.com>` trailer.
+1. Trace `packages/core/src/orchestrator/suggestions.ts`, `packages/ui/src/screens/Lorebook.tsx`,
+   `Characters.tsx`, `CharacterDossier.tsx`, and `StorySettings.tsx` with codebase-memory-mcp.
+2. Add independent acceptance tests for grounded/legal suggestions, retry preserving the user's
+   draft and recovery context, lorebook hierarchy, Characters -> dossier -> loadout selection, and
+   rulebook regeneration persistence.
+3. Observe each failure separately. Do not combine unrelated behavior changes.
+4. Implement and commit one service/screen slice at a time, maintaining native/browser bridge parity
+   and deterministic engine authority.
+5. Run all core/UI tests and the direct production UI build; record exact evidence in WORKLOG.
 
 Then continue in order without waiting for the human:
 
-- Task 13: remaining UX acceptance and bridge parity.
 - Task 14: eliminate the seven React `act(...)` warnings.
 - Task 15: full Internal Beta verification and packaged manual acceptance; only then build the final
   installer and report its exact path and SHA-256.

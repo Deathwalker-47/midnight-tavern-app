@@ -521,12 +521,12 @@ remain user-owned; new stories and explicit reset-to-recommended use the respons
 - Test: `packages/core/test/macros/macros.test.ts`
 - Create: `packages/core/test/bootstrap/crossCardAcceptance.test.ts`
 
-- [ ] **Step 1: Add three literal card/persona fixtures with explicit attributes, possessions, and
+- [x] **Step 1: Add three literal card/persona fixtures with explicit attributes, possessions, and
   `{{user}}` / `{{char}}` macros**
-- [ ] **Step 2: Observe any substitution, dropped macro, or missing carried gear**
-- [ ] **Step 3: Preserve explicit concepts/names and instantiate only explicitly carried starting gear**
-- [ ] **Step 4: Run bootstrap, macro, equipment, and cross-card suites**
-- [ ] **Step 5: Commit with `core(bootstrap): preserve card identity and starting gear`**
+- [x] **Step 2: Observe any substitution, dropped macro, or missing carried gear**
+- [x] **Step 3: Preserve explicit concepts/names and instantiate only explicitly carried starting gear**
+- [x] **Step 4: Run bootstrap, macro, equipment, and cross-card suites**
+- [x] **Step 5: Commit with `core(bootstrap): preserve card identity and starting gear`**
 
 ### Task 13: Close Remaining Product Acceptance Risks
 

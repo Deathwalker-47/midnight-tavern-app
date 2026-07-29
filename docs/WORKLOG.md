@@ -685,3 +685,35 @@ produced.
 
 **Next:** detailed-plan Task 12, beginning with three literal card/persona fixtures that cover
 explicit attributes, named possessions, and `{{user}}` / `{{char}}` macros.
+
+---
+
+## 2026-07-29 - Preserve card identity and explicitly carried starting gear
+
+Completed detailed-plan Task 12 in commit `b348f83`.
+
+- Added three literal V2/V3 card/persona acceptance fixtures covering prompt-time `{{user}}` and
+  `{{char}}` expansion, explicit typed attribute names/scores, exact named possessions, scenery
+  decoys, model-proposed decoy gear, and preservation of the original unexpanded creation source.
+- RED evidence showed accepted mechanics could remain stuck on a stale import-preview substitution
+  (`'s Echo Sense` instead of `Ari's Echo Sense`), multi-word possessions collapsed to generic
+  `Dagger`/`Amulet`, apostrophe names became `Ash-Warden'S Ring`, and a model-proposed museum sword
+  was installed despite never belonging to the player.
+- Forge now resolves persona/card macros immediately before prompts, refreshes typed mechanics from
+  the preserved card, and carries a transient resolved source into actor-foundation prompts and
+  installation without mutating the raw card/persona snapshot.
+- Deterministic starting-gear extraction couples each supported item to a carried/wielded/worn/kept/
+  holstered/strapped/packed cue in the same sentence, retains bounded multi-word names, handles
+  repeated item kinds, and no longer treats generic `has`/`owns` as proof of carried equipment.
+- When card/persona prose is attached, only deterministically verified possessions are installed;
+  unverified model proposals and scenery are excluded. Premise-only creation can still use bounded
+  actor-foundation proposals, and an empty verified result receives neutral personal effects.
+
+**Verification:** focused bootstrap/macro/equipment/cross-card suites passed **68 tests**. Fresh
+`npm run typecheck` passed; core **527 / 42 files** and UI **144 / 25 files** passed (**671 tests**
+total). Direct core and UI production builds passed; `cargo check` passed. The seven pre-existing
+React `act(...)` warnings remain reserved for Task 14. No installer was produced.
+
+**Next:** detailed-plan Task 13, beginning with independent acceptance tests for grounded
+suggestions, retry draft retention, lorebook hierarchy, character dossier/loadout navigation, and
+rulebook-regeneration persistence.

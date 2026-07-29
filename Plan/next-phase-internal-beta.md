@@ -86,6 +86,13 @@ re-grounded against current HEAD (most audit gaps had already been closed by lat
   or restart. Native SQLite and browser storage paths are parity-tested, and failed replacement
   generation leaves the installed rulebook untouched._
 
+  _Task 12 completed 2026-07-29 (`b348f83`): three literal V2/V3 card/persona acceptance fixtures
+  now lock prompt-time `{{user}}` / `{{char}}` resolution, accepted attribute terminology, exact
+  named possessions, source immutability, and runtime inventory. Forge refreshes mechanics from the
+  preserved card instead of a stale import preview, preserves the raw creation source for future
+  reevaluation, and installs only deterministically verified carried/worn gear when card/persona
+  prose is attached. Scenery and model-proposed display gear are excluded._
+
 ## Internal-Beta exit criteria (the finish line for this phase)
 
 - A user can create **or import** a story, play it, close the app, reopen it, and continue.
