@@ -1,7 +1,7 @@
 # HANDOFF — current live state
 
 **Updated:** 2026-07-29
-**Branch / runtime HEAD:** `main` at `04e83b7` (Task 5) before this docs commit; local, not pushed
+**Branch / runtime HEAD:** `main` at `b753de3` (Task 6) before this docs commit; local, not pushed
 **App version:** `0.2.8`, unsigned
 **User-owned/untracked:** `.codex/`, `opencode.json` — preserve
 **Active plan:** `Plan/next-phase-internal-beta.md`
@@ -10,7 +10,7 @@
 ## Fresh verification
 
 - `npm run typecheck`: passed.
-- `npm test`: core 498/40 files + UI 137/25 files = **635 tests**, passed (Task 5 added 4).
+- `npm test`: core 502/40 files + UI 137/25 files = **639 tests**, passed (Tasks 5–6 added 8).
 - Known noise: seven existing React `act(...)` warnings.
 - Build/cargo/installer were intentionally not rerun after `350f805`; the human asked to defer the
   installer until all remaining Internal Beta work is complete.
@@ -62,7 +62,8 @@ had no health delta, so a successful strike could never kill mechanically; confi
    bounded classifier request; deterministic validation (present candidate, sealed action/item/skill,
    present target, actor gate) + separate NPC budget; fail-closed to no action on malformed/timeout.
    Watch-out: fires a model call every full-stat turn with an idle present NPC — Task 9 should bound it.
-2. Task 6: sealed non-combat provocation (threat/intimidation), without reacting to harmless talk.
+2. Task 6: sealed non-combat provocation — **DONE (`b753de3`)**. `isProvocation` reacts to combat /
+   opposed / target-harm / hostile-stakes; healing/aid and harmless talk draw no reaction.
 3. Task 7: provider → core → bridge → store → Play safe-streaming smoke test.
 4. Task 8: progressively verify and release mechanical beats.
 5. Tasks 9–10: stage deadlines/telemetry and responsive model defaults.
@@ -73,13 +74,13 @@ had no health delta, so a successful strike could never kill mechanically; confi
 
 ## Single next action
 
-Start detailed-plan **Task 6: Extend Deterministic Provocation Beyond Combat** in
-`packages/core/src/orchestrator/npcAgency.ts`. Write failing tests first: a sealed threat/intimidation
-action targeting a present living NPC provokes a same-turn reaction, while harmless dialogue does NOT.
-Add a sealed hostile/provocation predicate based on action category, stakes, and effects (never raw
-prose). Today `planNpcReactions` only treats `category === "combat"` as provoking; broaden it to the
-new predicate and keep the deterministic counter path. Run the agency + resolver suites, then commit
-`core(orchestrator): react to sealed non-combat provocation`.
+Start detailed-plan **Task 7: Prove Streaming from Provider to Play UI**. Add a multi-delta
+provider → core → bridge → store → Play smoke test (`authorityGuard.test.ts` for the core release
+point, `ui/test/bridge/sqliteBridge.test.ts` + `Play.test.tsx` for the UI path). Observe the first
+boundary that drops or coalesces safe deltas, thread the same `onDelta` through it, and assert the
+first safe paragraph is visible before the provider promise resolves. Only touch
+`sqliteBridge.ts`/`playStore.ts` if a test fails. Commit `ui(play): prove end-to-end verified
+streaming`.
 
 Do not build an installer yet. Generate it only after the remaining Internal Beta tasks (through Task
 15) and complete verification, as requested by the human.

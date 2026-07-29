@@ -6,6 +6,35 @@ landed, why, verification, and any gotcha the next agent needs. Live state is in
 
 ---
 
+## 2026-07-29 — Task 6: deterministic provocation beyond combat
+
+`planNpcReactions` previously provoked only on `category === "combat"`. It now reacts to any SEALED
+hostile act.
+
+**What landed (`b753de3`).** `npcAgency.ts::isProvocation(action, ruling, stakes)` returns true for:
+combat category; an opposed contest (`action.opposed`); a sealed outcome table that can reduce a
+target resource, or a committed negative `resourceDeltaTarget` this turn; or a classifier `stakes`
+of `danger`/`opposed`. Never prose. `turn.ts` builds `stakesByTurnId` (`ruling.turnId → intent.stakes`)
+in the player-resolution loop and passes it into `planNpcReactions`, so the hostility grade
+participates alongside the action's category/opposed/effects. Beneficial acts (healing/aid),
+harmless non-opposed dialogue, and self-directed actions are not provocations.
+
+**Tests (`npcAgency.test.ts`, +4 → 19).** A damaging non-combat intimidation and a damage-free
+opposed "menace" both provoke a same-turn counter; a harmless "greet" and healing the creature do
+not (and the heal is observed). Test-local actions are appended to the fixture schema via a small
+`addActions` helper. RED observed for the two provoke cases before implementation.
+
+**Verification.** typecheck clean; **core 502 / 40 (was 498) + UI 137 / 25 = 639** green. No
+regressions from broadening the predicate (existing suites use combat actions, still provoking).
+
+**Gotchas.** `opposed` alone counts as provocation even without damage (a friendly duel-of-nerve
+would provoke) — acceptable for the encounter model, revisit if a non-hostile opposed action is
+ever added. `seedWightHp(hp)` sets `max = hp`, so healing tests must seed `max > current`.
+
+**Next:** plan Task 7 — prove end-to-end verified streaming (provider → core → bridge → store → Play).
+
+---
+
 ## 2026-07-29 — Task 5: goal-driven bounded NPC planning
 
 Implemented plan Task 5 test-first. Present, living NPCs that did not deterministically react can

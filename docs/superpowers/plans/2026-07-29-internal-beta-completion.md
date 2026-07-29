@@ -347,12 +347,19 @@ goals flow through the validated model path today.
 - Modify: `packages/core/src/orchestrator/npcAgency.ts`
 - Test: `packages/core/test/orchestrator/npcAgency.test.ts`
 
-- [ ] **Step 1: Write failing intimidation/threat tests and harmless-dialogue negatives**
-- [ ] **Step 2: Observe no reaction**
-- [ ] **Step 3: Add a sealed hostile/provocation predicate based on action category, stakes, and
+- [x] **Step 1: Write failing intimidation/threat tests and harmless-dialogue negatives**
+- [x] **Step 2: Observe no reaction**
+- [x] **Step 3: Add a sealed hostile/provocation predicate based on action category, stakes, and
   effects; never use raw prose alone**
-- [ ] **Step 4: Run agency and resolver suites**
-- [ ] **Step 5: Commit with `core(orchestrator): react to sealed non-combat provocation`**
+- [x] **Step 4: Run agency and resolver suites**
+- [x] **Step 5: Commit with `core(orchestrator): react to sealed non-combat provocation`**
+
+Completed in `b753de3`. `isProvocation(action, ruling, stakes)` provokes on combat category, an
+opposed contest, a sealed/committed target-harm effect, or classifier stakes of danger/opposed —
+never prose. `turn.ts` threads `intent.stakes` (keyed by `ruling.turnId`) into `planNpcReactions`.
+Healing/aid, harmless non-opposed dialogue, and self-directed actions draw no reaction. Four tests
+cover damaging intimidation, a damage-free opposed contest, a harmless greeting, and healing the
+creature. Core 502 (+4) + UI 137 = 639 green.
 
 ### Task 7: Prove Streaming from Provider to Play UI
 
