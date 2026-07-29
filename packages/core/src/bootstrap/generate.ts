@@ -48,10 +48,12 @@ import {
   type CharacterCard,
   type ImportedMechanics,
 } from "../importer/index.js";
-import type {
-  MacroContext,
-  MacroRegistry,
-  MacroWarning,
+import {
+  evaluateMacros,
+  type MacroVariableStore,
+  type MacroContext,
+  type MacroRegistry,
+  type MacroWarning,
 } from "../macros/index.js";
 import { validateStorySchema } from "./validate.js";
 import {
@@ -995,6 +997,14 @@ export interface BootstrapInput {
    * immediately before prompt assembly; its resolved premise is authoritative for this forge.
    */
   sourceCard?: CharacterCard;
+  /**
+   * Ephemeral macro-expanded prose used by Forge prompts and starting-gear
+   * installation. Never persisted in the creation-source snapshot.
+   */
+  resolvedStartingPossessionSources?: {
+    card?: string;
+    persona?: string;
+  };
   /** Sealed player-action budget. Defaults to two consequential actions per turn. */
   actionBudget?: number;
 }
@@ -1143,13 +1153,68 @@ export function resolveBootstrapCreationInput(
   input: BootstrapInput,
   options: BootstrapOptions
 ): BootstrapInput {
-  if (!input.sourceCard) return input;
+  const macroRegistry = options.macroRegistry;
+  let variables: MacroVariableStore = {
+    local: { ...(options.macroContext?.variables?.local ?? {}) },
+    global: { ...(options.macroContext?.variables?.global ?? {}) },
+  };
+  const char = input.sourceCard?.data.name.trim()
+    ? { name: input.sourceCard.data.name.trim() }
+    : undefined;
+  const resolvePersonaField = (
+    value: string,
+    field: string,
+    required: boolean
+  ): string => {
+    const evaluation = evaluateMacros(
+      value,
+      {
+        ...(options.macroContext ?? {}),
+        ...(input.persona ? { user: input.persona } : {}),
+        ...(char ? { char } : {}),
+        variables,
+      },
+      macroRegistry
+    );
+    variables = evaluation.variables;
+    if (required && evaluation.blocked) {
+      throw new BootstrapMacroEvaluationError(
+        evaluation.warnings.map((warning) => ({ ...warning, field, required }))
+      );
+    }
+    return evaluation.output;
+  };
+  const persona = input.persona
+    ? {
+        ...input.persona,
+        name: resolvePersonaField(input.persona.name, "persona.name", true),
+        description: resolvePersonaField(
+          input.persona.description,
+          "persona.description",
+          false
+        ),
+      }
+    : undefined;
+  if (!input.sourceCard) {
+    return {
+      ...input,
+      ...(persona ? { persona } : {}),
+      ...(persona?.description.trim()
+        ? {
+            resolvedStartingPossessionSources: {
+              persona: persona.description,
+            },
+          }
+        : {}),
+    };
+  }
   const mapped = mapCardToImportWithOptions(input.sourceCard, {
     macroContext: {
       ...(options.macroContext ?? {}),
-      ...(input.persona ? { user: input.persona } : {}),
+      ...(persona ? { user: persona } : {}),
+      variables,
     },
-    ...(options.macroRegistry ? { macroRegistry: options.macroRegistry } : {}),
+    ...(macroRegistry ? { macroRegistry } : {}),
   });
   if (mapped.macroDiagnostics?.blocked) {
     throw new BootstrapMacroEvaluationError(mapped.macroDiagnostics.warnings);
@@ -1157,11 +1222,20 @@ export function resolveBootstrapCreationInput(
   return {
     ...input,
     premise: mapped.premise,
-    ...(input.importedMechanics
-      ? {}
-      : mapped.importedMechanics
-        ? { importedMechanics: mapped.importedMechanics }
+    ...(persona ? { persona } : {}),
+    ...(mapped.importedMechanics
+      ? { importedMechanics: mapped.importedMechanics }
+      : {}),
+    resolvedStartingPossessionSources: {
+      card: [
+        mapped.premise,
+        ...mapped.openings,
+        mapped.blueprint.creatorNotes ?? "",
+      ].filter(Boolean).join("\n"),
+      ...(persona?.description.trim()
+        ? { persona: persona.description }
         : {}),
+    },
   };
 }
 
@@ -1322,17 +1396,10 @@ export async function generateStorySchema(
       : {}),
     ...(latestCompletedFragment ? { latestCompletedFragment } : {}),
   };
-  const cardStartingPossessionSource = resolvedInput.sourceCard
-    ? [
-        resolvedInput.sourceCard.data.description,
-        resolvedInput.sourceCard.data.personality,
-        resolvedInput.sourceCard.data.scenario,
-        resolvedInput.sourceCard.data.first_mes,
-        resolvedInput.sourceCard.data.creator_notes ?? "",
-      ].filter(Boolean).join("\n").slice(0, 6_000)
-    : undefined;
+  const cardStartingPossessionSource =
+    resolvedInput.resolvedStartingPossessionSources?.card?.slice(0, 6_000);
   const personaStartingPossessionSource =
-    resolvedInput.persona?.description.slice(0, 3_000);
+    resolvedInput.resolvedStartingPossessionSources?.persona?.slice(0, 3_000);
   const promptContext = {
     ...(resolvedInput.persona ? { persona: resolvedInput.persona } : {}),
     ...(imported ? { importedMechanics: imported } : {}),

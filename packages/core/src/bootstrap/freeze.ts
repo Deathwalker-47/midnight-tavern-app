@@ -191,7 +191,12 @@ export async function bootstrapStory(
   const hard = instantiatePlayer(installedSchema, playerCharacterId);
   const generatedStartingGear: StartingGearSeed[] =
     latestCheckpoint?.foundation?.startingGear ?? [];
-  const startingGear = resolveStartingGear(input, generatedStartingGear);
+  const resolvedInstallationInput =
+    noStatsInput ?? resolveBootstrapCreationInput(input, generationOptions);
+  const startingGear = resolveStartingGear(
+    resolvedInstallationInput,
+    generatedStartingGear
+  );
 
   options.onProgress?.("install");
   options.onProgressDetail?.({

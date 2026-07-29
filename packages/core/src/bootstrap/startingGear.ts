@@ -57,6 +57,14 @@ export type StartingGearSeed = z.infer<typeof StartingGearSeedSchema>;
 export type StartingGearCreationSource = {
   sourceCard?: CharacterCard;
   persona?: { id?: string; name: string; description: string };
+  /**
+   * Prompt-time macro-expanded source text. The original card/persona remains
+   * untouched for persistence and later reevaluation.
+   */
+  resolvedStartingPossessionSources?: {
+    card?: string;
+    persona?: string;
+  };
 };
 
 interface GearLexeme {
@@ -69,7 +77,7 @@ interface GearLexeme {
 }
 
 const POSSESSION_CUE =
-  /\b(?:carry|carries|carrying|wield|wields|wielding|wear|wears|wearing|armed with|equipped with|keeps?|owns?|has|have|holstered|strapped|packed)\b/i;
+  /\b(?:carry|carries|carrying|wield|wields|wielding|wear|wears|wearing|armed with|equipped with|keeps?|holsters?|holstered|straps?|strapped|packs?|packed)\b/i;
 
 const GEAR_LEXEMES: readonly GearLexeme[] = [
   { pattern: /\blongbow\b/i, name: "Longbow", kind: "weapon", slots: ["primary"], preferredSlot: "primary", handsRequired: 2 },
@@ -86,22 +94,63 @@ const GEAR_LEXEMES: readonly GearLexeme[] = [
 ];
 
 function titleCase(value: string): string {
-  return value.replace(/\b[\p{L}\p{N}]/gu, (letter) => letter.toLocaleUpperCase());
+  return value.replace(
+    /(^|[\s-])([\p{L}\p{N}])/gu,
+    (_match, boundary: string, letter: string) =>
+      `${boundary}${letter.toLocaleUpperCase()}`
+  );
 }
 
-function displayName(text: string, match: RegExpExecArray, fallback: string): string {
-  const before = text.slice(Math.max(0, match.index - 32), match.index);
-  const adjective = before.match(/\b(?:a|an|the|his|her|their)\s+([\p{L}\p{N}'-]+)\s+$/iu)?.[1];
-  return titleCase(`${adjective ? `${adjective} ` : ""}${match[0] || fallback}`.trim()).slice(0, 100);
+function lastPossessionCue(
+  text: string,
+  itemIndex: number
+): { end: number } | undefined {
+  const boundary = Math.max(
+    text.lastIndexOf(".", itemIndex - 1),
+    text.lastIndexOf("!", itemIndex - 1),
+    text.lastIndexOf("?", itemIndex - 1),
+    text.lastIndexOf(";", itemIndex - 1),
+    text.lastIndexOf("\n", itemIndex - 1)
+  );
+  const beforeItem = text.slice(boundary + 1, itemIndex);
+  const matcher = new RegExp(POSSESSION_CUE.source, "giu");
+  let latest: RegExpExecArray | undefined;
+  for (const candidate of beforeItem.matchAll(matcher)) latest = candidate;
+  if (!latest || latest.index === undefined) return undefined;
+  return { end: boundary + 1 + latest.index + latest[0].length };
 }
 
-function seedFromLexeme(text: string, lexeme: GearLexeme, sourceLabel: string): StartingGearSeed | undefined {
-  const match = new RegExp(lexeme.pattern.source, lexeme.pattern.flags.replace("g", "")).exec(text);
-  if (!match) return undefined;
-  const vicinity = text.slice(Math.max(0, match.index - 90), Math.min(text.length, match.index + match[0].length + 45));
-  if (!POSSESSION_CUE.test(vicinity)) return undefined;
+function displayName(
+  text: string,
+  match: RegExpExecArray,
+  cueEnd: number,
+  fallback: string
+): string {
+  const rawPhrase = text.slice(cueEnd, match.index + match[0].length);
+  const finalListedItem =
+    rawPhrase.split(/\s*(?:,|\band\b|\bbut\b|\bwhile\b)\s*/iu).at(-1) ?? rawPhrase;
+  const cleaned = finalListedItem
+    .replace(/^[\s:–—-]+/u, "")
+    .replace(/^(?:(?:a|an|the|his|her|their|its|my|our|your)\s+)+/iu, "")
+    .replace(/^[\s"'“”‘’]+|[\s"'“”‘’]+$/gu, "")
+    .trim();
+  const bounded =
+    cleaned.length > 0 && cleaned.split(/\s+/u).length <= 8
+      ? cleaned
+      : match[0] || fallback;
+  return titleCase(bounded).slice(0, 100);
+}
+
+function seedFromMatch(
+  text: string,
+  match: RegExpExecArray,
+  lexeme: GearLexeme,
+  sourceLabel: string
+): StartingGearSeed | undefined {
+  const cue = lastPossessionCue(text, match.index);
+  if (!cue) return undefined;
   return StartingGearSeedSchema.parse({
-    name: displayName(text, match, lexeme.name),
+    name: displayName(text, match, cue.end, lexeme.name),
     description: `A starting possession explicitly described by the ${sourceLabel}.`,
     kind: lexeme.kind,
     tier: "common",
@@ -117,6 +166,10 @@ function seedFromLexeme(text: string, lexeme: GearLexeme, sourceLabel: string): 
 
 function sourceTexts(source: StartingGearCreationSource): Array<{ label: string; text: string }> {
   const rows: Array<{ label: string; text: string }> = [];
+  const resolved = source.resolvedStartingPossessionSources;
+  if (resolved?.card?.trim()) rows.push({ label: "card", text: resolved.card });
+  if (resolved?.persona?.trim()) rows.push({ label: "persona", text: resolved.persona });
+  if (rows.length > 0) return rows;
   const card = source.sourceCard?.data;
   if (card) {
     const text = [
@@ -152,8 +205,13 @@ export function explicitStartingGear(source: StartingGearCreationSource): Starti
   const seeds: StartingGearSeed[] = [];
   for (const row of sourceTexts(source)) {
     for (const lexeme of GEAR_LEXEMES) {
-      const seed = seedFromLexeme(row.text, lexeme, row.label);
-      if (seed) seeds.push(seed);
+      const flags = lexeme.pattern.flags.includes("g")
+        ? lexeme.pattern.flags
+        : `${lexeme.pattern.flags}g`;
+      for (const match of row.text.matchAll(new RegExp(lexeme.pattern.source, flags))) {
+        const seed = seedFromMatch(row.text, match, lexeme, row.label);
+        if (seed) seeds.push(seed);
+      }
     }
   }
   return dedupeStartingGear(seeds).slice(0, MAX_EQUIPPED_SLOTS);
@@ -184,17 +242,18 @@ function dedupeStartingGear(seeds: readonly StartingGearSeed[]): StartingGearSee
 }
 
 /**
- * Merge explicit possessions with model-selected basics. Explicit card/persona gear
- * wins, the result is capped at the seven universal slots, and an empty character
- * receives one neutral common personal-effects entry rather than a world catalog.
+ * Resolve the bounded player possessions for installation. When a card/persona source
+ * exists, only deterministically verified carried gear is accepted; model proposals
+ * cannot add scenery or another character's items. Premise-only creation may use the
+ * bounded actor-foundation proposals. An empty result receives neutral personal effects.
  *
  * @param source - Imported card and selected persona used during story creation.
- * @param generated - Bounded actor-foundation proposals returned by the bootstrap model.
+ * @param generated - Bounded actor-foundation proposals used only without attached card/persona prose.
  * @returns Unique starting possessions capped at {@link MAX_EQUIPPED_SLOTS}.
  *
  * @remarks
- * Explicitly described possessions take precedence over model-selected basics.
- * Invalid and duplicate proposals are dropped before the cap is applied.
+ * Attached source prose is authoritative over model-selected basics. Invalid and
+ * duplicate proposals are dropped before the cap is applied.
  *
  * @see {@link explicitStartingGear} for deterministic source extraction.
  * @see {@link persistStartingGear} for runtime installation.
@@ -205,7 +264,10 @@ export function resolveStartingGear(
   generated: readonly StartingGearSeed[] = []
 ): StartingGearSeed[] {
   const explicit = explicitStartingGear(source);
-  const merged = dedupeStartingGear([...explicit, ...generated]).slice(0, MAX_EQUIPPED_SLOTS);
+  const hasAttachedSource = sourceTexts(source).length > 0;
+  const merged = dedupeStartingGear(
+    hasAttachedSource ? explicit : generated
+  ).slice(0, MAX_EQUIPPED_SLOTS);
   if (merged.length > 0) return merged;
   return [StartingGearSeedSchema.parse({
     name: "Basic Personal Effects",
