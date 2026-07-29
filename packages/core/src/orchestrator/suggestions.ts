@@ -61,6 +61,13 @@ export async function suggestPlayerActions(
   const context = await assemblePlayerSuggestionContext(store, story);
   if (context.recentScene.length === 0) return [];
 
+  const visibleCharacterIds = new Set(
+    context.visibleCharacters.map((character) => character.id)
+  );
+  const absentCharacterNames = (await store.characters.listByStory(storyId))
+    .filter((character) => !visibleCharacterIds.has(character.id))
+    .map((character) => normalized(character.name))
+    .filter(Boolean);
   const validActions = new Map(
     context.availableActions.map((action) => [action.id, action] as const)
   );
@@ -85,6 +92,17 @@ export async function suggestPlayerActions(
             code: z.ZodIssueCode.custom,
             path: ["suggestions", index, "text"],
             message: "Generic fallback phrasing is not grounded in this scene.",
+          });
+        }
+        const absentName = absentCharacterNames.find((name) =>
+          includesWholePhrase(text, name)
+        );
+        if (absentName) {
+          refinement.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["suggestions", index, "text"],
+            message:
+              "Suggestion names a registered character who is not visible in the live scene.",
           });
         }
       }

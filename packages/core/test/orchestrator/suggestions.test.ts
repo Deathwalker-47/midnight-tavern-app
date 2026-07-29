@@ -223,6 +223,44 @@ describe("context-grounded possible moves", () => {
     expect(router.prompts).toHaveLength(1);
   });
 
+  it("repairs suggestions that name a registered character who is absent from the live scene", async () => {
+    const { store } = await seedStory();
+    stores.push(store);
+    await store.characters.insert({
+      id: "marrow",
+      storyId: STORY_ID,
+      name: "Marrow",
+      isPlayer: false,
+      present: false,
+      hard: {
+        characterId: "marrow",
+        isPlayer: false,
+        attributes: {},
+        resources: { hp: { current: 10, max: 10 } },
+        skills: [],
+        inventory: [],
+        flags: {},
+        alive: true,
+      },
+    });
+    const absentCharacterResponse = JSON.stringify({
+      suggestions: [
+        { kind: "dialogue", text: "Ask Marrow why the burden healed you." },
+        { kind: "move", text: "Step away from the mill door while watching Sorel." },
+        { kind: "dialogue", text: "Tell Sorel the burden changed inside the mill." },
+        { kind: "move", text: "Examine the mill door beside Sorel." },
+        { kind: "dialogue", text: "Ask Sorel what the transfer was meant to do." },
+      ],
+    });
+    const router = new SuggestionRouter([absentCharacterResponse, groundedResponse]);
+
+    const suggestions = await suggestPlayerActions(router, store, STORY_ID);
+
+    expect(router.prompts).toHaveLength(2);
+    expect(suggestions).toHaveLength(5);
+    expect(suggestions.every((suggestion) => !suggestion.text.includes("Marrow"))).toBe(true);
+  });
+
   it("repairs then reports generic fallback output instead of silently showing it", async () => {
     const { store } = await seedStory();
     stores.push(store);
