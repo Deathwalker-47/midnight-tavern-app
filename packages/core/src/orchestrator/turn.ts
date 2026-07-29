@@ -41,6 +41,7 @@ import { assembleContext } from "./context.js";
 import { capture } from "./checkpoint.js";
 import { generateGuardedNarration } from "./authorityGuard.js";
 import { planNpcReactions, planNpcActions } from "./npcAgency.js";
+import { runStage, DEFAULT_STAGE_DEADLINES, type StageMetric } from "./stagePolicy.js";
 import { discoverNarratedSceneEntities } from "./sceneEntityPromotion.js";
 import {
   planNpcTransitions,
@@ -77,6 +78,8 @@ export interface SubmitTurnOptions {
   onBackgroundError?: (err: unknown) => void;
   /** Observable, persisted turn phase for the play-screen operation indicator. */
   onPhase?: (phase: TurnOperationState) => void;
+  /** Per-stage latency/outcome telemetry (deadlines, fallbacks); never throws into the turn. */
+  onStageMetric?: (metric: StageMetric) => void;
 }
 
 export interface SubmitTurnResult {
@@ -767,17 +770,29 @@ async function runTurnOperation(
         const hard = await workingState(character.id);
         if (hard.alive) plannerCandidates.push(hard);
       }
-      const npcActionIntents = await planNpcActions(
-        router,
+      // Bound the planner's model call: it fires on every full-stat turn with an idle present NPC,
+      // so a hung provider must not stall the turn. On timeout/error it falls closed to no NPC action.
+      const npcActionIntents = await runStage(
+        "npc_planner",
+        (signal) =>
+          planNpcActions(
+            router,
+            {
+              schema,
+              playerText,
+              recentNarration,
+              candidates: plannerCandidates,
+              nameById,
+              present: new Map(presentRoster.map((character) => [character.id, character.isPlayer])),
+            },
+            signal
+          ),
         {
-          schema,
-          playerText,
-          recentNarration,
-          candidates: plannerCandidates,
-          nameById,
-          present: new Map(presentRoster.map((character) => [character.id, character.isPlayer])),
-        },
-        opts.signal
+          deadlineMs: DEFAULT_STAGE_DEADLINES.npc_planner,
+          fallback: () => [],
+          ...(opts.signal ? { signal: opts.signal } : {}),
+          ...(opts.onStageMetric ? { onMetric: opts.onStageMetric } : {}),
+        }
       );
       for (const intent of npcActionIntents) {
         const actorHard = await workingState(intent.actorId);

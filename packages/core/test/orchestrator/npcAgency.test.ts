@@ -25,6 +25,7 @@ import { openStore, type Store } from "../../src/store/index.js";
 import { makePlayer, makeStory } from "../fixtures.js";
 import type { NpcIntroductionProposal } from "../../src/orchestrator/npcIntroduction.js";
 import type { NpcActionProposal } from "../../src/orchestrator/npcAgency.js";
+import type { StageMetric } from "../../src/orchestrator/stagePolicy.js";
 
 /** Minimal V7 router: canned classifier + loot decline + a fixed narrator stream. */
 class AgencyRouter implements Router {
@@ -447,6 +448,24 @@ describe("same-turn NPC agency", () => {
     const reaction = result.rulings.find((ruling) => ruling.actorId === "wight");
     expect(reaction, "player budget must not suppress NPC agency").toBeDefined();
     expect(reaction!.gate.allowed).toBe(true);
+  });
+
+  it("runs the goal planner as a bounded stage and emits its latency metric", async () => {
+    await seedWightHp(12); // a present idle NPC → the planner stage fires
+    const metrics: StageMetric[] = [];
+    const result = await submitTurn(
+      new AgencyRouter({ playerIntents: [], npcIntents: [], freeText: "I wait." }),
+      store,
+      storyId,
+      "I wait and watch.",
+      { rng: d20Sequence([15]), onStageMetric: (metric) => metrics.push(metric) }
+    );
+    await result.background;
+
+    const plannerMetric = metrics.find((metric) => metric.stage === "npc_planner");
+    expect(plannerMetric, "the npc_planner stage should be measured").toBeDefined();
+    expect(plannerMetric!.durationMs).toBeGreaterThanOrEqual(0);
+    expect(["ok", "timeout", "fallback", "error"]).toContain(plannerMetric!.outcome);
   });
 
   it("does not react when no living NPC was the target (narration-only turn)", async () => {

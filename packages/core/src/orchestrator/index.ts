@@ -69,6 +69,13 @@ export {
   type NpcIntroductionInput,
 } from "./npcIntroduction.js";
 export {
+  runStage,
+  DEFAULT_STAGE_DEADLINES,
+  type TurnStage,
+  type StageMetric,
+  type RunStageOptions,
+} from "./stagePolicy.js";
+export {
   SuggestedActionSchema,
   suggestPlayerActions,
   type SuggestedAction,
