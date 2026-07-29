@@ -89,6 +89,40 @@ function fakeStore(parts: Record<string, unknown> = {}) {
 }
 
 describe("buildSqliteBridge", () => {
+  it("persists, reloads, and safely clears the matching Forge operation", async () => {
+    const store = fakeStore();
+    const bridge = buildSqliteBridge(
+      store,
+      fakeCore({ ForgeOperationSnapshotSchema: {} })
+    );
+    const operation = {
+      version: 1 as const,
+      operationId: "story-forge",
+      kind: "story-create" as const,
+      storyId: "story-forge",
+      status: "timed-out" as const,
+      phase: "phase-b" as const,
+      attempt: 1,
+      elapsedMs: 12_000,
+      detail: "Actor foundation retained.",
+      startedAt: 1_000,
+      updatedAt: 13_000,
+      request: {
+        storyId: "story-forge",
+        title: "Retained",
+        premise: "A sufficiently detailed retained story premise.",
+        playerName: "Kestrel",
+      },
+    };
+
+    await bridge.saveForgeOperation(operation);
+    expect(await bridge.getForgeOperation()).toEqual(operation);
+    await bridge.clearForgeOperation("another-operation");
+    expect(await bridge.getForgeOperation()).toEqual(operation);
+    await bridge.clearForgeOperation(operation.operationId);
+    expect(await bridge.getForgeOperation()).toBeUndefined();
+  });
+
   it("listStories sorts by createdAt desc and counts messages per story", async () => {
     const store = fakeStore({
       stories: {

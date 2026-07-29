@@ -76,6 +76,39 @@ describe("V7 persistence repositories", () => {
     });
   });
 
+  it("keeps the installed rulebook unchanged when replacement generation fails", async () => {
+    const store = await openStore(":memory:");
+    const schema = makeStory();
+    await store.stories.insert({
+      id: schema.storyId,
+      title: schema.title,
+      createdAt: 1,
+      schema,
+      locked: true,
+      actionBudget: 2,
+      rulebookVersion: 1,
+    });
+    const failingRouter: Router = {
+      ...inertRouter,
+      async complete() {
+        throw new Error("provider timed out");
+      },
+    };
+
+    await expect(
+      regenerateRulebook(failingRouter, store, schema.storyId, {
+        confirmMechanicalReset: true,
+        statMode: "full",
+      })
+    ).rejects.toThrow(/timed out/i);
+
+    const retained = await store.stories.get(schema.storyId);
+    expect(retained?.schema).toEqual(schema);
+    expect(retained?.rulebookVersion).toBe(1);
+    expect(await store.rulebookSnapshots.latest(schema.storyId)).toBeUndefined();
+    await store.close();
+  });
+
   it("installs only card/persona starting possessions in runtime inventory", async () => {
     const store = await openStore(":memory:");
     const sourceCard = parseCardObject({

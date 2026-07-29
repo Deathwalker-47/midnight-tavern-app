@@ -32,6 +32,7 @@ import type {
   CoreBridge,
   CreateStoryArgs,
   CreateStoryResult,
+  ForgeOperationRecord,
   KeyValidation,
   ProviderConfigInput,
   StorySummary,
@@ -39,7 +40,10 @@ import type {
   SubmitTurnOutcome,
   TurnOperationPhase,
 } from "./core.js";
+import { parseForgeOperation } from "./core.js";
 import { diagnosticError, diagnosticsLogger } from "../observability/logger.js";
+
+const FORGE_OPERATION_SETTING_KEY = "forge.operation.active.v1";
 
 /**
  * Build the real bridge over an already-opened, migrated {@link Store}. `core` is the live core
@@ -165,6 +169,31 @@ export function buildSqliteBridge(
         }))
       );
       return summaries.sort((a, b) => b.createdAt - a.createdAt);
+    },
+
+    async getForgeOperation(): Promise<ForgeOperationRecord | undefined> {
+      const operation = await store.settings.get(
+        FORGE_OPERATION_SETTING_KEY,
+        core.ForgeOperationSnapshotSchema
+      );
+      return parseForgeOperation(operation);
+    },
+
+    async saveForgeOperation(operation: ForgeOperationRecord): Promise<void> {
+      await store.settings.set(
+        FORGE_OPERATION_SETTING_KEY,
+        core.ForgeOperationSnapshotSchema,
+        operation
+      );
+    },
+
+    async clearForgeOperation(operationId: string): Promise<void> {
+      const current = await store.settings.get(
+        FORGE_OPERATION_SETTING_KEY,
+        core.ForgeOperationSnapshotSchema
+      );
+      if (current?.operationId !== operationId) return;
+      await store.settings.delete(FORGE_OPERATION_SETTING_KEY);
     },
 
     async getStory(id) {

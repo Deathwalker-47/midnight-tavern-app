@@ -18,6 +18,8 @@ import {
 const expiredTrial: TrialStatus = { startedAt: 0, expiresAt: 1, active: false, daysRemaining: 0 };
 
 beforeEach(() => {
+  globalThis.sessionStorage?.clear();
+  globalThis.localStorage?.clear();
   setBridge(makeMemoryBridge());
   useStoriesStore.setState({ forging: false, draft: undefined });
   useSettingsStore.setState({ entitlement: { canCreateStory: true, via: "trial" } });
@@ -91,5 +93,42 @@ describe("Wizard", () => {
     useStoriesStore.setState({ forging: true });
     await renderWizard();
     expect(screen.getByText("Forging your story")).toBeInTheDocument();
+  });
+
+  it("rehydrates a durable timed-out forge and offers to retry its retained checkpoint", async () => {
+    const bridge = makeMemoryBridge();
+    await (bridge as any).saveForgeOperation({
+      version: 1,
+      operationId: "story-resume",
+      kind: "story-create",
+      storyId: "story-resume",
+      status: "timed-out",
+      phase: "phase-b",
+      attempt: 1,
+      elapsedMs: 12_000,
+      detail: "Actor foundation retained.",
+      startedAt: 1_000,
+      updatedAt: 13_000,
+      checkpoint: {
+        startedAt: 1_000,
+        sourceFingerprint: "bootstrap-v1-resume",
+        latestCompletedFragment: "actor-foundation",
+      },
+      request: {
+        storyId: "story-resume",
+        title: "Retained Tale",
+        premise: "A courier follows the last bell into a drowned monastery.",
+        playerName: "Kestrel",
+        statMode: "full",
+      },
+    });
+    const restartedBridge = makeMemoryBridge();
+    setBridge(restartedBridge);
+
+    await renderWizard();
+
+    expect(await screen.findByText("The active fragment timed out")).toBeInTheDocument();
+    expect(screen.getByText(/actor foundation retained/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /retry failed fragment/i })).toBeInTheDocument();
   });
 });

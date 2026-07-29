@@ -13,6 +13,7 @@ import { useSettingsStore } from "../../src/state/settingsStore";
 import { useRoute } from "../../src/app/router";
 
 beforeEach(async () => {
+  globalThis.localStorage?.clear();
   const bridge = makeMemoryBridge();
   await bridge.savePersona({
     id: "persona-kestrel",
@@ -183,5 +184,47 @@ describe("StoryBlueprint create flow", () => {
     await waitFor(() => expect(screen.getByText(/forging was cancelled/i)).toBeInTheDocument());
     expect(useStoriesStore.getState().draft?.title).toBe("Ash Road");
     expect(useStoriesStore.getState().forging).toBe(false);
+  });
+
+  it("restores a durable retained forge after leaving and re-entering creation", async () => {
+    const bridge = getBridge();
+    await (bridge as any).saveForgeOperation({
+      version: 1,
+      operationId: "story-blueprint-resume",
+      kind: "story-create",
+      storyId: "story-blueprint-resume",
+      status: "cancelled",
+      phase: "phase-b",
+      attempt: 1,
+      elapsedMs: 8_000,
+      detail: "Mechanics core retained.",
+      startedAt: 1_000,
+      updatedAt: 9_000,
+      checkpoint: {
+        startedAt: 1_000,
+        sourceFingerprint: "bootstrap-v1-blueprint-resume",
+        latestCompletedFragment: "mechanics-core",
+      },
+      request: {
+        storyId: "story-blueprint-resume",
+        title: "Recovered Blueprint",
+        premise: "A courier returns to a monastery that vanished at dawn.",
+        playerName: "Kestrel Vane",
+        statMode: "full",
+        persona: {
+          id: "persona-kestrel",
+          name: "Kestrel Vane",
+          description: "A patient courier, practiced climber, and reluctant duelist.",
+        },
+        blueprint: { name: "The Vanished Bell" },
+      },
+    });
+    useStoriesStore.setState({ draft: undefined });
+
+    render(<StoryBlueprint />);
+
+    expect(await screen.findByDisplayValue("Recovered Blueprint")).toBeInTheDocument();
+    expect(screen.getAllByText(/mechanics core retained/i).length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: /resume retained forge/i })).toBeInTheDocument();
   });
 });

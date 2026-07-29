@@ -11,6 +11,9 @@
  */
 import { DC_MIN, DC_MAX, type StorySchema } from "../types/index.js";
 
+/** One model retry per invalid structured fragment; deterministic repair remains independently safe. */
+export const DEFAULT_BOOTSTRAP_REPAIR_BUDGET = 1;
+
 /** Render the validator's errors as a numbered fix-list for the repair prompt. */
 export function formatValidationFeedback(errors: string[]): string {
   return (

@@ -242,6 +242,102 @@ export interface CreateStoryResult {
   playerCharacterId: string;
 }
 
+export type ForgeOperationStatus =
+  | "running"
+  | "slow"
+  | "degraded"
+  | "timed-out"
+  | "failed"
+  | "cancelled"
+  | "resumable";
+
+export type ForgeCreateRequest = Omit<
+  CreateStoryArgs,
+  "onProgress" | "onProgressDetail" | "onCheckpoint" | "resume" | "signal"
+>;
+
+/** Durable, serializable Forge state shared by creation screens and both bridge backends. */
+export interface ForgeOperationRecord {
+  version: 1;
+  operationId: string;
+  kind: "story-create";
+  storyId: string;
+  status: ForgeOperationStatus;
+  phase?: BootstrapPhase;
+  attempt: number;
+  elapsedMs: number;
+  detail?: string;
+  startedAt: number;
+  updatedAt: number;
+  checkpoint?: BootstrapResumeState;
+  request: ForgeCreateRequest;
+}
+
+export function parseForgeOperation(value: unknown): ForgeOperationRecord | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const candidate = value as Partial<ForgeOperationRecord>;
+  const request =
+    candidate.request && typeof candidate.request === "object"
+      ? (candidate.request as Partial<ForgeCreateRequest>)
+      : undefined;
+  const statuses: ForgeOperationStatus[] = [
+    "running",
+    "slow",
+    "degraded",
+    "timed-out",
+    "failed",
+    "cancelled",
+    "resumable",
+  ];
+  const phases: BootstrapPhase[] = [
+    "phase-a",
+    "phase-b",
+    "repair",
+    "validate",
+    "freeze",
+    "install",
+  ];
+  if (
+    candidate.version !== 1 ||
+    typeof candidate.operationId !== "string" ||
+    candidate.operationId.length === 0 ||
+    typeof candidate.storyId !== "string" ||
+    candidate.storyId.length === 0 ||
+    candidate.kind !== "story-create" ||
+    !candidate.status ||
+    !statuses.includes(candidate.status) ||
+    typeof candidate.attempt !== "number" ||
+    !Number.isInteger(candidate.attempt) ||
+    candidate.attempt < 1 ||
+    typeof candidate.elapsedMs !== "number" ||
+    !Number.isFinite(candidate.elapsedMs) ||
+    candidate.elapsedMs < 0 ||
+    typeof candidate.startedAt !== "number" ||
+    !Number.isFinite(candidate.startedAt) ||
+    typeof candidate.updatedAt !== "number" ||
+    !Number.isFinite(candidate.updatedAt) ||
+    (candidate.phase !== undefined && !phases.includes(candidate.phase)) ||
+    typeof request?.title !== "string" ||
+    typeof request.premise !== "string" ||
+    typeof request.playerName !== "string"
+  ) {
+    return undefined;
+  }
+  return candidate as ForgeOperationRecord;
+}
+
+export function forgeCreateRequest(args: CreateStoryArgs): ForgeCreateRequest {
+  const {
+    onProgress: _onProgress,
+    onProgressDetail: _onProgressDetail,
+    onCheckpoint: _onCheckpoint,
+    resume: _resume,
+    signal: _signal,
+    ...request
+  } = args;
+  return request;
+}
+
 /** Arguments for one player turn (drives the orchestrator's `submitTurn`). */
 export interface SubmitTurnArgs {
   storyId: string;
@@ -367,6 +463,12 @@ export interface CoreBridge {
   listStories(): Promise<StorySummary[]>;
   getStory(id: string): Promise<StoryRecord | undefined>;
   createStory(args: CreateStoryArgs): Promise<CreateStoryResult>;
+  /** Read the single active/recoverable Forge operation, including validated checkpoints. */
+  getForgeOperation(): Promise<ForgeOperationRecord | undefined>;
+  /** Persist truthful progress before yielding control back to a provider or screen. */
+  saveForgeOperation(operation: ForgeOperationRecord): Promise<void>;
+  /** Clear only the matching operation so a stale completion cannot erase a newer Forge. */
+  clearForgeOperation(operationId: string): Promise<void>;
   renameStory(id: string, title: string): Promise<void>;
   deleteStory(id: string): Promise<void>;
   changeStoryStatMode(args: ChangeStoryStatModeArgs): Promise<StoryRecord>;
@@ -887,9 +989,33 @@ async function streamProse(prose: string, onDelta?: (d: string) => void, signal?
   }
 }
 
+const MEMORY_FORGE_OPERATION_KEY = "midnight-tavern:v7-forge-operation";
+
+function readMemoryForgeOperation(): ForgeOperationRecord | undefined {
+  try {
+    const raw = globalThis.localStorage?.getItem(MEMORY_FORGE_OPERATION_KEY);
+    return raw ? parseForgeOperation(JSON.parse(raw)) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function persistMemoryForgeOperation(operation: ForgeOperationRecord | undefined): void {
+  try {
+    if (operation) {
+      globalThis.localStorage?.setItem(MEMORY_FORGE_OPERATION_KEY, JSON.stringify(operation));
+    } else {
+      globalThis.localStorage?.removeItem(MEMORY_FORGE_OPERATION_KEY);
+    }
+  } catch {
+    // Browser storage can be restricted; the native bridge remains SQLite-backed.
+  }
+}
+
 export function makeMemoryBridge(): CoreBridge {
   const stories = new Map<string, MemStory>();
   const lorebooks = new Map<string, MemLorebook>();
+  let forgeOperation = readMemoryForgeOperation();
   const providerConfigs: ProviderConfigs = {};
   let roleMap: RoleMap = structuredCloneSafe(MEMORY_DEFAULT_ROLE_MAP);
   let primaryProvider: ProviderId | undefined;
@@ -937,6 +1063,21 @@ export function makeMemoryBridge(): CoreBridge {
 
     async getStory(id) {
       return stories.get(id)?.record;
+    },
+
+    async getForgeOperation() {
+      return forgeOperation ? structuredCloneSafe(forgeOperation) : undefined;
+    },
+
+    async saveForgeOperation(operation) {
+      forgeOperation = structuredCloneSafe(operation);
+      persistMemoryForgeOperation(forgeOperation);
+    },
+
+    async clearForgeOperation(operationId) {
+      if (forgeOperation?.operationId !== operationId) return;
+      forgeOperation = undefined;
+      persistMemoryForgeOperation(undefined);
     },
 
     async createStory(args) {

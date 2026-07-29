@@ -11,6 +11,8 @@ export {
   PhaseASchema,
   PhaseBSchema,
   BootstrapMacroEvaluationError,
+  BootstrapTimeoutError,
+  ForgeOperationSnapshotSchema,
   type PhaseA,
   type PhaseB,
   type PhaseBFoundation,
@@ -20,6 +22,7 @@ export {
   type BootstrapFragment,
   type BootstrapProgressEvent,
   type BootstrapResumeState,
+  type BootstrapSchedule,
   type BootstrapMacroWarning,
 } from "./generate.js";
 export { validateStorySchema } from "./validate.js";

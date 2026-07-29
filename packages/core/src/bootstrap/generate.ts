@@ -63,6 +63,7 @@ import {
   buildPhaseBFoundationUser,
 } from "./prompts.js";
 import { StartingGearSeedSchema } from "./startingGear.js";
+import { DEFAULT_BOOTSTRAP_REPAIR_BUDGET } from "./repair.js";
 
 const MONEY_RESOURCE = /^(?:credits?|currency|coins?|gold|money|cash|funds?|wealth)$/i;
 const ACTION_BATCHES: readonly (readonly ActionCategory[])[] = [
@@ -1038,11 +1039,50 @@ export interface BootstrapResumeState {
   latestCompletedFragment?: BootstrapFragment;
 }
 
+/**
+ * Storage boundary for a resumable Forge operation. The request payload and checkpoint are
+ * bridge-owned and deliberately opaque to this persistence envelope.
+ */
+export const ForgeOperationSnapshotSchema = z.object({
+  version: z.literal(1),
+  operationId: z.string().min(1),
+  kind: z.enum(["story-create", "rulebook-regenerate"]),
+  storyId: z.string().min(1),
+  status: z.enum(["running", "slow", "degraded", "timed-out", "failed", "cancelled", "resumable"]),
+  phase: z.enum(["phase-a", "phase-b", "repair", "validate", "freeze", "install"]).optional(),
+  attempt: z.number().int().positive(),
+  elapsedMs: z.number().nonnegative(),
+  detail: z.string().max(2_000).optional(),
+  startedAt: z.number().nonnegative(),
+  updatedAt: z.number().nonnegative(),
+  checkpoint: z.unknown().optional(),
+  request: z.unknown(),
+});
+
+export type BootstrapSchedule = (callback: () => void, delayMs: number) => () => void;
+
+/** A recoverable Forge failure: validated checkpoints remain safe to resume. */
+export class BootstrapTimeoutError extends Error {
+  constructor(
+    readonly fragment: BootstrapFragment,
+    readonly deadlineMs: number
+  ) {
+    super(`Story forging timed out while processing ${fragment} after ${deadlineMs}ms.`);
+    this.name = "BootstrapTimeoutError";
+  }
+}
+
 export interface BootstrapOptions {
-  /** Per-phase JSON repair budget passed to callStructured (default 3). */
+  /** Per-phase JSON repair budget passed to callStructured (default 1). */
   maxRepairs?: number;
-  /** Whole-schema cross-validation repair passes on Phase B (default 3). */
+  /** Whole-schema cross-validation repair passes on Phase B (default 1). */
   maxSchemaRepairs?: number;
+  /** Deadline applied independently to each provider-backed fragment (default 45 seconds). */
+  fragmentDeadlineMs?: number;
+  /** Injectable clock used by deterministic progress/deadline tests. */
+  now?: () => number;
+  /** Injectable deadline scheduler. Returns a cancellation function. */
+  schedule?: BootstrapSchedule;
   /** Called immediately before each material generation, validation, and installation stage. */
   onProgress?: (phase: BootstrapPhase) => void;
   /** Truthful substep/retry/elapsed metadata for the V7 forging interstitial. */
@@ -1241,8 +1281,16 @@ export async function generateStorySchema(
   input: BootstrapInput,
   options: BootstrapOptions = {}
 ): Promise<StorySchema> {
-  const maxRepairs = options.maxRepairs ?? 3;
-  const maxSchemaRepairs = options.maxSchemaRepairs ?? 3;
+  const maxRepairs = options.maxRepairs ?? DEFAULT_BOOTSTRAP_REPAIR_BUDGET;
+  const maxSchemaRepairs = options.maxSchemaRepairs ?? DEFAULT_BOOTSTRAP_REPAIR_BUDGET;
+  const fragmentDeadlineMs = options.fragmentDeadlineMs ?? 45_000;
+  const now = options.now ?? Date.now;
+  const schedule: BootstrapSchedule =
+    options.schedule ??
+    ((callback, delayMs) => {
+      const handle = globalThis.setTimeout(callback, delayMs);
+      return () => globalThis.clearTimeout(handle);
+    });
   const resolvedInput = resolveBootstrapCreationInput(input, options);
   const imported = resolvedInput.acceptImportedMechanics
     ? resolvedInput.importedMechanics
@@ -1262,7 +1310,7 @@ export async function generateStorySchema(
     options.resume?.sourceFingerprint === sourceFingerprint
       ? options.resume
       : undefined;
-  const startedAt = resume?.startedAt ?? Date.now();
+  const startedAt = resume?.startedAt ?? now();
   let latestCompletedFragment = resume?.latestCompletedFragment;
   let checkpoint: BootstrapResumeState = {
     startedAt,
@@ -1324,7 +1372,7 @@ export async function generateStorySchema(
       status,
       attempt,
       maxAttempts,
-      elapsedMs: Math.max(0, Date.now() - startedAt),
+      elapsedMs: Math.max(0, now() - startedAt),
       message,
       ...(detail.durationMs !== undefined ? { durationMs: detail.durationMs } : {}),
       ...(detail.validationSummary
@@ -1343,7 +1391,7 @@ export async function generateStorySchema(
     const fragmentStart = fragmentStartedAt[fragment];
     emit(phase, fragment, "completed", 1, 1, message, {
       ...(fragmentStart !== undefined
-        ? { durationMs: Math.max(0, Date.now() - fragmentStart) }
+        ? { durationMs: Math.max(0, now() - fragmentStart) }
         : {}),
     });
     delete fragmentStartedAt[fragment];
@@ -1371,30 +1419,62 @@ export async function generateStorySchema(
   const runFragment = async <T>(
     phase: BootstrapPhase,
     fragment: BootstrapFragment,
-    work: () => Promise<T>
+    work: (signal: AbortSignal) => Promise<T>
   ): Promise<T> => {
-    fragmentStartedAt[fragment] = Date.now();
+    fragmentStartedAt[fragment] = now();
+    const controller = new AbortController();
+    let rejectCallerCancellation: ((reason: unknown) => void) | undefined;
+    const callerCancellation = new Promise<never>((_resolve, reject) => {
+      rejectCallerCancellation = reject;
+    });
+    const onCallerAbort = (): void => {
+      const reason =
+        options.signal?.reason ??
+        new DOMException("Story forging was cancelled.", "AbortError");
+      controller.abort(reason);
+      rejectCallerCancellation?.(reason);
+    };
+    if (options.signal?.aborted) onCallerAbort();
+    else options.signal?.addEventListener("abort", onCallerAbort, { once: true });
+    let timedOut = false;
+    let rejectDeadline: ((reason: BootstrapTimeoutError) => void) | undefined;
+    const deadline = new Promise<never>((_resolve, reject) => {
+      rejectDeadline = reject;
+    });
+    const cancelDeadline = schedule(() => {
+      timedOut = true;
+      controller.abort(new BootstrapTimeoutError(fragment, fragmentDeadlineMs));
+      rejectDeadline?.(new BootstrapTimeoutError(fragment, fragmentDeadlineMs));
+    }, fragmentDeadlineMs);
     try {
-      return await work();
+      return await Promise.race([work(controller.signal), deadline, callerCancellation]);
     } catch (error) {
       const fragmentStart = fragmentStartedAt[fragment];
+      const callerCancelled = options.signal?.aborted ?? false;
+      const reportedError = timedOut
+        ? new BootstrapTimeoutError(fragment, fragmentDeadlineMs)
+        : error;
       emit(
         phase,
         fragment,
-        options.signal?.aborted ? "cancelled" : "failed",
+        callerCancelled ? "cancelled" : "failed",
         1,
         1,
-        options.signal?.aborted
+        callerCancelled
           ? "Story forging was cancelled."
-          : `Fragment failed: ${(error as Error).message}`,
+          : `Fragment failed: ${(reportedError as Error).message}`,
         {
           ...(fragmentStart !== undefined
-            ? { durationMs: Math.max(0, Date.now() - fragmentStart) }
+            ? { durationMs: Math.max(0, now() - fragmentStart) }
             : {}),
         }
       );
       delete fragmentStartedAt[fragment];
-      throw error;
+      if (callerCancelled) options.signal?.throwIfAborted();
+      throw reportedError;
+    } finally {
+      cancelDeadline();
+      options.signal?.removeEventListener("abort", onCallerAbort);
     }
   };
 
@@ -1421,7 +1501,7 @@ export async function generateStorySchema(
       maxRepairs + 1,
       "Designing attributes, resources, and skills."
     );
-    const generatedPhaseA = await runFragment("phase-a", "mechanics-core", () =>
+    const generatedPhaseA = await runFragment("phase-a", "mechanics-core", (signal) =>
       callStructured(
     router,
     "bootstrapper",
@@ -1438,7 +1518,7 @@ export async function generateStorySchema(
       maxRepairs,
       maxTokens: 5_000,
       maxRepairTokens: 8_000,
-      signal: options.signal,
+      signal,
       onRepair: repairReporter("mechanics-core"),
       }
     ));
@@ -1468,7 +1548,7 @@ export async function generateStorySchema(
         ? "Repairing the player/NPC foundation."
         : "Creating the persona-aware player and NPC foundation."
     );
-    const value = await runFragment("phase-b", "actor-foundation", () =>
+    const value = await runFragment("phase-b", "actor-foundation", (signal) =>
       callStructured(
       router,
       "bootstrapper",
@@ -1486,7 +1566,7 @@ export async function generateStorySchema(
         maxRepairs,
         maxTokens: 3_000,
         maxRepairTokens: 5_000,
-        signal: options.signal,
+        signal,
         onRepair: repairReporter("actor-foundation"),
         }
       )
@@ -1576,7 +1656,7 @@ export async function generateStorySchema(
           maxSchemaRepairs + 1,
           `${pass > 0 ? "Repairing" : "Creating"} ${categories.join("/")} actions.`
         );
-        batch = await runFragment("phase-b", fragment, () =>
+        batch = await runFragment("phase-b", fragment, (signal) =>
           callStructured(
           router,
           "bootstrapper",
@@ -1597,7 +1677,7 @@ export async function generateStorySchema(
             maxRepairs,
             maxTokens: 5_000,
             maxRepairTokens: 6_500,
-            signal: options.signal,
+            signal,
             onRepair: repairReporter(fragment),
             }
           )
@@ -1646,7 +1726,7 @@ export async function generateStorySchema(
 
     const candidate = assemble(resolvedInput, mechanicsCore, phaseB);
     options.onProgress?.("validate");
-    fragmentStartedAt["cross-validation"] = Date.now();
+    fragmentStartedAt["cross-validation"] = now();
     emit(
       "validate",
       "cross-validation",

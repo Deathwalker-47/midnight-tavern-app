@@ -25,8 +25,10 @@ import { getBridge } from "../bridge/core";
 import type {
   BootstrapProgressEvent,
   BootstrapResumeState,
+  ForgeOperationRecord,
   PersonaRecord,
 } from "../bridge/core";
+import { forgeCreateRequest } from "../bridge/core";
 import {
   Button,
   PremiseInput,
@@ -59,29 +61,9 @@ const STEP_LABELS: Record<ForgePhase, string> = {
   install: "Placing characters and opening the scene",
 };
 
-const FORGE_RESUME_KEY = "midnight-tavern:v7-forge-resume";
-
 interface ForgeResumeEnvelope {
   storyId: string;
   checkpoint: BootstrapResumeState;
-}
-
-function readForgeResume(): ForgeResumeEnvelope | undefined {
-  try {
-    const raw = globalThis.sessionStorage?.getItem(FORGE_RESUME_KEY);
-    return raw ? (JSON.parse(raw) as ForgeResumeEnvelope) : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-function persistForgeResume(value: ForgeResumeEnvelope | undefined): void {
-  try {
-    if (value) globalThis.sessionStorage?.setItem(FORGE_RESUME_KEY, JSON.stringify(value));
-    else globalThis.sessionStorage?.removeItem(FORGE_RESUME_KEY);
-  } catch {
-    // Resume is a reliability enhancement; restricted browser storage must not block forging.
-  }
 }
 
 /** The three error families forging can fail with, each with a named cause + fix. */
@@ -142,11 +124,12 @@ export function Wizard(_props: ScreenProps): JSX.Element {
   const [elapsed, setElapsed] = useState(0);
   const [lastProgressEvent, setLastProgressEvent] = useState<string>();
   const [progressAttempt, setProgressAttempt] = useState(1);
-  const [resumeEnvelope, setResumeEnvelope] = useState<ForgeResumeEnvelope | undefined>(
-    readForgeResume
-  );
-  const forgeStoryId = useRef(
-    resumeEnvelope?.storyId ?? globalThis.crypto?.randomUUID?.() ?? `story-${Date.now()}`
+  const [resumeEnvelope, setResumeEnvelope] = useState<ForgeResumeEnvelope>();
+  const [, setForgeOperation] = useState<ForgeOperationRecord>();
+  const forgeOperationRef = useRef<ForgeOperationRecord>();
+  const forgeWriteQueue = useRef<Promise<void>>(Promise.resolve());
+  const forgeStoryId = useRef<string>(
+    globalThis.crypto?.randomUUID?.() ?? `story-${Date.now()}`
   );
   const forgeAbort = useRef<AbortController>();
   // Optional persona pick (v2 §4); "" ⇒ use the global default persona.
@@ -155,6 +138,46 @@ export function Wizard(_props: ScreenProps): JSX.Element {
   const [personaLoadState, setPersonaLoadState] = useState<"loading" | "ready" | "error">(
     "loading"
   );
+
+  useEffect(() => {
+    let cancelled = false;
+    void getBridge()
+      .getForgeOperation()
+      .then(async (operation) => {
+        if (cancelled || operation?.kind !== "story-create") return;
+        if (await getBridge().getStory(operation.storyId)) {
+          await getBridge().clearForgeOperation(operation.operationId).catch(() => undefined);
+          return;
+        }
+        if (cancelled) return;
+        forgeOperationRef.current = operation;
+        setForgeOperation(operation);
+        forgeStoryId.current = operation.storyId;
+        setResumeEnvelope(
+          operation.checkpoint
+            ? { storyId: operation.storyId, checkpoint: operation.checkpoint }
+            : undefined
+        );
+        setPremise(operation.request.premise);
+        setPlayerName(operation.request.playerName);
+        setStatMode(operation.request.statMode ?? "full");
+        setDifficulty({
+          ...STANDARD_DIFFICULTY,
+          ...(operation.request.difficulty ?? {}),
+        });
+        setActionBudget(operation.request.actionBudget ?? 2);
+        setContinueWithoutPersona(!operation.request.persona);
+        setPhase(operation.phase ?? "phase-a");
+        setForgeState(operation.status);
+        setElapsed(Math.floor(operation.elapsedMs / 1000));
+        setProgressAttempt(operation.attempt);
+        setLastProgressEvent(operation.detail ?? "Validated Forge fragments retained.");
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -223,7 +246,8 @@ export function Wizard(_props: ScreenProps): JSX.Element {
   const forgeDisabled = trimmedPremise.length < 12 || forging || reviewBlocked;
 
   const runForge = async (): Promise<void> => {
-    if (forgeDisabled) return;
+    const retained = forgeOperationRef.current;
+    if (forgeDisabled && !retained) return;
     setError(undefined);
     setPhase("phase-a");
     setForgeState("running");
@@ -232,7 +256,7 @@ export function Wizard(_props: ScreenProps): JSX.Element {
     const abort = new AbortController();
     forgeAbort.current = abort;
     try {
-      const result = await create({
+      const request = retained?.request ?? forgeCreateRequest({
         storyId: forgeStoryId.current,
         title: deriveTitle(trimmedPremise),
         premise: trimmedPremise,
@@ -247,18 +271,59 @@ export function Wizard(_props: ScreenProps): JSX.Element {
         persona: selectedPersona,
         difficulty,
         actionBudget,
+      });
+      const startedAt = retained?.startedAt ?? Date.now();
+      const initialOperation: ForgeOperationRecord = {
+        version: 1,
+        operationId: forgeStoryId.current,
+        kind: "story-create",
+        storyId: forgeStoryId.current,
+        status: "running",
+        phase: retained?.phase ?? "phase-a",
+        attempt: retained?.attempt ?? 1,
+        elapsedMs: retained?.elapsedMs ?? 0,
+        detail: retained?.detail ?? "Forge request accepted.",
+        startedAt,
+        updatedAt: Date.now(),
+        ...(retained?.checkpoint ? { checkpoint: retained.checkpoint } : {}),
+        request,
+      };
+      forgeOperationRef.current = initialOperation;
+      setForgeOperation(initialOperation);
+      forgeWriteQueue.current = getBridge().saveForgeOperation(initialOperation);
+      await forgeWriteQueue.current;
+      const persistPatch = (patch: Partial<ForgeOperationRecord>): void => {
+        const current = forgeOperationRef.current;
+        if (!current) return;
+        const next = { ...current, ...patch, updatedAt: Date.now() };
+        forgeOperationRef.current = next;
+        setForgeOperation(next);
+        forgeWriteQueue.current = forgeWriteQueue.current
+          .catch(() => undefined)
+          .then(() => getBridge().saveForgeOperation(next));
+      };
+      const result = await create({
+        ...request,
         signal: abort.signal,
-        resume: resumeEnvelope?.checkpoint,
+        resume: retained?.checkpoint ?? resumeEnvelope?.checkpoint,
         onCheckpoint: (checkpoint: BootstrapResumeState) => {
           const envelope = { storyId: forgeStoryId.current, checkpoint };
           setResumeEnvelope(envelope);
-          persistForgeResume(envelope);
+          persistPatch({ checkpoint, detail: "Validated fragment retained." });
         },
         onProgress: (rawPhase: ForgePhase) => {
           const p = FORGE_PHASES.includes(rawPhase) ? rawPhase : undefined;
           if (p) setPhase(p);
           setForgeState(p === "repair" ? "degraded" : "running");
           setLastProgressEvent(p ? STEP_LABELS[p] : "Progress event received");
+          if (p) {
+            persistPatch({
+              phase: p,
+              status: p === "repair" ? "degraded" : "running",
+              detail: STEP_LABELS[p],
+              elapsedMs: Date.now() - startedAt,
+            });
+          }
         },
         onProgressDetail: (event: BootstrapProgressEvent) => {
           if (FORGE_PHASES.includes(event.phase as ForgePhase)) {
@@ -274,9 +339,28 @@ export function Wizard(_props: ScreenProps): JSX.Element {
                 : "running"
           );
           setLastProgressEvent(event.message);
+          persistPatch({
+            phase: event.phase,
+            status:
+              event.status === "retrying"
+                ? "degraded"
+                : event.status === "cancelled"
+                  ? "cancelled"
+                  : event.status === "failed"
+                    ? "failed"
+                    : "running",
+            attempt: event.attempt,
+            elapsedMs: event.elapsedMs,
+            detail: event.message,
+          });
         },
       });
-      persistForgeResume(undefined);
+      await forgeWriteQueue.current.catch(() => undefined);
+      await getBridge()
+        .clearForgeOperation(initialOperation.operationId)
+        .catch(() => undefined);
+      forgeOperationRef.current = undefined;
+      setForgeOperation(undefined);
       setResumeEnvelope(undefined);
       setForgeState("completed");
       navigate("play", { storyId: result.story.id });
@@ -284,10 +368,45 @@ export function Wizard(_props: ScreenProps): JSX.Element {
       if (abort.signal.aborted) {
         setForgeState("cancelled");
         setLastProgressEvent("Cancellation acknowledged; completed fragments retained");
+        const current = forgeOperationRef.current;
+        if (current) {
+          const cancelled = {
+            ...current,
+            status: "cancelled" as const,
+            detail: "Cancellation acknowledged; completed fragments retained.",
+            elapsedMs: Date.now() - current.startedAt,
+            updatedAt: Date.now(),
+          };
+          forgeOperationRef.current = cancelled;
+          setForgeOperation(cancelled);
+          await forgeWriteQueue.current.catch(() => undefined);
+          forgeWriteQueue.current = getBridge().saveForgeOperation(cancelled);
+          await forgeWriteQueue.current;
+        }
         return;
       }
       setError(classifyError(err));
-      setForgeState(String(err).toLowerCase().includes("timeout") ? "timed-out" : "failed");
+      const status: ForgeOperationRecord["status"] = String(err)
+        .toLowerCase()
+        .includes("timeout")
+        ? "timed-out"
+        : "failed";
+      setForgeState(status);
+      const current = forgeOperationRef.current;
+      if (current) {
+        const failed = {
+          ...current,
+          status,
+          detail: err instanceof Error ? err.message : String(err),
+          elapsedMs: Date.now() - current.startedAt,
+          updatedAt: Date.now(),
+        };
+        forgeOperationRef.current = failed;
+        setForgeOperation(failed);
+        await forgeWriteQueue.current.catch(() => undefined);
+        forgeWriteQueue.current = getBridge().saveForgeOperation(failed);
+        await forgeWriteQueue.current;
+      }
     }
   };
 
@@ -340,9 +459,23 @@ export function Wizard(_props: ScreenProps): JSX.Element {
           />
           {error ? <ForgeErrorNotice error={error} onRetry={() => void runForge()} onSettings={() => navigate("settings")} /> : null}
           {forgeState === "cancelled" ? (
-            <div style={{ display: "flex", justifyContent: "center" }}>
-              <Button variant="secondary" onClick={() => { setPhase(undefined); setWizardStep("review"); }}>
-                Return to review
+            <div style={{ display: "flex", justifyContent: "center", gap: 8 }}>
+              <Button variant="secondary" onClick={() => void runForge()}>
+                Resume retained forge
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  const operationId = forgeOperationRef.current?.operationId;
+                  forgeOperationRef.current = undefined;
+                  setForgeOperation(undefined);
+                  setResumeEnvelope(undefined);
+                  setPhase(undefined);
+                  setWizardStep("review");
+                  if (operationId) void getBridge().clearForgeOperation(operationId);
+                }}
+              >
+                Discard retained forge and edit
               </Button>
             </div>
           ) : null}

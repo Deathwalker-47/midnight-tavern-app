@@ -21,6 +21,7 @@ import { describe, it, expect } from "vitest";
 import {
   generateStorySchema,
   BootstrapMacroEvaluationError,
+  BootstrapTimeoutError,
   PhaseASchema,
   PhaseBSchema,
   type BootstrapProgressEvent,
@@ -1481,6 +1482,7 @@ describe("generateStorySchema — repair loop", () => {
     const phases: string[] = [];
     const details: BootstrapProgressEvent[] = [];
     const out = await generateStorySchema(router, input, {
+      maxRepairs: 2,
       onProgress: (phase) => phases.push(phase),
       onProgressDetail: (event) => details.push(event),
     });
@@ -1497,6 +1499,121 @@ describe("generateStorySchema — repair loop", () => {
           event.message.includes(event.validationSummary!)
         )
     ).toBe(true);
+  });
+
+  it("permits one structured repair by default and never makes a third provider call", async () => {
+    const { router, counts } = phasedRouter({
+      a: ['{"statMode":"full"}', "still not JSON", J(PHASE_A)],
+      b: [J(PHASE_B)],
+    });
+
+    await expect(generateStorySchema(router, input)).rejects.toBeInstanceOf(ModelOutputError);
+    expect(counts.a).toBe(2);
+    expect(counts.b).toBe(0);
+  });
+
+  it("aborts a stalled fragment at its deadline and reports a resumable timeout", async () => {
+    let releaseDeadline: (() => void) | undefined;
+    let providerSignal: AbortSignal | undefined;
+    const details: BootstrapProgressEvent[] = [];
+    const router: Router = {
+      bindingFor: () => ({
+        provider: "openrouter",
+        model: "test",
+        source: "recommended",
+        samplersDirty: false,
+      }),
+      async complete(_role, _prompt, options): Promise<ChatResponse> {
+        providerSignal = options?.signal;
+        return new Promise<ChatResponse>(() => undefined);
+      },
+      async stream() {
+        throw new Error("bootstrapper never streams");
+      },
+    };
+
+    const pending = generateStorySchema(router, input, {
+      fragmentDeadlineMs: 1_000,
+      schedule: (callback) => {
+        releaseDeadline = callback;
+        return () => undefined;
+      },
+      onProgressDetail: (event) => details.push(event),
+    });
+    await Promise.resolve();
+    expect(releaseDeadline).toBeTypeOf("function");
+    releaseDeadline?.();
+
+    await expect(pending).rejects.toBeInstanceOf(BootstrapTimeoutError);
+    expect(providerSignal?.aborted).toBe(true);
+    expect(details.at(-1)).toMatchObject({
+      fragment: "mechanics-core",
+      status: "failed",
+    });
+    expect(details.at(-1)?.message).toMatch(/timed out/i);
+  });
+
+  it("honors caller cancellation before any provider call and reports it separately from timeout", async () => {
+    const { router, counts } = phasedRouter({
+      a: [J(PHASE_A)],
+      b: [J(PHASE_B)],
+    });
+    const controller = new AbortController();
+    const details: BootstrapProgressEvent[] = [];
+    controller.abort(new DOMException("User cancelled Forge", "AbortError"));
+
+    await expect(
+      generateStorySchema(router, input, {
+        signal: controller.signal,
+        onProgressDetail: (event) => details.push(event),
+      })
+    ).rejects.toMatchObject({ name: "AbortError" });
+
+    expect(counts).toEqual({ a: 0, b: 0 });
+    expect(details.at(-1)).toMatchObject({
+      fragment: "mechanics-core",
+      status: "cancelled",
+    });
+  });
+
+  it("cancels immediately even when the provider ignores its aborted signal", async () => {
+    let providerSignal: AbortSignal | undefined;
+    const controller = new AbortController();
+    const details: BootstrapProgressEvent[] = [];
+    const router: Router = {
+      bindingFor: () => ({
+        provider: "openrouter",
+        model: "test",
+        source: "recommended",
+        samplersDirty: false,
+      }),
+      async complete(_role, _prompt, options): Promise<ChatResponse> {
+        providerSignal = options?.signal;
+        return new Promise<ChatResponse>(() => undefined);
+      },
+      async stream() {
+        throw new Error("bootstrapper never streams");
+      },
+    };
+
+    const pending = generateStorySchema(router, input, {
+      signal: controller.signal,
+      fragmentDeadlineMs: 60_000,
+      onProgressDetail: (event) => details.push(event),
+    });
+    await Promise.resolve();
+    controller.abort(new DOMException("User cancelled Forge", "AbortError"));
+    const outcome = await Promise.race([
+      pending.catch((error: unknown) => error),
+      new Promise<string>((resolve) => setTimeout(() => resolve("still pending"), 25)),
+    ]);
+
+    expect(outcome).toMatchObject({ name: "AbortError" });
+    expect(providerSignal?.aborted).toBe(true);
+    expect(details.at(-1)).toMatchObject({
+      fragment: "mechanics-core",
+      status: "cancelled",
+    });
   });
 
   it("re-prompts the Phase B foundation when an essential actor reference is invalid", async () => {

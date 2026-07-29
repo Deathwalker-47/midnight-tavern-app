@@ -2,7 +2,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import type { ScreenProps } from "./registry.js";
 import { getBridge } from "../bridge/core.js";
-import type { Blueprint, PersonaRecord } from "../bridge/core.js";
+import { forgeCreateRequest } from "../bridge/core.js";
+import type {
+  Blueprint,
+  BootstrapProgressEvent,
+  BootstrapResumeState,
+  ForgeOperationRecord,
+  PersonaRecord,
+} from "../bridge/core.js";
 import { useRoute } from "../app/router.js";
 import { EMPTY_STORY_DRAFT, useStoriesStore } from "../state/storiesStore.js";
 import { setupSupportsStatMode, useSettingsStore } from "../state/settingsStore.js";
@@ -45,10 +52,44 @@ export function StoryBlueprint(props: ScreenProps): JSX.Element {
   const [progress, setProgress] = useState<string>();
   const [progressPhase, setProgressPhase] = useState<keyof typeof PHASE_LABEL>();
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [retainedForge, setRetainedForge] = useState<ForgeOperationRecord>();
+  const retainedForgeRef = useRef<ForgeOperationRecord>();
+  const forgeWriteQueue = useRef<Promise<void>>(Promise.resolve());
   const forgeController = useRef<AbortController>();
   const forgeStartedAt = useRef<number>();
 
   useEffect(() => () => forgeController.current?.abort(), []);
+
+  useEffect(() => {
+    if (!creating) return;
+    let cancelled = false;
+    void getBridge()
+      .getForgeOperation()
+      .then(async (operation) => {
+        if (cancelled || operation?.kind !== "story-create") return;
+        if (await getBridge().getStory(operation.storyId)) {
+          await getBridge().clearForgeOperation(operation.operationId).catch(() => undefined);
+          return;
+        }
+        if (cancelled) return;
+        retainedForgeRef.current = operation;
+        setRetainedForge(operation);
+        setTitle(operation.request.title);
+        setPremise(operation.request.premise);
+        setStatMode(operation.request.statMode ?? "full");
+        setBlueprint(operation.request.blueprint ?? {});
+        setSelectedOpening(operation.request.openingMessage ?? "");
+        setPersonaId(operation.request.persona?.id ?? "");
+        setContinueWithoutPersona(!operation.request.persona);
+        setProgressPhase(operation.phase);
+        setProgress(operation.detail ?? "Validated Forge fragments retained.");
+        setElapsedSeconds(Math.floor(operation.elapsedMs / 1000));
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [creating]);
 
   useEffect(() => {
     if (!creating || !saving) return;
@@ -187,7 +228,9 @@ export function StoryBlueprint(props: ScreenProps): JSX.Element {
     const controller = new AbortController();
     forgeController.current = controller;
     try {
-      const result = await createStory({
+      const retained = retainedForgeRef.current;
+      const request = retained?.request ?? forgeCreateRequest({
+        storyId: globalThis.crypto?.randomUUID?.() ?? `story-${Date.now()}`,
         title: finalTitle,
         playerName: finalPlayer,
         premise: finalPremise,
@@ -199,15 +242,105 @@ export function StoryBlueprint(props: ScreenProps): JSX.Element {
         sourceCard: storedDraft?.importedCard?.sourceCard,
         importedMechanics: storedDraft?.importedCard?.importedMechanics,
         acceptImportedMechanics: Boolean(storedDraft?.importedCard?.importedMechanics),
+      });
+      const operationId = retained?.operationId ?? request.storyId!;
+      const startedAt = retained?.startedAt ?? Date.now();
+      const initialOperation: ForgeOperationRecord = {
+        version: 1,
+        operationId,
+        kind: "story-create",
+        storyId: request.storyId ?? operationId,
+        status: "running",
+        phase: retained?.phase ?? "phase-a",
+        attempt: retained?.attempt ?? 1,
+        elapsedMs: retained?.elapsedMs ?? 0,
+        detail: retained?.detail ?? "Forge request accepted.",
+        startedAt,
+        updatedAt: Date.now(),
+        ...(retained?.checkpoint ? { checkpoint: retained.checkpoint } : {}),
+        request,
+      };
+      retainedForgeRef.current = initialOperation;
+      setRetainedForge(initialOperation);
+      forgeWriteQueue.current = getBridge().saveForgeOperation(initialOperation);
+      await forgeWriteQueue.current;
+      const persistPatch = (patch: Partial<ForgeOperationRecord>): void => {
+        const current = retainedForgeRef.current;
+        if (!current) return;
+        const next = { ...current, ...patch, updatedAt: Date.now() };
+        retainedForgeRef.current = next;
+        setRetainedForge(next);
+        forgeWriteQueue.current = forgeWriteQueue.current
+          .catch(() => undefined)
+          .then(() => getBridge().saveForgeOperation(next));
+      };
+      const result = await createStory({
+        ...request,
+        resume: retained?.checkpoint,
+        onCheckpoint: (checkpoint: BootstrapResumeState) => {
+          persistPatch({ checkpoint, detail: "Validated fragment retained." });
+        },
         onProgress: (phase) => {
           setProgressPhase(phase);
           setProgress(PHASE_LABEL[phase]);
+          persistPatch({
+            phase,
+            status: phase === "repair" ? "degraded" : "running",
+            detail: PHASE_LABEL[phase],
+            elapsedMs: Date.now() - startedAt,
+          });
+        },
+        onProgressDetail: (event: BootstrapProgressEvent) => {
+          setProgressPhase(event.phase);
+          setProgress(event.message);
+          setElapsedSeconds(Math.floor(event.elapsedMs / 1000));
+          persistPatch({
+            phase: event.phase,
+            status:
+              event.status === "retrying"
+                ? "degraded"
+                : event.status === "cancelled"
+                  ? "cancelled"
+                  : event.status === "failed"
+                    ? "failed"
+                    : "running",
+            attempt: event.attempt,
+            elapsedMs: event.elapsedMs,
+            detail: event.message,
+          });
         },
         signal: controller.signal,
       });
+      await forgeWriteQueue.current.catch(() => undefined);
+      await getBridge().clearForgeOperation(operationId).catch(() => undefined);
+      retainedForgeRef.current = undefined;
+      setRetainedForge(undefined);
       clearDraft();
       navigate("play", { storyId: result.story.id });
     } catch (err) {
+      const current = retainedForgeRef.current;
+      if (current) {
+        const failed = {
+          ...current,
+          status: controller.signal.aborted
+            ? ("cancelled" as const)
+            : String(err).toLowerCase().includes("timeout")
+              ? ("timed-out" as const)
+              : ("failed" as const),
+          detail: controller.signal.aborted
+            ? "Cancellation acknowledged; completed fragments retained."
+            : err instanceof Error
+              ? err.message
+              : String(err),
+          elapsedMs: Date.now() - current.startedAt,
+          updatedAt: Date.now(),
+        };
+        retainedForgeRef.current = failed;
+        setRetainedForge(failed);
+        await forgeWriteQueue.current.catch(() => undefined);
+        forgeWriteQueue.current = getBridge().saveForgeOperation(failed);
+        await forgeWriteQueue.current;
+      }
       setSaveError(
         controller.signal.aborted
           ? "Forging was cancelled. Your blueprint is still here and ready to retry."
@@ -383,6 +516,28 @@ export function StoryBlueprint(props: ScreenProps): JSX.Element {
         ) : null}
 
         {saveError ? <div style={{ marginTop: 18 }}><InlineNotice severity="error" title={creating ? "Couldn't forge story" : "Couldn't save"} detail={saveError} /></div> : null}
+        {creating && retainedForge && !saving ? (
+          <div style={{ marginTop: 18 }}>
+            <InlineNotice
+              severity={retainedForge.status === "failed" || retainedForge.status === "timed-out" ? "warn" : "info"}
+              title="A retained Forge can resume"
+              detail={retainedForge.detail ?? "Validated fragments were kept safely."}
+            />
+            <Button
+              variant="ghost"
+              onClick={() => {
+                const operationId = retainedForgeRef.current?.operationId;
+                retainedForgeRef.current = undefined;
+                setRetainedForge(undefined);
+                setProgress(undefined);
+                setProgressPhase(undefined);
+                if (operationId) void getBridge().clearForgeOperation(operationId);
+              }}
+            >
+              Discard retained forge
+            </Button>
+          </div>
+        ) : null}
         {progress ? (
           <div style={{ ...FORGE_PROGRESS, marginTop: 18 }} aria-busy="true" aria-live="polite" data-testid="forge-progress">
             <div style={FORGE_PROGRESS_HEAD}>
@@ -422,7 +577,13 @@ export function StoryBlueprint(props: ScreenProps): JSX.Element {
             }
             onClick={() => void (creating ? forgeStory() : saveExisting())}
           >
-            {saving ? (progress ?? "Saving…") : creating ? "Forge this world →" : "Save blueprint"}
+            {saving
+              ? (progress ?? "Saving…")
+              : creating
+                ? retainedForge
+                  ? "Resume retained forge"
+                  : "Forge this world →"
+                : "Save blueprint"}
           </Button>
           {creating && saving ? <Button variant="ghost" onClick={cancelForge}>Cancel forge</Button> : null}
           {!creating && dirty ? <span style={DIRTY}>Unsaved changes</span> : null}
