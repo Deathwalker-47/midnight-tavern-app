@@ -6,6 +6,36 @@ landed, why, verification, and any gotcha the next agent needs. Live state is in
 
 ---
 
+## 2026-07-29 — Task 9a: stage deadline primitive + bound the NPC planner
+
+First slice of Task 9 (`2b43325`). Task 9 is split: 9a = the reusable deadline/fallback/telemetry
+primitive applied to the highest-risk stage; 9b = wrap the remaining stages + persist metrics
+(migration). See the plan's Task 9 section for the 9b checklist.
+
+**What landed.** `orchestrator/stagePolicy.ts::runStage(stage, run, opts)` races an async stage
+against `deadlineMs`; on timeout it aborts the stage (the injected `AbortSignal`) and returns a
+DETERMINISTIC `fallback()` (never blocking the turn); on error it also falls back; a genuine caller
+cancel re-throws (not a fallback). It emits a `StageMetric { stage, startedAt, durationMs, outcome }`
+via `onMetric` — provider internals never leak. Clock + deadline timer are injectable
+(`now`, `schedule`), so tests are deterministic without a global fake clock. `DEFAULT_STAGE_DEADLINES`
+covers all five stages; exported from the orchestrator barrel.
+
+`turn.ts` wraps the goal-driven NPC planner (Task 5's per-turn model call) in
+`runStage("npc_planner", …, { fallback: () => [] })` and forwards `SubmitTurnOptions.onStageMetric`.
+Note: `planNpcActions` already catches provider errors internally (→ `[]`), so `runStage` mainly adds
+the DEADLINE bound (a hung provider → timeout → `[]`); the error path is a belt-and-braces net.
+
+**Tests (+7).** 6 `stagePolicy` unit tests (ok / timeout+abort / error / caller-cancel /
+already-cancelled / positive defaults) + a turn-level test asserting the `npc_planner` metric is
+emitted with a non-negative duration.
+
+**Verification.** typecheck clean; **core 512 / 41 (+7) + UI 139 / 25 = 651** green.
+
+**Next:** plan Task 9b — wrap classifier/introduction/narrator/audit stages, persist `StageMetric[]`
+on `turn_operations` (migration + bridge parity), fake-clock timeout/duplicate-turn tests.
+
+---
+
 ## 2026-07-29 — Task 8: release verified mechanical beats incrementally
 
 **What landed (`09da205`).** `authorityGuard.ts::generateGuardedNarration` no longer dumps the whole

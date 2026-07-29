@@ -436,12 +436,29 @@ interface StageMetric {
 }
 ```
 
-- [ ] **Step 1: Write fake-clock timeout and duplicate-turn tests**
-- [ ] **Step 2: Observe unbounded waits**
-- [ ] **Step 3: Apply configured deadlines and deterministic fallbacks; persist metrics without
-  exposing provider internals in prose**
-- [ ] **Step 4: Verify restart/retry/cancel behavior**
-- [ ] **Step 5: Commit with `core(orchestrator): bound turn stages and record latency`**
+Split into 9a (done) and 9b (remaining):
+
+**9a — DONE (`2b43325`).** `orchestrator/stagePolicy.ts::runStage` is the reusable primitive:
+deadline race → deterministic fallback on timeout/error (never blocks the turn), genuine caller
+cancel propagates, `StageMetric` (stage/startedAt/durationMs/outcome) via injected callback, no
+provider internals leaked. Timing + timer are injectable (6 deterministic unit tests: ok / timeout+
+abort / error / caller-cancel / already-cancelled / defaults). Applied to the NPC planner stage in
+`turn.ts` (the Task-5 per-turn model call), forwarding `SubmitTurnOptions.onStageMetric`; a turn-level
+test proves it is measured. `DEFAULT_STAGE_DEADLINES` covers all five stages. Exported from the
+orchestrator barrel. core 512 (+7) + UI 139 = 651 green.
+
+**9b — REMAINING:**
+- [ ] Wrap the `classifier`, `npc_introduction`, `narrator`, and `authority_audit` stages in
+  `turn.ts` with `runStage` (deadlines from `DEFAULT_STAGE_DEADLINES`, deterministic fallbacks:
+  classifier → narration-only recovery, introduction → no transitions, narrator → `safeSummary`,
+  audit → treat as fail-closed). The narrator/audit live inside `generateGuardedNarration`, so thread
+  a deadline/onMetric option through `GuardedNarrationOptions`.
+- [ ] Persist `StageMetric[]` on the turn operation: migration `stage_metrics_json` on
+  `turn_operations` (+ `TurnOperationSchema` field, `toRecord`/`upsert`, and bridge parity in
+  `ui/src/bridge/core.ts` + `sqliteBridge.ts`).
+- [ ] Fake-clock timeout + duplicate-turn tests in `turn.test.ts`; verify restart/retry/cancel.
+- [ ] Consider only firing the planner when an encounter is active (cost), noted since Task 5.
+- [ ] Commit `core(orchestrator): bound remaining turn stages and persist latency`.
 
 ### Task 10: Make Responsive Models the Default
 
