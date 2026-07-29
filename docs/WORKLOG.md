@@ -6,6 +6,33 @@ landed, why, verification, and any gotcha the next agent needs. Live state is in
 
 ---
 
+## 2026-07-29 — Task 7: prove end-to-end verified streaming
+
+Proof task (`fccab2c`) — added tests only, no source changed. The streamed-delta path was already
+threaded end to end; three temporal tests now pin it.
+
+**What was proven.** provider `stream(onDelta)` → `generateGuardedNarration` (releases each safe,
+non-mechanical paragraph the instant it streams) → `turn.ts` forwards `opts.onDelta` →
+`sqliteBridge.submitTurn` forwards `args.onDelta` verbatim to `core.submitTurn` → `playStore`
+accumulates `proseBuffer += delta` → `Play` renders `<p data-testid="play-prose-buffer">` while
+`operationPhase === "streaming"`. No boundary buffers or coalesces safe deltas.
+
+**Tests (+3).** Each gates the provider promise (a hung `stream`/`submitTurn`) and asserts the first
+safe paragraph is already delivered/rendered while it is still pending:
+`authorityGuard.test.ts` (core release point), `sqliteBridge.test.ts` (bridge forwards the same
+`onDelta`), `Play.test.tsx` (live prose renders mid-stream).
+
+**Verification.** typecheck clean; **core 503 / 40 (+1) + UI 139 / 25 (+2) = 642** green.
+
+**Gotcha.** `Play` only shows `play-prose-buffer` while `operationPhase ∈ {streaming, saving}`; a
+streaming test's fake bridge must call `onPhase("streaming")` before `onDelta`. Play's mount-load
+effect still emits one of the known React `act()` warnings (Task 14).
+
+**Next:** plan Task 8 — release verified mechanical beats incrementally (per-beat authority release in
+`authorityGuard.ts`, replacing the whole-draft hold for the mechanical remainder).
+
+---
+
 ## 2026-07-29 — Task 6: deterministic provocation beyond combat
 
 `planNpcReactions` previously provoked only on `category === "combat"`. It now reacts to any SEALED

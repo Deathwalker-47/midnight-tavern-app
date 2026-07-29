@@ -1,7 +1,7 @@
 # HANDOFF — current live state
 
 **Updated:** 2026-07-29
-**Branch / runtime HEAD:** `main` at `b753de3` (Task 6) before this docs commit; local, not pushed
+**Branch / runtime HEAD:** `main` at `fccab2c` (Task 7) before this docs commit; local, not pushed
 **App version:** `0.2.8`, unsigned
 **User-owned/untracked:** `.codex/`, `opencode.json` — preserve
 **Active plan:** `Plan/next-phase-internal-beta.md`
@@ -10,7 +10,7 @@
 ## Fresh verification
 
 - `npm run typecheck`: passed.
-- `npm test`: core 502/40 files + UI 137/25 files = **639 tests**, passed (Tasks 5–6 added 8).
+- `npm test`: core 503/40 files + UI 139/25 files = **642 tests**, passed (Tasks 5–7 added 11).
 - Known noise: seven existing React `act(...)` warnings.
 - Build/cargo/installer were intentionally not rerun after `350f805`; the human asked to defer the
   installer until all remaining Internal Beta work is complete.
@@ -64,7 +64,8 @@ had no health delta, so a successful strike could never kill mechanically; confi
    Watch-out: fires a model call every full-stat turn with an idle present NPC — Task 9 should bound it.
 2. Task 6: sealed non-combat provocation — **DONE (`b753de3`)**. `isProvocation` reacts to combat /
    opposed / target-harm / hostile-stakes; healing/aid and harmless talk draw no reaction.
-3. Task 7: provider → core → bridge → store → Play safe-streaming smoke test.
+3. Task 7: end-to-end verified streaming — **DONE (`fccab2c`)**, proof-only, no source changed;
+   `onDelta` already threaded provider → core → bridge → store → Play.
 4. Task 8: progressively verify and release mechanical beats.
 5. Tasks 9–10: stage deadlines/telemetry and responsive model defaults.
 6. Tasks 11–13: resumable Forge, card/persona/starting-gear acceptance, and remaining UX acceptance.
@@ -74,13 +75,14 @@ had no health delta, so a successful strike could never kill mechanically; confi
 
 ## Single next action
 
-Start detailed-plan **Task 7: Prove Streaming from Provider to Play UI**. Add a multi-delta
-provider → core → bridge → store → Play smoke test (`authorityGuard.test.ts` for the core release
-point, `ui/test/bridge/sqliteBridge.test.ts` + `Play.test.tsx` for the UI path). Observe the first
-boundary that drops or coalesces safe deltas, thread the same `onDelta` through it, and assert the
-first safe paragraph is visible before the provider promise resolves. Only touch
-`sqliteBridge.ts`/`playStore.ts` if a test fails. Commit `ui(play): prove end-to-end verified
-streaming`.
+Start detailed-plan **Task 8: Release Verified Mechanical Beats Incrementally** in
+`packages/core/src/orchestrator/authorityGuard.ts`. Today the first mechanical paragraph and
+everything after it are held for a single whole-draft audit. Change this to verify each COMPLETE
+mechanical beat against the immutable rulings and release safe beats as they pass, replacing an
+unsafe beat with `safeSummary` and never exposing rejected text. Write failing accepted/rejected
+mechanical-beat tests first (`authorityGuard.test.ts`), then implement. Keep the deterministic death
+guard and the existing safe-prefix behavior. Commit `core(orchestrator): stream verified mechanical
+beats`.
 
 Do not build an installer yet. Generate it only after the remaining Internal Beta tasks (through Task
 15) and complete verification, as requested by the human.

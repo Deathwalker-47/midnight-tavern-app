@@ -369,11 +369,19 @@ creature. Core 502 (+4) + UI 137 = 639 green.
 - Modify: `packages/ui/test/screens/Play.test.tsx`
 - Modify only if a test fails: `packages/ui/src/bridge/sqliteBridge.ts`, `playStore.ts`
 
-- [ ] **Step 1: Add a multi-delta provider → core → bridge → store → Play smoke test**
-- [ ] **Step 2: Observe the first boundary that drops or coalesces safe deltas**
-- [ ] **Step 3: Thread the same `onDelta` callback through that boundary**
-- [ ] **Step 4: Assert the first safe paragraph is visible before the provider promise resolves**
-- [ ] **Step 5: Verify and commit with `ui(play): prove end-to-end verified streaming`**
+- [x] **Step 1: Add a multi-delta provider → core → bridge → store → Play smoke test**
+- [x] **Step 2: Observe the first boundary that drops or coalesces safe deltas**
+- [x] **Step 3: Thread the same `onDelta` callback through that boundary**
+- [x] **Step 4: Assert the first safe paragraph is visible before the provider promise resolves**
+- [x] **Step 5: Verify and commit with `ui(play): prove end-to-end verified streaming`**
+
+Completed in `fccab2c`. Proof task — NO boundary dropped or coalesced deltas, so no source changed.
+`onDelta` was already threaded provider → `generateGuardedNarration` (safe-paragraph release) →
+`turn.ts` → `sqliteBridge.submitTurn` → `playStore` (`proseBuffer += delta`) → `Play`
+(`data-testid="play-prose-buffer"`, shown while `operationPhase === "streaming"`). Three temporal
+tests gate the provider promise and assert the first safe paragraph is delivered/rendered while it is
+still pending, at the core, bridge, and Play boundaries respectively. core 503 (+1) + UI 139 (+2) =
+642 green.
 
 ### Task 8: Release Verified Mechanical Beats Incrementally
 
