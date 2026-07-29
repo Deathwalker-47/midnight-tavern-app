@@ -172,6 +172,57 @@ describe("generateGuardedNarration — progressive verified streaming", () => {
     expect(result.prose).toContain("broke and ran");
   });
 
+  it("releases accepted mechanical beats incrementally rather than as one dump", async () => {
+    const beats = [
+      SAFE_PARAGRAPH,
+      "The strike lands for solid damage and he reels back.",
+      "A second success drives the last man behind the pillar.",
+    ];
+    const { router } = streamingRouterFor(
+      beats,
+      JSON.stringify({ obeysRulings: true, contradictions: [] })
+    );
+    const deltas: string[] = [];
+    const result = await generateGuardedNarration(
+      router,
+      { system: "Narrate.", user: "Advance." },
+      [ruling],
+      { onDelta: (delta) => deltas.push(delta) }
+    );
+    expect(result.usedSafeFallback).toBe(false);
+    // Safe lead + each verified mechanical beat arrives as its own delta — not one concatenated blob.
+    expect(deltas.length).toBeGreaterThanOrEqual(3);
+    expect(result.prose).toContain("solid damage");
+    expect(result.prose).toContain("behind the pillar");
+  });
+
+  it("keeps earlier verified beats but replaces a later beat that asserts an unrecorded death", async () => {
+    // The model auditor permissively accepts, but the deterministic per-beat death guard catches the
+    // fabricated death — WITHOUT discarding the earlier verified beat (the old whole-draft guard did).
+    const beats = [
+      "The blow lands for heavy damage and he buckles against the rail.",
+      "He falls dead at your feet, a lifeless heap.",
+    ];
+    const { router } = streamingRouterFor(
+      beats,
+      JSON.stringify({ obeysRulings: true, contradictions: [] })
+    );
+    const deltas: string[] = [];
+    const result = await generateGuardedNarration(
+      router,
+      { system: "Narrate.", user: "Advance." },
+      [ruling], // ruling records no causedDeathOf
+      { onDelta: (delta) => deltas.push(delta) }
+    );
+    const shown = deltas.join("");
+    expect(shown).toContain("heavy damage"); // earlier verified beat is preserved…
+    expect(shown).not.toContain("falls dead"); // …and the fabricated death is never exposed
+    expect(shown).not.toContain("lifeless heap");
+    expect(result.prose).toContain("heavy damage");
+    expect(result.prose).not.toContain("falls dead");
+    expect(result.usedSafeFallback).toBe(true);
+  });
+
   it("never exposes a mechanical paragraph the auditor rejects", async () => {
     const { router } = streamingRouterFor(
       [SAFE_PARAGRAPH, MECHANICAL_LIE],

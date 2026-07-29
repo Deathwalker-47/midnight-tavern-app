@@ -178,6 +178,26 @@ function deterministicContradiction(
 }
 
 /**
+ * Split prose into complete beats on the paragraph boundary, keeping each beat's trailing "\n\n" so
+ * re-emitting `full` in order exactly reconstructs the text. The final beat has no trailing boundary.
+ */
+function splitBeats(prose: string): { text: string; full: string }[] {
+  const beats: { text: string; full: string }[] = [];
+  let start = 0;
+  for (;;) {
+    const boundary = prose.indexOf("\n\n", start);
+    if (boundary === -1) {
+      const rest = prose.slice(start);
+      if (rest) beats.push({ text: rest, full: rest });
+      break;
+    }
+    beats.push({ text: prose.slice(start, boundary), full: prose.slice(start, boundary + 2) });
+    start = boundary + 2;
+  }
+  return beats;
+}
+
+/**
  * Generates mechanical-turn narration behind an authority wall. Prose is released progressively:
  * each complete paragraph that asserts no mechanic is shown as soon as it streams (it cannot
  * contradict a ruling), while the first mechanical paragraph and everything after it stay buffered
@@ -260,13 +280,41 @@ export async function generateGuardedNarration(
         : "";
 
     try {
-      const deterministicReason = deterministicContradiction(lastDraft, rulings);
-      const audited = deterministicReason
-        ? { ok: false, reason: deterministicReason }
-        : await review(router, lastDraft, rulings, options.signal);
+      const audited = await review(router, lastDraft, rulings, options.signal);
       if (audited.ok) {
-        onDelta(releasedPrefix ? lastDraft.slice(releasedPrefix.length) : lastDraft);
-        return { prose: lastDraft, repairCount: attempt, usedSafeFallback: false };
+        // Release the accepted remainder BEAT BY BEAT (not one dump), with the deterministic death
+        // guard as a per-beat net for a false death the model auditor let through. Clean beats stream
+        // incrementally; the first beat asserting an unrecorded death is replaced by the deterministic
+        // summary — earlier verified beats stay, and the offending beat (and everything after) is
+        // never shown.
+        const shownPrefix = releasedPrefix;
+        let accepted = "";
+        let deathRejected = false;
+        for (const beat of splitBeats(lastDraft.slice(shownPrefix.length))) {
+          if (deterministicContradiction(beat.text, rulings)) {
+            deathRejected = true;
+            break;
+          }
+          onDelta(beat.full);
+          accepted += beat.full;
+        }
+        if (!deathRejected) {
+          return { prose: lastDraft, repairCount: attempt, usedSafeFallback: false };
+        }
+        // Nothing on screen yet and a repair remains → regenerate; otherwise keep what streamed and
+        // cap it with the deterministic summary.
+        if (shownPrefix.length + accepted.length === 0 && attempt < maxRepairs) {
+          repairReason = "A narrated beat asserted a death with no lethal ruling.";
+          options.onRepair?.(attempt + 1, repairReason);
+          continue;
+        }
+        const summary = safeSummary(rulings);
+        onDelta(summary);
+        return {
+          prose: shownPrefix + accepted + summary,
+          repairCount: attempt,
+          usedSafeFallback: true,
+        };
       }
       repairReason = audited.reason;
     } catch (error) {
