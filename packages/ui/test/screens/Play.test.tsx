@@ -60,7 +60,139 @@ afterEach(async () => {
     await Promise.resolve();
   });
   consoleErrorSpy.mockRestore();
+  vi.unstubAllGlobals();
   expect(actWarnings, "React updates must settle inside act before test cleanup").toEqual([]);
+});
+
+function installScrollMetrics(element: HTMLElement, initialHeight = 1_200) {
+  let scrollHeight = initialHeight;
+  let scrollTop = 0;
+  Object.defineProperties(element, {
+    clientHeight: { configurable: true, get: () => 300 },
+    scrollHeight: { configurable: true, get: () => scrollHeight },
+    scrollTop: {
+      configurable: true,
+      get: () => scrollTop,
+      set: (value: number) => { scrollTop = value; },
+    },
+  });
+  return {
+    get top() { return scrollTop; },
+    set top(value: number) { scrollTop = value; },
+    set height(value: number) { scrollHeight = value; },
+  };
+}
+
+describe("Play — stable transcript anchoring", () => {
+  it("lands at latest when the initial transcript finishes loading", async () => {
+    let releaseMessages!: (messages: Awaited<ReturnType<CoreBridge["listMessages"]>>) => void;
+    const messagesGate = new Promise<Awaited<ReturnType<CoreBridge["listMessages"]>>>((resolve) => {
+      releaseMessages = resolve;
+    });
+    const bridge = emptyBridge();
+    bridge.listMessages = vi.fn(() => messagesGate);
+    setBridge(bridge);
+    render(<Play storyId="scroll-story" />);
+    const scroll = screen.getByTestId("play-scroll");
+    const metrics = installScrollMetrics(scroll);
+
+    await act(async () => {
+      releaseMessages([
+        {
+          id: "narrator-1",
+          storyId: "scroll-story",
+          idx: 0,
+          role: "narrator",
+          content: "The latest scene settles into view.",
+          createdAt: 1,
+        },
+      ]);
+      await messagesGate;
+    });
+
+    expect(metrics.top).toBe(1_200);
+  });
+
+  it("follows resize growth near latest but preserves a historical reader position", async () => {
+    let notifyResize: (() => void) | undefined;
+    class TestResizeObserver {
+      constructor(callback: ResizeObserverCallback) {
+        notifyResize = () => callback([], this as unknown as ResizeObserver);
+      }
+      observe(): void {}
+      unobserve(): void {}
+      disconnect(): void {}
+    }
+    vi.stubGlobal("ResizeObserver", TestResizeObserver);
+    const bridge = emptyBridge();
+    bridge.listMessages = vi.fn(async () => [
+      {
+        id: "narrator-1",
+        storyId: "scroll-story",
+        idx: 0,
+        role: "narrator" as const,
+        content: "A long scene fills the transcript.",
+        createdAt: 1,
+      },
+    ]);
+    setBridge(bridge);
+    render(<Play storyId="scroll-story" />);
+    await screen.findByText("A long scene fills the transcript.");
+    const scroll = screen.getByTestId("play-scroll");
+    const metrics = installScrollMetrics(scroll);
+
+    metrics.top = 850;
+    fireEvent.scroll(scroll);
+    metrics.height = 1_500;
+    act(() => notifyResize?.());
+    expect(metrics.top).toBe(1_500);
+
+    metrics.top = 400;
+    fireEvent.scroll(scroll);
+    expect(await screen.findByTestId("play-anchor")).toBeInTheDocument();
+    metrics.height = 1_800;
+    act(() => notifyResize?.());
+    expect(metrics.top).toBe(400);
+
+    fireEvent.click(screen.getByTestId("play-anchor"));
+    expect(metrics.top).toBe(1_800);
+    metrics.height = 2_000;
+    act(() => notifyResize?.());
+    expect(metrics.top).toBe(2_000);
+  });
+
+  it("does not move a historical viewport during streaming or drawer layout changes", async () => {
+    const bridge = emptyBridge();
+    bridge.listMessages = vi.fn(async () => [
+      {
+        id: "narrator-1",
+        storyId: "scroll-story",
+        idx: 0,
+        role: "narrator" as const,
+        content: "The archived scene remains readable.",
+        createdAt: 1,
+      },
+    ]);
+    bridge.listPresentCast = vi.fn(async () => [
+      { characterId: "hero", name: "Kestrel", isPlayer: true, alive: true },
+    ]);
+    setBridge(bridge);
+    render(<Play storyId="scroll-story" />);
+    await screen.findByText("The archived scene remains readable.");
+    const scroll = screen.getByTestId("play-scroll");
+    const metrics = installScrollMetrics(scroll);
+    metrics.top = 350;
+    fireEvent.scroll(scroll);
+
+    metrics.height = 1_500;
+    await act(async () => {
+      usePlayStore.setState({ operationPhase: "streaming", proseBuffer: "New prose arrives below." });
+      useUiStore.getState().openCharacterDrawer("hero");
+      await Promise.resolve();
+    });
+
+    expect(metrics.top).toBe(350);
+  });
 });
 
 describe("Play — empty state", () => {

@@ -18,7 +18,7 @@
  * the same render path. Talks to core only through `usePlayStore`, `useUiStore` and the bridge
  * façade. Token CSS variables only — no raw hex.
  */
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
 import {
   PartyStrip,
   RulingArtifact,
@@ -965,26 +965,52 @@ export function Play(props: PlayProps): JSX.Element {
 
   // ── Scroll + jump-to-latest anchor ─────────────────────────────────────────────────────────
   const scrollRef = useRef<HTMLDivElement>(null);
+  const bottomAnchorRef = useRef<HTMLDivElement>(null);
+  const followLatestRef = useRef(true);
   const [showAnchor, setShowAnchor] = useState<boolean>(false);
 
   const onScroll = useCallback((e: React.UIEvent<HTMLDivElement>): void => {
     const el = e.currentTarget;
     const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-    setShowAnchor(distanceFromBottom > 240);
+    const followLatest = distanceFromBottom <= 240;
+    followLatestRef.current = followLatest;
+    setShowAnchor(!followLatest);
   }, []);
 
   const scrollToLatest = useCallback((): void => {
+    followLatestRef.current = true;
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
     setShowAnchor(false);
   }, []);
 
-  // Auto-follow the stream unless the reader scrolled up.
-  useEffect(() => {
-    if (showAnchor) return;
+  useLayoutEffect(() => {
+    followLatestRef.current = true;
+    setShowAnchor(false);
+  }, [storyId]);
+
+  // Follow React-driven content/layout changes before paint. The ref changes synchronously inside
+  // the scroll handler, so a stream delta cannot race a delayed state update and yank a reader who
+  // just moved into history.
+  useLayoutEffect(() => {
+    if (!followLatestRef.current) return;
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [stream.length, thinking, proseBuffer, showAnchor]);
+  }, [stream.length, thinking, proseBuffer, drawerCharacterId, classifierRecovery, turnError]);
+
+  // Fonts, wrapping, ruling expansion, and drawer reflow can change height without changing any
+  // React dependency above. Observe the measured transcript and follow only while the user's
+  // synchronous intent still says latest; historical reading positions are left untouched.
+  useEffect(() => {
+    if (typeof ResizeObserver === "undefined") return;
+    const measured = bottomAnchorRef.current?.parentElement;
+    if (!measured) return;
+    const observer = new ResizeObserver(() => {
+      if (followLatestRef.current) scrollToLatest();
+    });
+    observer.observe(measured);
+    return () => observer.disconnect();
+  }, [storyId, scrollToLatest]);
 
   // ── Render ──────────────────────────────────────────────────────────────────────────────────
   const showEmpty = !loading && messages.length === 0 && !thinking && !turnError;
@@ -1144,7 +1170,7 @@ export function Play(props: PlayProps): JSX.Element {
                   )}
                 </div>
               )}
-              <div style={{ height: 20 }} />
+              <div ref={bottomAnchorRef} style={{ height: 20 }} aria-hidden="true" />
             </div>
           </div>
 
