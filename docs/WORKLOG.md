@@ -909,3 +909,25 @@ No installer was built.
 
 **Next:** Task 15A.3 - recover a pronoun continuation target only from one unique recent committed
 player ruling whose target remains present and alive.
+
+---
+
+## 2026-07-31 - Task 15A.3: Authoritative recent-target continuity
+
+**RED evidence.** Classifier recovery could not resolve "attack it again" when an older NPC and the
+current creature were both present. A turn-level provider-failure reproduction produced no ruling,
+and the new target-focus suite initially had no implementation.
+
+**What landed.** The orchestrator now derives at most one recent focus from the newest committed
+allowed player ruling in the bounded message window. The target must remain present, non-player,
+and alive; a newest turn with multiple targets is ambiguous and does not fall back to an older
+event. Classifier recovery may reuse that id only for continuation wording. An explicit living name
+always wins, while dead, absent, stale, unknown, or ambiguous focus fails closed. Sealed actions,
+gates, effects, damage/death, and the two-action player budget were not changed.
+
+**Tests and verification.** Focused classifier/target-focus/turn suites: 80 tests/3 files. Complete
+core: 558 tests/44 files. Complete UI: 150 tests/25 files. Root total: 708 tests. Typecheck and diff
+checks passed. No installer was built.
+
+**Next:** Task 15A.4 - deterministic, scene-grounded Possible Moves on provider degradation while
+preserving cancellation and normal DM authority when a suggestion is sent.

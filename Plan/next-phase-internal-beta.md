@@ -123,7 +123,7 @@ re-grounded against current HEAD (most audit gaps had already been closed by lat
 - [x] Make cancelled/failed Forge offer both reliable resume and a genuinely fresh operation.
 - [x] Make dossier history character-specific and ensure every registry character participates in
   evidence-backed soft-memory updates.
-- [ ] Preserve a unique recent living target for pronoun continuation attacks without guessing.
+- [x] Preserve a unique recent living target for pronoun continuation attacks without guessing.
 - [ ] Provide scene-grounded deterministic Possible Moves when the suggestion provider degrades.
 - [ ] Persist engine-validated hostility and let living hostile NPCs select legal sealed actions
   when the planner provider degrades.

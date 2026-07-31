@@ -127,16 +127,22 @@ complete core 550/43 and UI 150/25 (700 total), and typecheck pass.
 - `packages/core/src/orchestrator/turn.ts`
 - classifier/context/turn tests
 
-- [ ] Add a failing reproduction with player + old NPC + current creature present, a prior allowed
+- [x] Add a failing reproduction with player + old NPC + current creature present, a prior allowed
   attack ruling against the creature, provider failure, and “attack it again.”
-- [ ] Derive target focus from the newest committed player ruling/event whose target is still
+- [x] Derive target focus from the newest committed player ruling/event whose target is still
   present and alive; thread only that authoritative id into classifier recovery.
-- [ ] Reuse focus only for pronoun/continuation language and only when explicit naming did not select
+- [x] Reuse focus only for pronoun/continuation language and only when explicit naming did not select
   another target.
-- [ ] Prove stale, dead, absent, multiple, and explicitly switched targets fail closed or select the
+- [x] Prove stale, dead, absent, multiple, and explicitly switched targets fail closed or select the
   explicit living name as appropriate.
-- [ ] Keep sealed action lookup, gate evaluation, damage, death, and action-budget rules unchanged.
-- [ ] Run classifier/turn suites, all tests, typecheck, and commit the slice.
+- [x] Keep sealed action lookup, gate evaluation, damage, death, and action-budget rules unchanged.
+- [x] Run classifier/turn suites, all tests, typecheck, and commit the slice.
+
+_Completed 2026-07-31 in `3b0a05e`. RED cases covered provider failure with an older NPC and current
+creature, dead/absent/stale/multiple focus, and explicit target switching. Focus is derived only
+from the newest recent authoritative player ruling and is reused only for continuation wording.
+Focused classifier/target-focus/turn suites passed 80 tests in 3 files; complete core passed 558
+tests in 44 files, UI passed 150 tests in 25 files (708 total), and root typecheck passed._
 
 ## Task 4: Keep Possible Moves useful during provider degradation
 

@@ -25,7 +25,7 @@ hint is known to be ignored.
 
 ## Current state
 
-The branch is local `main` at source commit `2032832` before the current documentation closeout. It
+The branch is local `main` at source commit `3b0a05e` before the current documentation closeout. It
 is not pushed. The app is unsigned v0.2.8. The previous automated Internal Beta gate passed, but the human's
 first provider-backed packaged pass found seven source defects. The old package is stale for these
 fixes. The human explicitly asked not to build another installer until all fixes are done.
@@ -67,9 +67,9 @@ Fresh pre-remediation baseline on 2026-07-31:
 - `packages/core/src/orchestrator/suggestions.ts::suggestPlayerActions`: exact structured output is
   required after bounded repair; any final failure throws. Packaged logs showed HTTP 429 and
   malformed tiny classifier responses.
-- `packages/core/src/classifier/classify.ts::recoverUniversalPlayerIntent`: a required target is
-  recovered only from an explicit character name or exactly one non-player present character. It
-  has no recent-target focus for pronouns/“again.”
+- Target continuity is fixed at `3b0a05e`: the orchestrator derives at most one focus from the
+  newest recent authoritative player ruling, validates that it remains present and alive, and
+  classifier recovery uses it only for continuation wording when no explicit name switches target.
 - `packages/core/src/orchestrator/npcAgency.ts::planNpcActions`: provider errors return `[]`.
   `planNpcReactions` is deterministic but requires an already resolved provocation. No persisted,
   validated hostility fact supports safe autonomous fallback.
@@ -99,9 +99,10 @@ per slice:
    **Character history** now uses only that character's backstory, observations, and authoritative
    actor/target events, with honest **Not observed yet** states. Focused core 67/5, focused UI 2/1,
    complete core 550/43 and UI 150/25 (700 total), and typecheck passed.
-3. **Attack target continuity.** Derive a unique recent target from the newest committed player
-   ruling/event whose target is present and alive. Use it only for pronoun/continuation wording when
-   no explicit name switches targets. Dead, absent, stale, or ambiguous focus fails closed.
+3. **Attack target continuity - complete at `3b0a05e`.** The newest recent authoritative player
+   ruling may supply one present living non-player focus for pronoun/continuation recovery. Explicit
+   names override; dead, absent, stale, unknown, or multi-target focus fails closed. Focused suites
+   passed 80/3; complete core 558/44 and UI 150/25 (708 total), and typecheck passed.
 4. **Possible Moves fallback.** On provider error/malformed final output, return five unique
    scene-grounded deterministic suggestions using committed scene anchors, present living registry
    names, and legal sealed labels. Never invent items/skills or pre-assert success. Caller abort
@@ -138,17 +139,17 @@ per slice:
 
 ## Exact next action
 
-Do only detailed-plan Task 3 next. Add a RED reproduction with player + older NPC + current creature
-present, a newest committed allowed player attack against the creature, provider failure, and
-“attack it again.” Derive one focus only from the newest committed player ruling/event whose target
-is still present and alive, then thread that id into local classifier recovery. Reuse it only for
-pronoun/continuation language and only when no explicit living name switches targets. Prove dead,
-absent, stale, ambiguous, and explicit-switch cases. Keep sealed actions, gates, effects,
-damage/death, and action budgets unchanged. Run focused classifier/turn suites, typecheck, and all
-tests before committing. Update the active plan, append WORKLOG, overwrite HANDOFF, and refresh this
-prompt with the actual commit and one next task.
+Do only detailed-plan Task 4 next. Add RED tests for provider error, malformed output after bounded
+repairs, caller abort, absent/dead characters, an empty sealed action catalog, and sparse committed
+scene context. When safe context exists, return five unique deterministic fallback suggestions
+using only recent committed scene anchors, present living registry names, and legal sealed action
+labels. Never invent items or skills, mention absent/dead characters, or pre-assert success. Abort
+must remain abort. Suggestions remain insert-only, so sending one still passes through normal
+classification, gates, rulings, effects, and budgets. Run focused suggestion/bridge/Play suites,
+typecheck, and all tests before committing. Update the active plan, append WORKLOG, overwrite
+HANDOFF, and refresh this prompt with the actual commit and one next task.
 
-Do not mix suggestions, hostility, scroll, Overview, or packaging into the target-continuity commit.
+Do not mix hostility, scroll, Overview, or packaging into the Possible Moves commit.
 Do not build an installer yet. Do not start Task 16.
 
 Before every stop: keep tests green, make coherent commits with the required Co-Authored-By trailer,
