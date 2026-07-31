@@ -777,3 +777,55 @@ No installer was produced during Task 14.
 **Next:** detailed-plan Task 15: run every Internal Beta exit command independently, build the
 unsigned packaged app, execute the create/import/play/restart/continue and authority acceptance
 matrix, and record exact artifact paths and SHA-256 hashes.
+
+---
+
+## 2026-07-31 - Complete the automated Internal Beta gate and package v0.2.8
+
+Completed Task 15's source and automated verification gate. The configured coverage command first
+failed despite the ordinary suite passing: the engine measured 90.06% statements/lines, 84.81%
+branches, and 94.20% functions against its 100% thresholds. Commit `4237735` adds deterministic
+coverage for equipment/loadout and loot boundaries, sparse progression fallbacks, attribute
+advancement guards, equipment-enabled gates, explicit XP ledger behavior, resolver attribute and
+equipped/opposed effects, every opposed natural-roll precedence case, deception, and unknown action
+labels. It also removes two branches that were provably unreachable under their existing caller and
+data invariants. The real configured engine gate now reports 100% statements, branches, functions,
+and lines.
+
+Fresh closeout evidence:
+
+- `npm run typecheck`: passed in 12.351 seconds.
+- `npm test`: core 546/42 files plus UI 147/25 files, 693 total, passed in 20.616 seconds. UI stderr
+  remained clean and the `act(...)` regression guards passed.
+- `npm --workspace @midnight-tavern/core run coverage`: 546 tests and 100% in all four configured
+  coverage dimensions, passed in 11.615 seconds.
+- Direct core build: passed in 4.123 seconds.
+- Direct UI production build: passed in 8.067 seconds.
+- `cargo check`: passed in 3.76 cargo-reported seconds.
+- Root package build: passed and Tauri reported both bundles complete. The desktop turn was
+  interrupted after completion and cargo printed an implausible elapsed value, so no package
+  duration is claimed.
+- The release executable, MSI, and NSIS files were independently re-opened and hashed after the
+  interruption. No cargo, rustc, Tauri, WiX, or NSIS packaging process remained.
+- The packaged release executable was launched with an isolated app-data profile, remained alive
+  for eight seconds, and only that newly launched process was stopped. The user's existing installed
+  Midnight Tavern process was left untouched.
+
+Artifacts:
+
+- `packages/shell/src-tauri/target/release/midnight-tavern.exe` - 22,791,168 bytes - SHA-256
+  `F2BE3989C2CF57611EADF31D841E3A1EE197E832D3927F9E3E8B6E8B7584D36F`
+- `packages/shell/src-tauri/target/release/bundle/msi/Midnight Tavern_0.2.8_x64_en-US.msi` -
+  9,261,056 bytes - SHA-256
+  `077504A87FC1A76FCFFDBE99820589503692ECC84C93ABB6330F900D1780F661`
+- `packages/shell/src-tauri/target/release/bundle/nsis/Midnight Tavern_0.2.8_x64-setup.exe` -
+  5,614,826 bytes - SHA-256
+  `74E258DDCF878D40022E9EC3B7BD54618AED12BDFAA859541FA7897E2196E7BA`
+
+Automated acceptance covers real-file close/reopen persistence, create/import, play/history,
+registry-backed NPC introduction and presence, same-turn NPC agency, ruling-before-delta, verified
+streaming, Forge recovery, grounded suggestions, macros, literal cross-card fixtures, and starting
+gear authority. Detailed-plan Task 15 Steps 2, 3, and 5 deliberately remain partial: the isolated
+startup smoke is not a substitute for the human's visual/provider-backed packaged journey. The
+single next action is that acceptance pass using the NSIS installer; Task 16 signing/updater/CSP
+remains out of scope.

@@ -581,12 +581,22 @@ UI 147 = 675 tests, typecheck, and the direct UI production build pass.
 - Modify: `docs/HANDOFF.md`
 - Append: `docs/WORKLOG.md`
 
-- [ ] **Step 1: Run typecheck, all tests, coverage, production build, and `cargo check` independently**
-- [ ] **Step 2: Test create/import → play → close → reopen → continue in the packaged app**
-- [ ] **Step 3: Test NPC introduction/presence/agency, safe streaming, Forge, suggestions, macros, and
+- [x] **Step 1: Run typecheck, all tests, coverage, production build, and `cargo check` independently**
+- [~] **Step 2: Test create/import → play → close → reopen → continue in the packaged app**
+- [~] **Step 3: Test NPC introduction/presence/agency, safe streaming, Forge, suggestions, macros, and
   cross-card acceptance in the packaged app**
-- [ ] **Step 4: Record exact commands, counts, durations, warnings, artifact paths, and hashes**
+- [x] **Step 4: Record exact commands, counts, durations, warnings, artifact paths, and hashes**
 - [ ] **Step 5: Check the Internal Beta exit boxes only when every criterion has evidence**
+
+_Automated closeout completed 2026-07-31 (`4237735` plus the following docs commit): typecheck
+passed in 12.351 s; core 546/42 files and UI 147/25 files passed (693 total) in 20.616 s with clean
+UI stderr; configured engine coverage passed at 100% statements/branches/functions/lines in
+11.615 s; direct core and UI builds passed in 4.123 s and 8.067 s; and `cargo check` passed in
+3.76 s. The unsigned v0.2.8 release, MSI, and NSIS artifacts were built and independently hashed.
+The packaged release stayed alive through an isolated eight-second startup smoke test. Real-file
+close/reopen persistence plus the complete scenario matrix are covered by automated tests. Steps 2,
+3, and 5 remain partial until the human performs the visual, provider-backed packaged journey; do
+not infer that manual evidence from the automated harness._
 
 ### Task 16: Later Release Security and Distribution
 

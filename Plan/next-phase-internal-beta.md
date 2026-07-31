@@ -100,6 +100,14 @@ re-grounded against current HEAD (most audit gaps had already been closed by lat
   context intact before resuming from the retained checkpoint. Lorebook hierarchy and
   dossier-to-loadout navigation are acceptance-tested. Core 528 + UI 147 = 675 tests pass._
 
+  _Tasks 14-15 automated gate completed 2026-07-31 (`f1d8a4a`, `4237735`): React test stderr is
+  clean and guarded; core engine coverage is 100% for statements, branches, functions, and lines;
+  typecheck, 693 tests, direct core/UI builds, native `cargo check`, and the unsigned v0.2.8 package
+  build pass. MSI and NSIS installers were hashed, and the packaged release survived an isolated
+  startup smoke test. The only remaining Internal-Beta evidence is the human visual/provider-backed
+  packaged journey for create/import, play, close/reopen/continue, NPC behavior, ruling-before-prose,
+  verified streaming, Forge recovery, suggestions, macros, and cross-card gear._
+
 ## Internal-Beta exit criteria (the finish line for this phase)
 
 - A user can create **or import** a story, play it, close the app, reopen it, and continue.
@@ -112,6 +120,10 @@ re-grounded against current HEAD (most audit gaps had already been closed by lat
 - Mechanical turns deliver progressively verified prose without exposing narrator text that
   contradicts an immutable DM ruling.
 - UI tests run without `act(...)` warnings.
+
+Automated evidence is green for all criteria above. Final phase sign-off remains intentionally open
+until the packaged visual/provider-backed journey is performed by the human; the local harness does
+not have their provider credentials and must not claim that manual observation occurred.
 
 ## Explicitly out of scope this phase (later)
 
