@@ -881,3 +881,31 @@ product owner's instruction to package only after all Task 15A work is complete.
 
 **Next:** Task 15A.2 - durable soft envelopes, present-cast analysis, character-only dossier history,
 and honest Character history UI states.
+
+---
+
+## 2026-07-31 - Task 15A.2: Registry-owned character memory and dossiers
+
+**RED evidence.** Repository tests showed player/NPC insertions persisted `soft_json` as null;
+`applySoftPatch` created a new hard-state `ghost` row from analyzer output; a two-character dossier
+test received the global chapter summary instead of either character's evidence; and the dossier UI
+still rendered **STORY SO FAR** with blank dashes and an empty Mentality section. A legacy-row turn
+test also required both present characters to appear in the analyzer prompt after their soft state
+was cleared.
+
+**What landed.** Every character insertion now receives a durable soft envelope: primary for the
+player, secondary for NPCs. Completed-turn background analysis lazily repairs old present hard-only
+rows, including the player. The analyzer prompt now forbids registry creation, and both its caller
+and soft-state store reject unknown, non-present, cross-story, and unknown relationship targets.
+Dossiers no longer load global chapters/arcs for their recap; **Character history** is built only
+from the selected character's backstory, observations, and authoritative events where they were the
+actor or target. Missing Mentality, Mood, Location, Goal, and character history are labeled honestly
+as not observed rather than shown as shared plot or broken blanks. The in-memory and SQLite bridge
+paths preserve the same dossier meaning.
+
+**Tests and verification.** Focused core: 67 tests/5 files. Focused UI: 2 tests/1 file. Complete
+core: 550 tests/43 files. Complete UI: 150 tests/25 files. Root total: 700 tests. Typecheck passed.
+No installer was built.
+
+**Next:** Task 15A.3 - recover a pronoun continuation target only from one unique recent committed
+player ruling whose target remains present and alive.

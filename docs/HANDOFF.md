@@ -1,7 +1,7 @@
 # HANDOFF - current live state
 
 **Updated:** 2026-07-31
-**Branch / HEAD:** local `main` at `ad629f7` before the current Forge source/docs commit; not pushed
+**Branch / HEAD:** local `main` at source commit `2032832`; documentation closeout pending; not pushed
 **App version:** `0.2.8`, unsigned
 **User-owned/untracked:** `.codex/`, `opencode.json` - preserve
 **Active plan:** `Plan/next-phase-internal-beta.md`, Task 15A
@@ -9,95 +9,79 @@
 
 ## Current outcome
 
-The first provider-backed packaged acceptance pass found seven source defects, so the prior v0.2.8
-artifacts are stale for acceptance even though the automated gate that produced them was green. Do
-not start Task 16 and do not rebuild an installer after each fix. Complete Task 15A sequentially,
-run the combined gate, then package the final source state once.
+Two of seven packaged-acceptance remediation slices are complete.
 
-Task 15A slice 1 is complete. A retained Forge now offers **Resume saved Forge** and **Start new
-Forge**. Fresh start waits for queued retained writes, clears exactly the old operation id, then
-creates a new story/operation without a resume checkpoint. If durable clearing fails, replacement is
-blocked with a visible error instead of racing or overwriting saved work. The next slice is durable
-character-specific memory and dossier semantics.
+1. `fab2088` - a retained Forge now offers **Resume saved Forge** and **Start new Forge**. Fresh
+   start waits for queued retained writes, clears exactly the retained operation id, and creates a
+   new story/operation without a resume checkpoint.
+2. `2032832` - character memory is registry-owned and character-specific. Every insertion receives
+   a primary player or secondary NPC soft envelope; completed turns repair legacy present rows;
+   analyzer ops are restricted to the supplied present registry cast; and dossiers no longer reuse
+   global chapter/arc plot summaries.
 
-## Fresh baseline before remediation
+The Character page now uses **Character history** from only that character's backstory,
+observations, and authoritative actor/target events. Empty Mentality, Mood, Location, Goal, and
+history states say **Not observed yet**. The in-memory and SQLite bridge paths preserve this meaning.
 
-- `npm run typecheck`: passed on 2026-07-31.
-- `npm test`: core **546/42 files** + UI **147/25 files** = **693 tests**, passed.
-- After Forge tests: core **546/42 files** + UI **149/25 files** = **695 tests**, passed.
-- Working tree before docs: only user-owned `.codex/` and `opencode.json` were untracked.
-- Prior automated release gate at `8ab7a68`: configured engine coverage 100% in all four metrics,
-  direct core/UI builds passed, `cargo check` passed, and unsigned v0.2.8 packages built.
-- That package evidence remains useful history, but its artifacts must not be offered as containing
-  any Task 15A fix.
+Do not start Task 16 and do not build an installer yet. Complete all remaining Task 15A slices,
+run the combined gate, then package once.
 
-## Packaged findings and grounded causes
+## Verification
 
-1. **Overview:** chapters without a closed arc put the live automatic summary only in the narrow
-   timeline while the large pane falls back to the immutable premise.
-2. **Dossiers:** `getCharacterDossier` explicitly chooses global arc/chapter summaries for every
-   character. Player/bootstrap and promoted-NPC paths may also create hard-only records, and
-   `runBackground` omits present characters without soft state from analyzer input.
-3. **Forge:** cancellation correctly retains checkpoints, but `forgeStory` always reuses any
-   retained request/operation. Discard is secondary and asynchronous, leaving no clear atomic path
-   to start a new operation.
-4. **Possible Moves:** `suggestPlayerActions` throws after malformed/provider-failed structured
-   output. Packaged provider logs showed HTTP 429 and tiny invalid responses, so the UI always lands
-   on “Suggestions are unavailable.”
-5. **Attack error:** universal-action recovery can target only an explicitly named present
-   character or the sole non-player character. “Attack it again” becomes ambiguous when an older
-   registry NPC is also present, even when the newest committed ruling identifies the current foe.
-6. **NPC does not attack:** deterministic reaction requires a resolved provocation; goal-driven
-   `planNpcActions` returns `[]` on any provider failure. There is no persisted engine-approved
-   hostility fact for a safe provider-independent attack.
-7. **Scroll jump:** Play’s follow/latest decision is held mainly in asynchronous React state; DOM
-   replacement and layout-height changes can reset the transcript before the effect re-anchors or
-   preserves the reader viewport.
+- Task 15A.2 RED cases reproduced null insertion, analyzer-created `ghost`, global dossier leakage,
+  missing legacy-present analyzer input, and the old blank/shared UI.
+- Focused core: **67 tests / 5 files**, passed.
+- Focused UI: **2 tests / 1 file**, passed.
+- Complete core: **550 tests / 43 files**, passed.
+- Complete UI: **150 tests / 25 files**, passed.
+- Root total after Task 15A.2: **700 tests**, passed.
+- `npm run typecheck`: passed.
+- Prior full release gate at `8ab7a68` remains historical only; its package predates Task 15A.
 
-The packaged log’s 429s are real provider rate limiting, not proof of a local crash. Remediation
-must degrade safely and honestly; it must not manufacture mechanics or conceal provider status.
+## Remaining packaged findings
 
-## Task 15A order
+1. **Attack continuation:** local universal-action recovery resolves an explicit name or a sole
+   non-player only. “Attack it again” becomes ambiguous when an old NPC and the current creature are
+   both present, even though the latest committed ruling identifies the active foe.
+2. **Possible Moves:** exact structured provider output throws after bounded repair; packaged HTTP
+   429 and malformed responses therefore disable the feature instead of using safe grounded moves.
+3. **Hostile NPC agency:** deterministic reaction needs a resolved provocation, while goal planning
+   returns no action on provider failure. No validated persisted hostility fact supports an
+   engine-owned fallback attack.
+4. **Scroll:** Play follow/latest intent relies chiefly on delayed React state and can lose the
+   reader/latest anchor during DOM replacement or layout growth.
+5. **Overview:** before an arc closes, live chapter summaries remain in the narrow timeline while
+   the large pane falls back to the immutable premise.
 
-1. Forge fresh start vs checkpoint resume. **Complete.**
-2. Character-specific history and durable soft-state participation.
-3. Recent living target focus for pronoun continuation attacks.
-4. Deterministic scene-grounded suggestion fallback.
-5. Validated persisted hostility and provider-independent hostile NPC action.
-6. Play scroll anchoring.
-7. Overview chapter/premise hierarchy.
-8. Full tests/typecheck/coverage/build/cargo, baton refresh, then one package build.
-
-## Non-negotiable product and authority rules
+## Non-negotiable authority rules
 
 - Engine/DM owns gates, dice, effects, damage, death, budgets, target legality, persistence, and
   rollback. Models propose identity/intent and write prose only.
-- Every actual fictional NPC/creature that appears is registry-backed. Scenery, crowds, statues,
-  murals, “Nothing,” and “Something” are not characters.
+- Every actual fictional NPC/creature is registry-backed. Scenery, crowds, statues, murals,
+  “Nothing,” and “Something” are not characters.
 - Registry membership and scene presence are separate. Only present, living actors participate.
-- DM rulings render before narrator streaming. Prose cannot assert death without authoritative
-  health-threshold death and `causedDeathOf`.
-- Two player actions remain legal when the player budget is two. NPC budget is separate.
-- Target continuity may reuse only one unique recent present living target; never roster order.
-- Suggestions remain insert-only and still pass through normal classification/ruling on send.
-- Provider degradation may reduce variety but must not disable safe affordances or proven hostile
-  behavior.
-- Browser/native bridge parity is mandatory; keep native dependencies out of the webview bridge.
+- Rulings render before narrator streaming. Prose cannot assert death without threshold-backed
+  `causedDeathOf`.
+- Two player strikes remain legal under the two-action player budget; NPC budget is separate.
+- Target continuity may reuse only one unique recent present living target, never roster order.
+- Provider degradation may reduce variety but cannot invent mechanics or silently disable safe
+  affordances/proven hostile behavior.
+- Browser/native bridge parity is mandatory; keep native dependencies out of the webview path.
 - Preserve `.codex/` and `opencode.json`; do not push.
 
 ## Single next action
 
-Implement detailed-plan Task 2 using TDD:
+Implement detailed-plan Task 3 with TDD:
 
-1. Add core RED tests proving bootstrap players and introduced NPCs always have a soft-state
-   envelope and that background analysis includes every present registry character.
-2. Add two-character dossier RED tests proving neither dossier uses global plot or the other
-   character's observations/events.
-3. Implement insertion defaults plus lazy repair for older hard-only records; restrict analyzer ops
-   to known present ids.
-4. Build Character history only from that character's evidence, rename the UI section, and render
-   honest not-observed states.
-5. Run focused core/UI tests, typecheck, all tests, update every baton document, and commit.
+1. Add a RED turn/classifier reproduction with player + older NPC + current creature present, a
+   newest committed allowed player attack against the creature, provider failure, and “attack it
+   again.”
+2. Derive one focus only from the newest committed player ruling/event whose target remains present
+   and alive; pass that authoritative id into local classifier recovery.
+3. Reuse focus only for pronoun/continuation wording when no explicit living name selects another
+   target. Prove absent, dead, stale, ambiguous, and explicit-switch behavior.
+4. Keep sealed action lookup, gates, effects, damage/death, and the two-action budget unchanged.
+5. Run focused classifier/turn tests, all tests, typecheck, append WORKLOG, overwrite this handoff,
+   refresh `docs/NEXT-AGENT-PROMPT.md`, and commit the slice.
 
-Do not mix targeting, suggestions, NPC hostility, scroll, or Overview changes into the character
-memory commit.
+Do not mix suggestions, hostility, scroll, Overview, or packaging into the target-continuity commit.

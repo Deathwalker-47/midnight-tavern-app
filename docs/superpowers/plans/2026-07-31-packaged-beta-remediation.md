@@ -95,20 +95,29 @@ racing it. Focused StoryBlueprint 8/8, UI 149/25, core 546/42, total 695, and ty
 - `packages/ui/src/screens/CharacterDossier.tsx`
 - `packages/ui/test/screens/CharacterDossier.test.tsx`
 
-- [ ] Add failing tests proving player and introduced-NPC records always have a valid soft-state
+- [x] Add failing tests proving player and introduced-NPC records always have a valid soft-state
   envelope and are included in analyzer input.
-- [ ] Add failing dossier tests with two characters in one story; neither dossier may use the
+- [x] Add failing dossier tests with two characters in one story; neither dossier may use the
   other's observations or the global chapter/arc summary.
-- [ ] Ensure soft state on every registry insertion path and lazily repair older hard-only rows.
-- [ ] Reject analyzer operations for unknown/non-present character ids; the analyzer may update only
+- [x] Ensure soft state on every registry insertion path and lazily repair older hard-only rows.
+- [x] Reject analyzer operations for unknown/non-present character ids; the analyzer may update only
   the supplied present registry cast.
-- [ ] Build **Character history** from that character's backstory, observations, and actor/target
+- [x] Build **Character history** from that character's backstory, observations, and actor/target
   events. Show an honest empty-state label when no evidence exists; never substitute global plot.
-- [ ] Populate evidence-backed traits, mood, location, and goal during completed turns, including
+- [x] Populate evidence-backed traits, mood, location, and goal during completed turns, including
   the player. Do not invent defaults that the exchange does not support.
-- [ ] Rename the UI section from “Story so far” to “Character history” and distinguish “Not observed
+- [x] Rename the UI section from “Story so far” to “Character history” and distinguish “Not observed
   yet” from loading/absence.
-- [ ] Run focused core/UI tests, all tests, typecheck, and commit the slice.
+- [x] Run focused core/UI tests, all tests, typecheck, and commit the slice.
+
+Completed 2026-07-31. Character insertion now creates a primary player or secondary NPC soft
+envelope at the repository boundary, while completed-turn background work repairs legacy null
+envelopes before prompting the analyzer. Analyzer output is limited to the supplied present cast,
+and unknown/non-present ids or relationships cannot create registry entries. Dossiers no longer
+read global chapter/arc summaries: Character history uses only that character's backstory,
+observations, and authoritative actor/target events. Empty Mentality, Mood, Location, Goal, and
+history states say **Not observed yet** instead of appearing broken. Focused core 67/5 and UI 2/1,
+complete core 550/43 and UI 150/25 (700 total), and typecheck pass.
 
 ## Task 3: Preserve a unique recent target across degraded classification
 

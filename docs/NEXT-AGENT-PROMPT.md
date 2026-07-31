@@ -25,8 +25,8 @@ hint is known to be ignored.
 
 ## Current state
 
-The branch is local `main` at `ad629f7` before the current Forge source/docs commit. It is not
-pushed. The app is unsigned v0.2.8. The previous automated Internal Beta gate passed, but the human's
+The branch is local `main` at source commit `2032832` before the current documentation closeout. It
+is not pushed. The app is unsigned v0.2.8. The previous automated Internal Beta gate passed, but the human's
 first provider-backed packaged pass found seven source defects. The old package is stale for these
 fixes. The human explicitly asked not to build another installer until all fixes are done.
 
@@ -92,10 +92,13 @@ per slice:
    The original task was: add RED tests for cancel -> Start new Forge using a new story/operation id
    without a resume checkpoint and for the durable-clear race. Implement explicit **Resume saved
    Forge** and **Start new Forge** choices plus awaited id-safe clearing.
-2. **Character memory/dossiers.** Ensure every registry insertion has a soft envelope and lazy-repair
-   old hard-only rows. Analyzer updates only known present ids and includes the player. Replace
-   global plot reuse with character-only backstory/observations/actor-target events. Rename the UI
-   section to Character history and use honest evidence-empty labels.
+2. **Character memory/dossiers - complete at `2032832`.** Every registry insertion now receives a
+   primary player or secondary NPC soft envelope, and completed turns repair legacy present rows
+   before analysis. Analyzer ops are restricted to the supplied present registry ids; unknown,
+   non-present, cross-story, and unknown relationship targets cannot create or alter characters.
+   **Character history** now uses only that character's backstory, observations, and authoritative
+   actor/target events, with honest **Not observed yet** states. Focused core 67/5, focused UI 2/1,
+   complete core 550/43 and UI 150/25 (700 total), and typecheck passed.
 3. **Attack target continuity.** Derive a unique recent target from the newest committed player
    ruling/event whose target is present and alive. Use it only for pronoun/continuation wording when
    no explicit name switches targets. Dead, absent, stale, or ambiguous focus fails closed.
@@ -135,16 +138,17 @@ per slice:
 
 ## Exact next action
 
-Do only detailed-plan Task 2 next. Add core RED tests proving player/bootstrap and NPC-introduction
-rows always have a soft envelope and every present registry character enters background analysis.
-Add a two-character dossier reproduction proving current global arc/chapter fallback leaks the same
-story into both profiles. Then implement insertion defaults/lazy repair, present-id analyzer
-validation, character-only history, and the Character history UI label with honest not-observed
-states. Run focused core/UI suites, typecheck, and all tests before committing. Update the active
-plan, append WORKLOG, overwrite HANDOFF, and refresh this prompt with the actual commit and one next
-task.
+Do only detailed-plan Task 3 next. Add a RED reproduction with player + older NPC + current creature
+present, a newest committed allowed player attack against the creature, provider failure, and
+“attack it again.” Derive one focus only from the newest committed player ruling/event whose target
+is still present and alive, then thread that id into local classifier recovery. Reuse it only for
+pronoun/continuation language and only when no explicit living name switches targets. Prove dead,
+absent, stale, ambiguous, and explicit-switch cases. Keep sealed actions, gates, effects,
+damage/death, and action budgets unchanged. Run focused classifier/turn suites, typecheck, and all
+tests before committing. Update the active plan, append WORKLOG, overwrite HANDOFF, and refresh this
+prompt with the actual commit and one next task.
 
-Do not mix targeting, suggestions, hostility, scroll, or Overview into the character-memory commit.
+Do not mix suggestions, hostility, scroll, Overview, or packaging into the target-continuity commit.
 Do not build an installer yet. Do not start Task 16.
 
 Before every stop: keep tests green, make coherent commits with the required Co-Authored-By trailer,
