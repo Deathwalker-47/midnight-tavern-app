@@ -1,7 +1,7 @@
 # HANDOFF - current live state
 
 **Updated:** 2026-07-31
-**Branch / HEAD:** local `main` at source commit `ad25b9c`; documentation closeout pending; not pushed
+**Branch / HEAD:** local `main` at source commit `a0b5a98`; documentation closeout pending; not pushed
 **App version:** `0.2.8`, unsigned
 **User-owned/untracked:** `.codex/`, `opencode.json` - preserve
 **Active plan:** `Plan/next-phase-internal-beta.md`, Task 15A
@@ -9,7 +9,7 @@
 
 ## Current outcome
 
-Five of seven packaged-acceptance remediation slices are complete.
+Six of seven packaged-acceptance remediation slices are complete.
 
 1. `fab2088` - retained Forge offers reliable resume and an awaited id-safe fresh start.
 2. `2032832` - registry-owned soft memory and character-specific Character history.
@@ -19,25 +19,26 @@ Five of seven packaged-acceptance remediation slices are complete.
    present living hostile NPC that planning fails or leaves unplanned selects one gate-legal sealed
    damaging action through the ordinary resolver/ruling/state path. Neutral, ambiguous, absent,
    dead, and action-less cases fail closed; a prior reaction consumes the NPC's one turn action.
+6. `a0b5a98` - Play tracks follow-latest intent synchronously, anchors React changes before paint,
+   and observes measured transcript growth. Initial/latest and near-bottom views follow; historical
+   reading stays fixed through streaming, drawer reflow, and resize; Jump to latest resumes follow.
 
-Do not start Task 16 and do not build an installer yet. Complete scroll and Overview, run the
+Do not start Task 16 and do not build an installer yet. Complete Overview, run the
 combined release gate, then package once.
 
 ## Fresh verification
 
-- Focused NPC introduction/agency/history: **56 tests / 3 files**, passed.
+- Focused Play: **21 tests / 1 file**, passed.
 - Complete core: **578 tests / 44 files**, passed.
-- Complete UI: **151 tests / 25 files**, passed.
-- Root total after Task 15A.5: **729 tests**, passed.
+- Complete UI: **154 tests / 25 files**, passed.
+- Root total after Task 15A.6: **732 tests**, passed.
 - `npm run typecheck`: passed.
 - `git diff --check`: passed.
 - Prior package/release evidence predates Task 15A and is historical only.
 
 ## Remaining packaged findings
 
-1. **Scroll:** Play follow/latest intent relies chiefly on delayed React state and can lose the
-   reader/latest anchor during DOM replacement or layout growth.
-2. **Overview:** before an arc closes, live chapter summaries remain in the narrow timeline while
+1. **Overview:** before an arc closes, live chapter summaries remain in the narrow timeline while
    the large pane falls back to the immutable premise.
 
 ## Hostility semantics now locked
@@ -66,16 +67,15 @@ combined release gate, then package once.
 
 ## Single next action
 
-Implement detailed-plan Task 6 with TDD in `packages/ui/src/screens/Play.tsx` and
-`packages/ui/test/screens/Play.test.tsx`:
+Implement detailed-plan Task 7 with TDD in `packages/ui/src/screens/Overview.tsx` and
+`packages/ui/test/screens/Overview.test.tsx`:
 
-1. Add RED DOM-metric tests proving initial load lands at latest, near-bottom streaming follows,
-   reading older prose survives streaming plus drawer/layout growth, and Jump to latest resumes.
-2. Track follow-latest intent synchronously rather than depending on delayed React state.
-3. Use layout-phase anchoring plus a bottom sentinel or bounded resize observation so content-height
-   changes cannot reset the reader to the transcript start.
-4. Preserve the exact historical viewport while follow mode is off; avoid fighting user scrolling.
-5. Run focused Play tests, complete UI, root typecheck/all tests, append WORKLOG, overwrite this
+1. Add RED tests for no chapter, chapters without an arc, chapter selection, and a closed arc.
+2. With chapters but no arc, make the selected/latest automatic chapter title and summary primary.
+3. Retain the immutable premise as compact supporting context, clearly labeled as premise.
+4. With a closed arc, keep the arc synthesis primary and the chapter timeline navigable.
+5. Verify keyboard selection plus narrow/wide semantic hierarchy.
+6. Run focused Overview tests, complete UI, root typecheck/all tests, append WORKLOG, overwrite this
    handoff, refresh `docs/NEXT-AGENT-PROMPT.md`, and commit the slice.
 
-Do not mix Overview or packaging into the scroll commit.
+Do not mix packaging into the Overview commit.

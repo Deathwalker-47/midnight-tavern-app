@@ -981,3 +981,25 @@ was built.
 
 **Next:** Task 15A.6 - stabilize Play scroll anchoring across initial load, streaming, historical
 reading, drawer/layout growth, and explicit Jump to latest.
+
+---
+
+## 2026-07-31 - Task 15A.6: Stable Play transcript anchoring
+
+**RED evidence.** A DOM-metric resize test placed the reader near latest, increased transcript
+height without a React data change, and observed `scrollTop` remain at 850 instead of following the
+new 1500-pixel bottom. The old effect watched delayed state and render dependencies only.
+
+**What landed.** Follow-latest intent now updates synchronously in the scroll handler. React content
+and drawer changes anchor in a layout effect before paint, while a bounded `ResizeObserver` covers
+font loading, wrapping, ruling expansion, and other measured height changes. The observer follows
+only in latest mode. Historical reading leaves the exact scroll position untouched across streaming
+and drawer reflow. **Jump to latest** synchronously restores follow mode before the next resize.
+
+**Tests and verification.** Focused Play: 21 tests/1 file. New DOM-metric coverage proves initial
+load at latest, near-bottom resize following, historical resize stability, streaming/drawer
+stability, and Jump-to-latest resumption. Complete core: 578 tests/44 files. Complete UI: 154
+tests/25 files. Root total: 732 tests. Root typecheck and diff checks passed. No installer was built.
+
+**Next:** Task 15A.7 - put the latest automatic chapter summary in the primary Overview pane until
+an arc synthesis exists, with premise retained as compact context.

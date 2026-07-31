@@ -127,7 +127,7 @@ re-grounded against current HEAD (most audit gaps had already been closed by lat
 - [x] Provide scene-grounded deterministic Possible Moves when the suggestion provider degrades.
 - [x] Persist engine-validated hostility and let living hostile NPCs select legal sealed actions
   when the planner provider degrades.
-- [ ] Preserve reader scroll position and keep follow-latest mode stable through content/layout
+- [x] Preserve reader scroll position and keep follow-latest mode stable through content/layout
   changes.
 - [ ] Make the latest automatic chapter summary primary when no arc synthesis exists; keep the
   static premise as compact context.

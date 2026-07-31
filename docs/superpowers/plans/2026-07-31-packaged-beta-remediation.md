@@ -207,15 +207,22 @@ apply. Focused introduction/agency/history passed 56 tests; complete core passed
 - `packages/ui/src/screens/Play.tsx`
 - `packages/ui/test/screens/Play.test.tsx`
 
-- [ ] Add failing DOM-metric tests: initial load lands at latest; near-bottom streaming follows;
+- [x] Add failing DOM-metric tests: initial load lands at latest; near-bottom streaming follows;
   reading older prose survives stream changes, drawer open/close, and layout growth; Jump to latest
   resumes follow mode.
-- [ ] Track follow/latest intent synchronously in a ref rather than relying only on delayed React
+- [x] Track follow/latest intent synchronously in a ref rather than relying only on delayed React
   state from scroll events.
-- [ ] Use layout-phase anchoring and a bottom sentinel or bounded resize observation so height
+- [x] Use layout-phase anchoring and a bottom sentinel or bounded resize observation so height
   changes cannot reset the reader to the transcript start.
-- [ ] Preserve the user's exact viewport while they are reading history.
-- [ ] Run Play tests, UI suite, typecheck, and commit the slice.
+- [x] Preserve the user's exact viewport while they are reading history.
+- [x] Run Play tests, UI suite, typecheck, and commit the slice.
+
+_Completed 2026-07-31 in `a0b5a98`. Follow-latest intent now updates synchronously in the scroll
+handler, React-driven changes anchor before paint, and a bounded `ResizeObserver` follows font,
+wrapping, ruling, and drawer-driven height growth only while follow mode is active. Initial load,
+near-latest growth, historical reading, drawer/stream changes, and Jump to latest are DOM-metric
+tested. Focused Play passed 21 tests; complete core 578/44 plus UI 154/25 (732 total), root
+typecheck, and diff checks passed._
 
 ## Task 7: Put the latest chapter summary in the primary Overview pane
 

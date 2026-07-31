@@ -25,7 +25,7 @@ hint is known to be ignored.
 
 ## Current state
 
-The branch is local `main` at source commit `ad25b9c` before the current documentation closeout. It
+The branch is local `main` at source commit `a0b5a98` before the current documentation closeout. It
 is not pushed. The app is unsigned v0.2.8. The previous automated Internal Beta gate passed, but the human's
 first provider-backed packaged pass found seven source defects. The old package is stale for these
 fixes. The human explicitly asked not to build another installer until all fixes are done.
@@ -75,8 +75,9 @@ Fresh pre-remediation baseline on 2026-07-31:
   timeout, empty/invalid output, or omission then yields one gate-legal sealed damaging action for
   an eligible hostile actor. Neutral/ambiguous/dead/absent/no-action cases fail closed, reactions
   share the same NPC turn budget, and checkpoint rewind restores the prior flag.
-- `packages/ui/src/screens/Play.tsx`: follow/latest intent is based chiefly on delayed React state;
-  content/layout height changes are not robustly anchored.
+- Play scroll anchoring is fixed at `a0b5a98`: follow intent is synchronous, React changes anchor
+  before paint, measured height growth is resize-observed, historical reading stays fixed through
+  streaming/drawer reflow, and Jump to latest restores follow mode.
 
 The packaged provider was rate limited (HTTP 429). Treat this honestly as external degradation,
 but make safe local fallbacks work. Never fake a successful model call.
@@ -118,9 +119,11 @@ per slice:
    action through normal gate/resolver/ruling/state authority; a prior reaction consumes the same
    NPC turn budget. Focused introduction/agency/history passed 56 tests; full core 578/44 and UI
    151/25 (729 total), root typecheck and diff checks passed.
-6. **Scroll anchoring.** Test initial/latest, near-bottom streaming, historical reading, drawer and
-   layout growth, and Jump to latest. Track follow mode synchronously and preserve the exact reader
-   viewport while not following.
+6. **Scroll anchoring - complete at `a0b5a98`.** Follow-latest intent is synchronous, React changes
+   anchor in layout phase, and measured transcript growth is observed. Historical reading remains
+   fixed through streaming and drawer changes; Jump to latest restores follow before later growth.
+   Focused Play passed 21 tests; full core 578/44 and UI 154/25 (732 total), root typecheck and diff
+   checks passed.
 7. **Overview hierarchy.** Test no chapter, chapters without arc, and closed arc. Latest/selected
    automatic chapter summary is primary until arc synthesis exists; premise becomes compact context.
 8. **Final gate/package.** Typecheck, all tests, configured coverage, direct core/UI builds, cargo
@@ -145,15 +148,15 @@ per slice:
 
 ## Exact next action
 
-Do only detailed-plan Task 6 next. Add RED DOM-metric tests for initial load at latest, near-bottom
-stream following, historical reading across stream changes and drawer/layout growth, and Jump to
-latest resuming follow mode. Track follow intent synchronously rather than only in delayed React
-state. Use layout-phase anchoring plus a bottom sentinel or bounded resize observation so content
-growth cannot reset the viewport to transcript start. Preserve the exact viewport while the reader
-is not following. Run focused Play tests, the full UI suite, root typecheck/all tests, then update the
-plan, append WORKLOG, overwrite HANDOFF, refresh this prompt, and commit the scroll slice.
+Do only detailed-plan Task 7 next. Add RED Overview tests for no closed chapter, chapters without a
+closed arc, selected chapter navigation, and a closed arc. With chapters but no arc, render the
+selected/latest automatic chapter title and summary in the large primary pane and retain immutable
+premise as compact clearly labeled context. With an arc, keep arc synthesis primary while chapter
+navigation remains usable. Verify keyboard semantics and narrow/wide hierarchy. Run focused
+Overview tests, full UI, root typecheck/all tests, then update the plan, append WORKLOG, overwrite
+HANDOFF, refresh this prompt, and commit the Overview slice.
 
-Do not mix Overview or packaging into the scroll commit.
+Do not mix packaging into the Overview commit.
 Do not build an installer yet. Do not start Task 16.
 
 Before every stop: keep tests green, make coherent commits with the required Co-Authored-By trailer,
