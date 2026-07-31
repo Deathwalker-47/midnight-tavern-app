@@ -310,11 +310,12 @@ export async function assemblePlayerSuggestionContext(
     store.worldSoft.get(story.id),
   ]);
   const latestNarrator = [...messages].reverse().find((message) => message.role === "narrator");
-  const player = roster.find((character) => character.isPlayer);
+  const livingRoster = roster.filter((character) => character.hard.alive);
+  const player = livingRoster.find((character) => character.isPlayer);
   const narratorText = tailExcerpt(latestNarrator?.content ?? "", LATEST_NARRATOR_LIMIT);
   const normalizedNarrator = normalizedSuggestionText(narratorText);
   const playerLocation = player?.soft?.current.location?.trim().toLowerCase();
-  const visible = roster.filter((character) => {
+  const visible = livingRoster.filter((character) => {
     if (character.isPlayer) return true;
     const characterName = normalizedSuggestionText(character.name);
     const namedInScene =

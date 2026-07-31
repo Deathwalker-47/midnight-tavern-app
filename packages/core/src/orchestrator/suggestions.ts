@@ -2,7 +2,10 @@ import { z } from "zod";
 import { callStructured, type Router } from "../router/index.js";
 import type { Store } from "../store/index.js";
 import { randomUUID } from "../util/uuid.js";
-import { assemblePlayerSuggestionContext } from "./context.js";
+import {
+  assemblePlayerSuggestionContext,
+  type PlayerSuggestionContext,
+} from "./context.js";
 import { requireStory } from "./turn.js";
 
 export const SuggestedActionSchema = z.object({
@@ -50,6 +53,102 @@ function actionTextMatches(
     .some((phrase) => includesWholePhrase(candidate, phrase));
 }
 
+const UNSAFE_FALLBACK_ANCHORS = new Set([
+  "absent",
+  "dead",
+  "dies",
+  "elsewhere",
+  "killed",
+]);
+
+function deterministicFallbackSuggestions(
+  context: PlayerSuggestionContext,
+  unavailableCharacterNames: string[]
+): SuggestedAction[] {
+  if (!context.latestNarrator?.trim()) return [];
+  const player = context.visibleCharacters.find((character) => character.isPlayer);
+  if (!player) return [];
+
+  const allCharacterNameWords = new Set(
+    [...context.visibleCharacters.map((character) => character.name), ...unavailableCharacterNames]
+      .flatMap((name) => normalized(name).split(/\s+/))
+      .filter(Boolean)
+  );
+  const anchors = [...new Set(context.sceneAnchors.map(normalized))]
+    .filter(Boolean)
+    .filter((anchor) => !allCharacterNameWords.has(anchor))
+    .filter((anchor) => !UNSAFE_FALLBACK_ANCHORS.has(anchor));
+  if (anchors.length < 2) return [];
+
+  const [primaryAnchor, secondaryAnchor] = anchors;
+  if (!primaryAnchor || !secondaryAnchor) return [];
+  const npc = context.visibleCharacters.find((character) => !character.isPlayer);
+  const safeAction = context.availableActions.find((action) =>
+    npc
+      ? action.category !== "combat"
+      : ["exploration", "utility", "crafting"].includes(action.category)
+  );
+  const suggestions: Array<Omit<SuggestedAction, "id">> = npc
+    ? [
+        {
+          kind: "dialogue",
+          text: `Ask ${npc.name} what they know about ${primaryAnchor}.`,
+        },
+        {
+          kind: "dialogue",
+          text: `Tell ${npc.name} what you noticed about ${secondaryAnchor}.`,
+        },
+        {
+          kind: "move",
+          text: `Examine ${primaryAnchor} while keeping ${npc.name} in view.`,
+        },
+        {
+          kind: "move",
+          text: `Move toward ${secondaryAnchor} and watch ${npc.name} for a reaction.`,
+        },
+        safeAction
+          ? {
+              kind: "action",
+              text: `${safeAction.label} while investigating ${primaryAnchor}.`,
+              actionId: safeAction.id,
+            }
+          : {
+              kind: "move",
+              text: `Check whether ${primaryAnchor} and ${secondaryAnchor} are connected before moving on.`,
+            },
+      ]
+    : [
+        {
+          kind: "move",
+          text: `Examine ${primaryAnchor} for details connected to ${secondaryAnchor}.`,
+        },
+        {
+          kind: "move",
+          text: `Move toward ${primaryAnchor} while keeping ${secondaryAnchor} in view.`,
+        },
+        {
+          kind: "move",
+          text: `Check whether ${primaryAnchor} and ${secondaryAnchor} are connected.`,
+        },
+        {
+          kind: "dialogue",
+          text: `Call out about ${primaryAnchor} and listen near ${secondaryAnchor}.`,
+        },
+        safeAction
+          ? {
+              kind: "action",
+              text: `${safeAction.label} while investigating ${primaryAnchor}.`,
+              actionId: safeAction.id,
+            }
+          : {
+              kind: "move",
+              text: `Compare what changed around ${primaryAnchor} with ${secondaryAnchor}.`,
+            },
+      ];
+
+  return suggestions.map((suggestion) => ({ id: randomUUID(), ...suggestion }));
+}
+
 /** Generate five or six optional, context-grounded player choices without taking an action. */
 export async function suggestPlayerActions(
   router: Router,
@@ -64,8 +163,10 @@ export async function suggestPlayerActions(
   const visibleCharacterIds = new Set(
     context.visibleCharacters.map((character) => character.id)
   );
-  const absentCharacterNames = (await store.characters.listByStory(storyId))
-    .filter((character) => !visibleCharacterIds.has(character.id))
+  const unavailableCharacterNames = (await store.characters.listByStory(storyId))
+    .filter(
+      (character) => !visibleCharacterIds.has(character.id) || !character.hard.alive
+    )
     .map((character) => normalized(character.name))
     .filter(Boolean);
   const validActions = new Map(
@@ -94,7 +195,7 @@ export async function suggestPlayerActions(
             message: "Generic fallback phrasing is not grounded in this scene.",
           });
         }
-        const absentName = absentCharacterNames.find((name) =>
+        const absentName = unavailableCharacterNames.find((name) =>
           includesWholePhrase(text, name)
         );
         if (absentName) {
@@ -173,9 +274,6 @@ export async function suggestPlayerActions(
     });
   } catch (error) {
     if (signal?.aborted) throw error;
-    throw new SuggestionGenerationError(
-      "The suggestion model did not return five context-grounded options.",
-      { cause: error }
-    );
+    return deterministicFallbackSuggestions(context, unavailableCharacterNames);
   }
 }

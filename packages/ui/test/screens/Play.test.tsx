@@ -428,6 +428,53 @@ describe("Play — stream + composer", () => {
 });
 
 describe("Play — possible moves", () => {
+  it("shows degraded grounded moves as insert-only choices instead of an unavailable warning", async () => {
+    const suggestActions = vi.fn(async () => [
+      {
+        id: "fallback-1",
+        kind: "move" as const,
+        text: "Examine the mill door for signs of the burden.",
+      },
+      {
+        id: "fallback-2",
+        kind: "move" as const,
+        text: "Keep the burden in view near the mill.",
+      },
+      {
+        id: "fallback-3",
+        kind: "dialogue" as const,
+        text: "Call out about the burden beside the mill.",
+      },
+      {
+        id: "fallback-4",
+        kind: "move" as const,
+        text: "Check whether the mill and burden are connected.",
+      },
+      {
+        id: "fallback-5",
+        kind: "move" as const,
+        text: "Move toward the mill while watching the door.",
+      },
+    ]);
+    setBridge({ ...emptyBridge(), suggestActions });
+    render(<Play storyId="s1" />);
+
+    const composer = await screen.findByTestId("play-composer") as HTMLTextAreaElement;
+    fireEvent.change(composer, { target: { value: "I stay ready." } });
+    fireEvent.click(screen.getByRole("button", { name: /Possible moves/i }));
+
+    const fallback = await screen.findByRole("button", {
+      name: /Examine the mill door for signs of the burden/i,
+    });
+    expect(screen.queryByText("Suggestions are unavailable")).not.toBeInTheDocument();
+    fireEvent.click(fallback);
+
+    expect(composer.value).toBe(
+      "I stay ready. Examine the mill door for signs of the burden."
+    );
+    expect(screen.getByRole("button", { name: /Possible moves/i })).toBeInTheDocument();
+  });
+
   it("shows a retryable provider error without replacing the player's draft", async () => {
     const suggestActions = vi.fn(async () => {
       throw new Error("Classifier returned invalid scene-grounded suggestions");

@@ -7,10 +7,7 @@ import type {
   Router,
   StreamHandler,
 } from "../../src/router/index.js";
-import {
-  SuggestionGenerationError,
-  suggestPlayerActions,
-} from "../../src/orchestrator/suggestions.js";
+import { suggestPlayerActions } from "../../src/orchestrator/suggestions.js";
 import { assemblePlayerSuggestionContext } from "../../src/orchestrator/context.js";
 import { openStore, type Store } from "../../src/store/index.js";
 import type { CharacterSoftState, StoryRecord } from "../../src/types/index.js";
@@ -39,7 +36,7 @@ class SuggestionRouter implements Router {
   readonly prompts: RolePrompt[] = [];
   private index = 0;
 
-  constructor(private readonly responses: string[]) {}
+  constructor(private readonly responses: Array<string | Error>) {}
 
   bindingFor(_role: Role): RoleBinding {
     return {
@@ -52,10 +49,11 @@ class SuggestionRouter implements Router {
 
   async complete(_role: Role, prompt: RolePrompt): Promise<ChatResponse> {
     this.prompts.push(prompt);
-    const content =
+    const response =
       this.responses[Math.min(this.index, this.responses.length - 1)] ?? "";
     this.index += 1;
-    return { content };
+    if (response instanceof Error) throw response;
+    return { content: response };
   }
 
   async stream(
@@ -67,12 +65,16 @@ class SuggestionRouter implements Router {
   }
 }
 
-async function seedStory(statMode: "full" | "none" = "full"): Promise<{
+async function seedStory(
+  statMode: "full" | "none" = "full",
+  emptyCatalog = false
+): Promise<{
   store: Store;
   story: StoryRecord;
 }> {
   const store = await openStore(":memory:");
   const schema = makeStory({ storyId: STORY_ID, statMode });
+  if (emptyCatalog) schema.actions = [];
   const story: StoryRecord = {
     id: STORY_ID,
     title: "Deadweight",
@@ -261,7 +263,7 @@ describe("context-grounded possible moves", () => {
     expect(suggestions.every((suggestion) => !suggestion.text.includes("Marrow"))).toBe(true);
   });
 
-  it("repairs then reports generic fallback output instead of silently showing it", async () => {
+  it("uses five deterministic scene-grounded fallbacks after malformed repair output", async () => {
     const { store } = await seedStory();
     stores.push(store);
     const generic = JSON.stringify({
@@ -275,10 +277,193 @@ describe("context-grounded possible moves", () => {
     });
     const router = new SuggestionRouter([generic]);
 
-    await expect(
-      suggestPlayerActions(router, store, STORY_ID)
-    ).rejects.toBeInstanceOf(SuggestionGenerationError);
+    const suggestions = await suggestPlayerActions(router, store, STORY_ID);
+
+    expect(suggestions).toHaveLength(5);
+    expect(new Set(suggestions.map((suggestion) => suggestion.text)).size).toBe(5);
+    expect(
+      suggestions.every((suggestion) =>
+        /sorel|mill|burden|door/i.test(suggestion.text)
+      )
+    ).toBe(true);
+    expect(
+      suggestions.every((suggestion) => !/\b(success|succeed|defeat|kill|find)\b/i.test(suggestion.text))
+    ).toBe(true);
     expect(router.prompts).toHaveLength(3);
+  });
+
+  it("uses grounded fallbacks after structurally malformed responses exhaust repairs", async () => {
+    const { store } = await seedStory();
+    stores.push(store);
+    const router = new SuggestionRouter(["not json"]);
+
+    const suggestions = await suggestPlayerActions(router, store, STORY_ID);
+
+    expect(suggestions).toHaveLength(5);
+    expect(router.prompts).toHaveLength(3);
+    expect(suggestions.every((suggestion) => /sorel|mill|burden|door/i.test(suggestion.text)))
+      .toBe(true);
+  });
+
+  it("uses the same deterministic grounded fallback when the provider fails", async () => {
+    const { store, story } = await seedStory();
+    stores.push(store);
+    const first = await suggestPlayerActions(
+      new SuggestionRouter([new Error("HTTP 429")]),
+      store,
+      STORY_ID
+    );
+    const second = await suggestPlayerActions(
+      new SuggestionRouter([new Error("network unavailable")]),
+      store,
+      STORY_ID
+    );
+
+    expect(first).toHaveLength(5);
+    expect(first.map(({ id: _id, ...suggestion }) => suggestion)).toEqual(
+      second.map(({ id: _id, ...suggestion }) => suggestion)
+    );
+    const context = await assemblePlayerSuggestionContext(store, story);
+    for (const suggestion of first.filter((candidate) => candidate.kind === "action")) {
+      const action = context.availableActions.find(
+        (candidate) => candidate.id === suggestion.actionId
+      );
+      expect(action).toBeDefined();
+      expect(suggestion.text.toLowerCase()).toContain(action!.label.toLowerCase());
+    }
+  });
+
+  it("never falls back when the caller has aborted", async () => {
+    const { store } = await seedStory();
+    stores.push(store);
+    const controller = new AbortController();
+    controller.abort();
+    const providerError = new Error("Aborted");
+    providerError.name = "AbortError";
+
+    await expect(
+      suggestPlayerActions(
+        new SuggestionRouter([providerError]),
+        store,
+        STORY_ID,
+        controller.signal
+      )
+    ).rejects.toBe(providerError);
+  });
+
+  it("excludes absent and dead registered characters from degraded suggestions", async () => {
+    const { store, story } = await seedStory();
+    stores.push(store);
+    await store.characters.insert({
+      id: "marrow",
+      storyId: STORY_ID,
+      name: "Marrow",
+      isPlayer: false,
+      present: false,
+      hard: {
+        characterId: "marrow",
+        isPlayer: false,
+        attributes: {},
+        resources: { hp: { current: 10, max: 10 } },
+        skills: [],
+        inventory: [],
+        flags: {},
+        alive: true,
+      },
+    });
+    await store.characters.insert({
+      id: "husk",
+      storyId: STORY_ID,
+      name: "Husk",
+      isPlayer: false,
+      present: true,
+      hard: {
+        characterId: "husk",
+        isPlayer: false,
+        attributes: {},
+        resources: { hp: { current: 0, max: 10 } },
+        skills: [],
+        inventory: [],
+        flags: {},
+        alive: false,
+      },
+      soft: soft("husk", "Husk", { location: "mill" }),
+    });
+    await store.messages.insert({
+      id: "latest-with-unavailable-cast",
+      storyId: story.id,
+      idx: 1,
+      role: "narrator",
+      content:
+        "Sorel guards the mill door while the burden hums. Marrow is elsewhere, and Husk lies dead.",
+      createdAt: 1,
+    });
+
+    const suggestions = await suggestPlayerActions(
+      new SuggestionRouter([new Error("HTTP 429")]),
+      store,
+      STORY_ID
+    );
+    const context = await assemblePlayerSuggestionContext(store, story);
+
+    expect(context.visibleCharacters.map((character) => character.name)).not.toContain("Husk");
+    expect(suggestions).toHaveLength(5);
+    expect(suggestions.every((suggestion) => !/marrow|husk/i.test(suggestion.text))).toBe(true);
+  });
+
+  it("uses no mechanical suggestion when the sealed action catalog is empty", async () => {
+    const { store } = await seedStory("full", true);
+    stores.push(store);
+
+    const suggestions = await suggestPlayerActions(
+      new SuggestionRouter([new Error("HTTP 429")]),
+      store,
+      STORY_ID
+    );
+
+    expect(suggestions).toHaveLength(5);
+    expect(
+      suggestions.every(
+        (suggestion) => suggestion.kind !== "action" && suggestion.actionId === undefined
+      )
+    ).toBe(true);
+  });
+
+  it("returns no fallback when committed scene context is too sparse", async () => {
+    const store = await openStore(":memory:");
+    stores.push(store);
+    const schema = makeStory({ storyId: STORY_ID, statMode: "none" });
+    await store.stories.insert({
+      id: STORY_ID,
+      title: "Sparse",
+      createdAt: 0,
+      schema,
+      locked: true,
+      actionBudget: 2,
+    });
+    await store.characters.insert({
+      id: "kestrel",
+      storyId: STORY_ID,
+      name: "Kestrel",
+      isPlayer: true,
+      hard: makePlayer(),
+    });
+    await store.messages.insert({
+      id: "sparse",
+      storyId: STORY_ID,
+      idx: 0,
+      role: "narrator",
+      content: "Dark.",
+      createdAt: 0,
+    });
+
+    await expect(
+      suggestPlayerActions(
+        new SuggestionRouter([new Error("HTTP 429")]),
+        store,
+        STORY_ID
+      )
+    ).resolves.toEqual([]);
   });
 
   it("drops invalid mechanical metadata without discarding useful prose", async () => {
