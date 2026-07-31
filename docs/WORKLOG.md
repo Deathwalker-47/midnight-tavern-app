@@ -858,3 +858,26 @@ slices and the combined gate are complete.
 
 **Baseline.** Before this docs checkpoint, typecheck passed and core 546/42 plus UI 147/25 = 693
 tests passed. Only user-owned `.codex/` and `opencode.json` were untracked.
+
+---
+
+## 2026-07-31 - Task 15A.1: Forge resume and fresh-start lifecycle
+
+**RED evidence.** Two new StoryBlueprint tests restored a cancelled durable Forge and looked for a
+**Start new Forge** action. Both failed because the UI exposed only **Resume retained forge** and an
+asynchronous discard. The race test also required the retained durable operation to finish clearing
+before any replacement save.
+
+**What landed.** `StoryBlueprint` now keeps explicit resume behavior while offering **Start new
+Forge** beside **Resume saved Forge**. Fresh start waits for the queued retained write, clears only
+the matching retained operation id through the already id-guarded bridge contract, resets retained
+progress, and then generates a new request/operation with no resume checkpoint. A durable-clear
+failure is surfaced and stops replacement; it cannot silently race a new save. Cancellation still
+retains validated fragments and the editable blueprint.
+
+**Tests and verification.** Focused StoryBlueprint: 8/8. Complete UI: 149 tests/25 files. Core: 546
+tests/42 files. Root total: 695 tests. Typecheck passed. The old package was not rebuilt, per the
+product owner's instruction to package only after all Task 15A work is complete.
+
+**Next:** Task 15A.2 - durable soft envelopes, present-cast analysis, character-only dossier history,
+and honest Character history UI states.

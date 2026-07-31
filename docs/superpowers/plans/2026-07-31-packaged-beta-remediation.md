@@ -67,15 +67,20 @@ is deferred until all source slices are complete, per the product owner's instru
 - `packages/ui/src/screens/StoryBlueprint.tsx`
 - `packages/ui/test/screens/StoryBlueprint.test.tsx`
 
-- [ ] Add a failing test: cancel a Forge, choose **Start new Forge**, then assert a new story id,
+- [x] Add a failing test: cancel a Forge, choose **Start new Forge**, then assert a new story id,
   operation id, request, and no resume checkpoint are passed to `createStory`.
-- [ ] Add a failing race test proving the old durable operation is cleared before the fresh one is
+- [x] Add a failing race test proving the old durable operation is cleared before the fresh one is
   saved, so a late clear cannot delete the new operation.
-- [ ] Extract an awaited `discardRetainedForge(expectedOperationId)` transition that clears durable
+- [x] Extract an awaited `discardRetainedForge(expectedOperationId)` transition that clears durable
   state only for the retained id and then clears matching refs/state.
-- [ ] Present equally understandable actions: **Resume saved Forge** and **Start new Forge**.
-- [ ] Preserve explicit checkpoint resume and honest provider 429/error copy.
-- [ ] Run the focused StoryBlueprint suite, UI suite, typecheck, and commit the slice.
+- [x] Present equally understandable actions: **Resume saved Forge** and **Start new Forge**.
+- [x] Preserve explicit checkpoint resume and honest provider 429/error copy.
+- [x] Run the focused StoryBlueprint suite, UI suite, typecheck, and commit the slice.
+
+Completed 2026-07-31. The focused test was RED because no Start-new action existed. Fresh start now
+awaits the queued retained write, clears exactly the retained operation id, and only then creates and
+saves a new request without `resume`. A clear failure is visible and blocks replacement instead of
+racing it. Focused StoryBlueprint 8/8, UI 149/25, core 546/42, total 695, and typecheck pass.
 
 ## Task 2: Give every registry character durable character-specific memory
 

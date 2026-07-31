@@ -120,7 +120,7 @@ re-grounded against current HEAD (most audit gaps had already been closed by lat
 
 - [x] Capture all seven observations and trace each to its runtime owner/root cause.
 - [x] Write the dependency-ordered detailed remediation plan and refresh the active baton.
-- [ ] Make cancelled/failed Forge offer both reliable resume and a genuinely fresh operation.
+- [x] Make cancelled/failed Forge offer both reliable resume and a genuinely fresh operation.
 - [ ] Make dossier history character-specific and ensure every registry character participates in
   evidence-backed soft-memory updates.
 - [ ] Preserve a unique recent living target for pronoun continuation attacks without guessing.

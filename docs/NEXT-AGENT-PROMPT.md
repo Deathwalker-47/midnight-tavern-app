@@ -25,7 +25,7 @@ hint is known to be ignored.
 
 ## Current state
 
-The branch is local `main` at `8ab7a68` before the remediation documentation checkpoint. It is not
+The branch is local `main` at `ad629f7` before the current Forge source/docs commit. It is not
 pushed. The app is unsigned v0.2.8. The previous automated Internal Beta gate passed, but the human's
 first provider-backed packaged pass found seven source defects. The old package is stale for these
 fixes. The human explicitly asked not to build another installer until all fixes are done.
@@ -84,7 +84,12 @@ but make safe local fallbacks work. Never fake a successful model call.
 Follow `docs/superpowers/plans/2026-07-31-packaged-beta-remediation.md` exactly, one coherent commit
 per slice:
 
-1. **Forge lifecycle.** Add RED tests for cancel -> Start new Forge using a new story/operation id
+1. **Forge lifecycle - complete.** RED tests proved cancel/retained state had no Start-new action.
+   Fresh start now waits for queued writes, clears exactly the retained operation id, and only then
+   uses a new story/operation id with no resume checkpoint. The UI exposes **Resume saved Forge** and
+   **Start new Forge**; clear failure blocks replacement visibly. Focused 8/8, UI 149, core 546,
+   total 695, and typecheck pass.
+   The original task was: add RED tests for cancel -> Start new Forge using a new story/operation id
    without a resume checkpoint and for the durable-clear race. Implement explicit **Resume saved
    Forge** and **Start new Forge** choices plus awaited id-safe clearing.
 2. **Character memory/dossiers.** Ensure every registry insertion has a soft envelope and lazy-repair
@@ -130,13 +135,17 @@ per slice:
 
 ## Exact next action
 
-Do only detailed-plan Task 1 first. Inspect the existing StoryBlueprint tests and render branch,
-write the two failing Forge tests, run them and record the RED cause, then implement the smallest
-id-safe fresh-start transition. Run focused UI tests, the complete UI suite, typecheck, and all tests
-before committing. Update the active plan, append WORKLOG, overwrite HANDOFF, and refresh this prompt
-with the actual commit and the next single task.
+Do only detailed-plan Task 2 next. Add core RED tests proving player/bootstrap and NPC-introduction
+rows always have a soft envelope and every present registry character enters background analysis.
+Add a two-character dossier reproduction proving current global arc/chapter fallback leaks the same
+story into both profiles. Then implement insertion defaults/lazy repair, present-id analyzer
+validation, character-only history, and the Character history UI label with honest not-observed
+states. Run focused core/UI suites, typecheck, and all tests before committing. Update the active
+plan, append WORKLOG, overwrite HANDOFF, and refresh this prompt with the actual commit and one next
+task.
 
-Do not mix later fixes into the Forge commit. Do not build an installer yet. Do not start Task 16.
+Do not mix targeting, suggestions, hostility, scroll, or Overview into the character-memory commit.
+Do not build an installer yet. Do not start Task 16.
 
 Before every stop: keep tests green, make coherent commits with the required Co-Authored-By trailer,
 tick only evidenced checklist items, append `docs/WORKLOG.md`, overwrite `docs/HANDOFF.md` with one

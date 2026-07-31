@@ -1,7 +1,7 @@
 # HANDOFF - current live state
 
 **Updated:** 2026-07-31
-**Branch / HEAD:** local `main` at `8ab7a68` before this remediation docs checkpoint; not pushed
+**Branch / HEAD:** local `main` at `ad629f7` before the current Forge source/docs commit; not pushed
 **App version:** `0.2.8`, unsigned
 **User-owned/untracked:** `.codex/`, `opencode.json` - preserve
 **Active plan:** `Plan/next-phase-internal-beta.md`, Task 15A
@@ -14,14 +14,17 @@ artifacts are stale for acceptance even though the automated gate that produced 
 not start Task 16 and do not rebuild an installer after each fix. Complete Task 15A sequentially,
 run the combined gate, then package the final source state once.
 
-No source file has been changed for this new batch yet. The defects have been reproduced from the
-screenshots, packaged log, runtime data flow, and current code, and a dependency-ordered TDD plan is
-now written. The next slice is Forge fresh-start lifecycle.
+Task 15A slice 1 is complete. A retained Forge now offers **Resume saved Forge** and **Start new
+Forge**. Fresh start waits for queued retained writes, clears exactly the old operation id, then
+creates a new story/operation without a resume checkpoint. If durable clearing fails, replacement is
+blocked with a visible error instead of racing or overwriting saved work. The next slice is durable
+character-specific memory and dossier semantics.
 
 ## Fresh baseline before remediation
 
 - `npm run typecheck`: passed on 2026-07-31.
 - `npm test`: core **546/42 files** + UI **147/25 files** = **693 tests**, passed.
+- After Forge tests: core **546/42 files** + UI **149/25 files** = **695 tests**, passed.
 - Working tree before docs: only user-owned `.codex/` and `opencode.json` were untracked.
 - Prior automated release gate at `8ab7a68`: configured engine coverage 100% in all four metrics,
   direct core/UI builds passed, `cargo check` passed, and unsigned v0.2.8 packages built.
@@ -56,7 +59,7 @@ must degrade safely and honestly; it must not manufacture mechanics or conceal p
 
 ## Task 15A order
 
-1. Forge fresh start vs checkpoint resume.
+1. Forge fresh start vs checkpoint resume. **Complete.**
 2. Character-specific history and durable soft-state participation.
 3. Recent living target focus for pronoun continuation attacks.
 4. Deterministic scene-grounded suggestion fallback.
@@ -84,15 +87,17 @@ must degrade safely and honestly; it must not manufacture mechanics or conceal p
 
 ## Single next action
 
-Implement detailed-plan Task 1 using TDD:
+Implement detailed-plan Task 2 using TDD:
 
-1. In `packages/ui/test/screens/StoryBlueprint.test.tsx`, reproduce cancellation followed by
-   **Start new Forge** and observe that current code reuses the retained story/operation/checkpoint.
-2. Add the durable-clear race test.
-3. Implement an awaited, operation-id-safe discard transition and explicit **Resume saved Forge** /
-   **Start new Forge** actions in `StoryBlueprint.tsx`.
-4. Run the focused UI test, UI suite, typecheck, then update the plan/worklog/handoff/prompt and
-   commit the coherent slice with the required trailer.
+1. Add core RED tests proving bootstrap players and introduced NPCs always have a soft-state
+   envelope and that background analysis includes every present registry character.
+2. Add two-character dossier RED tests proving neither dossier uses global plot or the other
+   character's observations/events.
+3. Implement insertion defaults plus lazy repair for older hard-only records; restrict analyzer ops
+   to known present ids.
+4. Build Character history only from that character's evidence, rename the UI section, and render
+   honest not-observed states.
+5. Run focused core/UI tests, typecheck, all tests, update every baton document, and commit.
 
-Do not mix dossier, targeting, suggestions, NPC hostility, scroll, or Overview changes into the
-Forge commit.
+Do not mix targeting, suggestions, NPC hostility, scroll, or Overview changes into the character
+memory commit.

@@ -5,12 +5,47 @@ import {
   makeMemoryBridge,
   setBridge,
   type CoreBridge,
+  type ForgeOperationRecord,
   type MappedCard,
 } from "../../src/bridge/core";
 import { StoryBlueprint } from "../../src/screens/StoryBlueprint";
 import { useStoriesStore } from "../../src/state/storiesStore";
 import { useSettingsStore } from "../../src/state/settingsStore";
 import { useRoute } from "../../src/app/router";
+
+function retainedForgeOperation(): ForgeOperationRecord {
+  return {
+    version: 1,
+    operationId: "story-blueprint-resume",
+    kind: "story-create",
+    storyId: "story-blueprint-resume",
+    status: "cancelled",
+    phase: "phase-b",
+    attempt: 1,
+    elapsedMs: 8_000,
+    detail: "Mechanics core retained.",
+    startedAt: 1_000,
+    updatedAt: 9_000,
+    checkpoint: {
+      startedAt: 1_000,
+      sourceFingerprint: "bootstrap-v1-blueprint-resume",
+      latestCompletedFragment: "mechanics-core",
+    },
+    request: {
+      storyId: "story-blueprint-resume",
+      title: "Recovered Blueprint",
+      premise: "A courier returns to a monastery that vanished at dawn.",
+      playerName: "Kestrel Vane",
+      statMode: "full",
+      persona: {
+        id: "persona-kestrel",
+        name: "Kestrel Vane",
+        description: "A patient courier, practiced climber, and reluctant duelist.",
+      },
+      blueprint: { name: "The Vanished Bell" },
+    },
+  };
+}
 
 beforeEach(async () => {
   globalThis.localStorage?.clear();
@@ -184,47 +219,81 @@ describe("StoryBlueprint create flow", () => {
     await waitFor(() => expect(screen.getByText(/forging was cancelled/i)).toBeInTheDocument());
     expect(useStoriesStore.getState().draft?.title).toBe("Ash Road");
     expect(useStoriesStore.getState().forging).toBe(false);
+    expect(screen.getByRole("button", { name: /start new forge/i })).toBeInTheDocument();
   });
 
   it("restores a durable retained forge after leaving and re-entering creation", async () => {
     const bridge = getBridge();
-    await (bridge as any).saveForgeOperation({
-      version: 1,
-      operationId: "story-blueprint-resume",
-      kind: "story-create",
-      storyId: "story-blueprint-resume",
-      status: "cancelled",
-      phase: "phase-b",
-      attempt: 1,
-      elapsedMs: 8_000,
-      detail: "Mechanics core retained.",
-      startedAt: 1_000,
-      updatedAt: 9_000,
-      checkpoint: {
-        startedAt: 1_000,
-        sourceFingerprint: "bootstrap-v1-blueprint-resume",
-        latestCompletedFragment: "mechanics-core",
-      },
-      request: {
-        storyId: "story-blueprint-resume",
-        title: "Recovered Blueprint",
-        premise: "A courier returns to a monastery that vanished at dawn.",
-        playerName: "Kestrel Vane",
-        statMode: "full",
-        persona: {
-          id: "persona-kestrel",
-          name: "Kestrel Vane",
-          description: "A patient courier, practiced climber, and reluctant duelist.",
-        },
-        blueprint: { name: "The Vanished Bell" },
-      },
-    });
+    await bridge.saveForgeOperation(retainedForgeOperation());
+    const createStory = vi.fn(bridge.createStory.bind(bridge));
+    setBridge({ ...bridge, createStory } as CoreBridge);
     useStoriesStore.setState({ draft: undefined });
 
     render(<StoryBlueprint />);
 
     expect(await screen.findByDisplayValue("Recovered Blueprint")).toBeInTheDocument();
     expect(screen.getAllByText(/mechanics core retained/i).length).toBeGreaterThan(0);
-    expect(screen.getByRole("button", { name: /resume retained forge/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /resume saved forge/i }));
+    await waitFor(() => expect(createStory).toHaveBeenCalledOnce(), { timeout: 2_500 });
+    expect(createStory.mock.calls[0]![0]).toMatchObject({
+      storyId: "story-blueprint-resume",
+      resume: {
+        sourceFingerprint: "bootstrap-v1-blueprint-resume",
+        latestCompletedFragment: "mechanics-core",
+      },
+    });
+  });
+
+  it("starts a genuinely new Forge without reusing the retained request or checkpoint", async () => {
+    const bridge = getBridge();
+    await bridge.saveForgeOperation(retainedForgeOperation());
+    const createStory = vi.fn(bridge.createStory.bind(bridge));
+    setBridge({ ...bridge, createStory } as CoreBridge);
+    useStoriesStore.setState({ draft: undefined });
+
+    render(<StoryBlueprint />);
+
+    await screen.findByDisplayValue("Recovered Blueprint");
+    fireEvent.click(screen.getByRole("button", { name: /start new forge/i }));
+
+    await waitFor(() => expect(createStory).toHaveBeenCalledOnce(), { timeout: 2_500 });
+    const request = createStory.mock.calls[0]![0];
+    expect(request.storyId).not.toBe("story-blueprint-resume");
+    expect(request.resume).toBeUndefined();
+  });
+
+  it("clears the retained operation before saving the fresh Forge operation", async () => {
+    const bridge = getBridge();
+    await bridge.saveForgeOperation(retainedForgeOperation());
+    const order: string[] = [];
+    let releaseClear!: () => void;
+    const clearGate = new Promise<void>((resolve) => {
+      releaseClear = resolve;
+    });
+    const clearForgeOperation = vi.fn(async (operationId: string) => {
+      order.push(`clear:${operationId}:started`);
+      if (operationId === "story-blueprint-resume") await clearGate;
+      await bridge.clearForgeOperation(operationId);
+      order.push(`clear:${operationId}:finished`);
+    });
+    const saveForgeOperation = vi.fn(async (operation: ForgeOperationRecord) => {
+      order.push(`save:${operation.operationId}`);
+      await bridge.saveForgeOperation(operation);
+    });
+    setBridge({ ...bridge, clearForgeOperation, saveForgeOperation } as CoreBridge);
+    useStoriesStore.setState({ draft: undefined });
+
+    render(<StoryBlueprint />);
+
+    await screen.findByDisplayValue("Recovered Blueprint");
+    fireEvent.click(screen.getByRole("button", { name: /start new forge/i }));
+    await waitFor(() => expect(clearForgeOperation).toHaveBeenCalledWith("story-blueprint-resume"));
+    expect(saveForgeOperation).not.toHaveBeenCalled();
+
+    releaseClear();
+    await waitFor(() => expect(saveForgeOperation).toHaveBeenCalledOnce());
+    expect(order[0]).toBe("clear:story-blueprint-resume:started");
+    expect(order[1]).toBe("clear:story-blueprint-resume:finished");
+    expect(order[2]).toMatch(/^save:(?!story-blueprint-resume$).+/);
   });
 });
