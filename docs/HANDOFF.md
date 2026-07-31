@@ -1,120 +1,98 @@
 # HANDOFF - current live state
 
 **Updated:** 2026-07-31
-**Branch / source HEAD:** `main` at `4237735` before the following docs-only closeout commit; local,
-not pushed
+**Branch / HEAD:** local `main` at `8ab7a68` before this remediation docs checkpoint; not pushed
 **App version:** `0.2.8`, unsigned
 **User-owned/untracked:** `.codex/`, `opencode.json` - preserve
-**Active plan:** `Plan/next-phase-internal-beta.md`
-**Detailed plan:** `docs/superpowers/plans/2026-07-29-internal-beta-completion.md`
+**Active plan:** `Plan/next-phase-internal-beta.md`, Task 15A
+**Detailed plan:** `docs/superpowers/plans/2026-07-31-packaged-beta-remediation.md`
 
 ## Current outcome
 
-All planned source changes through Task 15's automated gate are complete. The interrupted desktop
-turn did not corrupt the build: no cargo/tauri/installer process remained, all three release
-artifacts existed with the expected 2026-07-31 timestamps, and the packaged release stayed alive
-for an isolated eight-second startup smoke test. Do not repeat the expensive package build unless a
-later source change invalidates these artifacts.
+The first provider-backed packaged acceptance pass found seven source defects, so the prior v0.2.8
+artifacts are stale for acceptance even though the automated gate that produced them was green. Do
+not start Task 16 and do not rebuild an installer after each fix. Complete Task 15A sequentially,
+run the combined gate, then package the final source state once.
 
-Internal Beta is not being overclaimed. Automated evidence is green, but detailed-plan Task 15
-Steps 2, 3, and 5 remain partial until the human completes the visual/provider-backed packaged
-journey. Task 16 signing/updater/CSP is later work and remains out of scope.
+No source file has been changed for this new batch yet. The defects have been reproduced from the
+screenshots, packaged log, runtime data flow, and current code, and a dependency-ordered TDD plan is
+now written. The next slice is Forge fresh-start lifecycle.
 
-## Fresh verification
+## Fresh baseline before remediation
 
-- `npm run typecheck`: passed in **12.351 s**.
-- `npm test`: core **546/42 files** + UI **147/25 files** = **693 tests**, passed in **20.616 s**.
-- UI suite stderr is clean; React `act(...)` warning guards remain active.
-- `npm --workspace @midnight-tavern/core run coverage`: **100% statements, branches, functions,
-  and lines** across configured engine files; 546 tests passed in **11.615 s**.
-- Direct core build: passed in **4.123 s**.
-- Direct UI production build: passed in **8.067 s**.
-- `cargo check`: passed; cargo duration **3.76 s**.
-- Root packaging flow: passed and reported both Windows bundles complete. The interrupted turn did
-  not retain a trustworthy total packaging duration, so no duration is invented here.
-- Packaged release smoke: isolated profile, alive after **8 seconds**, then only that newly launched
-  process was stopped. The user's already-running installed app was not touched.
+- `npm run typecheck`: passed on 2026-07-31.
+- `npm test`: core **546/42 files** + UI **147/25 files** = **693 tests**, passed.
+- Working tree before docs: only user-owned `.codex/` and `opencode.json` were untracked.
+- Prior automated release gate at `8ab7a68`: configured engine coverage 100% in all four metrics,
+  direct core/UI builds passed, `cargo check` passed, and unsigned v0.2.8 packages built.
+- That package evidence remains useful history, but its artifacts must not be offered as containing
+  any Task 15A fix.
 
-## Unsigned v0.2.8 artifacts
+## Packaged findings and grounded causes
 
-- Portable release executable:
-  `packages/shell/src-tauri/target/release/midnight-tavern.exe`
-  - 22,791,168 bytes
-  - SHA-256 `F2BE3989C2CF57611EADF31D841E3A1EE197E832D3927F9E3E8B6E8B7584D36F`
-- MSI:
-  `packages/shell/src-tauri/target/release/bundle/msi/Midnight Tavern_0.2.8_x64_en-US.msi`
-  - 9,261,056 bytes
-  - SHA-256 `077504A87FC1A76FCFFDBE99820589503692ECC84C93ABB6330F900D1780F661`
-- NSIS installer:
-  `packages/shell/src-tauri/target/release/bundle/nsis/Midnight Tavern_0.2.8_x64-setup.exe`
-  - 5,614,826 bytes
-  - SHA-256 `74E258DDCF878D40022E9EC3B7BD54618AED12BDFAA859541FA7897E2196E7BA`
+1. **Overview:** chapters without a closed arc put the live automatic summary only in the narrow
+   timeline while the large pane falls back to the immutable premise.
+2. **Dossiers:** `getCharacterDossier` explicitly chooses global arc/chapter summaries for every
+   character. Player/bootstrap and promoted-NPC paths may also create hard-only records, and
+   `runBackground` omits present characters without soft state from analyzer input.
+3. **Forge:** cancellation correctly retains checkpoints, but `forgeStory` always reuses any
+   retained request/operation. Discard is secondary and asynchronous, leaving no clear atomic path
+   to start a new operation.
+4. **Possible Moves:** `suggestPlayerActions` throws after malformed/provider-failed structured
+   output. Packaged provider logs showed HTTP 429 and tiny invalid responses, so the UI always lands
+   on “Suggestions are unavailable.”
+5. **Attack error:** universal-action recovery can target only an explicitly named present
+   character or the sole non-player character. “Attack it again” becomes ambiguous when an older
+   registry NPC is also present, even when the newest committed ruling identifies the current foe.
+6. **NPC does not attack:** deterministic reaction requires a resolved provocation; goal-driven
+   `planNpcActions` returns `[]` on any provider failure. There is no persisted engine-approved
+   hostility fact for a safe provider-independent attack.
+7. **Scroll jump:** Play’s follow/latest decision is held mainly in asynchronous React state; DOM
+   replacement and layout-height changes can reset the transcript before the effect re-anchors or
+   preserves the reader viewport.
 
-These are unsigned internal-beta artifacts. Windows reputation warnings are expected until Task 16.
+The packaged log’s 429s are real provider rate limiting, not proof of a local crash. Remediation
+must degrade safely and honestly; it must not manufacture mechanics or conceal provider status.
 
-## What just landed - Task 15 source gate (`4237735`)
+## Task 15A order
 
-The configured core coverage command initially exposed real untested engine branches despite the
-ordinary suite being green. Deterministic tests now cover equipment/loot boundaries, sparse
-progression fallbacks, attribute advancement guards, item-enabled action gates, explicit XP ledger
-behavior, resolver attribute/equipment/opposed-roll effects, natural-roll precedence, deception,
-and unknown action labels. Two provably unreachable branches were simplified without changing the
-public contract. The configured engine coverage gate is now genuinely 100% in all four dimensions.
-
-## Runtime foundation complete
-
-1. Tasks 1-2: authoritative registry/presence split, rollback pre-images, ruling-before-prose,
-   quantifier phantom cleanup.
-2. Tasks 3-4 (`350f805`): bounded NPC introduction/presence, actor normalization, legal two-action
-   turns, default attack damage, health-threshold death, natural authority fallback.
-3. Task 5 (`04e83b7`): validated same-turn goal-driven NPC actions under a separate budget.
-4. Task 6 (`b753de3`): sealed non-combat provocation.
-5. Tasks 7-8 (`fccab2c`, `09da205`): provider-to-Play streaming and verified mechanical beat release.
-6. Tasks 9a-9b (`2b43325`, `a803f76`): bounded provider stages, deterministic fallbacks, durable
-   latency/outcome metrics, and immediate cancellation.
-7. Task 10 (`a2656e4`): responsive Gemini Flash narrator default with explicit fast/quality labels.
-8. Task 11 (`80e3b44`): bounded, durable, resumable Forge.
-9. Task 12 (`b348f83`): macro-safe card acceptance and source-authoritative starting gear.
-10. Task 13 (`3ebd58d` through `75dfe6c`): grounded suggestions and product recovery/navigation.
-11. Task 14 (`f1d8a4a`): warning-free, warning-guarded React test lifecycle.
-12. Task 15 source gate (`4237735`): 100% configured engine coverage and unsigned beta packages.
+1. Forge fresh start vs checkpoint resume.
+2. Character-specific history and durable soft-state participation.
+3. Recent living target focus for pronoun continuation attacks.
+4. Deterministic scene-grounded suggestion fallback.
+5. Validated persisted hostility and provider-independent hostile NPC action.
+6. Play scroll anchoring.
+7. Overview chapter/premise hierarchy.
+8. Full tests/typecheck/coverage/build/cargo, baton refresh, then one package build.
 
 ## Non-negotiable product and authority rules
 
-- Engine/DM owns gates, dice, effects, damage, death, budgets, loot, progression, and persistence.
-- Models may propose identity/intent and write prose but may not mutate or contradict hard state.
-- Every actual fictional NPC or creature must be registry-backed. Ambient scenery, murals, statues,
-  background crowds, "Nothing," and "Something" are not characters.
+- Engine/DM owns gates, dice, effects, damage, death, budgets, target legality, persistence, and
+  rollback. Models propose identity/intent and write prose only.
+- Every actual fictional NPC/creature that appears is registry-backed. Scenery, crowds, statues,
+  murals, “Nothing,” and “Something” are not characters.
 - Registry membership and scene presence are separate. Only present, living actors participate.
-- Rulings render before narrator streaming. Prose may dramatize but may not quote internal dice/DC
-  boilerplate or assert death without an authoritative `causedDeathOf`.
-- Two player actions remain legal when the configured player budget is two. NPC budget is separate.
-- Do not add NPC encounter gating until an authoritative encounter-active fact exists.
-- Preserved card/persona source is authoritative for accepted identity/mechanics and attached-source
-  starting possessions; model output cannot rename accepted concepts or add unverified inventory.
-
-## Evidence boundary
-
-Automated tests directly cover real-file SQLite close/reopen persistence, story create/import paths,
-playthrough and history synchronization, NPC registration/presence/agency, ruling-before-delta and
-safe progressive narration, Forge persistence/resume/retry, grounded suggestions, macros, literal
-cross-card acceptance, and source-authoritative starting gear. The package-start smoke proves the
-release executable initializes, but it does not substitute for human visual/provider-backed use.
+- DM rulings render before narrator streaming. Prose cannot assert death without authoritative
+  health-threshold death and `causedDeathOf`.
+- Two player actions remain legal when the player budget is two. NPC budget is separate.
+- Target continuity may reuse only one unique recent present living target; never roster order.
+- Suggestions remain insert-only and still pass through normal classification/ruling on send.
+- Provider degradation may reduce variety but must not disable safe affordances or proven hostile
+  behavior.
+- Browser/native bridge parity is mandatory; keep native dependencies out of the webview bridge.
+- Preserve `.codex/` and `opencode.json`; do not push.
 
 ## Single next action
 
-Use the NSIS installer above for one packaged human acceptance pass, recording screenshots or notes:
+Implement detailed-plan Task 1 using TDD:
 
-1. create a premise story and import a card story;
-2. play a consequential two-action turn and confirm both rulings appear before prose;
-3. meet and attack a newly introduced creature, confirming the correct registry/presence row,
-   separate NPC response, natural prose, health damage, and death only at zero health;
-4. close the app, reopen it, and continue the same story without transcript/ruling/state drift;
-5. verify Forge resume/retry, suggestions, macros, cross-card gear, and Role Matrix provider/model/
-   sampler controls;
-6. append the observed result to `docs/WORKLOG.md`; if green, check Task 15 Steps 2, 3, and 5 and
-   mark the Internal-Beta exit criteria complete. If any defect appears, preserve screenshots and
-   add a focused failing test before changing runtime code.
+1. In `packages/ui/test/screens/StoryBlueprint.test.tsx`, reproduce cancellation followed by
+   **Start new Forge** and observe that current code reuses the retained story/operation/checkpoint.
+2. Add the durable-clear race test.
+3. Implement an awaited, operation-id-safe discard transition and explicit **Resume saved Forge** /
+   **Start new Forge** actions in `StoryBlueprint.tsx`.
+4. Run the focused UI test, UI suite, typecheck, then update the plan/worklog/handoff/prompt and
+   commit the coherent slice with the required trailer.
 
-Do not start Task 16 signing/updater/CSP until this acceptance pass is recorded and the human asks
-to enter the later release phase.
+Do not mix dossier, targeting, suggestions, NPC hostility, scroll, or Overview changes into the
+Forge commit.

@@ -108,6 +108,32 @@ re-grounded against current HEAD (most audit gaps had already been closed by lat
   packaged journey for create/import, play, close/reopen/continue, NPC behavior, ruling-before-prose,
   verified streaming, Forge recovery, suggestions, macros, and cross-card gear._
 
+  _Packaged acceptance reopened source work on 2026-07-31. Seven defects were observed in the
+  provider-backed installed app: inverted Overview hierarchy, shared/empty character memory,
+  retained-Forge restart friction, unavailable suggestions under provider degradation, lost
+  pronoun attack focus, provider-dependent hostile NPC agency, and unstable Play scroll anchoring.
+  These are tracked as Task 15A below and in
+  `docs/superpowers/plans/2026-07-31-packaged-beta-remediation.md`. The earlier artifacts are now
+  stale for acceptance and must not be rebuilt until all Task 15A source slices are complete._
+
+## Task 15A: Packaged Acceptance Remediation
+
+- [x] Capture all seven observations and trace each to its runtime owner/root cause.
+- [x] Write the dependency-ordered detailed remediation plan and refresh the active baton.
+- [ ] Make cancelled/failed Forge offer both reliable resume and a genuinely fresh operation.
+- [ ] Make dossier history character-specific and ensure every registry character participates in
+  evidence-backed soft-memory updates.
+- [ ] Preserve a unique recent living target for pronoun continuation attacks without guessing.
+- [ ] Provide scene-grounded deterministic Possible Moves when the suggestion provider degrades.
+- [ ] Persist engine-validated hostility and let living hostile NPCs select legal sealed actions
+  when the planner provider degrades.
+- [ ] Preserve reader scroll position and keep follow-latest mode stable through content/layout
+  changes.
+- [ ] Make the latest automatic chapter summary primary when no arc synthesis exists; keep the
+  static premise as compact context.
+- [ ] Run the full automated/native gate, update baton documents, then rebuild one combined unsigned
+  installer for the next human acceptance pass.
+
 ## Internal-Beta exit criteria (the finish line for this phase)
 
 - A user can create **or import** a story, play it, close the app, reopen it, and continue.

@@ -829,3 +829,32 @@ gear authority. Detailed-plan Task 15 Steps 2, 3, and 5 deliberately remain part
 startup smoke is not a substitute for the human's visual/provider-backed packaged journey. The
 single next action is that acceptance pass using the NSIS installer; Task 16 signing/updater/CSP
 remains out of scope.
+---
+
+## 2026-07-31 - Packaged acceptance remediation opened
+
+The first provider-backed v0.2.8 acceptance pass found seven defects that the prior automated gate
+did not expose: Overview gives the static premise more weight than live chapter summaries;
+character dossiers reuse one global story and omit soft fields; cancelled Forge lacks a clear
+atomic fresh-start path; Possible Moves disappear after structured-provider failure; pronoun attack
+continuations lose their current target when an older NPC is also present; hostile NPC goal actions
+vanish when the planner provider degrades; and Play can lose its latest/read-position anchoring.
+
+**Diagnosis.** Codebase-memory tracing and targeted runtime inspection found direct owners for all
+seven. `getCharacterDossier` explicitly reads global arc/chapter summaries. `runBackground` filters
+out present characters without soft state. `forgeStory` always reuses a retained request/checkpoint.
+Suggestions throw after their repair budget. Universal local attack recovery has no recent target
+focus. The NPC planner returns no action on provider failure, and Play follow mode relies on delayed
+state without layout anchoring. Packaged logs also showed classifier/provider HTTP 429 and malformed
+small responses; rate limiting is real external degradation, not a local crash, and must remain
+honestly reported while safe deterministic fallbacks work.
+
+**Planning/baton.** Added
+`docs/superpowers/plans/2026-07-31-packaged-beta-remediation.md`, opened Task 15A in the active plan,
+and replaced HANDOFF/NEXT-AGENT-PROMPT with the current root causes, authority constraints, task
+order, and exact next Forge slice. No runtime source changed. The old unsigned v0.2.8 artifacts are
+now stale for acceptance; per the product owner, package only once after all remediation source
+slices and the combined gate are complete.
+
+**Baseline.** Before this docs checkpoint, typecheck passed and core 546/42 plus UI 147/25 = 693
+tests passed. Only user-owned `.codex/` and `opencode.json` were untracked.
