@@ -1,0 +1,21 @@
+.overview-layout {
+  display: grid;
+  grid-template-columns: minmax(180px, 230px) minmax(0, 1fr);
+  gap: 34px;
+}
+
+.overview-timeline {
+  position: sticky;
+  top: 0;
+}
+
+@media (max-width: 760px) {
+  .overview-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 22px;
+  }
+
+  .overview-timeline {
+    position: static;
+  }
+}

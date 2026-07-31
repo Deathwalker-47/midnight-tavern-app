@@ -23,12 +23,14 @@ import { ChapterCard, ArcDoc, EmptyState, InlineNotice, Button } from "../compon
 import type { ArcDocSection, ChapterStatus } from "../components";
 import type { MessageRecord, ChapterRecord, ArcRecord } from "../bridge/core";
 import type { ScreenProps } from "./registry";
+import "./Overview.css";
 
 const MSGS_PER_CHAPTER = 20;
 /** A chapter can only be summarized once it holds a couple of turns beyond its start. */
 const MIN_MSGS_TO_SUMMARIZE = 2;
 
 interface DerivedChapter {
+  id?: string;
   index: number;
   title: string;
   status: ChapterStatus;
@@ -43,6 +45,7 @@ interface DerivedChapter {
  */
 function buildChapters(chapters: ChapterRecord[], messageCount: number): DerivedChapter[] {
   const out: DerivedChapter[] = chapters.map((ch) => ({
+    id: ch.id,
     index: ch.idx + 1,
     title: ch.title,
     status: "summarized" as ChapterStatus,
@@ -107,6 +110,7 @@ export function Overview(props: ScreenProps): JSX.Element {
   const [chapters, setChapters] = useState<ChapterRecord[]>([]);
   const [arcs, setArcs] = useState<ArcRecord[]>([]);
   const [loadError, setLoadError] = useState(false);
+  const [selectedChapterId, setSelectedChapterId] = useState<string | undefined>(undefined);
 
   // Ensure the open-story record is loaded (deeplink / direct tab), then read the transcript
   // length so the timeline can derive chapters. Talks only through the store + bridge.
@@ -124,6 +128,7 @@ export function Overview(props: ScreenProps): JSX.Element {
     let cancelled = false;
     setLoadError(false);
     setMessages(undefined);
+    setSelectedChapterId(undefined);
     const bridge = getBridge();
     Promise.all([
       bridge.listMessages(storyId),
@@ -225,27 +230,21 @@ export function Overview(props: ScreenProps): JSX.Element {
   const currentChapterMsgs = messagesInCurrentChapter(chapters, messageCount);
   const hasClosedChapter = chapters.length > 0;
   const latestArc = arcs.length ? arcs[arcs.length - 1] : undefined;
+  const selectedChapter = selectedChapterId
+    ? chapters.find((chapter) => chapter.id === selectedChapterId)
+    : latestArc
+      ? undefined
+      : chapters[chapters.length - 1];
   const needMore = !hasClosedChapter && currentChapterMsgs < MIN_MSGS_TO_SUMMARIZE;
   const remaining = Math.max(0, MIN_MSGS_TO_SUMMARIZE - currentChapterMsgs);
 
-  // Arc reader: prefer the persisted ArcDoc; fall back to the premise blurb before any arc exists.
-  const arcSections: ArcDocSection[] = latestArc
-    ? arcDocToSections(latestArc)
-    : current
-      ? [
-          { heading: "Premise", body: current.schema.premise || "The storyteller has not recorded a premise yet." },
-          {
-            heading: "How this record works",
-            body: "The storyteller writes an arc document when a chapter closes — a living record it reads before every turn. Closed chapters fold into it; the current chapter stays open below.",
-          },
-        ]
-      : [];
+  const premise = current.schema.premise || "The storyteller has not recorded a premise yet.";
 
   return (
     <div style={styles.screen}>
-      <div style={styles.grid}>
+      <div className="overview-layout" style={styles.grid}>
         {/* LEFT: chapter timeline */}
-        <aside style={styles.timeline}>
+        <aside className="overview-timeline" style={styles.timeline}>
           <div className="mono" style={styles.railLabel}>
             CHAPTERS
           </div>
@@ -258,6 +257,8 @@ export function Overview(props: ScreenProps): JSX.Element {
                 status={ch.status}
                 range={ch.range}
                 summary={ch.summary}
+                onOpen={ch.id ? () => setSelectedChapterId(ch.id) : undefined}
+                selected={ch.id === selectedChapter?.id}
               />
             ))}
           </div>
@@ -280,17 +281,28 @@ export function Overview(props: ScreenProps): JSX.Element {
             </div>
           ) : null}
 
-          {hasClosedChapter ? (
-            <ArcDoc
-              title={latestArc?.title ?? current?.title ?? "This story"}
-              index={(latestArc?.idx ?? 0) + 1}
-              range={
-                latestArc
-                  ? `Chapters ${latestArc.chapterFrom + 1}–${latestArc.chapterTo + 1}`
-                  : `Chapters 1–${Math.max(1, chapters.length)}`
-              }
-              sections={arcSections}
-            />
+          {selectedChapter ? (
+            <div data-testid="overview-chapter-document">
+              {latestArc ? (
+                <Button variant="secondary" onClick={() => setSelectedChapterId(undefined)} style={{ marginBottom: 14 }}>
+                  Back to current arc
+                </Button>
+              ) : null}
+              <ArcDoc
+                title={selectedChapter.title}
+                range={`CHAPTER ${selectedChapter.idx + 1} · msgs ${selectedChapter.msgFrom + 1}–${selectedChapter.msgTo + 1}`}
+                sections={[{ heading: "Chapter summary", body: selectedChapter.summary }]}
+              />
+            </div>
+          ) : latestArc ? (
+            <div data-testid="overview-arc-document">
+              <ArcDoc
+                title={latestArc.title}
+                index={latestArc.idx + 1}
+                range={`Chapters ${latestArc.chapterFrom + 1}–${latestArc.chapterTo + 1}`}
+                sections={arcDocToSections(latestArc)}
+              />
+            </div>
           ) : (
             <EmptyState
               glyph="❧"
@@ -298,6 +310,11 @@ export function Overview(props: ScreenProps): JSX.Element {
               body="The storyteller writes an arc document when a chapter closes. Finish this chapter and its record will appear here."
             />
           )}
+
+          <aside style={styles.premiseContext} data-testid="overview-premise-context" aria-label="Original story premise">
+            <div className="mono" style={styles.premiseLabel}>ORIGINAL STORY PREMISE</div>
+            <p style={styles.premiseText}>{premise}</p>
+          </aside>
         </div>
       </div>
     </div>
@@ -306,8 +323,8 @@ export function Overview(props: ScreenProps): JSX.Element {
 
 const styles: Record<string, CSSProperties> = {
   screen: { maxWidth: 920, margin: "0 auto", padding: "30px 40px 60px" },
-  grid: { display: "grid", gridTemplateColumns: "minmax(180px, 230px) 1fr", gap: 34, alignItems: "start" },
-  timeline: { position: "sticky", top: 0 },
+  grid: { alignItems: "start" },
+  timeline: {},
   railLabel: { fontSize: 11, letterSpacing: "0.14em", color: "var(--teal)", marginBottom: 14 },
   centered: { maxWidth: 520, margin: "6vh auto 0" },
   needMore: {
@@ -331,6 +348,14 @@ const styles: Record<string, CSSProperties> = {
   },
   skeletonLabel: { fontSize: 11, letterSpacing: "0.1em", color: "var(--teal)" },
   skelBar: { height: 12, background: "var(--bg2-card)", borderRadius: 4 },
+  premiseContext: {
+    marginTop: 18,
+    padding: "14px 16px",
+    borderLeft: "2px solid var(--brass)",
+    background: "var(--brass-tint)",
+  },
+  premiseLabel: { color: "var(--brass)", fontSize: 10, letterSpacing: ".13em", marginBottom: 7 },
+  premiseText: { color: "var(--secondary)", fontFamily: "var(--font-prose)", fontSize: 14, lineHeight: 1.6, margin: 0 },
 };
 
 export default Overview;

@@ -16,6 +16,8 @@ export interface ChapterCardProps {
   /** Message range label, e.g. "msgs 1–20". */
   range?: string;
   onOpen?: () => void;
+  /** Marks the chapter whose full summary is open in the Overview reader. */
+  selected?: boolean;
   animate?: boolean;
   className?: string;
   style?: CSSProperties;
@@ -33,7 +35,7 @@ function statusColor(status: ChapterStatus): string {
 }
 
 export function ChapterCard(props: ChapterCardProps): JSX.Element {
-  const { index, title, summary, status = "summarized", range, onOpen, animate = true, className, style } = props;
+  const { index, title, summary, status = "summarized", range, onOpen, selected = false, animate = true, className, style } = props;
   const reduced = useReducedMotion();
   const color = statusColor(status);
   const pulse = status === "in-progress" && animate && !reduced;
@@ -45,6 +47,7 @@ export function ChapterCard(props: ChapterCardProps): JSX.Element {
       data-status={status}
       role={clickable ? "button" : undefined}
       tabIndex={clickable ? 0 : undefined}
+      aria-pressed={clickable ? selected : undefined}
       onClick={onOpen}
       onKeyDown={
         clickable
