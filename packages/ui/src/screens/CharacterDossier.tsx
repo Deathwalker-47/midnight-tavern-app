@@ -253,9 +253,9 @@ export function CharacterDossier(props: ScreenProps): JSX.Element {
   const accent = fallen ? "var(--muted)" : d.isPlayer ? "var(--brass)" : "var(--teal)";
 
   const currentCells: { k: string; v: string }[] = [
-    { k: fallen ? "STATE" : "MOOD", v: fallen ? "Fallen" : d.currentState.mood ?? "—" },
-    { k: "LOCATION", v: d.currentState.location ?? "—" },
-    { k: fallen ? "LAST GOAL" : "GOAL", v: d.currentState.goal ?? "—" },
+    { k: fallen ? "STATE" : "MOOD", v: fallen ? "Fallen" : d.currentState.mood ?? "Not observed yet" },
+    { k: "LOCATION", v: d.currentState.location ?? "Not observed yet" },
+    { k: fallen ? "LAST GOAL" : "GOAL", v: d.currentState.goal ?? "Not observed yet" },
     { k: "STATUS", v: (d.currentState as typeof d.currentState & { status?: string }).status ?? (fallen ? "No longer active" : "Active") },
   ];
 
@@ -447,18 +447,27 @@ export function CharacterDossier(props: ScreenProps): JSX.Element {
                   {d.mentality.outlook}
                 </div>
               ) : null}
+              {d.mentality.traits.length === 0 &&
+              d.mentality.behavioralSignatures.length === 0 &&
+              !d.mentality.outlook &&
+              !d.mentality.mood &&
+              !d.mentality.speechStyle ? (
+                <div style={{ fontFamily: "var(--font-body)", fontStyle: "italic", fontSize: 14, color: "var(--muted)" }}>
+                  Not observed yet
+                </div>
+              ) : null}
             </section>
 
-            {/* Story so far + key events */}
+            {/* Character-specific history + key events */}
             <section>
-              <SectionRule label="STORY SO FAR" />
+              <SectionRule label="CHARACTER HISTORY" />
               {v7.storySoFar?.summary ? (
                 <p style={{ fontFamily: "var(--font-body)", fontSize: 16, lineHeight: 1.75, color: "var(--ui-text)", margin: "0 0 16px", maxWidth: "60ch" }}>
                   {v7.storySoFar.summary}
                 </p>
               ) : (
                 <div style={{ fontFamily: "var(--font-body)", fontStyle: "italic", fontSize: 14, color: "var(--muted)", marginBottom: 12 }}>
-                  No chapter summary has been written for {short} yet.
+                  No character-specific history has been observed for {short} yet.
                 </div>
               )}
               {v7.storySoFar?.keyEvents?.length ? (

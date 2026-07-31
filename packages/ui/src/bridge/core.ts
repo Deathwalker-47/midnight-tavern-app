@@ -1501,6 +1501,7 @@ export function makeMemoryBridge(): CoreBridge {
       const card = requireStory(storyId).cards.get(characterId);
       if (!card) return undefined;
       const soft = card.soft;
+      const observations = soft?.recentObservations ?? [];
       return {
         characterId: card.characterId,
         isPlayer: card.isPlayer,
@@ -1521,7 +1522,24 @@ export function makeMemoryBridge(): CoreBridge {
           ...(soft?.location !== undefined ? { location: soft.location } : {}),
           ...(soft?.goal !== undefined ? { goal: soft.goal } : {}),
         },
-        past: { observations: (soft?.recentObservations ?? []).map((text, i) => ({ turnIdx: i, text })) },
+        past: { observations: observations.map((text, i) => ({ turnIdx: i, text })) },
+        storySoFar: {
+          ...(observations.length ? { summary: observations.join("\n\n") } : {}),
+          keyEvents: observations.slice(-8).map((text, index, selected) => ({
+            turnIdx: index,
+            title: text.split(/[.!?]/)[0]?.trim() || "Observed event",
+            detail: text,
+            recent: index === selected.length - 1,
+            provenance: "In-memory character observation",
+          })),
+        },
+        history: observations.map((text, turnIdx) => ({
+          turnIdx,
+          text,
+          kind: "observation",
+          recent: turnIdx === observations.length - 1,
+          provenance: "In-memory character observation",
+        })),
         relationships: {
           outgoing: (soft?.relationships ?? []).map((r) => ({
             toCharacterId: r.toCharacterId,

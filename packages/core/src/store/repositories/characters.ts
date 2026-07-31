@@ -1,14 +1,16 @@
 /**
  * Characters repository (table `characters`, low-level-plan §3).
  *
- * Each row carries the authoritative `hard_json` (engine-owned) and the optional
- * `soft_json` (analyzer-owned, NULL until first analyzed) plus its `soft_tier`. Hard and
+ * Each row carries the authoritative `hard_json` (engine-owned) and a durable
+ * `soft_json` narrative envelope plus its `soft_tier`. Legacy/checkpoint rows may still
+ * temporarily contain NULL and are repaired before analysis. Hard and
  * soft state stay in separate columns so their distinct writers never contend on one blob.
  */
 import type { Db } from "../db.js";
 import {
   CharacterHardStateSchema,
   CharacterSoftStateSchema,
+  createCharacterSoftState,
   SoftTierSchema,
   type CharacterHardState,
   type CharacterSoftState,
@@ -76,6 +78,9 @@ export function makeCharacterRepo(db: Db): CharacterRepo {
   return {
     async insert(record) {
       CharacterHardStateSchema.parse(record.hard);
+      const tier =
+        record.softTier ?? record.soft?.tier ?? (record.isPlayer ? "primary" : "secondary");
+      const soft = record.soft ?? createCharacterSoftState(record.id, record.name, tier);
       await db.run(
         `INSERT INTO characters (
            id, story_id, name, is_player, present, hard_json, soft_json, soft_tier
@@ -86,8 +91,8 @@ export function makeCharacterRepo(db: Db): CharacterRepo {
         toInt(record.isPlayer),
         toInt(record.present ?? true),
         encodeJson(CharacterHardStateSchema, record.hard),
-        record.soft ? encodeJson(CharacterSoftStateSchema, record.soft) : null,
-        record.softTier ?? null
+        encodeJson(CharacterSoftStateSchema, soft),
+        SoftTierSchema.parse(tier)
       );
     },
 

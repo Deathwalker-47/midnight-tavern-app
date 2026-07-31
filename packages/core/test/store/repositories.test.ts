@@ -18,7 +18,7 @@ import type {
   StoryRecord,
   WorldSoftState,
 } from "../../src/types/index.js";
-import { makePlayer, makeStory } from "../fixtures.js";
+import { makeEnemy, makePlayer, makeStory } from "../fixtures.js";
 
 /** A story record wrapping the shared StorySchema fixture. */
 function storyRecord(id = "s1"): StoryRecord {
@@ -132,7 +132,7 @@ describe("characters", () => {
     await store.stories.insert(storyRecord());
   });
 
-  it("round-trips hard state, then attaches soft state", async () => {
+  it("creates a primary soft-state envelope for a player, then updates it", async () => {
     await store.characters.insert({
       id: "kestrel",
       storyId: "s1",
@@ -142,12 +142,40 @@ describe("characters", () => {
     });
     const got = await store.characters.get("kestrel");
     expect(got?.hard).toEqual(makePlayer());
-    expect(got?.soft).toBeUndefined();
+    expect(got?.soft).toMatchObject({
+      characterId: "kestrel",
+      name: "Kestrel",
+      tier: "primary",
+      current: {},
+      observations: [],
+    });
+    expect(got?.softTier).toBe("primary");
 
     await store.characters.updateSoft("kestrel", softState("kestrel"), "primary");
     const withSoft = await store.characters.get("kestrel");
     expect(withSoft?.soft).toEqual(softState("kestrel"));
     expect(withSoft?.softTier).toBe("primary");
+  });
+
+  it("creates a secondary soft-state envelope for a registry NPC", async () => {
+    await store.characters.insert({
+      id: "wight",
+      storyId: "s1",
+      name: "Grave-wight",
+      isPlayer: false,
+      hard: makeEnemy({ characterId: "wight" }),
+    });
+
+    expect(await store.characters.get("wight")).toMatchObject({
+      softTier: "secondary",
+      soft: {
+        characterId: "wight",
+        name: "Grave-wight",
+        tier: "secondary",
+        current: {},
+        observations: [],
+      },
+    });
   });
 
   it("updates hard state in place", async () => {

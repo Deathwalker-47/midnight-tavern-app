@@ -23,7 +23,7 @@ export interface RunAnalyzerArgs {
   narratorText: string;
   /** Soft snapshots of characters present this turn (for prompt context). */
   presentSoft: CharacterSoftState[];
-  /** Resolve a display name for an analyzer-introduced characterId. */
+  /** Resolve a display name for a present registry character. */
   nameFor?: (characterId: string) => string | undefined;
   maxRepairs?: number;
   signal?: AbortSignal;
@@ -52,9 +52,21 @@ export async function runAnalyzer(router: Router, store: Store, args: RunAnalyze
       { maxRepairs: args.maxRepairs ?? 2, signal: args.signal }
     );
 
-    if (patch.characterOps.length === 0 && patch.worldOps.length === 0) return false;
+    const allowedIds = new Set(args.presentSoft.map((soft) => soft.characterId));
+    const safePatch = {
+      ...patch,
+      characterOps: patch.characterOps.flatMap((entry) => {
+        if (!allowedIds.has(entry.characterId)) return [];
+        const ops = entry.ops.filter(
+          (op) => op.op !== "adjust_relationship" || allowedIds.has(op.toCharacterId)
+        );
+        return ops.length ? [{ ...entry, ops }] : [];
+      }),
+    };
 
-    await applySoftPatch(store, args.storyId, patch, args.turnIdx, args.nameFor);
+    if (safePatch.characterOps.length === 0 && safePatch.worldOps.length === 0) return false;
+
+    await applySoftPatch(store, args.storyId, safePatch, args.turnIdx, args.nameFor);
     return true;
   } catch (err) {
     args.onError?.(err);

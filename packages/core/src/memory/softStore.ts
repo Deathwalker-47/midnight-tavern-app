@@ -7,8 +7,7 @@
  *   • `append`              → adds to a string list, deduped case-insensitively,
  *   • `observe`             → appends a timestamped observation, FIFO-capped at 200,
  *   • `adjust_relationship` → nudges trust/power by a delta, clamped to [-1, 1],
- *   • an unknown characterId → auto-creates a **secondary** soft profile (NPCs get hard
- *     state only via NpcTemplate instantiation, never here — this is the wall).
+ *   • an unknown characterId → ignored (registry creation is owned by validated introduction).
  *
  * The merge functions are pure (state in → state out) so M7's tests can prove each rule
  * and prove a mechanical field can never appear; `applySoftPatch` wires them to the store
@@ -16,6 +15,7 @@
  */
 import type { Store } from "../store/index.js";
 import {
+  createCharacterSoftState,
   type CharacterSoftState,
   type WorldSoftState,
   type SoftStatePatch,
@@ -37,18 +37,9 @@ function includesCI(list: string[], value: string): boolean {
   return list.some((x) => x.toLowerCase() === v);
 }
 
-/** A blank secondary soft profile for a newly-observed character. */
+/** Backwards-compatible blank secondary profile factory. Registry creation lives elsewhere. */
 export function newSoftState(characterId: string, name: string): CharacterSoftState {
-  return {
-    characterId,
-    name,
-    tier: "secondary",
-    identity: { traits: [], likes: [], dislikes: [] },
-    behavioralSignatures: [],
-    current: {},
-    relationships: [],
-    observations: [],
-  };
+  return createCharacterSoftState(characterId, name, "secondary");
 }
 
 /** A blank world soft state (used when a story has none yet). */
@@ -147,37 +138,18 @@ export async function applySoftPatch(
   await store.transaction(async () => {
     for (const entry of patch.characterOps) {
       const existing = await store.characters.get(entry.characterId);
+      // Analyzer output can never create a character or cross story boundaries. Actual
+      // introductions are validated and committed by the registry transition pipeline.
+      if (!existing || existing.storyId !== storyId) continue;
       let soft: CharacterSoftState =
-        existing?.soft ??
-        newSoftState(entry.characterId, nameFor?.(entry.characterId) ?? entry.characterId);
+        existing.soft ??
+        createCharacterSoftState(
+          existing.id,
+          nameFor?.(existing.id) ?? existing.name,
+          existing.softTier ?? (existing.isPlayer ? "primary" : "secondary")
+        );
       for (const op of entry.ops) soft = applyCharacterOp(soft, op, turnIdx);
-
-      if (existing) {
-        // Known character (has hard state): update its soft column, preserving its tier
-        // (default primary — it earned hard state) unless it already had one.
-        await store.characters.updateSoft(entry.characterId, soft, existing.softTier ?? soft.tier);
-      } else {
-        // Unknown id: a purely-observed secondary character, no hard state. Persist a
-        // minimal row carrying only the soft profile so getLivingCard can render it.
-        await store.characters.insert({
-          id: entry.characterId,
-          storyId,
-          name: soft.name,
-          isPlayer: false,
-          hard: {
-            characterId: entry.characterId,
-            isPlayer: false,
-            attributes: {},
-            resources: {},
-            skills: [],
-            inventory: [],
-            flags: {},
-            alive: true,
-          },
-          soft,
-          softTier: "secondary",
-        });
-      }
+      await store.characters.updateSoft(entry.characterId, soft, existing.softTier ?? soft.tier);
     }
 
     if (patch.worldOps.length > 0) {

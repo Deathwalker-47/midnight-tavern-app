@@ -20,8 +20,10 @@ export const ANALYZER_SYSTEM = [
   "levels, or any number that represents a mechanical value — those are tracked elsewhere",
   "and you cannot change them. Only personality, mood, relationships, observations,",
   "locations, and threads.",
-  "Use existing characterId values for known characters; you may introduce a new characterId",
-  "for a clearly-named character who just appeared (they become a secondary profile).",
+  "Use only the existing characterId values listed in CURRENT SOFT SNAPSHOTS. Never invent",
+  "or introduce a characterId; registry introductions are handled by a separate authority.",
+  "For each present character, including the player, refresh mood, location, or goal only when",
+  "the latest exchange provides evidence. Add a concise observation for meaningful involvement.",
   "Prefer a few high-signal ops over many trivial ones. If nothing meaningful changed,",
   "return empty characterOps and worldOps arrays.",
 ].join("\n");

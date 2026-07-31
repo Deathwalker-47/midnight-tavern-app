@@ -87,6 +87,31 @@ afterEach(async () => {
 });
 
 describe("CharacterDossier skill progression", () => {
+  it("labels character-only history and shows honest unknown-field states", async () => {
+    const bridge = {
+      async getCharacterDossier() {
+        return dossier();
+      },
+      async getStory() {
+        return { schema: { statMode: "full" } };
+      },
+    } as unknown as CoreBridge;
+    setBridge(bridge);
+    useRoute.setState({
+      route: "dossier",
+      params: { storyId: "story", characterId: "kestrel" },
+    });
+
+    await act(async () => {
+      render(<CharacterDossier storyId="story" />);
+    });
+
+    expect(await screen.findByText("CHARACTER HISTORY")).toBeInTheDocument();
+    expect(screen.queryByText("STORY SO FAR")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Not observed yet").length).toBeGreaterThanOrEqual(4);
+    expect(screen.getByText(/No character-specific history has been observed/i)).toBeInTheDocument();
+  });
+
   it("renders schema-backed definitions and actions with cumulative XP thresholds", async () => {
     const bridge = {
       async getCharacterDossier() {

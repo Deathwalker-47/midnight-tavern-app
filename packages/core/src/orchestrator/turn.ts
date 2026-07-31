@@ -35,7 +35,11 @@ import { cryptoRng, type Rng } from "../engine/dice.js";
 import { runAnalyzer } from "../memory/index.js";
 import { maybeSummarizeChapter, maybeSummarizeArc } from "../summarizer/index.js";
 import { instantiateFromTemplate, instantiateGeneric } from "../bootstrap/instantiate.js";
-import { blueprintToStyleInputs, STANDARD_DIFFICULTY } from "../types/index.js";
+import {
+  blueprintToStyleInputs,
+  createCharacterSoftState,
+  STANDARD_DIFFICULTY,
+} from "../types/index.js";
 import { applyUniversalActionDefaults } from "../config/index.js";
 import { assembleContext } from "./context.js";
 import { capture } from "./checkpoint.js";
@@ -1347,9 +1351,15 @@ async function runBackground(router: Router, store: Store, args: BackgroundArgs)
     const roster = await store.characters.listPresentByStory(storyId);
     const nameById = new Map(roster.map((c) => [c.id, c.name]));
     const nameFor = (id: string) => nameById.get(id);
-    const presentSoft = roster
-      .map((c) => c.soft)
-      .filter((s): s is NonNullable<typeof s> => s !== undefined);
+    const presentSoft = await Promise.all(
+      roster.map(async (character) => {
+        if (character.soft) return character.soft;
+        const tier = character.softTier ?? (character.isPlayer ? "primary" : "secondary");
+        const soft = createCharacterSoftState(character.id, character.name, tier);
+        await store.characters.updateSoft(character.id, soft, tier);
+        return soft;
+      })
+    );
 
     await runAnalyzer(router, store, {
       storyId,

@@ -75,6 +75,24 @@ export const CharacterSoftStateSchema = z.object({
 });
 export type CharacterSoftState = z.infer<typeof CharacterSoftStateSchema>;
 
+/** Create the durable narrative envelope every registry character starts with. */
+export function createCharacterSoftState(
+  characterId: string,
+  name: string,
+  tier: SoftTier
+): CharacterSoftState {
+  return {
+    characterId,
+    name,
+    tier,
+    identity: { traits: [], likes: [], dislikes: [] },
+    behavioralSignatures: [],
+    current: {},
+    relationships: [],
+    observations: [],
+  };
+}
+
 /** A named place in the world. */
 export const WorldLocationSchema = z.object({
   name: z.string(),
@@ -144,7 +162,9 @@ export const SoftStatePatchSchema = z
     characterOps: z.array(
       z
         .object({
-          characterId: z.string(), // analyzer may propose NEW secondary characters
+          // Registry creation is owned by the introduction/promotion pipeline. The analyzer may
+          // update only present registry ids supplied in its prompt.
+          characterId: z.string(),
           ops: z.array(CharacterOpSchema),
         })
         .strict()

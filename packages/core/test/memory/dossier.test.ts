@@ -169,6 +169,86 @@ describe("getCharacterDossier", () => {
     expect(d!.relationships.toPlayer).toBeUndefined();
   });
 
+  it("builds character history only from that character's evidence, never the global plot", async () => {
+    const kestrel = (await store.characters.get("kestrel"))!;
+    const wight = (await store.characters.get("wight"))!;
+    await store.characters.updateSoft(
+      "kestrel",
+      soft("kestrel", "Kestrel", {
+        ...kestrel.soft,
+        identity: {
+          traits: ["stoic"],
+          likes: [],
+          dislikes: [],
+          backstory: "Kestrel survived the winter road.",
+        },
+        observations: [{ turnIdx: 4, text: "Kestrel shielded Mira from falling stone." }],
+      }),
+      "primary"
+    );
+    await store.characters.updateSoft(
+      "wight",
+      soft("wight", "Grave-wight", {
+        ...wight.soft,
+        identity: {
+          traits: ["relentless"],
+          likes: [],
+          dislikes: [],
+          backstory: "The wight woke beneath the ridge.",
+        },
+        observations: [{ turnIdx: 5, text: "The wight stalked the ruined chapel." }],
+      }),
+      "secondary"
+    );
+    await store.chapters.insert({
+      id: "global-chapter",
+      storyId: STORY_ID,
+      idx: 0,
+      msgFrom: 0,
+      msgTo: 5,
+      title: "Everyone's chapter",
+      summary: "GLOBAL PLOT SUMMARY THAT MUST NOT APPEAR IN A DOSSIER.",
+    });
+    await store.events.insert({
+      id: "ruling-targeting-wight",
+      storyId: STORY_ID,
+      turnIndex: 6,
+      actorId: "kestrel",
+      kind: "roll",
+      payload: {
+        ruling: {
+          actorId: "kestrel",
+          targetId: "wight",
+          actionId: "attack_melee",
+          gate: { allowed: true },
+          roll: { outcome: "success" },
+        },
+      },
+      rulebookVersion: 1,
+      createdAt: 1800,
+    });
+
+    const playerDossier = (await getCharacterDossier(store, storyRecord().schema, "kestrel"))!;
+    const wightDossier = (await getCharacterDossier(store, storyRecord().schema, "wight"))!;
+
+    expect(playerDossier.storySoFar?.summary).toContain("Kestrel survived the winter road.");
+    expect(playerDossier.storySoFar?.summary).toContain("Kestrel shielded Mira");
+    expect(playerDossier.storySoFar?.summary).not.toContain("wight stalked");
+    expect(playerDossier.storySoFar?.summary).not.toContain("GLOBAL PLOT");
+    expect(wightDossier.storySoFar?.summary).toContain("The wight woke beneath the ridge.");
+    expect(wightDossier.storySoFar?.summary).toContain("The wight stalked");
+    expect(wightDossier.storySoFar?.summary).not.toContain("Kestrel shielded");
+    expect(wightDossier.storySoFar?.summary).not.toContain("GLOBAL PLOT");
+    expect(wightDossier.storySoFar?.keyEvents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          title: "Attack (melee) — success",
+          detail: expect.stringContaining("against Grave-wight"),
+        }),
+      ])
+    );
+  });
+
   it("computes skill progress from cumulative XP and the V7 progression config", async () => {
     // blade: successesPerRank = 3; Kestrel is adept with successCount 1 → 2 to go.
     const d = await getCharacterDossier(store, storyRecord().schema, "kestrel");
@@ -302,6 +382,8 @@ describe("getCharacterDossier", () => {
       hard: makeEnemy({ characterId: "husk" }),
       // no soft
     });
+    // Simulate a pre-envelope legacy/checkpoint row. New insertions are normalized automatically.
+    await store.characters.clearSoft("husk");
     const d = await getCharacterDossier(store, storyRecord().schema, "husk");
     expect(d).toBeDefined();
     expect(d!.identity.tier).toBeUndefined();

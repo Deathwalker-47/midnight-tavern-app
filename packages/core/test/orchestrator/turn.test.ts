@@ -34,6 +34,7 @@ interface Script {
 /** A Router that replays a script and records the order roles were called in. */
 class ScriptedRouter implements Router {
   readonly calls: Role[] = [];
+  lastAnalyzerPrompt?: RolePrompt;
   constructor(private script: Script) {}
 
   bindingFor(_role: Role): RoleBinding {
@@ -62,6 +63,7 @@ class ScriptedRouter implements Router {
         }
         return { content: JSON.stringify(this.script.classified) };
       case "analyzer":
+        this.lastAnalyzerPrompt = prompt;
         return {
           content: JSON.stringify(this.script.analyzer ?? { characterOps: [], worldOps: [] }),
         };
@@ -227,6 +229,43 @@ describe("submitTurn — pipeline order & transaction", () => {
     expect((await store.messages.listByStory(storyId)).map((m) => m.role)).toEqual(["player", "narrator"]);
     // No ruling ⇒ no state change.
     expect((await store.characters.get("wight"))!.hard.resources.hp!.current).toBe(before);
+  });
+
+  it("repairs legacy hard-only present characters before analyzer memory runs", async () => {
+    await store.characters.clearSoft("kestrel");
+    await store.characters.clearSoft("wight");
+    const router = new ScriptedRouter({
+      classified: { playerIntents: [], npcIntents: [], freeText: "I study the chamber." },
+      narratorProse: "Kestrel studies the chamber while the Grave-wight watches.",
+      analyzer: {
+        characterOps: [
+          {
+            characterId: "kestrel",
+            ops: [
+              { op: "set", path: "mood", value: "alert" },
+              { op: "set", path: "location", value: "the chamber" },
+              { op: "set", path: "goal", value: "understand the chamber" },
+            ],
+          },
+        ],
+        worldOps: [],
+      },
+    });
+
+    const result = await submitTurn(router, store, storyId, "I study the chamber.");
+    await result.background;
+
+    expect(router.lastAnalyzerPrompt?.user).toContain("Kestrel (kestrel)");
+    expect(router.lastAnalyzerPrompt?.user).toContain("Grave-wight (wight)");
+    expect((await store.characters.get("kestrel"))?.soft?.current).toEqual({
+      mood: "alert",
+      location: "the chamber",
+      goal: "understand the chamber",
+    });
+    expect((await store.characters.get("wight"))?.soft).toMatchObject({
+      characterId: "wight",
+      tier: "secondary",
+    });
   });
 
   it("calls only the narrator and writes no mechanics in No Stats mode", async () => {

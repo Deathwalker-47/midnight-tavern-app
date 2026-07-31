@@ -5,8 +5,8 @@
  *   1. Pure merge semantics on `applyCharacterOp` / `applyWorldOp` — set/append-dedupe/
  *      observe-FIFO-cap/relationship-clamp, and the world ops — proving each rule in
  *      isolation with no store.
- *   2. `applySoftPatch` against a real in-memory store: auto-creation of a secondary
- *      profile for an unknown characterId, and preservation of an existing character's row.
+ *   2. `applySoftPatch` against a real in-memory store: rejection of analyzer-invented
+ *      characterIds, and preservation of an existing character's hard state.
  *
  * Plus THE WALL (§10, D5): a patch that tries to smuggle a mechanical field
  * (hp/skills/items/inventory) must fail `SoftStatePatchSchema` validation. This is the
@@ -121,7 +121,7 @@ describe("applySoftPatch — store integration", () => {
     await store.stories.insert({ id: "story-1", title: schema.title, createdAt: 0, schema, locked: true });
   });
 
-  it("auto-creates a SECONDARY profile for an unknown characterId (no hard state)", async () => {
+  it("does not create a registry character from an analyzer-invented characterId", async () => {
     await applySoftPatch(
       store,
       "story-1",
@@ -129,14 +129,7 @@ describe("applySoftPatch — store integration", () => {
       3,
       (id) => (id === "ghost" ? "The Ghost" : undefined)
     );
-    const row = await store.characters.get("ghost");
-    expect(row).toBeDefined();
-    expect(row!.softTier).toBe("secondary");
-    expect(row!.soft!.name).toBe("The Ghost");
-    expect(row!.soft!.observations[0]).toEqual({ turnIdx: 3, text: "wailed" });
-    // No hard state was fabricated (the wall): empty resources/skills/inventory.
-    expect(row!.hard.skills).toEqual([]);
-    expect(row!.hard.inventory).toEqual([]);
+    expect(await store.characters.get("ghost")).toBeUndefined();
   });
 
   it("updates an existing character's soft column without touching hard state", async () => {

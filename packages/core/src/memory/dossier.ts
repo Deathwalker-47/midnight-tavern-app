@@ -427,17 +427,14 @@ export async function getCharacterDossier(
     runtimeDefinitions,
     runtimeInstances,
     runtimeAssignments,
-    characterEvents,
-    chapters,
-    arcs,
+    storyEvents,
   ] = await Promise.all([
     store.runtimeItems.listDefinitions(schema.storyId),
     store.runtimeItems.listInventory(characterId),
     store.runtimeItems.listLoadout(characterId),
-    store.events.listByStory(schema.storyId, { actorId: characterId, limit: 500 }),
-    store.chapters.listByStory(schema.storyId),
-    store.arcs.listByStory(schema.storyId),
+    store.events.listByStory(schema.storyId, { limit: 500 }),
   ]);
+  const characterEvents = storyEvents.filter((event) => event.actorId === characterId);
   const soft = self.soft;
 
   // Outgoing: this character's own edges. Reverse (incoming): every OTHER character's edge whose
@@ -547,19 +544,64 @@ export async function getCharacterDossier(
       active: true,
     }))
   );
-  const latestArc = arcs[arcs.length - 1];
-  const chapterSummary = chapters
-    .slice(-3)
-    .map((chapter) => chapter.summary)
+  const storySummary = [
+    soft?.identity.backstory?.trim(),
+    ...observations.map((observation) => observation.text.trim()),
+  ]
+    .filter((part): part is string => Boolean(part))
     .join("\n\n");
-  const storySummary = latestArc?.doc.plotSummary || chapterSummary || soft?.identity.backstory;
-  const keyEvents = observations.slice(-8).map((observation, index, selected) => ({
+  const observedKeyEvents: NonNullable<Dossier["storySoFar"]>["keyEvents"] = observations
+    .slice(-8)
+    .map((observation, index, selected) => ({
     turnIdx: observation.turnIdx,
     title: observation.text.split(/[.!?]/)[0]?.trim() || "Observed event",
     detail: observation.text,
     recent: index === selected.length - 1,
     provenance: `Turn ${observation.turnIdx}`,
   }));
+  const actionNameById = new Map(schema.actions.map((action) => [action.id, action.label]));
+  const rulingKeyEvents: NonNullable<Dossier["storySoFar"]>["keyEvents"] = storyEvents.flatMap(
+    (event) => {
+      if (!["roll", "automatic", "denied", "action_budget_exceeded"].includes(event.kind)) {
+        return [];
+      }
+      const value = event.payload["ruling"];
+      if (!value || typeof value !== "object") return [];
+      const ruling = value as Record<string, unknown>;
+      const actorId = typeof ruling["actorId"] === "string" ? ruling["actorId"] : event.actorId;
+      const targetId = typeof ruling["targetId"] === "string" ? ruling["targetId"] : undefined;
+      if (actorId !== characterId && targetId !== characterId) return [];
+      const actionId = typeof ruling["actionId"] === "string" ? ruling["actionId"] : "action";
+      const actionName = actionNameById.get(actionId) ?? actionId;
+      const gate = ruling["gate"] as Record<string, unknown> | undefined;
+      const roll = ruling["roll"] as Record<string, unknown> | undefined;
+      const outcome =
+        gate?.["allowed"] === false
+          ? "denied"
+          : typeof roll?.["outcome"] === "string"
+            ? roll["outcome"]
+            : "resolved";
+      const actorName = actorId ? (nameById.get(actorId) ?? actorId) : "Unknown actor";
+      const targetName = targetId ? (nameById.get(targetId) ?? targetId) : undefined;
+      const detail =
+        actorId === characterId
+          ? `${actorName} used ${actionName}${targetName ? ` against ${targetName}` : ""}; the ruling was ${outcome}.`
+          : `${actorName} used ${actionName} against ${self.name}; the ruling was ${outcome}.`;
+      return [{
+        turnIdx: event.turnIndex,
+        title: `${actionName} — ${outcome}`,
+        detail,
+        provenance: `Authoritative ruling from turn ${event.turnIndex}`,
+      }];
+    }
+  );
+  const keyEvents = [...observedKeyEvents, ...rulingKeyEvents]
+    .sort((left, right) => left.turnIdx - right.turnIdx)
+    .slice(-8)
+    .map((event, index, selected) => ({
+      ...event,
+      recent: index === selected.length - 1,
+    }));
   const skillNameById = new Map(schema.skills.map((skill) => [skill.id, skill.name]));
   const attributeNameById = new Map(
     schema.attributes.map((attribute) => [attribute.id, attribute.name])
@@ -620,7 +662,7 @@ export async function getCharacterDossier(
       observations: observations.map((o) => ({ turnIdx: o.turnIdx, text: o.text })),
     },
     storySoFar: {
-      ...(storySummary ? { summary: storySummary } : {}),
+      ...(storySummary.length ? { summary: storySummary } : {}),
       keyEvents,
     },
     history: observations.map((observation, index) => ({
