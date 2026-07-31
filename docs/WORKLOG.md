@@ -1003,3 +1003,44 @@ tests/25 files. Root total: 732 tests. Root typecheck and diff checks passed. No
 
 **Next:** Task 15A.7 - put the latest automatic chapter summary in the primary Overview pane until
 an arc synthesis exists, with premise retained as compact context.
+
+---
+
+## 2026-07-31 - Task 15A.7 and combined remediation release gate
+
+**RED evidence.** Overview tests covered premise-only stories, multiple closed chapters without an
+arc, and a persisted arc. They failed because there was no primary chapter document, the premise
+was rendered inside an arc-shaped document, timeline entries were not selectable, and neither
+generated document had a stable semantic boundary.
+
+**What landed.** `f6c526b` makes the latest persisted chapter the primary reading document until an
+arc exists. A persisted arc remains primary by default; selecting any summarized timeline chapter
+opens that character-independent historical chapter document, and **Back to current arc** restores
+the synthesis. Timeline entries support Enter/Space and expose selected state. The immutable story
+premise is now a small, separately labeled **Original story premise** block and is never presented
+as generated chapter/arc history. The two-column Overview stacks below 760px so the same semantic
+order remains readable on narrow windows.
+
+**Combined verification.** Focused Overview passed **5 tests / 1 file**. Fresh root typecheck
+passed. Fresh full suites passed: core **578 / 44 files** plus UI **156 / 25 files**, **734 tests**
+total, with the UI warning guard clean. Configured core coverage remains **100% statements,
+branches, functions, and lines**. `npm run build` passed the core/UI production builds and the Tauri
+release/package build; standalone `cargo check` passed. Codebase memory was re-indexed at 6,207
+nodes / 15,714 edges. The release executable remained alive for an isolated eight-second startup
+smoke and only that smoke process was stopped.
+
+Fresh unsigned v0.2.8 artifacts:
+
+- `packages/shell/src-tauri/target/release/midnight-tavern.exe` - 22,795,264 bytes - SHA-256
+  `E557CBBDE60EEB6BC5BD5D1083D78900F7B99061280A51571A64E386505DF866`
+- `packages/shell/src-tauri/target/release/bundle/msi/Midnight Tavern_0.2.8_x64_en-US.msi` -
+  9,261,056 bytes - SHA-256
+  `AAC815ADF63B33867022640C020A97BB2151B4BE58E5C66A904CF7C4A3C266BF`
+- `packages/shell/src-tauri/target/release/bundle/nsis/Midnight Tavern_0.2.8_x64-setup.exe` -
+  5,619,121 bytes - SHA-256
+  `AC06D7ED7678A8F4BABBED7DA9F758917D3C699516C7E3E757A7BA4FEFC5B349`
+
+All seven packaged findings now have source fixes and regression coverage. The remaining evidence
+is the human's visual/provider-backed installed-app journey, especially provider rate-limit
+behavior and the seven affected workflows. Automated startup cannot claim that observation.
+Task 16 signing/updater/CSP remains explicitly out of scope.

@@ -230,25 +230,38 @@ typecheck, and diff checks passed._
 - `packages/ui/src/screens/Overview.tsx`
 - `packages/ui/test/screens/Overview.test.tsx`
 
-- [ ] Add failing tests for: no closed chapter, chapters without a closed arc, and a closed arc.
-- [ ] With chapters but no arc, render the selected/latest chapter title and automatic summary in
+- [x] Add failing tests for: no closed chapter, chapters without a closed arc, and a closed arc.
+- [x] With chapters but no arc, render the selected/latest chapter title and automatic summary in
   the large reading pane; show premise as compact persistent context.
-- [ ] With a closed arc, keep the arc synthesis primary and the chapter timeline navigable.
-- [ ] Avoid presenting an immutable premise under chapter/arc labels that imply generated history.
-- [ ] Verify narrow and wide layouts preserve readable hierarchy and keyboard navigation.
-- [ ] Run Overview tests, UI suite, typecheck, and commit the slice.
+- [x] With a closed arc, keep the arc synthesis primary and the chapter timeline navigable.
+- [x] Avoid presenting an immutable premise under chapter/arc labels that imply generated history.
+- [x] Verify narrow and wide layouts preserve readable hierarchy and keyboard navigation.
+- [x] Run Overview tests, UI suite, typecheck, and commit the slice.
+
+_Completed 2026-07-31 in `f6c526b`. The latest closed chapter is the default primary document until
+an arc exists; a persisted arc is primary by default afterward. Summarized timeline entries are
+mouse- and keyboard-selectable, expose pressed state, and support returning to the current arc.
+The immutable premise is always a compact, separately labeled supporting block. A responsive grid
+stacks the timeline below 760px. Focused Overview passed 5 tests; complete core 578/44 plus UI
+156/25 passed (734 total), and root typecheck passed._
 
 ## Task 8: Final gate, baton, and one deferred package build
 
-- [ ] Run `npm run typecheck` and `npm test`.
-- [ ] Run configured core coverage and direct core/UI production builds.
-- [ ] Run `cargo check`.
-- [ ] Re-index codebase memory after structural source changes.
-- [ ] Append exact evidence and known limitations to `docs/WORKLOG.md`.
-- [ ] Update `Plan/next-phase-internal-beta.md`, overwrite `docs/HANDOFF.md`, and refresh
+- [x] Run `npm run typecheck` and `npm test`.
+- [x] Run configured core coverage and direct core/UI production builds.
+- [x] Run `cargo check`.
+- [x] Re-index codebase memory after structural source changes.
+- [x] Append exact evidence and known limitations to `docs/WORKLOG.md`.
+- [x] Update `Plan/next-phase-internal-beta.md`, overwrite `docs/HANDOFF.md`, and refresh
   `docs/NEXT-AGENT-PROMPT.md` with actual commits and one next action.
-- [ ] Only now rebuild the unsigned package once, refresh artifact hashes, and hand it to the human
+- [x] Only now rebuild the unsigned package once, refresh artifact hashes, and hand it to the human
   for the affected acceptance steps.
+
+_Completed 2026-07-31 after all seven source slices. Typecheck, all 734 tests, configured core
+coverage (100% statements/branches/functions/lines), production builds, `cargo check`, graph
+re-index, package build, hashing, and an isolated eight-second release startup smoke passed. The
+remaining evidence is the human's visual/provider-backed acceptance pass; it is not replaced by the
+automated smoke._
 
 ## Completion definition
 

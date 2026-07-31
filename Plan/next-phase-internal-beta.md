@@ -129,9 +129,9 @@ re-grounded against current HEAD (most audit gaps had already been closed by lat
   when the planner provider degrades.
 - [x] Preserve reader scroll position and keep follow-latest mode stable through content/layout
   changes.
-- [ ] Make the latest automatic chapter summary primary when no arc synthesis exists; keep the
+- [x] Make the latest automatic chapter summary primary when no arc synthesis exists; keep the
   static premise as compact context.
-- [ ] Run the full automated/native gate, update baton documents, then rebuild one combined unsigned
+- [x] Run the full automated/native gate, update baton documents, then rebuild one combined unsigned
   installer for the next human acceptance pass.
 
 ## Internal-Beta exit criteria (the finish line for this phase)
