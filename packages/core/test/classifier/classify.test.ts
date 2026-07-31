@@ -448,6 +448,78 @@ describe("classify — behavior", () => {
     expect(out.turn.playerIntents).toEqual([]);
   });
 
+  it("uses a validated recent target only for a pronoun continuation", async () => {
+    const cast = [
+      ...present,
+      { id: "scout", name: "Scout", isPlayer: false },
+    ];
+    const out = await classifyWithRecovery(
+      scripted([""]),
+      story,
+      {
+        playerMessage: "I attack it again.",
+        presentCharacters: cast,
+        recentNarration: [],
+        recentTargetId: "guard",
+      },
+      { maxRepairs: 0 }
+    );
+
+    expect(out.turn.playerIntents[0]).toMatchObject({
+      actorId: "player",
+      actionId: "attack_melee",
+      targetId: "guard",
+    });
+  });
+
+  it("lets an explicit living name override recent target focus", async () => {
+    const out = await classifyWithRecovery(
+      scripted([""]),
+      story,
+      {
+        playerMessage: "I attack the Scout instead.",
+        presentCharacters: [
+          ...present,
+          { id: "scout", name: "Scout", isPlayer: false },
+        ],
+        recentNarration: [],
+        recentTargetId: "guard",
+      },
+      { maxRepairs: 0 }
+    );
+
+    expect(out.turn.playerIntents[0]?.targetId).toBe("scout");
+  });
+
+  it("does not use target focus without continuation wording or when it is absent", async () => {
+    for (const input of [
+      {
+        playerMessage: "I attack with my knife.",
+        recentTargetId: "guard",
+      },
+      {
+        playerMessage: "I attack it again.",
+        recentTargetId: "missing",
+      },
+    ]) {
+      const out = await classifyWithRecovery(
+        scripted([""]),
+        story,
+        {
+          ...input,
+          presentCharacters: [
+            ...present,
+            { id: "scout", name: "Scout", isPlayer: false },
+          ],
+          recentNarration: [],
+        },
+        { maxRepairs: 0 }
+      );
+      expect(out.turn.playerIntents).toEqual([]);
+      expect(out.recovery?.issues.at(-1)?.kind).toBe("unresolved_target");
+    }
+  });
+
   it("preserves low-confidence demotion as structured recovery metadata", async () => {
     const out = await classifyWithRecovery(
       scripted([

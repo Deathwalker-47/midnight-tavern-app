@@ -30,6 +30,8 @@ export interface ClassifyInput {
   presentCharacters: PresentCharacter[];
   /** Most recent narrator messages, oldest→newest; the last two are used. */
   recentNarration: string[];
+  /** Engine-validated prior target focus; local recovery may use it only for continuation wording. */
+  recentTargetId?: string;
 }
 
 /**

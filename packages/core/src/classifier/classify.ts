@@ -127,6 +127,32 @@ function actionNeedsTarget(
   );
 }
 
+function hasTargetContinuationWording(playerMessage: string): boolean {
+  const normalized = normalizePhrase(playerMessage);
+  return /\b(it|him|her|them|again)\b/u.test(normalized) ||
+    /\b(?:same|that) (?:one|target|creature|enemy|foe)\b/u.test(normalized);
+}
+
+function resolveCharacterTarget(
+  input: ClassifyInput,
+  otherCharacters: ClassifyInput["presentCharacters"],
+  requiresTarget: boolean
+) {
+  const namedTargets = otherCharacters.filter((character) =>
+    containsPhrase(input.playerMessage, character.name)
+  );
+  if (namedTargets.length === 1) return namedTargets[0];
+  if (namedTargets.length > 1 || !requiresTarget) return undefined;
+
+  if (input.recentTargetId && hasTargetContinuationWording(input.playerMessage)) {
+    const recentTarget = otherCharacters.find(
+      (character) => character.id === input.recentTargetId
+    );
+    if (recentTarget) return recentTarget;
+  }
+  return otherCharacters.length === 1 ? otherCharacters[0] : undefined;
+}
+
 interface ExplicitCatalogMatch {
   action: StorySchema["actions"][number];
   position: number;
@@ -197,18 +223,10 @@ function recoverExplicitCatalogPlayerIntents(
   const otherCharacters = input.presentCharacters.filter(
     (character) => character.id !== players[0]!.id
   );
-  const namedTargets = otherCharacters.filter((character) =>
-    containsPhrase(input.playerMessage, character.name)
-  );
   const intents: MechanicalIntent[] = [];
   for (const { action } of matches.sort((left, right) => left.position - right.position)) {
     const requiresTarget = actionNeedsTarget(action, false);
-    const target =
-      requiresTarget && namedTargets.length === 1
-        ? namedTargets[0]
-        : namedTargets.length === 0 && requiresTarget && otherCharacters.length === 1
-          ? otherCharacters[0]
-          : undefined;
+    const target = resolveCharacterTarget(input, otherCharacters, requiresTarget);
     if (requiresTarget && !target) {
       return {
         ...(intents.length > 0 ? { intents } : {}),
@@ -282,16 +300,8 @@ function recoverUniversalPlayerIntent(
   const otherCharacters = input.presentCharacters.filter(
     (character) => character.id !== players[0]!.id
   );
-  const namedTargets = otherCharacters.filter((character) =>
-    containsPhrase(input.playerMessage, character.name)
-  );
   const requiresTarget = actionNeedsTarget(action, universal.requiresCharacterTarget);
-  const target =
-    namedTargets.length === 1
-      ? namedTargets[0]
-      : namedTargets.length === 0 && requiresTarget && otherCharacters.length === 1
-        ? otherCharacters[0]
-        : undefined;
+  const target = resolveCharacterTarget(input, otherCharacters, requiresTarget);
 
   if (requiresTarget && !target) {
     return {

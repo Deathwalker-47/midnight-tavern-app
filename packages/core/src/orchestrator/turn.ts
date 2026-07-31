@@ -53,6 +53,7 @@ import {
   type TurnStage,
 } from "./stagePolicy.js";
 import { discoverNarratedSceneEntities } from "./sceneEntityPromotion.js";
+import { deriveRecentPlayerTargetId } from "./targetFocus.js";
 import {
   planNpcTransitions,
   type ApprovedNpcTransition,
@@ -647,10 +648,17 @@ async function runTurnOperation(
         name: character.name,
         isPlayer: character.isPlayer,
       }));
+      const recentTargetId = await deriveRecentPlayerTargetId(
+        store,
+        storyId,
+        presentRoster,
+        new Set(recentMessages.map((message) => message.id))
+      );
       const classifierInput = {
         playerMessage: playerText,
         presentCharacters,
         recentNarration,
+        ...(recentTargetId ? { recentTargetId } : {}),
       };
       const classifier = await runStage<
         Awaited<ReturnType<typeof classifyWithRecovery>>

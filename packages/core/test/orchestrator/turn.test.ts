@@ -29,6 +29,7 @@ interface Script {
   classified: ClassifiedTurn;
   narratorProse: string;
   analyzer?: SoftStatePatch;
+  classifierError?: Error;
 }
 
 /** A Router that replays a script and records the order roles were called in. */
@@ -61,6 +62,7 @@ class ScriptedRouter implements Router {
         if (prompt.system.includes("DM loot adjudicator")) {
           return { content: JSON.stringify({ award: false, reason: "No completed encounter." }) };
         }
+        if (this.script.classifierError) throw this.script.classifierError;
         return { content: JSON.stringify(this.script.classified) };
       case "analyzer":
         this.lastAnalyzerPrompt = prompt;
@@ -265,6 +267,72 @@ describe("submitTurn — pipeline order & transaction", () => {
     expect((await store.characters.get("wight"))?.soft).toMatchObject({
       characterId: "wight",
       tier: "secondary",
+    });
+  });
+
+  it("recovers attack-it-again against the newest committed living target with an older NPC present", async () => {
+    await store.characters.insert({
+      id: "old-foe",
+      storyId,
+      name: "Old foe",
+      isPlayer: false,
+      hard: {
+        ...(await store.characters.get("wight"))!.hard,
+        characterId: "old-foe",
+      },
+    });
+    await store.messages.insert({
+      id: "prior-player",
+      storyId,
+      idx: 0,
+      role: "player",
+      content: "I attack the Grave-wight.",
+      createdAt: 1,
+    });
+    await store.messages.insert({
+      id: "prior-narrator",
+      storyId,
+      idx: 1,
+      role: "narrator",
+      content: "Your blade catches the Grave-wight.",
+      createdAt: 2,
+    });
+    await store.events.insert({
+      id: "prior-attack-event",
+      storyId,
+      messageId: "prior-narrator",
+      turnIndex: 1,
+      actorId: "kestrel",
+      kind: "roll",
+      payload: {
+        ruling: {
+          actorId: "kestrel",
+          targetId: "wight",
+          actionId: "attack_melee",
+          gate: { allowed: true },
+          roll: { outcome: "success" },
+        },
+      },
+      rulebookVersion: 1,
+      createdAt: 2,
+    });
+    const router = new ScriptedRouter({
+      classified: { playerIntents: [], npcIntents: [], freeText: "" },
+      narratorProse: "You press the attack against the Grave-wight.",
+      classifierError: new Error("provider unavailable"),
+    });
+
+    const result = await submitTurn(router, store, storyId, "I attack it again.", {
+      rng: d20Sequence([15, 10]),
+    });
+    await result.background;
+
+    expect(result.classifierRecovered).toBe(true);
+    expect(result.rulings[0]).toMatchObject({
+      actorId: "kestrel",
+      actionId: "attack_melee",
+      targetId: "wight",
+      gate: { allowed: true },
     });
   });
 
