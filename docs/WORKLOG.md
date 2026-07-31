@@ -931,3 +931,26 @@ checks passed. No installer was built.
 
 **Next:** Task 15A.4 - deterministic, scene-grounded Possible Moves on provider degradation while
 preserving cancellation and normal DM authority when a suggestion is sent.
+
+---
+
+## 2026-07-31 - Task 15A.4: Grounded Possible Moves during provider degradation
+
+**RED evidence.** Provider HTTP errors, structurally invalid output after all three attempts,
+semantically generic output, dead/absent cast mentions, empty sealed catalogs, and sparse scenes
+were exercised. Five cases initially threw `SuggestionGenerationError` instead of returning safe
+choices or an honest empty result.
+
+**What landed.** Rich committed narrator context now yields five deterministic fallback choices
+after provider failure or exhausted repair. The builder uses only extracted scene anchors, living
+visible registry characters, and non-combat gate-allowed sealed actions; it does not infer combat,
+invent items/skills, mention unavailable characters, or claim outcomes. Sparse scenes return no
+fabricated choices. Caller abort remains an abort. Play renders fallback rows as normal insert-only
+choices, preserving the draft and all downstream classifier/gate/ruling authority.
+
+**Tests and verification.** Focused core suggestions: 13 tests/1 file. Focused Play/bridge: 38
+tests/3 files. Complete core: 564 tests/44 files. Complete UI: 151 tests/25 files. Root total: 715
+tests. Root typecheck and diff checks passed. No installer was built.
+
+**Next:** Task 15A.5 - persist only explicitly validated hostility and let a living present hostile
+NPC choose a legal sealed damaging action when the planner provider degrades.

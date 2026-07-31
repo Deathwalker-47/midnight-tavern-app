@@ -152,16 +152,23 @@ tests in 44 files, UI passed 150 tests in 25 files (708 total), and root typeche
 - `packages/core/test/orchestrator/suggestions.test.ts`
 - UI suggestion-flow tests if copy/state changes
 
-- [ ] Add failing tests for provider error, malformed output after repairs, aborted signal, absent
+- [x] Add failing tests for provider error, malformed output after repairs, aborted signal, absent
   characters, an empty sealed catalog, and sparse scene context.
-- [ ] Return five unique deterministic fallback suggestions when there is enough committed scene
+- [x] Return five unique deterministic fallback suggestions when there is enough committed scene
   context. Use recent scene anchors, present registry names, and legal sealed action labels only.
-- [ ] Never mention absent/dead characters, invent items/skills, or pre-assert success.
-- [ ] Preserve caller cancellation as cancellation; do not turn abort into suggestions.
-- [ ] Keep suggestions insert-only: sending one still runs normal classifier/gate/ruling authority.
-- [ ] Give an honest reduced-variety notice only if useful; do not show “unavailable” when safe
+- [x] Never mention absent/dead characters, invent items/skills, or pre-assert success.
+- [x] Preserve caller cancellation as cancellation; do not turn abort into suggestions.
+- [x] Keep suggestions insert-only: sending one still runs normal classifier/gate/ruling authority.
+- [x] Give an honest reduced-variety notice only if useful; do not show “unavailable” when safe
   fallbacks exist.
-- [ ] Run suggestion/bridge/Play suites, all tests, typecheck, and commit the slice.
+- [x] Run suggestion/bridge/Play suites, all tests, typecheck, and commit the slice.
+
+_Completed 2026-07-31 in `2c5c738`. After provider failure or three invalid structured attempts,
+rich committed scene context yields five deterministic choices. Fallbacks use only living visible
+registry names, extracted scene anchors, and non-combat gate-allowed sealed actions; sparse context
+returns no fabricated choices and aborts still reject. The Play drawer keeps them insert-only.
+Focused core passed 13 tests and focused UI/bridge passed 38 tests; complete core passed 564/44,
+UI passed 151/25 (715 total), and root typecheck passed._
 
 ## Task 5: Persist validated hostility and act without the planner provider
 

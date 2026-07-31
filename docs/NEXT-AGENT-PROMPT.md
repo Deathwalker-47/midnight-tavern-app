@@ -25,7 +25,7 @@ hint is known to be ignored.
 
 ## Current state
 
-The branch is local `main` at source commit `3b0a05e` before the current documentation closeout. It
+The branch is local `main` at source commit `2c5c738` before the current documentation closeout. It
 is not pushed. The app is unsigned v0.2.8. The previous automated Internal Beta gate passed, but the human's
 first provider-backed packaged pass found seven source defects. The old package is stale for these
 fixes. The human explicitly asked not to build another installer until all fixes are done.
@@ -64,9 +64,9 @@ Fresh pre-remediation baseline on 2026-07-31:
 - `packages/ui/src/screens/StoryBlueprint.tsx::forgeStory`: any retained operation forces reuse of
   its request, operation id, start time, and checkpoint. Cancellation keeps it by design; discard is
   not an awaited atomic fresh-start transition.
-- `packages/core/src/orchestrator/suggestions.ts::suggestPlayerActions`: exact structured output is
-  required after bounded repair; any final failure throws. Packaged logs showed HTTP 429 and
-  malformed tiny classifier responses.
+- Suggestions are fixed at `2c5c738`: provider errors or exhausted repair now use rich committed
+  scene anchors, living visible registry characters, and non-combat gate-allowed sealed actions to
+  produce five deterministic insert-only choices. Abort and sparse-context behavior fail safely.
 - Target continuity is fixed at `3b0a05e`: the orchestrator derives at most one focus from the
   newest recent authoritative player ruling, validates that it remains present and alive, and
   classifier recovery uses it only for continuation wording when no explicit name switches target.
@@ -103,10 +103,11 @@ per slice:
    ruling may supply one present living non-player focus for pronoun/continuation recovery. Explicit
    names override; dead, absent, stale, unknown, or multi-target focus fails closed. Focused suites
    passed 80/3; complete core 558/44 and UI 150/25 (708 total), and typecheck passed.
-4. **Possible Moves fallback.** On provider error/malformed final output, return five unique
-   scene-grounded deterministic suggestions using committed scene anchors, present living registry
-   names, and legal sealed labels. Never invent items/skills or pre-assert success. Caller abort
-   remains abort. Suggestions remain insert-only and receive normal rulings when sent.
+4. **Possible Moves fallback - complete at `2c5c738`.** Provider errors and exhausted repair use
+   rich committed scene anchors, living visible registry names, and non-combat gate-allowed sealed
+   actions for five deterministic choices. Sparse context returns none, abort remains abort, and
+   Play keeps choices insert-only. Focused core 13/1 and Play/bridge 38/3 passed; complete core
+   564/44 and UI 151/25 (715 total), and typecheck passed.
 5. **Independent hostile NPC agency.** Extend bounded NPC introduction with a small disposition
    contract, validate explicit hostility before persisting an engine-owned fact, and use that fact
    to choose a legal sealed damaging action if the planner provider degrades. Route through normal
@@ -139,17 +140,18 @@ per slice:
 
 ## Exact next action
 
-Do only detailed-plan Task 4 next. Add RED tests for provider error, malformed output after bounded
-repairs, caller abort, absent/dead characters, an empty sealed action catalog, and sparse committed
-scene context. When safe context exists, return five unique deterministic fallback suggestions
-using only recent committed scene anchors, present living registry names, and legal sealed action
-labels. Never invent items or skills, mention absent/dead characters, or pre-assert success. Abort
-must remain abort. Suggestions remain insert-only, so sending one still passes through normal
-classification, gates, rulings, effects, and budgets. Run focused suggestion/bridge/Play suites,
-typecheck, and all tests before committing. Update the active plan, append WORKLOG, overwrite
-HANDOFF, and refresh this prompt with the actual commit and one next task.
+Do only detailed-plan Task 5 next. Add RED tests for an explicitly hostile introduced NPC, planner
+provider failure, a legal sealed damaging action, and an independently resolved NPC attack against
+a present living player. Extend the bounded introduction contract with a small disposition field;
+validate only explicit hostility and persist it atomically in engine-owned hard state. On provider
+degradation, choose at most one legal damaging sealed action per eligible hostile NPC and route it
+through the normal gate/resolver/ruling/state path. Prove neutral, dead, absent, no-legal-action,
+dead-target, shared-budget, and rollback negatives. Reaction and goal actions must share one NPC
+per-turn budget. Run focused introduction/agency/turn/checkpoint suites, typecheck, and all tests
+before committing. Update the active plan, append WORKLOG, overwrite HANDOFF, and refresh this
+prompt with the actual commit and one next task.
 
-Do not mix hostility, scroll, Overview, or packaging into the Possible Moves commit.
+Do not mix scroll, Overview, or packaging into the hostility/agency commit.
 Do not build an installer yet. Do not start Task 16.
 
 Before every stop: keep tests green, make coherent commits with the required Co-Authored-By trailer,
