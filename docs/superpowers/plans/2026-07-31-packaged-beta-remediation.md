@@ -180,18 +180,26 @@ UI passed 151/25 (715 total), and root typecheck passed._
 - `packages/core/src/orchestrator/turn.ts`
 - NPC-introduction/agency/turn/persistence tests
 
-- [ ] Add failing tests for an explicitly hostile introduced creature attacking a present living
+- [x] Add failing tests for an explicitly hostile introduced creature attacking a present living
   player when the NPC planner provider errors or times out.
-- [ ] Add negative tests: neutral/friendly/unknown disposition, dead/absent actor, dead/absent target,
+- [x] Add negative tests: neutral/friendly/unknown disposition, dead/absent actor, dead/absent target,
   no legal damaging action, exhausted NPC budget, and cancelled/rolled-back turn.
-- [ ] Extend the bounded introduction proposal with a small disposition contract and validate it
-  against explicit scene evidence before persisting an engine-owned hostility fact.
-- [ ] Deterministically choose a legal sealed damaging action for a validated hostile NPC only;
+- [x] Derive a bounded disposition transition from explicit committed narrator evidence before
+  persisting an engine-owned hostility fact; never trust player claims or model labels directly.
+- [x] Deterministically choose a legal sealed damaging action for a validated hostile NPC only;
   route it through normal gate/resolver/ruling/state machinery.
-- [ ] Preserve deterministic provocation reactions and ensure the same NPC cannot exceed its
+- [x] Preserve deterministic provocation reactions and ensure the same NPC cannot exceed its
   separate per-turn budget across reaction plus goal action.
-- [ ] Atomically checkpoint, commit, and roll back hostility with the character transition.
-- [ ] Run NPC/turn/persistence suites, all tests, typecheck, and commit the slice.
+- [x] Atomically checkpoint, commit, and roll back hostility with the character transition.
+- [x] Run NPC/turn/persistence suites, all tests, typecheck, and commit the slice.
+
+_Completed 2026-07-31 in `ad25b9c`. Hostility is an engine-owned hard-state flag derived only from
+explicit committed narrator sentences in which one unambiguous registered living actor attacks the
+player. Player claims, reverse-direction violence, negation, ominous tone, and ambiguous aliases do
+not qualify. An eligible hostile actor receives one gate-legal sealed damaging action if planning
+fails or leaves it unplanned; normal resolver/ruling/state authority and the shared NPC budget still
+apply. Focused introduction/agency/history passed 56 tests; complete core passed 578/44, UI passed
+151/25 (729 total), and root typecheck passed._
 
 ## Task 6: Stabilize Play scroll anchoring
 

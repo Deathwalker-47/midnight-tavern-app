@@ -25,7 +25,7 @@ hint is known to be ignored.
 
 ## Current state
 
-The branch is local `main` at source commit `2c5c738` before the current documentation closeout. It
+The branch is local `main` at source commit `ad25b9c` before the current documentation closeout. It
 is not pushed. The app is unsigned v0.2.8. The previous automated Internal Beta gate passed, but the human's
 first provider-backed packaged pass found seven source defects. The old package is stale for these
 fixes. The human explicitly asked not to build another installer until all fixes are done.
@@ -70,9 +70,11 @@ Fresh pre-remediation baseline on 2026-07-31:
 - Target continuity is fixed at `3b0a05e`: the orchestrator derives at most one focus from the
   newest recent authoritative player ruling, validates that it remains present and alive, and
   classifier recovery uses it only for continuation wording when no explicit name switches target.
-- `packages/core/src/orchestrator/npcAgency.ts::planNpcActions`: provider errors return `[]`.
-  `planNpcReactions` is deterministic but requires an already resolved provocation. No persisted,
-  validated hostility fact supports safe autonomous fallback.
+- Hostile agency is fixed at `ad25b9c`: committed narrator evidence can persist the engine-owned
+  `npc_hostile_to_player` hard-state flag for one unambiguous registered actor. Planner failure,
+  timeout, empty/invalid output, or omission then yields one gate-legal sealed damaging action for
+  an eligible hostile actor. Neutral/ambiguous/dead/absent/no-action cases fail closed, reactions
+  share the same NPC turn budget, and checkpoint rewind restores the prior flag.
 - `packages/ui/src/screens/Play.tsx`: follow/latest intent is based chiefly on delayed React state;
   content/layout height changes are not robustly anchored.
 
@@ -108,11 +110,14 @@ per slice:
    actions for five deterministic choices. Sparse context returns none, abort remains abort, and
    Play keeps choices insert-only. Focused core 13/1 and Play/bridge 38/3 passed; complete core
    564/44 and UI 151/25 (715 total), and typecheck passed.
-5. **Independent hostile NPC agency.** Extend bounded NPC introduction with a small disposition
-   contract, validate explicit hostility before persisting an engine-owned fact, and use that fact
-   to choose a legal sealed damaging action if the planner provider degrades. Route through normal
-   gate/resolver/ruling/state. Test neutral/dead/absent/no-action/budget/rollback negatives. Combine
-   reaction and goal spending under one NPC per-turn budget.
+5. **Independent hostile NPC agency - complete at `ad25b9c`.** Hostility is derived only from an
+   explicit committed narrator sentence in which one unambiguous present living registry actor
+   attacks the player. Player claims, reverse-direction violence, negation, ominous tone, and
+   ambiguous shortened aliases fail closed. The persisted hard-state flag is checkpointed and
+   rollback-safe. Planner failure/timeout/empty/invalid/omission uses one legal sealed damaging
+   action through normal gate/resolver/ruling/state authority; a prior reaction consumes the same
+   NPC turn budget. Focused introduction/agency/history passed 56 tests; full core 578/44 and UI
+   151/25 (729 total), root typecheck and diff checks passed.
 6. **Scroll anchoring.** Test initial/latest, near-bottom streaming, historical reading, drawer and
    layout growth, and Jump to latest. Track follow mode synchronously and preserve the exact reader
    viewport while not following.
@@ -140,18 +145,15 @@ per slice:
 
 ## Exact next action
 
-Do only detailed-plan Task 5 next. Add RED tests for an explicitly hostile introduced NPC, planner
-provider failure, a legal sealed damaging action, and an independently resolved NPC attack against
-a present living player. Extend the bounded introduction contract with a small disposition field;
-validate only explicit hostility and persist it atomically in engine-owned hard state. On provider
-degradation, choose at most one legal damaging sealed action per eligible hostile NPC and route it
-through the normal gate/resolver/ruling/state path. Prove neutral, dead, absent, no-legal-action,
-dead-target, shared-budget, and rollback negatives. Reaction and goal actions must share one NPC
-per-turn budget. Run focused introduction/agency/turn/checkpoint suites, typecheck, and all tests
-before committing. Update the active plan, append WORKLOG, overwrite HANDOFF, and refresh this
-prompt with the actual commit and one next task.
+Do only detailed-plan Task 6 next. Add RED DOM-metric tests for initial load at latest, near-bottom
+stream following, historical reading across stream changes and drawer/layout growth, and Jump to
+latest resuming follow mode. Track follow intent synchronously rather than only in delayed React
+state. Use layout-phase anchoring plus a bottom sentinel or bounded resize observation so content
+growth cannot reset the viewport to transcript start. Preserve the exact viewport while the reader
+is not following. Run focused Play tests, the full UI suite, root typecheck/all tests, then update the
+plan, append WORKLOG, overwrite HANDOFF, refresh this prompt, and commit the scroll slice.
 
-Do not mix scroll, Overview, or packaging into the hostility/agency commit.
+Do not mix Overview or packaging into the scroll commit.
 Do not build an installer yet. Do not start Task 16.
 
 Before every stop: keep tests green, make coherent commits with the required Co-Authored-By trailer,

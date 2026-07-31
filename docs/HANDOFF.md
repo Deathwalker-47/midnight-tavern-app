@@ -1,7 +1,7 @@
 # HANDOFF - current live state
 
 **Updated:** 2026-07-31
-**Branch / HEAD:** local `main` at source commit `2c5c738`; documentation closeout pending; not pushed
+**Branch / HEAD:** local `main` at source commit `ad25b9c`; documentation closeout pending; not pushed
 **App version:** `0.2.8`, unsigned
 **User-owned/untracked:** `.codex/`, `opencode.json` - preserve
 **Active plan:** `Plan/next-phase-internal-beta.md`, Task 15A
@@ -9,39 +9,47 @@
 
 ## Current outcome
 
-Four of seven packaged-acceptance remediation slices are complete.
+Five of seven packaged-acceptance remediation slices are complete.
 
 1. `fab2088` - retained Forge offers reliable resume and an awaited id-safe fresh start.
 2. `2032832` - registry-owned soft memory and character-specific Character history.
 3. `3b0a05e` - newest authoritative living/present target continuity for pronoun attacks.
-4. `2c5c738` - provider failure or exhausted suggestion repair now yields five deterministic choices
-   from rich committed scene context. Names come only from living visible registry characters;
-   mechanical options come only from non-combat gate-allowed sealed actions. Sparse context returns
-   no fabricated choices and caller abort remains abort. Play keeps all choices insert-only.
+4. `2c5c738` - rich scenes retain five safe deterministic Possible Moves during provider failure.
+5. `ad25b9c` - explicit narrator-backed hostility persists in hard state and is rollback-safe. A
+   present living hostile NPC that planning fails or leaves unplanned selects one gate-legal sealed
+   damaging action through the ordinary resolver/ruling/state path. Neutral, ambiguous, absent,
+   dead, and action-less cases fail closed; a prior reaction consumes the NPC's one turn action.
 
-Do not start Task 16 and do not build an installer yet. Complete all Task 15A source slices, run the
+Do not start Task 16 and do not build an installer yet. Complete scroll and Overview, run the
 combined release gate, then package once.
 
-## Verification
+## Fresh verification
 
-- Task 15A.4 focused core suggestions: **13 tests / 1 file**, passed.
-- Focused Play plus both bridge suites: **38 tests / 3 files**, passed.
-- Complete core: **564 tests / 44 files**, passed.
+- Focused NPC introduction/agency/history: **56 tests / 3 files**, passed.
+- Complete core: **578 tests / 44 files**, passed.
 - Complete UI: **151 tests / 25 files**, passed.
-- Root total after Task 15A.4: **715 tests**, passed.
+- Root total after Task 15A.5: **729 tests**, passed.
 - `npm run typecheck`: passed.
-- `git diff --check`: passed before the source commit.
+- `git diff --check`: passed.
 - Prior package/release evidence predates Task 15A and is historical only.
 
 ## Remaining packaged findings
 
-1. **Hostile NPC agency:** deterministic reaction needs a resolved provocation, while goal planning
-   returns no action on provider failure. No validated persisted hostility fact supports an
-   engine-owned fallback attack.
-2. **Scroll:** Play follow/latest intent relies chiefly on delayed React state and can lose the
+1. **Scroll:** Play follow/latest intent relies chiefly on delayed React state and can lose the
    reader/latest anchor during DOM replacement or layout growth.
-3. **Overview:** before an arc closes, live chapter summaries remain in the narrow timeline while
+2. **Overview:** before an arc closes, live chapter summaries remain in the narrow timeline while
    the large pane falls back to the immutable premise.
+
+## Hostility semantics now locked
+
+- The persisted fact is `hard.flags.npc_hostile_to_player`.
+- Only committed narrator text can establish it, and only when one unambiguous present living
+  registry actor explicitly attacks the player. Player text is never evidence.
+- Reverse direction, negation, mood/species/appearance, and ambiguous shortened aliases fail closed.
+- Planning can take precedence with one valid action. Failure, timeout, empty output, invalid output,
+  or omission gives an eligible hostile actor one sealed damaging fallback.
+- Reactions and planned/fallback actions share the one-action NPC turn budget.
+- The checkpoint is captured before the disposition transition; rewind/delete restores the flag.
 
 ## Non-negotiable authority rules
 
@@ -53,26 +61,21 @@ combined release gate, then package once.
 - Rulings render before narrator streaming. Prose cannot assert death without threshold-backed
   `causedDeathOf`.
 - Two player strikes remain legal under the two-action player budget; NPC budget is separate.
-- Hostility must be explicit, validated, persisted, and rollback-safe; never infer it from mood,
-  species, combat-capable actions, or prose tone.
-- NPC fallbacks must use normal sealed action lookup, gates, resolver, ruling cards, state effects,
-  and the shared NPC per-turn budget.
 - Browser/native bridge parity is mandatory; keep native dependencies out of the webview path.
 - Preserve `.codex/` and `opencode.json`; do not push.
 
 ## Single next action
 
-Implement detailed-plan Task 5 with TDD:
+Implement detailed-plan Task 6 with TDD in `packages/ui/src/screens/Play.tsx` and
+`packages/ui/test/screens/Play.test.tsx`:
 
-1. Add RED tests for an explicitly hostile introduced NPC, planner provider failure, a legal sealed
-   damaging action, and an independently resolved NPC attack against a present living player.
-2. Extend the bounded NPC-introduction contract with a small disposition field; validate only an
-   explicit hostile value and persist it in engine-owned hard state atomically with introduction.
-3. On planner degradation, choose at most one legal damaging sealed action for each eligible hostile
-   NPC and route it through the normal classifier-independent gate/resolver/ruling/state path.
-4. Prove neutral, dead, absent, no-legal-action, target-dead, shared-budget, and rollback negatives.
-   Reactions and goal actions must consume one combined NPC per-turn budget, never duplicate it.
-5. Run focused introduction/agency/turn/checkpoint suites, all tests, and typecheck; then append
-   WORKLOG, overwrite this handoff, refresh `docs/NEXT-AGENT-PROMPT.md`, and commit the slice.
+1. Add RED DOM-metric tests proving initial load lands at latest, near-bottom streaming follows,
+   reading older prose survives streaming plus drawer/layout growth, and Jump to latest resumes.
+2. Track follow-latest intent synchronously rather than depending on delayed React state.
+3. Use layout-phase anchoring plus a bottom sentinel or bounded resize observation so content-height
+   changes cannot reset the reader to the transcript start.
+4. Preserve the exact historical viewport while follow mode is off; avoid fighting user scrolling.
+5. Run focused Play tests, complete UI, root typecheck/all tests, append WORKLOG, overwrite this
+   handoff, refresh `docs/NEXT-AGENT-PROMPT.md`, and commit the slice.
 
-Do not mix scroll, Overview, or packaging into the hostility/agency commit.
+Do not mix Overview or packaging into the scroll commit.

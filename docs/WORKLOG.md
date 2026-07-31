@@ -954,3 +954,30 @@ tests. Root typecheck and diff checks passed. No installer was built.
 
 **Next:** Task 15A.5 - persist only explicitly validated hostility and let a living present hostile
 NPC choose a legal sealed damaging action when the planner provider degrades.
+
+---
+
+## 2026-07-31 - Task 15A.5: Persisted hostility and autonomous NPC attacks
+
+**RED evidence.** A committed narrator sentence explicitly showing the Grave-wight attacking the
+player produced no disposition transition. A planner provider failure and a valid empty planner
+response both left a flagged hostile NPC with no ruling. A rewind test showed the flag was never
+committed, and an ambiguous shortened name initially marked two registry actors hostile.
+
+**What landed.** `npc_hostile_to_player` is now an engine-owned hard-state fact derived only from
+committed narrator evidence in which one unambiguous present living registry actor explicitly
+attacks the player. Player claims, reverse-direction attacks, negation, ominous appearance, and
+ambiguous aliases fail closed. The transition commits atomically after the pre-turn checkpoint and
+rewind restores the earlier flag state. If bounded goal planning fails, times out, returns empty, or
+omits an eligible hostile actor, deterministic policy chooses at most one gate-legal sealed damaging
+action and routes it through the normal resolver, ruling, damage/death, and persistence path. An NPC
+that already reacted is excluded from planning, preserving one shared NPC action for the turn.
+
+**Tests and verification.** Focused introduction/agency/history: 56 tests/3 files. Negative coverage
+includes neutral/unknown evidence, dead or absent actors and targets, no legal damaging action,
+ambiguous aliases, shared reaction budget, and rewind. Complete core: 578 tests/44 files. Complete
+UI: 151 tests/25 files. Root total: 729 tests. Root typecheck and diff checks passed. No installer
+was built.
+
+**Next:** Task 15A.6 - stabilize Play scroll anchoring across initial load, streaming, historical
+reading, drawer/layout growth, and explicit Jump to latest.

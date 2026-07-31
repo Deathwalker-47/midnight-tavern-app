@@ -125,7 +125,7 @@ re-grounded against current HEAD (most audit gaps had already been closed by lat
   evidence-backed soft-memory updates.
 - [x] Preserve a unique recent living target for pronoun continuation attacks without guessing.
 - [x] Provide scene-grounded deterministic Possible Moves when the suggestion provider degrades.
-- [ ] Persist engine-validated hostility and let living hostile NPCs select legal sealed actions
+- [x] Persist engine-validated hostility and let living hostile NPCs select legal sealed actions
   when the planner provider degrades.
 - [ ] Preserve reader scroll position and keep follow-latest mode stable through content/layout
   changes.
