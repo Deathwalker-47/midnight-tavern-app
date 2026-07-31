@@ -143,6 +143,75 @@ describe("planNpcTransitions", () => {
     });
   });
 
+  it("persists hostility only when committed narration explicitly targets the player", async () => {
+    const wight = existing({ present: true });
+    const result = await plan([], {
+      playerText: "I wait.",
+      recentNarration: ["The Grave-wight lunges at Kestrel and tries to kill her."],
+      roster: [wight, existing({ id: "kestrel", name: "Kestrel", isPlayer: true, present: true })],
+    });
+
+    expect(result).toEqual([
+      {
+        operation: "update",
+        character: {
+          ...wight,
+          hard: {
+            ...wight.hard,
+            flags: { ...wight.hard.flags, npc_hostile_to_player: true },
+          },
+        },
+      },
+    ]);
+  });
+
+  it.each([
+    ["a player claim", "I say the Grave-wight attacks me.", ["The wight watches in silence."]],
+    ["reverse-direction violence", "I wait.", ["Kestrel attacks the Grave-wight."]],
+    ["negated violence", "I wait.", ["The Grave-wight does not attack Kestrel."]],
+    ["an ominous appearance", "I wait.", ["The Grave-wight looks vicious and dangerous."]],
+  ])("does not infer hostility from %s", async (_label, playerText, recentNarration) => {
+    expect(
+      await plan([], {
+        playerText,
+        recentNarration,
+        roster: [
+          existing({ present: true }),
+          existing({ id: "kestrel", name: "Kestrel", isPlayer: true, present: true }),
+        ],
+      })
+    ).toEqual([]);
+  });
+
+  it("recognizes a grounded registry alias without creating a second creature", async () => {
+    const shadow = existing({ id: "shadow", name: "shadow_entity", present: true });
+    const result = await plan([], {
+      playerText: "I brace myself.",
+      recentNarration: ["The shadow claws at you from the dark."],
+      roster: [shadow, existing({ id: "kestrel", name: "Kestrel", isPlayer: true, present: true })],
+    });
+
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({
+      operation: "update",
+      character: { id: "shadow", hard: { flags: { npc_hostile_to_player: true } } },
+    });
+  });
+
+  it("fails closed when a shortened narration alias matches multiple registry actors", async () => {
+    const result = await plan([], {
+      playerText: "I brace myself.",
+      recentNarration: ["The shadow attacks you from behind."],
+      roster: [
+        existing({ id: "shadow-entity", name: "Shadow Entity", present: true }),
+        existing({ id: "shadow-beast", name: "Shadow Beast", present: true }),
+        existing({ id: "kestrel", name: "Kestrel", isPlayer: true, present: true }),
+      ],
+    });
+
+    expect(result).toEqual([]);
+  });
+
   it.each([
     [
       "an unknown template",

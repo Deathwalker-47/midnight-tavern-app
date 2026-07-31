@@ -453,4 +453,26 @@ describe("history ops — swipe / delete / rewind (§6)", () => {
     expect(await store.characters.get("ghost")).toBeUndefined();
     expect(await store.worldSoft.get(storyId)).toBeUndefined();
   });
+
+  it("rewind restores the hostility flag from before the reverted turn", async () => {
+    await store.messages.insert({
+      id: "hostile-scene",
+      storyId,
+      idx: 0,
+      role: "narrator",
+      content: "The Grave-wight attacks Kestrel from the crypt arch.",
+      createdAt: 0,
+    });
+    router.script.classified = { playerIntents: [], npcIntents: [], freeText: "I wait." };
+
+    const result = await submitTurn(router, store, storyId, "I hold my ground.", {
+      rng: d20Sequence([15]),
+    });
+    await result.background;
+    expect((await store.characters.get("wight"))!.hard.flags.npc_hostile_to_player).toBe(true);
+
+    await deleteLastTurn(store, storyId);
+
+    expect((await store.characters.get("wight"))!.hard.flags.npc_hostile_to_player).toBeUndefined();
+  });
 });

@@ -22,9 +22,13 @@ import type {
   StreamHandler,
 } from "../../src/index.js";
 import { openStore, type Store } from "../../src/store/index.js";
-import { makePlayer, makeStory } from "../fixtures.js";
+import { makeEnemy, makePlayer, makeStory } from "../fixtures.js";
 import type { NpcIntroductionProposal } from "../../src/orchestrator/npcIntroduction.js";
-import type { NpcActionProposal } from "../../src/orchestrator/npcAgency.js";
+import {
+  planHostileNpcFallback,
+  type NpcActionProposal,
+  type NpcPlanInput,
+} from "../../src/orchestrator/npcAgency.js";
 import type { StageMetric } from "../../src/orchestrator/stagePolicy.js";
 
 /** Minimal V7 router: canned classifier + loot decline + a fixed narrator stream. */
@@ -83,11 +87,61 @@ const PLAYER_ATTACK = {
   confidence: 1,
 } as const;
 
+function hostileFallbackInput(): NpcPlanInput {
+  const schema = makeStory({ storyId: "fallback-story" });
+  const player = makePlayer();
+  const hostile = makeEnemy({ flags: { npc_hostile_to_player: true } });
+  return {
+    schema,
+    playerText: "I wait.",
+    recentNarration: ["The Grave-wight attacks Kestrel."],
+    candidates: [hostile],
+    nameById: new Map([["kestrel", "Kestrel"], ["wight", "Grave-wight"]]),
+    present: new Map([["kestrel", true], ["wight", false]]),
+    hardById: new Map([["kestrel", player], ["wight", hostile]]),
+  };
+}
+
+describe("validated hostile fallback policy", () => {
+  it("requires one present living player target and a present living hostile actor", () => {
+    const baseline = hostileFallbackInput();
+    expect(planHostileNpcFallback(baseline)).toHaveLength(1);
+
+    const deadActor = makeEnemy({ alive: false, flags: { npc_hostile_to_player: true } });
+    expect(planHostileNpcFallback({ ...baseline, candidates: [deadActor] })).toEqual([]);
+
+    const absentActor = hostileFallbackInput();
+    absentActor.present.delete("wight");
+    expect(planHostileNpcFallback(absentActor)).toEqual([]);
+
+    const deadTarget = hostileFallbackInput();
+    deadTarget.hardById = new Map([
+      ["kestrel", makePlayer({ alive: false })],
+      ["wight", deadTarget.candidates[0]!],
+    ]);
+    expect(planHostileNpcFallback(deadTarget)).toEqual([]);
+
+    const absentTarget = hostileFallbackInput();
+    absentTarget.present.delete("kestrel");
+    expect(planHostileNpcFallback(absentTarget)).toEqual([]);
+  });
+
+  it("does nothing when the sealed catalog has no legal damaging action", () => {
+    const input = hostileFallbackInput();
+    input.schema = {
+      ...input.schema,
+      actions: input.schema.actions.filter((action) => action.category !== "combat"),
+    };
+
+    expect(planHostileNpcFallback(input)).toEqual([]);
+  });
+});
+
 describe("same-turn NPC agency", () => {
   let store: Store;
   const storyId = "fixture-story";
 
-  async function seedWightHp(hp: number): Promise<void> {
+  async function seedWightHp(hp: number, hostile = false): Promise<void> {
     await store.characters.insert({
       id: "wight",
       storyId,
@@ -101,7 +155,7 @@ describe("same-turn NPC agency", () => {
         resources: { hp: { current: hp, max: hp } },
         skills: [{ skillId: "blade", rank: "adept", successCount: 0 }],
         inventory: [{ itemId: "sword", qty: 1 }],
-        flags: {},
+        flags: hostile ? { npc_hostile_to_player: true } : {},
         alive: true,
       },
     });
@@ -600,6 +654,78 @@ describe("same-turn NPC agency", () => {
     expect(result.rulings.some((ruling) => ruling.actorId === "wight")).toBe(false);
     expect((await store.characters.get("wight"))!.hard.resources.hp!.current).toBe(12);
     expect(result.prose.length).toBeGreaterThan(0); // narration is never blocked by the planner
+  });
+
+  it("lets a validated hostile NPC attack independently when the planner provider fails", async () => {
+    await seedWightHp(12, true);
+    const router = new AgencyRouter({ playerIntents: [], npcIntents: [], freeText: "I wait." });
+    router.plannerFailure = new Error("provider unavailable");
+
+    const result = await submitTurn(router, store, storyId, "I wait in the dark.", {
+      rng: d20Sequence([15]),
+    });
+    await result.background;
+
+    expect(result.rulings).toContainEqual(
+      expect.objectContaining({
+        actorId: "wight",
+        actionId: "attack_wild",
+        targetId: "kestrel",
+        gate: { allowed: true },
+        roll: expect.objectContaining({ natural: 15 }),
+      })
+    );
+    expect((await store.characters.get("kestrel"))!.hard.resources.hp!.current).toBe(17);
+  });
+
+  it("does not let an empty planner response suppress a validated hostile NPC", async () => {
+    await seedWightHp(12, true);
+    const router = new AgencyRouter({ playerIntents: [], npcIntents: [], freeText: "I wait." });
+
+    const result = await submitTurn(router, store, storyId, "I wait in the dark.", {
+      rng: d20Sequence([15]),
+    });
+    await result.background;
+
+    expect(result.rulings).toContainEqual(
+      expect.objectContaining({ actorId: "wight", actionId: "attack_wild", targetId: "kestrel" })
+    );
+  });
+
+  it("shares one NPC action budget between reaction and hostile fallback", async () => {
+    await seedWightHp(12, true);
+    const router = new AgencyRouter({
+      playerIntents: [PLAYER_ATTACK],
+      npcIntents: [],
+      freeText: "",
+    });
+    router.plannerFailure = new Error("provider unavailable");
+
+    const result = await submitTurn(router, store, storyId, "I strike the wight.", {
+      rng: d20Sequence([15]),
+    });
+    await result.background;
+
+    expect(result.rulings.filter((ruling) => ruling.actorId === "wight")).toHaveLength(1);
+    expect((await store.characters.get("kestrel"))!.hard.resources.hp!.current).toBe(17);
+  });
+
+  it("does not let validated hostility bypass death, presence, or a dead player target", async () => {
+    await seedWightHp(12, true);
+    await store.characters.setPresent("wight", false);
+    const player = makePlayer();
+    player.alive = false;
+    player.resources.hp!.current = 0;
+    await store.characters.updateHard("kestrel", player);
+    const router = new AgencyRouter({ playerIntents: [], npcIntents: [], freeText: "I wait." });
+    router.plannerFailure = new Error("provider unavailable");
+
+    const result = await submitTurn(router, store, storyId, "I wait.", {
+      rng: d20Sequence([15]),
+    });
+    await result.background;
+
+    expect(result.rulings.some((ruling) => ruling.actorId === "wight")).toBe(false);
   });
 
   // ── Task 6: deterministic provocation beyond combat ─────────────────────────────────────

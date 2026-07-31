@@ -44,7 +44,7 @@ import { applyUniversalActionDefaults } from "../config/index.js";
 import { assembleContext } from "./context.js";
 import { capture } from "./checkpoint.js";
 import { generateGuardedNarration } from "./authorityGuard.js";
-import { planNpcReactions, planNpcActions } from "./npcAgency.js";
+import { planNpcReactions, planNpcActions, planHostileNpcFallback } from "./npcAgency.js";
 import {
   runStage,
   DEFAULT_STAGE_DEADLINES,
@@ -854,34 +854,40 @@ async function runTurnOperation(
       // deterministically react may still pursue a goal this turn (aid, converse, flee,
       // surrender, exploit an opening). One bounded structured request proposes; deterministic
       // code validates each proposal against present state + sealed catalog + gate; the engine
-      // resolves it. Fail-closed to no action — narration is never blocked on this stage.
+      // resolves it. An unplanned validated hostile actor gets a sealed damaging fallback;
+      // neutral and unvalidated actors still fail closed to no action.
       const reactedNpcIds = new Set(npcReactionIntents.map((intent) => intent.actorId));
       const plannerCandidates: CharacterHardState[] = [];
+      const presentHardById = new Map<string, CharacterHardState>();
       for (const character of presentRoster) {
-        if (character.isPlayer || reactedNpcIds.has(character.id)) continue;
         const hard = await workingState(character.id);
+        presentHardById.set(character.id, hard);
+        if (character.isPlayer || reactedNpcIds.has(character.id)) continue;
         if (hard.alive) plannerCandidates.push(hard);
       }
+      const npcPlanInput = {
+        schema,
+        playerText,
+        recentNarration,
+        candidates: plannerCandidates,
+        nameById,
+        present: new Map(presentRoster.map((character) => [character.id, character.isPlayer])),
+        hardById: presentHardById,
+      };
       // Bound the planner's model call: it fires on every full-stat turn with an idle present NPC,
-      // so a hung provider must not stall the turn. On timeout/error it falls closed to no NPC action.
+      // so a hung provider must not stall the turn. Timeout/error can trigger only the same
+      // engine-validated hostile fallback; everyone else degrades to no action.
       const npcActionIntents = await runStage(
         "npc_planner",
         (signal) =>
           planNpcActions(
             router,
-            {
-              schema,
-              playerText,
-              recentNarration,
-              candidates: plannerCandidates,
-              nameById,
-              present: new Map(presentRoster.map((character) => [character.id, character.isPlayer])),
-            },
+            npcPlanInput,
             signal
           ),
         {
           deadlineMs: stageDeadline("npc_planner"),
-          fallback: () => [],
+          fallback: () => planHostileNpcFallback(npcPlanInput),
           ...(opts.signal ? { signal: opts.signal } : {}),
           onMetric: recordStageMetric,
           ...(opts.stagePolicy?.now ? { now: opts.stagePolicy.now } : {}),
@@ -1022,10 +1028,18 @@ async function runTurnOperation(
       await store.checkpoints.insert(checkpoint);
 
       for (const transition of npcTransitions) {
+        if (transition.operation === "update") continue;
         await store.characters.setPresent(
           transition.character.id,
           transition.operation !== "leave"
         );
+      }
+
+      for (const transition of npcTransitions) {
+        if (transition.operation === "introduce" || workingById.has(transition.character.id)) {
+          continue;
+        }
+        await store.characters.updateHard(transition.character.id, transition.character.hard);
       }
 
       for (const stagedRuling of staged) {

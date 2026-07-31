@@ -14,8 +14,11 @@ export interface NpcIntroductionProposal {
 
 export interface ApprovedNpcTransition {
   character: CharacterRecord;
-  operation: "introduce" | "enter" | "leave";
+  operation: "introduce" | "enter" | "leave" | "update";
 }
+
+/** Engine-owned disposition fact. Models and narrator prose may provide evidence, never authority. */
+export const NPC_HOSTILE_TO_PLAYER_FLAG = "npc_hostile_to_player";
 
 export interface NpcIntroductionInput {
   storyId: string;
@@ -52,6 +55,47 @@ function normalize(value: string): string {
 
 function slug(value: string): string {
   return normalize(value).replace(/['’]/g, "").replace(/\s+/g, "-");
+}
+
+function regexEscape(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function actorAliases(name: string): string[] {
+  const normalized = normalize(name);
+  const shortened = normalized.replace(/\s+(?:entity|creature|monster|beast)$/, "");
+  return shortened.length >= 3 && shortened !== normalized
+    ? [normalized, shortened]
+    : [normalized];
+}
+
+function explicitlyAttacksPlayer(
+  character: CharacterRecord,
+  playerNames: readonly string[],
+  recentNarration: readonly string[],
+  aliases: readonly string[]
+): boolean {
+  const targets = ["you", ...playerNames.map(normalize)].filter(Boolean).map(regexEscape);
+  if (targets.length === 0) return false;
+  const targetPattern = `(?:${targets.join("|")})`;
+  const attackPattern =
+    "(?:attacks?|strikes?|lunges? at|charges?|bites?|claws? at|swings? at|turns? on|tries? to kill|threatens?)";
+
+  for (const rawSentence of recentNarration.join("\n").split(/[.!?;\n]+/)) {
+    const sentence = normalize(rawSentence);
+    for (const alias of aliases) {
+      if (!alias) continue;
+      const direct = new RegExp(
+        `\\b${regexEscape(alias)}\\b(?<between>.{0,80}?)\\b${attackPattern}\\b(?<after>.{0,80}?)\\b${targetPattern}\\b`,
+        "i"
+      ).exec(sentence);
+      if (!direct) continue;
+      const between = direct.groups?.between ?? "";
+      if (/\b(?:not|never|no longer|does not|doesnt|refuses? to)\b/i.test(between)) continue;
+      return true;
+    }
+  }
+  return false;
 }
 
 function grounded(proposal: NpcIntroductionProposal, corpus: string): boolean {
@@ -122,7 +166,7 @@ export async function planNpcTransitions(
     proposals = response.transitions;
   } catch (error) {
     if (signal?.aborted) throw signal.reason ?? error;
-    return [];
+    proposals = [];
   }
 
   const corpus = [input.playerText, ...input.recentNarration].join("\n");
@@ -183,6 +227,49 @@ export async function planNpcTransitions(
     };
     approved.push({ operation: "introduce", character });
     transitioned.add(id);
+  }
+
+  const playerNames = input.roster
+    .filter((character) => character.isPlayer)
+    .map((character) => character.name);
+  const approvedIndexById = new Map(
+    approved.map((transition, index) => [transition.character.id, index])
+  );
+  const dispositionCandidates = new Map(
+    [...input.roster, ...approved.map((transition) => transition.character)]
+      .filter((character) => !character.isPlayer && character.present && character.hard.alive)
+      .map((character) => [character.id, character])
+  );
+  const aliasOwners = new Map<string, Set<string>>();
+  for (const character of dispositionCandidates.values()) {
+    for (const alias of actorAliases(character.name)) {
+      const owners = aliasOwners.get(alias) ?? new Set<string>();
+      owners.add(character.id);
+      aliasOwners.set(alias, owners);
+    }
+  }
+  for (const character of dispositionCandidates.values()) {
+    if (character.hard.flags[NPC_HOSTILE_TO_PLAYER_FLAG]) continue;
+    const uniqueAliases = actorAliases(character.name).filter(
+      (alias) => aliasOwners.get(alias)?.size === 1
+    );
+    if (!explicitlyAttacksPlayer(character, playerNames, input.recentNarration, uniqueAliases)) {
+      continue;
+    }
+    const updated: CharacterRecord = {
+      ...character,
+      hard: {
+        ...character.hard,
+        flags: { ...character.hard.flags, [NPC_HOSTILE_TO_PLAYER_FLAG]: true },
+      },
+    };
+    const approvedIndex = approvedIndexById.get(character.id);
+    if (approvedIndex === undefined) {
+      approved.push({ operation: "update", character: updated });
+      approvedIndexById.set(character.id, approved.length - 1);
+    } else {
+      approved[approvedIndex] = { ...approved[approvedIndex]!, character: updated };
+    }
   }
 
   return approved;

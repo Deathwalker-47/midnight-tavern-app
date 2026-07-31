@@ -17,6 +17,7 @@
 import { z } from "zod";
 import { checkGate } from "../engine/index.js";
 import { callStructured, type Router } from "../router/index.js";
+import { NPC_HOSTILE_TO_PLAYER_FLAG } from "./npcIntroduction.js";
 import type {
   ActionDef,
   CharacterHardState,
@@ -209,6 +210,8 @@ export interface NpcPlanInput {
   nameById: Map<string, string>;
   /** Present roster (characterId → isPlayer). A proposed target must be present. */
   present: Map<string, boolean>;
+  /** Current hard state for every present actor, used by deterministic validation/fallback. */
+  hardById: ReadonlyMap<string, CharacterHardState>;
 }
 
 function nameOf(id: string, nameById: Map<string, string>): string {
@@ -259,11 +262,34 @@ function plannerPrompt(input: NpcPlanInput) {
 }
 
 /**
+ * Deterministic fallback policy for already validated hostile NPCs. It never infers hostility:
+ * actors must carry the engine flag and have a gate-legal sealed damaging action. The target
+ * must be the one unambiguous present, living player.
+ */
+export function planHostileNpcFallback(input: NpcPlanInput): MechanicalIntent[] {
+  const livingPlayers = [...input.present.entries()]
+    .filter(([id, isPlayer]) => isPlayer && input.hardById.get(id)?.alive)
+    .map(([id]) => id);
+  if (livingPlayers.length !== 1) return [];
+  const playerId = livingPlayers[0]!;
+  const intents: MechanicalIntent[] = [];
+
+  for (const npc of input.candidates) {
+    if (!npc.alive || input.present.get(npc.characterId) !== false) continue;
+    if (npc.flags[NPC_HOSTILE_TO_PLAYER_FLAG] !== true) continue;
+    const intent = chooseCounterAction(input.schema, npc, playerId);
+    if (intent) intents.push(intent);
+  }
+  return intents;
+}
+
+/**
  * Plan bounded goal-driven NPC actions. Fires one structured request only when there is at least
  * one candidate NPC, validates every proposal (actor is a present living candidate; action/item/
  * skill are sealed; target is present; the actor's gate permits it), and returns engine-ready
  * intents — one per NPC ({@link DEFAULT_NPC_ENCOUNTER_BUDGET}). Fails closed to `[]` on any
- * malformed/timeout output; only an actual abort propagates.
+ * malformed/timeout/empty output. Only an actual abort propagates. A valid model proposal for an
+ * actor takes precedence; an unplanned validated hostile actor uses the sealed fallback.
  */
 export async function planNpcActions(
   router: Router,
@@ -285,7 +311,7 @@ export async function planNpcActions(
     proposals = response.actions;
   } catch (error) {
     if (signal?.aborted) throw signal.reason ?? error;
-    return []; // fail closed: no NPC goal action, narration proceeds unblocked
+    return planHostileNpcFallback(input);
   }
 
   const candidateById = new Map(input.candidates.map((npc) => [npc.characterId, npc]));
@@ -319,5 +345,9 @@ export async function planNpcActions(
     spent.set(proposal.actorId, (spent.get(proposal.actorId) ?? 0) + 1);
   }
 
-  return intents;
+  const acted = new Set(intents.map((intent) => intent.actorId));
+  return [
+    ...intents,
+    ...planHostileNpcFallback(input).filter((intent) => !acted.has(intent.actorId)),
+  ];
 }
