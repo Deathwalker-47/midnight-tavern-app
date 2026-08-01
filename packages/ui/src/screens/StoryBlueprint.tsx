@@ -62,6 +62,16 @@ export function StoryBlueprint(props: ScreenProps): JSX.Element {
 
   useEffect(() => {
     if (!creating) return;
+    // A fresh draft the user deliberately brought in — a just-imported card, or a typed
+    // premise/title — is authoritative. A stale retained Forge from an earlier, unrelated create
+    // attempt must not hijack it; doing so made every import show the previous story (e.g. a failed
+    // "Dungeon Master" forge overwriting a freshly imported "Mojave" card). The retained Forge stays
+    // in storage and is only offered when creation starts from an empty draft.
+    const arriving = useStoriesStore.getState().draft;
+    const hasFreshDraft = Boolean(
+      arriving?.importedCard || arriving?.premise?.trim() || arriving?.title?.trim()
+    );
+    if (hasFreshDraft) return;
     let cancelled = false;
     void getBridge()
       .getForgeOperation()

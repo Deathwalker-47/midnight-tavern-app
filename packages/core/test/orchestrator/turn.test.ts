@@ -487,6 +487,81 @@ describe("submitTurn — pipeline order & transaction", () => {
     expect((await store.characters.get("wight"))!.hard.resources.hp!.current).toBe(12);
   });
 
+  it("promotes an NPC introduced organically by the current narration before committing the turn", async () => {
+    await store.characters.setPresent("wight", false);
+    const narratorProse =
+      "Marta Hearthwright steps from the roadside inn and raises a cautious hand. \"I can help,\" she says.";
+    let registrarCalls = 0;
+    const router: Router = {
+      bindingFor: () => ({
+        provider: "openrouter",
+        model: "test",
+        source: "recommended",
+        samplersDirty: false,
+      }),
+      async complete(_role, prompt) {
+        if (prompt.system.includes("NPC presence registrar")) {
+          registrarCalls += 1;
+          return registrarCalls === 1
+            ? { content: JSON.stringify({ transitions: [] }) }
+            : {
+                content: JSON.stringify({
+                  transitions: [
+                    {
+                      operation: "introduce",
+                      name: "Marta Hearthwright",
+                      grounding: "Marta Hearthwright steps from the roadside inn",
+                    },
+                  ],
+                }),
+              };
+        }
+        if (prompt.system.includes("mechanical intent classifier")) {
+          return {
+            content: JSON.stringify({
+              playerIntents: [],
+              npcIntents: [],
+              freeText: "I call for help.",
+            }),
+          };
+        }
+        if (prompt.system.includes("strict consistency auditor")) {
+          return { content: JSON.stringify({ obeysRulings: true, contradictions: [] }) };
+        }
+        if (prompt.system.includes("DM loot adjudicator")) {
+          return { content: JSON.stringify({ award: false, reason: "No encounter." }) };
+        }
+        return { content: "{}" };
+      },
+      async stream(_role, _prompt, onDelta) {
+        onDelta(narratorProse);
+        return { content: narratorProse };
+      },
+    };
+
+    const result = await submitTurn(router, store, storyId, "Is anyone there? I need help!");
+    await result.background;
+
+    expect(result.rulings).toEqual([]);
+    expect(result.prose).toContain("Marta Hearthwright");
+    expect(registrarCalls).toBe(1);
+    expect(await store.characters.listByStory(storyId)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: "Marta Hearthwright",
+          isPlayer: false,
+          present: true,
+          hard: expect.objectContaining({
+            alive: true,
+            skills: expect.arrayContaining([
+              expect.objectContaining({ skillId: "silver_tongue", rank: "novice" }),
+            ]),
+          }),
+        }),
+      ])
+    );
+  });
+
   it("times out a hung classifier, persists the metric, and completes one narration-only exchange", async () => {
     await store.characters.setPresent("wight", false);
     const clock = controllableStageSchedule();

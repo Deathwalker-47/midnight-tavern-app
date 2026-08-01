@@ -27,6 +27,20 @@ import { makeStory } from "../fixtures.js";
 import { GOLDEN_CASES } from "./golden.js";
 
 const story = makeStory();
+const reassureStory = makeStory({
+  actions: [
+    ...story.actions,
+    {
+      ...story.actions.find((action) => action.id === "persuade")!,
+      id: "social_reassure_survivor",
+      label: "Reassure Survivor",
+      description: "Comfort a traumatized refugee or townsfolk.",
+      aliases: ["comfort survivor", "soothe victim", "empathize"],
+      universalFamily: "empathize",
+      requiresSkill: undefined,
+    },
+  ],
+});
 const present = [
   { id: "player", name: "Hero", isPlayer: true },
   { id: "guard", name: "Guard", isPlayer: false },
@@ -79,6 +93,21 @@ describe("buildClassifierSchema", () => {
       freeText: "",
     });
     expect(res.success).toBe(true);
+  });
+
+  it("rejects a target-required social action when no character target is supplied", () => {
+    const targetlessSchema = buildClassifierSchema(reassureStory, ["player"]);
+    const res = targetlessSchema.safeParse({
+      playerIntents: [{
+        actorId: "player",
+        actionId: "social_reassure_survivor",
+        confidence: 0.7,
+      }],
+      npcIntents: [],
+      freeText: '"Is anyone there? I need help!"',
+    });
+
+    expect(res.success).toBe(false);
   });
 
   it("rejects an action id that is not in the catalog", () => {
@@ -151,6 +180,30 @@ describe("buildClassifierSchema", () => {
 });
 
 describe("classify — behavior", () => {
+  it("keeps a call for help narration-only instead of reassuring an absent survivor", async () => {
+    const mistaken = turn({
+      playerIntents: [{
+        actorId: "player",
+        actionId: "social_reassure_survivor",
+        stakes: "uncertain",
+        confidence: 0.7,
+      }],
+      freeText: '"Is anyone there? I need help!"',
+    });
+    const out = await classifyWithRecovery(
+      scripted([mistaken, mistaken, mistaken]),
+      reassureStory,
+      {
+        playerMessage: '"Is anyone there? I need help!" you call out at the empty road.',
+        presentCharacters: [{ id: "player", name: "Hero", isPlayer: true }],
+        recentNarration: ["You reach the village road, but no person is present."],
+      }
+    );
+
+    expect(out.turn.playerIntents).toEqual([]);
+    expect(out.turn.freeText).toContain("do not claim any roll");
+  });
+
   it("returns high-confidence player intents unchanged", async () => {
     const router = scripted([
       turn({

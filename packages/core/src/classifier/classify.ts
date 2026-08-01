@@ -17,7 +17,10 @@ import {
   type Router,
 } from "../router/index.js";
 import type { ClassifiedTurn, MechanicalIntent, StorySchema } from "../types/index.js";
-import { matchUniversalAction } from "../config/index.js";
+import {
+  actionRequiresCharacterTarget,
+  matchUniversalAction,
+} from "../config/index.js";
 import {
   buildClassifierSchema,
   buildClassifierUser,
@@ -113,18 +116,6 @@ function actionMatchScore(
     }
   }
   return score;
-}
-
-function actionNeedsTarget(
-  action: StorySchema["actions"][number],
-  universalRequiresTarget: boolean
-): boolean {
-  if (universalRequiresTarget || action.opposed) return true;
-  return Object.values(action.effects).some(
-    (effect) =>
-      effect.resourceDeltaTarget !== undefined ||
-      effect.attributeDeltaTarget !== undefined
-  );
 }
 
 function hasTargetContinuationWording(playerMessage: string): boolean {
@@ -225,7 +216,7 @@ function recoverExplicitCatalogPlayerIntents(
   );
   const intents: MechanicalIntent[] = [];
   for (const { action } of matches.sort((left, right) => left.position - right.position)) {
-    const requiresTarget = actionNeedsTarget(action, false);
+    const requiresTarget = actionRequiresCharacterTarget(action);
     const target = resolveCharacterTarget(input, otherCharacters, requiresTarget);
     if (requiresTarget && !target) {
       return {
@@ -300,7 +291,7 @@ function recoverUniversalPlayerIntent(
   const otherCharacters = input.presentCharacters.filter(
     (character) => character.id !== players[0]!.id
   );
-  const requiresTarget = actionNeedsTarget(action, universal.requiresCharacterTarget);
+  const requiresTarget = actionRequiresCharacterTarget(action);
   const target = resolveCharacterTarget(input, otherCharacters, requiresTarget);
 
   if (requiresTarget && !target) {

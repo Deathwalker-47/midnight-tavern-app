@@ -552,6 +552,36 @@ describe("buildSqliteBridge", () => {
     });
   });
 
+  it("does not accept a NanoGPT key merely because its public model catalog loads", async () => {
+    const listModels = vi.fn(async () => [
+      { id: "deepseek/deepseek-v4-pro", name: "DeepSeek V4 Pro" },
+    ]);
+    const chat = vi.fn(async () => {
+      throw new Error("401 Unauthorized");
+    });
+    const bridge = buildSqliteBridge(
+      fakeStore(),
+      fakeCore({
+        KNOWN_MODELS: [
+          {
+            provider: "nanogpt",
+            model: "deepseek/deepseek-v4-pro",
+            label: "DeepSeek V4 Pro",
+            tier: "recommended",
+          },
+        ],
+        makeProvider: vi.fn(() => ({ listModels, chat })),
+      })
+    );
+
+    expect(await bridge.validateProviderKey("nanogpt" as any, "bad-key")).toEqual({
+      state: "rejected",
+      reason: "401 Unauthorized",
+    });
+    expect(listModels).toHaveBeenCalledOnce();
+    expect(chat).toHaveBeenCalledOnce();
+  });
+
   it("resolveEntitlement threads the evaluated license into core.resolveEntitlement", async () => {
     const license = { status: "valid", source: "online", cache: {} };
     const evaluateCachedLicense = vi.fn(async () => license);

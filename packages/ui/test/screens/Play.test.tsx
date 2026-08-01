@@ -257,6 +257,77 @@ describe("Play — verified streaming end to end", () => {
   });
 });
 
+describe("Play — narrator degradation notice", () => {
+  it("surfaces the fallback reason when the narrator degraded to the safe summary", async () => {
+    const bridge = emptyBridge();
+    const prose = "Jinwoo's Weapon Strike succeeds.";
+    bridge.listMessages = vi.fn(async (storyId: string) => [
+      { id: "p1", storyId, idx: 0, role: "player" as const, content: "attack with your dagger", createdAt: 1 },
+      { id: "n1", storyId, idx: 1, role: "narrator" as const, content: prose, createdAt: 2 },
+    ]);
+    bridge.submitTurn = vi.fn(async (args: Parameters<CoreBridge["submitTurn"]>[0]) => {
+      args.onPhase?.("streaming");
+      args.onDelta?.(prose);
+      return {
+        prose,
+        rulings: [],
+        narratorIdx: 1,
+        classifierRecovered: false,
+        refusedActionCount: 0,
+        usedNarratorFallback: true,
+        narratorFallbackReason: "the AI provider is rate-limiting requests (HTTP 429)",
+        attributeAdvancements: [],
+      };
+    });
+    setBridge(bridge);
+    render(<Play storyId="s1" />);
+    await screen.findByTestId("play-composer"); // mount load settled
+
+    await act(async () => {
+      await usePlayStore.getState().submit("attack with your dagger");
+    });
+
+    const notice = await screen.findByTestId("narrator-notice");
+    expect(notice).toHaveTextContent(/rate-limiting requests \(HTTP 429\)/i);
+    expect(screen.getByRole("button", { name: /retry narration/i })).toBeInTheDocument();
+  });
+});
+
+describe("Play — narration retry state", () => {
+  it("clears the stale fallback notice as soon as narration retry begins and settles idle", async () => {
+    let finishSwipe!: () => void;
+    const bridge = emptyBridge();
+    bridge.swipeLastTurn = vi.fn(
+      () =>
+        new Promise<Awaited<ReturnType<CoreBridge["swipeLastTurn"]>>>((resolve) => {
+          finishSwipe = () => resolve({ variants: ["A full scene."], activeVariant: 0 });
+        })
+    );
+    setBridge(bridge);
+    usePlayStore.setState({
+      storyId: "s1",
+      narratorNotice: "the AI provider rejected the request (HTTP 401)",
+      thinking: false,
+      operationPhase: "idle",
+    });
+
+    const pending = usePlayStore.getState().swipeLast();
+    expect(usePlayStore.getState()).toMatchObject({
+      narratorNotice: undefined,
+      thinking: true,
+      operationPhase: "thinking",
+    });
+
+    finishSwipe();
+    await pending;
+    expect(usePlayStore.getState()).toMatchObject({
+      narratorNotice: undefined,
+      thinking: false,
+      operationPhase: "idle",
+    });
+  });
+});
+
 describe("Play — error states", () => {
   it("shows structured classifier recovery without claiming a mechanical result", () => {
     render(<Play storyId="s1" debugState="classifier-target" />);

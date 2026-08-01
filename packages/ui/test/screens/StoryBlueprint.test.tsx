@@ -244,6 +244,52 @@ describe("StoryBlueprint create flow", () => {
     });
   });
 
+  it("keeps a freshly imported card and does not let a stale retained Forge hijack it", async () => {
+    // A previous "Recovered Blueprint" create failed and left a retained Forge in storage. The user
+    // then imports a different card. The import is the deliberate intent and must win; the stale
+    // retained Forge must not overwrite the form (the reported "always shows the old story" bug).
+    const bridge = getBridge();
+    await bridge.saveForgeOperation(retainedForgeOperation());
+    setBridge(bridge);
+    const importedCard: MappedCard = {
+      name: "The Mojave",
+      premise: "The Mojave Wasteland — 2281 AD. A dying stretch of desert caught between empires.",
+      identity: { traits: [], likes: [], dislikes: [] },
+      openings: ["A courier wakes with two bullets dug out of their skull."],
+      lorebook: [],
+      blueprint: {
+        name: "The Mojave",
+        firstMessage: "A courier wakes with two bullets dug out of their skull.",
+      },
+    };
+    useStoriesStore.setState({
+      draft: {
+        title: "The Mojave",
+        playerName: "",
+        premise: "The Mojave Wasteland — 2281 AD. A dying stretch of desert caught between empires.",
+        blueprint: {
+          name: "The Mojave",
+          firstMessage: "A courier wakes with two bullets dug out of their skull.",
+        },
+        selectedOpening: "A courier wakes with two bullets dug out of their skull.",
+        importedCard,
+      },
+    });
+
+    render(<StoryBlueprint />);
+
+    await screen.findByRole("combobox", { name: "Persona for story creation" });
+    expect(screen.getByRole("textbox", { name: "Story title" })).toHaveValue("The Mojave");
+    expect(screen.getByRole("textbox", { name: "Premise" })).toHaveValue(
+      "The Mojave Wasteland — 2281 AD. A dying stretch of desert caught between empires."
+    );
+    // The stale retained Forge must not have overwritten the imported fields, nor turned the
+    // primary action into a resume of the old story.
+    expect(screen.queryByDisplayValue("Recovered Blueprint")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /forge this world/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /resume saved forge/i })).not.toBeInTheDocument();
+  });
+
   it("starts a genuinely new Forge without reusing the retained request or checkpoint", async () => {
     const bridge = getBridge();
     await bridge.saveForgeOperation(retainedForgeOperation());

@@ -243,6 +243,19 @@ export function findUniversalAction(id: string) {
   return UNIVERSAL_ACTIONS_CONFIG.actions.find((action) => action.id === id);
 }
 
+/** Whether an action needs a distinct, present character target before it can resolve. */
+export function actionRequiresCharacterTarget(action: ActionDef): boolean {
+  const universal = action.universalFamily
+    ? findUniversalAction(action.universalFamily)
+    : undefined;
+  if (universal?.requiresCharacterTarget || action.opposed) return true;
+  return Object.values(action.effects).some(
+    (effect) =>
+      effect.resourceDeltaTarget !== undefined ||
+      effect.attributeDeltaTarget !== undefined
+  );
+}
+
 /**
  * Install program-owned minimum damage for generated attack families that omitted it.
  * Explicit negative lethal-resource effects always win; this only repairs a mechanically empty

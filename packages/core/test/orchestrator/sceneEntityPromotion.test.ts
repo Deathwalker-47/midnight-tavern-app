@@ -28,6 +28,26 @@ describe("discoverNarratedSceneEntities", () => {
       {
         id: "story-1:scene:ashara",
         name: "Ashara",
+        skillIds: ["silver_tongue", "lockpicking", "blade"],
+      },
+    ]);
+  });
+
+  it("recognizes a named actor with an appositive description and gives it sealed usable skills", () => {
+    const found = discoverNarratedSceneEntities({
+      storyId: "story-1",
+      schema: makeStory(),
+      recentNarration: [
+        "Marta Hearthwright, a broad-shouldered innkeeper in a flour-dusted apron, steps into the road and says she can help.",
+      ],
+      roster: [],
+    });
+
+    expect(found).toEqual([
+      {
+        id: "story-1:scene:marta-hearthwright",
+        name: "Marta Hearthwright",
+        skillIds: ["silver_tongue", "lockpicking", "blade"],
       },
     ]);
   });

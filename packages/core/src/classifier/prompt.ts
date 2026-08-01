@@ -13,6 +13,7 @@
 import { z, type ZodType } from "zod";
 import { LEARN_SKILL_ACTION_ID, type StorySchema } from "../types/index.js";
 import type { ClassifiedTurn } from "../types/index.js";
+import { actionRequiresCharacterTarget } from "../config/index.js";
 
 /** Below this confidence, an intent is demoted to narration (D4). */
 export const CONFIDENCE_THRESHOLD = 0.6;
@@ -45,6 +46,11 @@ export function buildClassifierSchema(
 ): ZodType<ClassifiedTurn> {
   const actionIds = [...schema.actions.map((a) => a.id), LEARN_SKILL_ACTION_ID];
   const skillIds = schema.skills.map((s) => s.id);
+  const targetRequiredActionIds = new Set(
+    schema.actions
+      .filter(actionRequiresCharacterTarget)
+      .map((action) => action.id)
+  );
   const trimString = (value: unknown) =>
     typeof value === "string" ? value.trim() : value;
   const normalizeOptional = (value: unknown) => {
@@ -92,6 +98,18 @@ export function buildClassifierSchema(
       stakesReason: z.preprocess(normalizeOptional, z.string().max(240).optional()),
       confidence: z.preprocess(normalizeConfidence, z.number().min(0).max(1)),
     })
+    .superRefine((value, ctx) => {
+      if (
+        targetRequiredActionIds.has(value.actionId) &&
+        (!value.targetId || value.targetId === value.actorId)
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["targetId"],
+          message: `Action ${value.actionId} requires a distinct present character target.`,
+        });
+      }
+    })
     .transform(({ targetId, itemId, skillId: parsedSkillId, stakesReason, ...required }) => ({
       ...required,
       ...(targetId ? { targetId } : {}),
@@ -116,6 +134,7 @@ function renderCatalog(schema: StorySchema): string {
     if (a.description) parts.push(`means:${a.description}`);
     if (a.aliases?.length) parts.push(`aliases:${a.aliases.join(", ")}`);
     if (a.universalFamily) parts.push(`universal:${a.universalFamily}`);
+    if (actionRequiresCharacterTarget(a)) parts.push("target:required");
     if (a.requiresSkill) parts.push(`requires:${a.requiresSkill}`);
     return "- " + parts.join(" · ");
   });
@@ -140,6 +159,7 @@ export const CLASSIFIER_SYSTEM = [
   "- Every playerIntent actorId MUST be the one present character marked isPlayer=true. Never assign the player's words to an NPC.",
   "- Set confidence honestly in [0,1]. Use < 0.6 when the mapping is uncertain.",
   "- actorId and targetId must be ids of present characters.",
+  "- For target:required actions, targetId must identify a different present character. If no such target exists, return no mechanical intent for that action.",
   "- itemId is the item used, if any. For learn_skill, set skillId.",
   "- freeText carries any residual narration content (may be empty).",
 ].join("\n");

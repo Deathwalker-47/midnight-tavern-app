@@ -1138,7 +1138,12 @@ export interface BootstrapOptions {
   maxRepairs?: number;
   /** Whole-schema cross-validation repair passes on Phase B (default 1). */
   maxSchemaRepairs?: number;
-  /** Deadline applied independently to each provider-backed fragment (default 60 seconds). */
+  /**
+   * Deadline applied independently to each provider-backed fragment (default 120 seconds). The
+   * largest fragment (`actions-exploration-crafting-utility`) legitimately takes 45–50s on slower
+   * narrator-tier models; the deadline is a hung-provider backstop, not a cap on a slow-but-working
+   * generation, so it is set well above observed real durations.
+   */
   fragmentDeadlineMs?: number;
   /** Injectable clock used by deterministic progress/deadline tests. */
   now?: () => number;
@@ -1408,7 +1413,7 @@ export async function generateStorySchema(
 ): Promise<StorySchema> {
   const maxRepairs = options.maxRepairs ?? DEFAULT_BOOTSTRAP_REPAIR_BUDGET;
   const maxSchemaRepairs = options.maxSchemaRepairs ?? DEFAULT_BOOTSTRAP_REPAIR_BUDGET;
-  const fragmentDeadlineMs = options.fragmentDeadlineMs ?? 60_000;
+  const fragmentDeadlineMs = options.fragmentDeadlineMs ?? 120_000;
   const now = options.now ?? Date.now;
   const schedule: BootstrapSchedule =
     options.schedule ??

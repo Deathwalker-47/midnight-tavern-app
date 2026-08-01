@@ -117,6 +117,8 @@ export interface SubmitTurnResult {
   refusedActionCount: number;
   /** Whether narrator generation used the deterministic ruling-summary fallback. */
   usedNarratorFallback: boolean;
+  /** When the narrator fell back, a short player-facing reason (e.g. provider rate limit). */
+  narratorFallbackReason?: string;
   /** Deterministic app verdicts for any DM-proposed attribute changes this turn. */
   attributeAdvancements: AttributeAdvancementDecision[];
 }
@@ -971,6 +973,12 @@ async function runTurnOperation(
     opts.onRulings?.(structuredClone(rulings));
     await setPhase("thinking", { classified, rulings, staged });
     await setPhase("streaming");
+    // Roster-backed id→name lookup so deterministic fallback prose never leaks a raw actor id (the
+    // player's id is a UUID). Includes NPCs introduced this turn (not yet in `roster`).
+    const narratorNameById = new Map<string, string>(roster.map((c) => [c.id, c.name]));
+    for (const transition of npcTransitions) {
+      narratorNameById.set(transition.character.id, transition.character.name);
+    }
     const narration = await generateGuardedNarration(
       router,
       { system: context.system, user: context.user },
@@ -978,6 +986,7 @@ async function runTurnOperation(
       {
         ...(opts.signal ? { signal: opts.signal } : {}),
         ...(opts.onDelta ? { onDelta: opts.onDelta } : {}),
+        nameFor: (id) => narratorNameById.get(id),
         auditWithoutRulings: classifierRecovered,
         onStageMetric: recordStageMetric,
         stageDeadlines: {
@@ -991,6 +1000,41 @@ async function runTurnOperation(
       }
     );
     const prose = narration.prose;
+    if (schema.statMode === "full") {
+      // The narrator may introduce an actor organically. Promote that prose proposal into the
+      // registry before the turn commits, so a named person/creature is never left as prose-only
+      // canon. These actors become mechanically active on the following beat; this turn cannot
+      // retroactively give them an unruled action.
+      const narratedIntroductions = discoverNarratedSceneEntities({
+        storyId,
+        schema,
+        recentNarration: [prose],
+        roster,
+      }).map((entity) => ({
+        operation: "introduce" as const,
+        character: {
+          id: entity.id,
+          storyId,
+          name: entity.name,
+          isPlayer: false,
+          present: true,
+          hard: instantiateGeneric(schema, entity.id, entity.skillIds),
+        },
+      }));
+      const knownIds = new Set(npcTransitions.map((transition) => transition.character.id));
+      const knownNames = new Set(
+        [...roster, ...npcTransitions.map((transition) => transition.character)].map((character) =>
+          character.name.trim().toLocaleLowerCase("en-US")
+        )
+      );
+      for (const transition of narratedIntroductions) {
+        const name = transition.character.name.trim().toLocaleLowerCase("en-US");
+        if (knownIds.has(transition.character.id) || knownNames.has(name)) continue;
+        npcTransitions.push(transition);
+        knownIds.add(transition.character.id);
+        knownNames.add(name);
+      }
+    }
     const narratorIdx = playerIdx + 1;
     const narratorMessageId = randomUUID();
 
@@ -1132,6 +1176,9 @@ async function runTurnOperation(
       ...(classifierRecovery ? { classifierRecovery } : {}),
       refusedActionCount,
       usedNarratorFallback: narration.usedSafeFallback,
+      ...(narration.usedSafeFallback && narration.fallbackReason
+        ? { narratorFallbackReason: narration.fallbackReason }
+        : {}),
       attributeAdvancements,
     };
   } catch (error) {

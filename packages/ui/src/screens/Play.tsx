@@ -544,6 +544,8 @@ export function Play(props: PlayProps): JSX.Element {
   const storeError = usePlayStore((s) => s.turnError);
   const storeClassifierRecovery = usePlayStore((s) => s.classifierRecovery);
   const storeRecoveryInspection = usePlayStore((s) => s.recoveryInspection);
+  const narratorNotice = usePlayStore((s) => s.narratorNotice);
+  const clearNarratorNotice = usePlayStore((s) => s.clearNarratorNotice);
 
   // UI store.
   const drawerCharacterId = useUiStore((s) => s.drawerCharacterId);
@@ -1168,6 +1170,42 @@ export function Play(props: PlayProps): JSX.Element {
                       onDismiss={clearError}
                     />
                   )}
+
+                  {narratorNotice && !turnError && !classifierRecovery ? (
+                    <div data-testid="narrator-notice" style={{ marginTop: 12 }}>
+                      <InlineNotice
+                        severity="warn"
+                        title="Full narration unavailable this turn"
+                        detail={
+                          <div style={{ display: "grid", gap: 9 }}>
+                            <span>
+                              The mechanics resolved and are shown above, but {narratorNotice}, so a
+                              brief factual recap stands in for the full scene. Send another action, or
+                              swipe this turn to retry the narration.
+                            </span>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
+                              <Button
+                                variant="secondary"
+                                onClick={() => void swipeLast()}
+                                disabled={busy}
+                              >
+                                Retry narration
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                onClick={() => navigate("rolematrix", storyId ? { storyId } : {})}
+                              >
+                                Change narrator model
+                              </Button>
+                              <Button variant="ghost" onClick={clearNarratorNotice}>
+                                Dismiss
+                              </Button>
+                            </div>
+                          </div>
+                        }
+                      />
+                    </div>
+                  ) : null}
                 </div>
               )}
               <div ref={bottomAnchorRef} style={{ height: 20 }} aria-hidden="true" />

@@ -4,6 +4,7 @@ import type { StorySchema } from "../types/index.js";
 export interface SceneEntityCandidate {
   id: string;
   name: string;
+  skillIds: string[];
 }
 
 interface SceneEntityPromotionInput {
@@ -17,12 +18,20 @@ const ACTOR_HEADS = new Set([
   "assailant",
   "bandit",
   "beast",
+  "boy",
+  "child",
   "creature",
+  "elder",
   "enemy",
+  "girl",
   "guard",
+  "innkeeper",
   "knight",
   "man",
+  "merchant",
   "monster",
+  "priest",
+  "survivor",
   "soldier",
   "stranger",
   "thug",
@@ -42,13 +51,17 @@ const ACTOR_VERBS = [
   "enters",
   "follows",
   "laughs",
+  "asks",
+  "calls",
   "lurks",
   "moves",
   "runs",
+  "says",
   "speaks",
   "stands",
   "steps",
   "turns",
+  "replies",
   "walks",
   "watches",
 ];
@@ -84,6 +97,15 @@ function displayName(value: string): string {
   return value.length > 0 ? value[0]!.toLocaleUpperCase("en-US") + value.slice(1) : value;
 }
 
+function properDisplayName(value: string): string {
+  return value
+    .split(/\s+/)
+    .map((part) =>
+      part.length > 0 ? part[0]!.toLocaleUpperCase("en-US") + part.slice(1) : part
+    )
+    .join(" ");
+}
+
 function narratedActors(narration: string, schema: StorySchema): string[] {
   const actors = new Set<string>();
   const heads = [...ACTOR_HEADS].join("|");
@@ -106,6 +128,18 @@ function narratedActors(narration: string, schema: StorySchema): string[] {
     if (actor && !NON_CHARACTER_PROPER_ACTORS.has(actor)) actors.add(actor);
   }
 
+  // Names followed by an appositive actor description are common narrative prose:
+  // "Marta Hearthwright, a broad-shouldered innkeeper, steps forward." Keep the grammar
+  // bounded by both an actor head and an actor verb so locations/titles are not promoted.
+  const properAppositiveActor = new RegExp(
+    `\\b([A-Z][\\p{L}'-]+(?:\\s+[A-Z][\\p{L}'-]+){0,2})\\s*(?:,|—|-)\\s*(?:a|an|the)?\\s*[^.!?\\n]{0,60}\\b(?:${heads})\\b[^.!?\\n]{0,40}\\b(?:${verbs})\\b`,
+    "gu"
+  );
+  for (const match of narration.matchAll(properAppositiveActor)) {
+    const actor = normalize(match[1] ?? "");
+    if (actor && !NON_CHARACTER_PROPER_ACTORS.has(actor)) actors.add(actor);
+  }
+
   const normalizedNarration = normalize(narration);
   for (const template of schema.npcTemplates) {
     const templateName = normalize(template.name);
@@ -115,6 +149,56 @@ function narratedActors(narration: string, schema: StorySchema): string[] {
     if (followedByActorVerb) actors.add(templateName);
   }
   return [...actors];
+}
+
+function inferredSkillIds(narration: string, schema: StorySchema): string[] {
+  const words = new Set(normalize(narration).split(" ").filter((word) => word.length >= 4));
+  const chosen: string[] = [];
+  const add = (skillId: string | undefined) => {
+    if (skillId && !chosen.includes(skillId) && schema.skills.some((skill) => skill.id === skillId)) {
+      chosen.push(skillId);
+    }
+  };
+
+  // Prefer skills explicitly evoked by the prose (name or description), then fill a broad,
+  // story-authored social/exploration/combat set so a newly registered NPC is not a blank card.
+  for (const skill of [...schema.skills].sort((left, right) => {
+    const score = (candidate: typeof left) =>
+      normalize(`${candidate.name} ${candidate.description}`)
+        .split(" ")
+        .filter((word) => word.length >= 4 && words.has(word)).length;
+    return score(right) - score(left);
+  })) {
+    const overlap = normalize(`${skill.name} ${skill.description}`)
+      .split(" ")
+      .some((word) => word.length >= 4 && words.has(word));
+    if (overlap) add(skill.id);
+    if (chosen.length >= 3) return chosen;
+  }
+
+  const hostile = /\b(?:attack|assailant|bandit|beast|creature|enemy|monster|thug|weapon|wight|wolf)\b/i.test(
+    narration
+  );
+  const categoryOrder = hostile
+    ? ["combat", "movement", "exploration", "social"]
+    : ["social", "exploration", "movement", "combat"];
+  for (const category of categoryOrder) {
+    const actions = schema.actions.filter(
+      (action) => action.category === category && action.requiresSkill
+    );
+    for (const action of [
+      ...actions.filter((candidate) => !candidate.requiresItemKind),
+      ...actions.filter((candidate) => candidate.requiresItemKind),
+    ]) {
+      add(action.requiresSkill);
+      if (chosen.length >= 3) return chosen;
+    }
+  }
+  for (const skill of schema.skills) {
+    add(skill.id);
+    if (chosen.length >= 3) break;
+  }
+  return chosen;
 }
 
 /**
@@ -147,10 +231,12 @@ export function discoverNarratedSceneEntities(
         target.includes(templateName)
       );
     });
-    const name = template?.name ?? displayName(target);
+    const properName = properDisplayName(target);
+    const name =
+      template?.name ?? (rawNarration.includes(properName) ? properName : displayName(target));
     const baseId = `${input.storyId}:scene:${slug(template?.templateId ?? target)}`;
     if (knownIds.has(baseId)) continue;
-    found.set(baseId, { id: baseId, name });
+    found.set(baseId, { id: baseId, name, skillIds: inferredSkillIds(rawNarration, input.schema) });
   }
 
   return [...found.values()];

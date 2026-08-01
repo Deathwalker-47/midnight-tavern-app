@@ -403,6 +403,9 @@ export function buildSqliteBridge(
             : {}),
           refusedActionCount: result.refusedActionCount,
           usedNarratorFallback: result.usedNarratorFallback,
+          ...(result.narratorFallbackReason
+            ? { narratorFallbackReason: result.narratorFallbackReason }
+            : {}),
           attributeAdvancements: result.attributeAdvancements,
         };
       } catch (error) {
@@ -463,6 +466,9 @@ export function buildSqliteBridge(
           : {}),
         refusedActionCount: result.refusedActionCount,
         usedNarratorFallback: result.usedNarratorFallback,
+        ...(result.narratorFallbackReason
+          ? { narratorFallbackReason: result.narratorFallbackReason }
+          : {}),
         attributeAdvancements: result.attributeAdvancements,
       };
     },
@@ -684,18 +690,19 @@ export function buildSqliteBridge(
       // Balance is intentionally omitted rather than faked (the stub showed a placeholder "$4.20").
       const chatProvider = core.makeProvider(provider, tauriFetch as typeof fetch);
       try {
-        await chatProvider.validateConfig?.(
-          { apiKey: trimmed, ...(baseUrl ? { baseUrl } : {}) },
-          signal
-        );
+        const config = { apiKey: trimmed, ...(baseUrl ? { baseUrl } : {}) };
+        await chatProvider.validateConfig?.(config, signal);
+        let discoveredModels: Awaited<
+          ReturnType<NonNullable<typeof chatProvider.listModels>>
+        > = [];
         if (chatProvider.listModels) {
-          const models = await chatProvider.listModels(
-            { apiKey: trimmed, ...(baseUrl ? { baseUrl } : {}) },
-            signal
-          );
-          return { state: "valid", label: `Key accepted · ${models.length} models` };
+          discoveredModels = await chatProvider.listModels(config, signal);
         }
-        const model = core.KNOWN_MODELS.find((candidate) => candidate.provider === provider)?.model;
+        // A provider's model inventory may be public. It proves endpoint reachability, not that
+        // this credential can generate. Require one minimal authenticated chat response too.
+        const model =
+          core.KNOWN_MODELS.find((candidate) => candidate.provider === provider)?.model ??
+          discoveredModels[0]?.id;
         if (!model) return { state: "rejected", reason: `No known model for provider ${provider}.` };
         await chatProvider.chat(
           {
@@ -704,9 +711,15 @@ export function buildSqliteBridge(
             maxTokens: 1,
             ...(signal ? { signal } : {}),
           },
-          { apiKey: trimmed, ...(baseUrl ? { baseUrl } : {}) }
+          config
         );
-        return { state: "valid", label: "Key accepted" };
+        return {
+          state: "valid",
+          label:
+            discoveredModels.length > 0
+              ? `Key accepted · ${discoveredModels.length} models`
+              : "Key accepted",
+        };
       } catch (err) {
         return { state: "rejected", reason: (err as Error).message || "The provider rejected this key." };
       }

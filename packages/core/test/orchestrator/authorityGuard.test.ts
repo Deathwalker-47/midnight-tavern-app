@@ -271,6 +271,40 @@ describe("generateGuardedNarration — progressive verified streaming", () => {
 });
 
 describe("generateGuardedNarration", () => {
+  it("removes internal Chronicle Note blocks from streamed and persisted narration", async () => {
+    const raw = [
+      "[Chronicle ",
+      "Note]\n- Scene context: private planning text.\n[/Chronicle",
+      " Note]\n\n*Lanterns kindle along the village road.*",
+    ];
+    const router: Router = {
+      bindingFor: () => ({
+        provider: "openrouter",
+        model: "test",
+        source: "recommended",
+        samplersDirty: false,
+      }),
+      async complete() {
+        throw new Error("narration-only turns do not audit");
+      },
+      async stream(_role, _prompt, onDelta) {
+        raw.forEach(onDelta);
+        return { content: raw.join("") };
+      },
+    };
+    const deltas: string[] = [];
+
+    const result = await generateGuardedNarration(
+      router,
+      { system: "Narrate.", user: "Call for help." },
+      [],
+      { onDelta: (delta) => deltas.push(delta) }
+    );
+
+    expect(deltas.join("")).toBe("\n\n*Lanterns kindle along the village road.*");
+    expect(result.prose).toBe("\n\n*Lanterns kindle along the village road.*");
+  });
+
   it("aborts a hung narrator at its deadline and returns deterministic prose", async () => {
     const clock = controllableStageSchedule();
     const metrics: StageMetric[] = [];
@@ -511,5 +545,97 @@ describe("generateGuardedNarration", () => {
       expect.objectContaining({ stage: "narrator", outcome: "ok" }),
       expect.objectContaining({ stage: "authority_audit", outcome: "error" }),
     ]);
+  });
+
+  it("resolves an opaque actor id to its display name in deterministic fallback prose", async () => {
+    const uuidActor = "74d6414e-2421-4fba-b350-85ccbce8e8a7";
+    const uuidRuling: Ruling = {
+      ...ruling,
+      turnId: `${uuidActor}:strike`,
+      actorId: uuidActor,
+      actionId: "weapon-strike",
+      actionLabel: "Weapon Strike",
+      effectsApplied: { narrationHint: "Your strike lands clean and true." },
+    };
+    const failingRouter: Router = {
+      bindingFor: () => ({ provider: "electronhub", model: "test", source: "recommended", samplersDirty: false }),
+      async complete() {
+        return { content: JSON.stringify({ obeysRulings: true, contradictions: [] }) };
+      },
+      async stream() {
+        throw new Error("narrator provider unavailable");
+      },
+    };
+
+    const result = await generateGuardedNarration(
+      failingRouter,
+      { system: "Narrate.", user: "Attack with your dagger." },
+      [uuidRuling],
+      { nameFor: (id) => (id === uuidActor ? "Jinwoo" : undefined) }
+    );
+
+    expect(result.usedSafeFallback).toBe(true);
+    expect(result.prose).toContain("Jinwoo");
+    expect(result.prose).toMatch(/Weapon Strike succeeds/i);
+    // The raw actor id (a UUID) must never leak into player-facing prose.
+    expect(result.prose).not.toContain("74d6414e");
+    expect(result.prose).not.toMatch(/85ccbce8e8a7/i);
+  });
+
+  it("reports a provider rate-limit (429) as the fallback reason", async () => {
+    class ProviderHttpError extends Error {
+      constructor(readonly status: number) {
+        super(`provider returned ${status}`);
+        this.name = "ProviderHttpError";
+      }
+    }
+    const rateLimitedRouter: Router = {
+      bindingFor: () => ({ provider: "electronhub", model: "test", source: "recommended", samplersDirty: false }),
+      async complete() {
+        return { content: JSON.stringify({ obeysRulings: true, contradictions: [] }) };
+      },
+      async stream() {
+        throw new ProviderHttpError(429);
+      },
+    };
+
+    const result = await generateGuardedNarration(
+      rateLimitedRouter,
+      { system: "Narrate.", user: "Both pistols fire." },
+      [ruling]
+    );
+
+    expect(result.usedSafeFallback).toBe(true);
+    expect(result.fallbackReason).toMatch(/429/);
+    expect(result.fallbackReason).toMatch(/rate-limit/i);
+  });
+
+  it("never prints a raw opaque actor id even without a name resolver", async () => {
+    const uuidActor = "74d6414e-2421-4fba-b350-85ccbce8e8a7";
+    const uuidRuling: Ruling = {
+      ...ruling,
+      turnId: `${uuidActor}:strike`,
+      actorId: uuidActor,
+      actionLabel: "Weapon Strike",
+    };
+    const failingRouter: Router = {
+      bindingFor: () => ({ provider: "electronhub", model: "test", source: "recommended", samplersDirty: false }),
+      async complete() {
+        return { content: JSON.stringify({ obeysRulings: true, contradictions: [] }) };
+      },
+      async stream() {
+        throw new Error("narrator provider unavailable");
+      },
+    };
+
+    const result = await generateGuardedNarration(
+      failingRouter,
+      { system: "Narrate.", user: "Attack." },
+      [uuidRuling]
+    );
+
+    expect(result.usedSafeFallback).toBe(true);
+    expect(result.prose).not.toContain("74d6414e");
+    expect(result.prose).not.toMatch(/85ccbce8e8a7/i);
   });
 });

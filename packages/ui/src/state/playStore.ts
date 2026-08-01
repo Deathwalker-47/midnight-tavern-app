@@ -48,6 +48,11 @@ interface PlayState {
   turnError?: TurnError;
   classifierRecovery?: ClassifierRecoveryMetadata;
   recoveryInspection?: TurnOperationRecoveryInspection;
+  /**
+   * When the narrator degraded to the deterministic summary this turn, a short player-facing reason
+   * (e.g. provider rate limit). Cleared on the next turn or via `clearNarratorNotice`.
+   */
+  narratorNotice?: string;
 
   /** Load a story's transcript, rulings, and cast into the store. */
   load: (storyId: string) => Promise<void>;
@@ -74,6 +79,7 @@ interface PlayState {
   /** Delete the selected exchange itself plus everything after it. */
   deleteFrom: (fromIdx: number) => Promise<void>;
   clearError: () => void;
+  clearNarratorNotice: () => void;
   reset: () => void;
 }
 
@@ -160,6 +166,7 @@ export const usePlayStore = create<PlayState>((set, get) => ({
   pendingRulings: [],
   turnError: undefined,
   classifierRecovery: undefined,
+  narratorNotice: undefined,
   recoveryInspection: undefined,
 
   load: async (storyId) => {
@@ -214,6 +221,7 @@ export const usePlayStore = create<PlayState>((set, get) => ({
       pendingRulings: [],
       turnError: undefined,
       classifierRecovery: undefined,
+      narratorNotice: undefined,
       recoveryInspection: undefined,
     }));
 
@@ -257,6 +265,9 @@ export const usePlayStore = create<PlayState>((set, get) => ({
         classifierRecovery:
           outcome.classifierRecovery ??
           snapshot.recoveryInspection?.operation.classifierRecovery,
+        narratorNotice: outcome.usedNarratorFallback
+          ? (outcome.narratorFallbackReason ?? "the storyteller was briefly unavailable")
+          : undefined,
         recoveryInspection: snapshot.recoveryInspection,
       });
     } catch (err) {
@@ -354,6 +365,9 @@ export const usePlayStore = create<PlayState>((set, get) => ({
         classifierRecovery:
           outcome.classifierRecovery ??
           snapshot.recoveryInspection?.operation.classifierRecovery,
+        narratorNotice: outcome.usedNarratorFallback
+          ? (outcome.narratorFallbackReason ?? "the storyteller was briefly unavailable")
+          : undefined,
         recoveryInspection: snapshot.recoveryInspection,
       });
     } catch (err) {
@@ -398,6 +412,8 @@ export const usePlayStore = create<PlayState>((set, get) => ({
       operationPhase: "idle",
     }),
 
+  clearNarratorNotice: () => set({ narratorNotice: undefined }),
+
   swipeLast: async (opts = {}) => {
     const storyId = get().storyId;
     if (!storyId) return;
@@ -408,6 +424,7 @@ export const usePlayStore = create<PlayState>((set, get) => ({
       proseBuffer: "",
       pendingRulings: [],
       turnError: undefined,
+      narratorNotice: undefined,
     });
     try {
       await getBridge().swipeLastTurn({
@@ -433,6 +450,7 @@ export const usePlayStore = create<PlayState>((set, get) => ({
         operationPhase: "idle",
         proseBuffer: "",
         pendingRulings: [],
+        narratorNotice: undefined,
       });
     } catch (err) {
       if (!isCurrentOperation(generation, storyId, get)) return;
@@ -442,6 +460,7 @@ export const usePlayStore = create<PlayState>((set, get) => ({
         proseBuffer: "",
         pendingRulings: [],
         turnError: classifyError(err),
+        narratorNotice: undefined,
       });
     }
   },
@@ -517,6 +536,7 @@ export const usePlayStore = create<PlayState>((set, get) => ({
       pendingRulings: [],
       turnError: undefined,
       classifierRecovery: undefined,
+      narratorNotice: undefined,
       recoveryInspection: undefined,
     });
   },

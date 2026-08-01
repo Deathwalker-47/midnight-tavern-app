@@ -384,6 +384,8 @@ export interface SubmitTurnOutcome {
   classifierRecovery?: ClassifierRecoveryMetadata;
   refusedActionCount: number;
   usedNarratorFallback: boolean;
+  /** When the narrator fell back, a short player-facing reason (e.g. provider rate limit). */
+  narratorFallbackReason?: string;
   /** Structured deterministic verdicts for DM-proposed attribute changes. */
   attributeAdvancements: AttributeAdvancementDecision[];
 }
