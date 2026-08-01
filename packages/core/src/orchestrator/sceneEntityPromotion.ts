@@ -5,6 +5,7 @@ export interface SceneEntityCandidate {
   id: string;
   name: string;
   skillIds: string[];
+  present?: boolean;
 }
 
 interface SceneEntityPromotionInput {
@@ -56,12 +57,16 @@ const ACTOR_VERBS = [
   "calls",
   "called",
   "descended",
+  "appeared",
   "emerged",
   "glanced",
   "held",
   "jerked",
   "left",
+  "lifted",
+  "looked",
   "lowered",
+  "loped",
   "lurks",
   "made",
   "moves",
@@ -75,6 +80,8 @@ const ACTOR_VERBS = [
   "repeated",
   "said",
   "sniffed",
+  "snuffled",
+  "stepped",
   "studied",
   "walks",
   "watches",
@@ -92,8 +99,8 @@ const GENERIC_HUMAN_ACTORS = new Set([
   "woman",
 ]);
 
-/** Capitalized sentence starters that can satisfy the proper-name grammar but never name an NPC. */
-const NON_CHARACTER_PROPER_ACTORS = new Set([
+/** Quantified pronouns that cannot be a direct identity declaration. */
+const NON_CHARACTER_IDENTITIES = new Set([
   "anybody",
   "anyone",
   "anything",
@@ -105,6 +112,35 @@ const NON_CHARACTER_PROPER_ACTORS = new Set([
   "somebody",
   "someone",
   "something",
+]);
+
+/** Capitalized sentence starters that satisfy name casing but do not name an NPC. */
+const NON_CHARACTER_PROPER_ACTORS = new Set([
+  ...NON_CHARACTER_IDENTITIES,
+  "first",
+  "second",
+  "third",
+  "fourth",
+  "fifth",
+  "finally",
+  "he",
+  "her",
+  "hers",
+  "him",
+  "his",
+  "it",
+  "its",
+  "our",
+  "ours",
+  "she",
+  "their",
+  "theirs",
+  "them",
+  "they",
+  "we",
+  "you",
+  "your",
+  "yours",
 ]);
 
 function normalize(value: string): string {
@@ -145,29 +181,47 @@ function explicitIdentities(narration: string): ExplicitIdentities {
   const selfPattern = new RegExp(`\\b(?:I am|I['’]m|my name is)\\s+${proper}\\b`, "gu");
   for (const match of narration.matchAll(selfPattern)) {
     const identity = normalize(match[1] ?? "");
-    if (!identity || NON_CHARACTER_PROPER_ACTORS.has(identity)) continue;
+    if (!identity || NON_CHARACTER_IDENTITIES.has(identity)) continue;
     self.add(identity);
     all.add(identity);
   }
   const introducedPattern = new RegExp(`\\b(?:This is|Meet)\\s+${proper}\\b`, "gu");
   for (const match of narration.matchAll(introducedPattern)) {
     const identity = normalize(match[1] ?? "");
-    if (identity && !NON_CHARACTER_PROPER_ACTORS.has(identity)) all.add(identity);
+    if (identity && !NON_CHARACTER_IDENTITIES.has(identity)) all.add(identity);
   }
   return { all, self };
 }
 
+function isDepictedActor(narration: string, index: number | undefined): boolean {
+  const before = narration.slice(0, index ?? 0);
+  const sentenceStart = Math.max(
+    before.lastIndexOf("."),
+    before.lastIndexOf("!"),
+    before.lastIndexOf("?"),
+    before.lastIndexOf("\n")
+  );
+  const sentencePrefix = before.slice(sentenceStart + 1);
+  return /\b(?:carving|fresco|mural|painting|portrait|statue|tapestry)\b[^.!?\n]{0,60}\b(?:depicts?|depicted|of|portrays?|portrayed|shows?|showed)\s*$/iu.test(
+    sentencePrefix
+  );
+}
+
 function narratedActors(narration: string, schema: StorySchema): string[] {
   const actors = new Set<string>();
+  const appositiveDescriptions = new Set<string>();
   const heads = [...ACTOR_HEADS].join("|");
   const verbs = ACTOR_VERBS.join("|");
   const describedActor = new RegExp(
-    `\\b(?:a|an|the)\\s+((?:[a-z'-]+\\s+){0,3}(?:${heads}))\\s+(?:${verbs})\\b`,
+    `\\b(?:a|an|the)\\s+((?:[a-z'-]+\\s+){0,3}(?:${heads}))\\b([^.!?\\n]{0,120}?)\\b(?:${verbs})\\b`,
     "giu"
   );
   for (const match of narration.matchAll(describedActor)) {
+    if (isDepictedActor(narration, match.index)) continue;
     const actor = normalize(match[1] ?? "");
-    if (actor) actors.add(actor);
+    const betweenActorAndVerb = normalize(match[2] ?? "");
+    const changesSubject = /\\b(?:he|i|it|she|they|we|you)\\b/i.test(betweenActorAndVerb);
+    if (actor && !changesSubject) actors.add(actor);
   }
 
   const properActor = new RegExp(
@@ -175,6 +229,7 @@ function narratedActors(narration: string, schema: StorySchema): string[] {
     "gu"
   );
   for (const match of narration.matchAll(properActor)) {
+    if (isDepictedActor(narration, match.index)) continue;
     const actor = normalize(match[1] ?? "");
     if (actor && !NON_CHARACTER_PROPER_ACTORS.has(actor)) actors.add(actor);
   }
@@ -183,13 +238,21 @@ function narratedActors(narration: string, schema: StorySchema): string[] {
   // "Marta Hearthwright, a broad-shouldered innkeeper, steps forward." Keep the grammar
   // bounded by both an actor head and an actor verb so locations/titles are not promoted.
   const properAppositiveActor = new RegExp(
-    `\\b([A-Z][\\p{L}'-]+(?:\\s+[A-Z][\\p{L}'-]+){0,2})\\s*(?:,|—|-)\\s*(?:a|an|the)?\\s*[^.!?\\n]{0,60}\\b(?:${heads})\\b[^.!?\\n]{0,40}\\b(?:${verbs})\\b`,
+    `\\b([A-Z][\\p{L}'-]+(?:\\s+[A-Z][\\p{L}'-]+){0,2})\\s*(?:,|—|-)\\s*(?:a|an|the)?\\s*((?:[a-z'-]+\\s+){0,3}(?:${heads}))\\b([^.!?\\n]{0,60}?)\\b(?:${verbs})\\b`,
     "gu"
   );
   for (const match of narration.matchAll(properAppositiveActor)) {
+    if (isDepictedActor(narration, match.index)) continue;
     const actor = normalize(match[1] ?? "");
-    if (actor && !NON_CHARACTER_PROPER_ACTORS.has(actor)) actors.add(actor);
+    const appositiveDescription = normalize(match[2] ?? "");
+    const betweenActorAndVerb = normalize(match[3] ?? "");
+    const changesSubject = /\\b(?:he|i|it|she|they|we|you)\\b/i.test(betweenActorAndVerb);
+    if (actor && !changesSubject && !NON_CHARACTER_PROPER_ACTORS.has(actor)) {
+      actors.add(actor);
+      if (appositiveDescription) appositiveDescriptions.add(appositiveDescription);
+    }
   }
+  for (const description of appositiveDescriptions) actors.delete(description);
 
   const normalizedNarration = normalize(narration);
   for (const template of schema.npcTemplates) {
@@ -261,8 +324,9 @@ function inferredSkillIds(narration: string, schema: StorySchema): string[] {
 export function discoverNarratedSceneEntities(
   input: SceneEntityPromotionInput
 ): SceneEntityCandidate[] {
-  const rawNarration = input.recentNarration.slice(-2).join(" ");
+  const rawNarration = input.recentNarration.join(" ");
   const narration = normalize(rawNarration);
+  const latestNarration = normalize(input.recentNarration.at(-1) ?? "");
   if (!rawNarration.trim()) return [];
 
   const knownNames = new Set(input.roster.map((character) => normalize(character.name)));
@@ -317,7 +381,12 @@ export function discoverNarratedSceneEntities(
       ? identityTarget.id
       : `${input.storyId}:scene:${slug(template?.templateId ?? target)}`;
     if (knownIds.has(baseId) && !enrichesGeneric) continue;
-    found.set(baseId, { id: baseId, name, skillIds: inferredSkillIds(rawNarration, input.schema) });
+    found.set(baseId, {
+      id: baseId,
+      name,
+      skillIds: inferredSkillIds(rawNarration, input.schema),
+      ...(!latestNarration.includes(target) ? { present: false } : {}),
+    });
   }
 
   return [...found.values()];

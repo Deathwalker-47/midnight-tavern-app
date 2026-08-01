@@ -37,7 +37,7 @@ const EXPECTED_TABLES = [
 ];
 
 /** Number of embedded migrations. Bump when adding one. */
-const MIGRATION_COUNT = 15;
+const MIGRATION_COUNT = 16;
 
 async function tableNames(db: Db): Promise<string[]> {
   const rows = await db.all<{ name: string }>(
@@ -72,6 +72,7 @@ describe("openDb / migrations", () => {
       { version: 13, name: "remove_false_nothing_character" },
       { version: 14, name: "turn_operation_stage_metrics" },
       { version: 15, name: "checkpoint_character_identity" },
+      { version: 16, name: "remove_false_pronoun_characters" },
     ]);
     await db.close();
   });
@@ -166,6 +167,122 @@ describe("openDb / migrations", () => {
       expect(JSON.parse(checkpoint!.hard_pre_json)).toEqual({ keep: {} });
       expect(JSON.parse(checkpoint!.soft_pre_json)).toEqual({});
       expect(JSON.parse(checkpoint!.presence_pre_json)).toEqual({ keep: true });
+      await upgraded.close();
+    } finally {
+      try {
+        rmSync(dir, { recursive: true, force: true });
+      } catch {
+        // Windows may hold the native SQLite handle briefly; OS temp cleanup will reclaim it.
+      }
+    }
+  });
+
+  it("removes unreferenced pronoun and ordinal phantoms without deleting a mechanical actor", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "mt-db-"));
+    const path = join(dir, "pronoun-upgrade.db");
+    try {
+      const seeded = await openDb(path);
+      for (const storyId of ["s1", "s2"]) {
+        await seeded.run(
+          "INSERT INTO stories (id, title, created_at, schema_json, locked) VALUES (?,?,?,?,?)",
+          storyId,
+          storyId,
+          0,
+          "{}",
+          1
+        );
+      }
+      for (const name of ["He", "It", "Third"]) {
+        await seeded.run(
+          `INSERT INTO characters (id, story_id, name, is_player, hard_json)
+           VALUES (?, ?, ?, ?, ?)`,
+          `s1:scene:${name.toLocaleLowerCase("en-US")}`,
+          "s1",
+          name,
+          0,
+          "{}"
+        );
+      }
+      await seeded.run(
+        `INSERT INTO characters (id, story_id, name, is_player, hard_json)
+         VALUES (?, ?, ?, ?, ?)`,
+        "s2:scene:he",
+        "s2",
+        "He",
+        0,
+        "{}"
+      );
+      await seeded.run(
+        "INSERT INTO messages (id, story_id, idx, role, content, created_at) VALUES (?,?,?,?,?,?)",
+        "m1",
+        "s1",
+        0,
+        "narrator",
+        "It moved. Third, the creature left tracks. He studied you.",
+        0
+      );
+      await seeded.run(
+        `INSERT INTO story_events (
+           id, story_id, turn_index, actor_id, kind, payload_json, rulebook_version, created_at
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        "e1",
+        "s2",
+        0,
+        "s2:scene:he",
+        "automatic",
+        "{}",
+        1,
+        0
+      );
+      const ghostMap =
+        '{"s1:scene:he":{},"s1:scene:it":{},"s1:scene:third":{},"keep":{}}';
+      await seeded.run(
+        `INSERT INTO turn_checkpoints (
+           id, story_id, message_id, turn_index, hard_pre_json, soft_pre_json,
+           world_pre_json, presence_pre_json, identity_pre_json, created_at
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        "cp1",
+        "s1",
+        "m1",
+        0,
+        ghostMap,
+        ghostMap,
+        null,
+        ghostMap,
+        ghostMap,
+        0
+      );
+      await seeded.run("DELETE FROM schema_migrations WHERE version = 16");
+      await seeded.close();
+
+      const upgraded = await openDb(path);
+      expect(
+        await upgraded.all<{ name: string }>(
+          "SELECT name FROM characters WHERE story_id = ? ORDER BY name",
+          "s1"
+        )
+      ).toEqual([]);
+      expect(
+        await upgraded.get("SELECT id FROM characters WHERE id = ?", "s2:scene:he")
+      ).toBeDefined();
+      const checkpoint = await upgraded.get<{
+        hard_pre_json: string;
+        soft_pre_json: string;
+        presence_pre_json: string;
+        identity_pre_json: string;
+      }>(
+        `SELECT hard_pre_json, soft_pre_json, presence_pre_json, identity_pre_json
+         FROM turn_checkpoints WHERE id = ?`,
+        "cp1"
+      );
+      for (const value of [
+        checkpoint!.hard_pre_json,
+        checkpoint!.soft_pre_json,
+        checkpoint!.presence_pre_json,
+        checkpoint!.identity_pre_json,
+      ]) {
+        expect(JSON.parse(value)).toEqual({ keep: {} });
+      }
       await upgraded.close();
     } finally {
       try {

@@ -175,7 +175,7 @@ function mergeNarratedEntityTransitions(
         storyId,
         name: entity.name,
         isPlayer: false,
-        present: true,
+        present: entity.present ?? true,
         hard: instantiateGeneric(schema, entity.id, entity.skillIds),
       },
     });
@@ -1096,7 +1096,9 @@ async function runTurnOperation(
         if (transition.operation === "update") continue;
         await store.characters.setPresent(
           transition.character.id,
-          transition.operation !== "leave"
+          transition.operation === "introduce"
+            ? transition.character.present
+            : transition.operation !== "leave"
         );
       }
 

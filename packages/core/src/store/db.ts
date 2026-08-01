@@ -473,6 +473,59 @@ ALTER TABLE turn_operations ADD COLUMN stage_metrics_json TEXT;
 ALTER TABLE turn_checkpoints ADD COLUMN identity_pre_json TEXT NOT NULL DEFAULT '{}';
 `,
   },
+  {
+    version: 16,
+    name: "remove_false_pronoun_characters",
+    // Sentence-initial pronouns and the ordinal transition "Third" could satisfy the former
+    // proper-name grammar. Remove only exact auto-generated ids with no mechanical participation,
+    // and scrub every checkpoint dimension so rewind cannot resurrect those phantom rows.
+    sql: `
+UPDATE turn_checkpoints
+SET hard_pre_json = json_remove(
+      hard_pre_json,
+      '$."' || story_id || ':scene:he"',
+      '$."' || story_id || ':scene:it"',
+      '$."' || story_id || ':scene:third"'
+    ),
+    soft_pre_json = json_remove(
+      soft_pre_json,
+      '$."' || story_id || ':scene:he"',
+      '$."' || story_id || ':scene:it"',
+      '$."' || story_id || ':scene:third"'
+    ),
+    presence_pre_json = json_remove(
+      presence_pre_json,
+      '$."' || story_id || ':scene:he"',
+      '$."' || story_id || ':scene:it"',
+      '$."' || story_id || ':scene:third"'
+    ),
+    identity_pre_json = json_remove(
+      identity_pre_json,
+      '$."' || story_id || ':scene:he"',
+      '$."' || story_id || ':scene:it"',
+      '$."' || story_id || ':scene:third"'
+    )
+WHERE EXISTS (
+  SELECT 1
+  FROM characters c
+  WHERE c.story_id = turn_checkpoints.story_id
+    AND lower(c.name) IN ('he', 'it', 'third')
+    AND c.id = c.story_id || ':scene:' || lower(c.name)
+    AND c.is_player = 0
+    AND NOT EXISTS (SELECT 1 FROM story_events e WHERE e.actor_id = c.id)
+    AND NOT EXISTS (SELECT 1 FROM item_instances i WHERE i.owner_character_id = c.id)
+);
+
+DELETE FROM characters
+WHERE lower(name) IN ('he', 'it', 'third')
+  AND id = story_id || ':scene:' || lower(name)
+  AND is_player = 0
+  AND NOT EXISTS (SELECT 1 FROM story_events e WHERE e.actor_id = characters.id)
+  AND NOT EXISTS (
+    SELECT 1 FROM item_instances i WHERE i.owner_character_id = characters.id
+  );
+`,
+  },
 ];
 
 /**

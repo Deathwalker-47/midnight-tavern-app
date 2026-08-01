@@ -16,6 +16,67 @@ describe("discoverNarratedSceneEntities", () => {
     expect(found).toEqual([]);
   });
 
+  it("keeps Cyraeth pronouns and ordinal transitions out while retaining the actual creature", () => {
+    const found = discoverNarratedSceneEntities({
+      storyId: "story-1",
+      schema: makeStory(),
+      recentNarration: [
+        "It stood on four legs and studied the clearing. The creature snuffled at the base of a different tree. Third, and perhaps most immediately useful, that the creature had left tracks.",
+      ],
+      roster: [],
+    });
+
+    expect(found.map((candidate) => candidate.name)).toEqual(["Creature"]);
+  });
+
+  it("registers each concrete village actor without turning He into another character", () => {
+    const found = discoverNarratedSceneEntities({
+      storyId: "story-1",
+      schema: makeStory(),
+      recentNarration: [
+        "A younger man with a bow — not yet drawn but arrow nocked with practiced ease — stepped onto his threshold. An older woman appeared clutching a shawl, her other hand resting on the head of a large dog that looked reptilian. Daen lowered his makeshift weapon. He studied you more carefully now.",
+      ],
+      roster: [],
+    });
+
+    expect(found.map((candidate) => candidate.name).sort()).toEqual([
+      "Daen",
+      "Large dog",
+      "Older woman",
+      "Younger man",
+    ]);
+  });
+
+  it("checks every caller-bounded recent narration entry when repairing missed actors", () => {
+    const found = discoverNarratedSceneEntities({
+      storyId: "story-1",
+      schema: makeStory(),
+      recentNarration: [
+        "The creature lifted its head and loped into the undergrowth.",
+        "The road climbed west through the quiet hills.",
+        "Moonlight silvered the empty pasture.",
+      ],
+      roster: [],
+    });
+
+    expect(found).toEqual([
+      expect.objectContaining({ name: "Creature", present: false }),
+    ]);
+  });
+
+  it("does not register actor-shaped figures depicted by scenery", () => {
+    const found = discoverNarratedSceneEntities({
+      storyId: "story-1",
+      schema: makeStory(),
+      recentNarration: [
+        "A mural showed a younger man with a bow who stepped into a painted grove. A statue of an older woman appeared beside the altar.",
+      ],
+      roster: [],
+    });
+
+    expect(found).toEqual([]);
+  });
+
   it("still promotes a genuinely named narrated actor", () => {
     const found = discoverNarratedSceneEntities({
       storyId: "story-1",

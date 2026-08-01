@@ -676,6 +676,35 @@ describe("submitTurn — pipeline order & transaction", () => {
     expect(roster.some((character) => character.name === "Man")).toBe(false);
   });
 
+  it("backfills an older departed creature into the registry without returning it to the scene", async () => {
+    await store.characters.setPresent("wight", false);
+    for (const [index, content] of [
+      "The creature lifted its head and loped off into the undergrowth.",
+      "The road climbed west through the quiet hills.",
+      "Moonlight silvered the empty pasture.",
+    ].entries()) {
+      await store.messages.insert({
+        id: `legacy-scene-${index}`,
+        storyId,
+        idx: index,
+        role: "narrator",
+        content,
+        createdAt: index,
+      });
+    }
+    const router = new ScriptedRouter({
+      classified: { playerIntents: [], npcIntents: [], freeText: "I keep walking." },
+      narratorProse: "The quiet road continues toward the sleeping village.",
+    });
+
+    const result = await submitTurn(router, store, storyId, "I keep walking.");
+    await result.background;
+
+    expect(await store.characters.get(`${storyId}:scene:creature`)).toEqual(
+      expect.objectContaining({ name: "Creature", present: false })
+    );
+  });
+
   it("times out a hung classifier, persists the metric, and completes one narration-only exchange", async () => {
     await store.characters.setPresent("wight", false);
     const clock = controllableStageSchedule();
