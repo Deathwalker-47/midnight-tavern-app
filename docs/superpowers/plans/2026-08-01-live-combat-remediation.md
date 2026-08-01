@@ -193,14 +193,14 @@ may select only sealed story skill ids; the engine validates and instantiates th
 - Modify: `packages/core/src/orchestrator/npcIntroduction.ts` (retire absent NPCs)
 - Test: `targetFocus.test.ts` / `turn.test.ts` / `npcIntroduction.test.ts`
 
-- [ ] **Step 1:** Failing test — classifier fails on an ambiguous "attack it again" with two present
+- [x] **Step 1:** Failing test — classifier fails on an ambiguous "attack it again" with two present
   NPCs; recovery resolves to the recent unique living target via `deriveRecentPlayerTargetId` instead of
   "unresolved target".
-- [ ] **Step 2:** Observe RED (today it fails closed).
-- [ ] **Step 3:** Thread `targetFocus` into the recovery/target-resolution path; add presence hygiene so
+- [x] **Step 2:** Observe RED (today it fails closed).
+- [x] **Step 3:** Thread `targetFocus` into the recovery/target-resolution path; add presence hygiene so
   an NPC no longer in the scene leaves the present cast (reducing ambiguity like stale "Dead man").
-- [ ] **Step 4:** Verify fail-closed still holds when the recent target is genuinely ambiguous.
-- [ ] **Step 5:** Commit `core(orchestrator): resolve ambiguous attack via recent target`.
+- [x] **Step 4:** Verify fail-closed still holds when the recent target is genuinely ambiguous.
+- [x] **Step 5:** Commit `core(orchestrator): resolve ambiguous attack via recent target`.
 
 ## Completion Definition
 
@@ -211,6 +211,18 @@ DM ruling with meaningful damage; provider hiccups still produce readable prose;
 continuation resolves to the correct present living target.
 
 ## Progress log (update as you go — exact stopping point for the next agent)
+
+- **2026-08-01 (Task 6 complete at `5f4e85d`; final package built):**
+  - RED proved the outer classifier-stage timeout discarded a locally recoverable continuation
+    attack even though a unique recent living target existed. The same sealed recovery policy now
+    handles that stage fallback without another provider request.
+  - RED proved exact committed scene-roster evidence could not retire stale presence. Named exits
+    remain valid; exact sentences such as "You are alone now" may retire existing NPCs even without
+    repeating every name. Omission and dramatic uses of "alone" fail closed.
+  - Cancellation coverage proves approved presence transitions remain staged until the atomic save.
+  - Fresh gate: typecheck; core 601 / UI 156 = 757 tests; optimized Rust/UI/core build; unsigned NSIS
+    and MSI bundles produced and hashed in HANDOFF.
+  - **NEXT:** human provider-backed packaged acceptance; no known Task 15B source work remains.
 
 - **2026-08-01 (Task 5 complete at `e7548ab`):**
   - Three intended RED failures proved 429 responses did not retry, safe fallback omitted the

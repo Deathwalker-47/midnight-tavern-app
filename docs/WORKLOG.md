@@ -1207,3 +1207,32 @@ are not acceptance artifacts and will not be rebuilt or handed off.
 
 **Next:** Task 15B.6 - route degraded ambiguous continuation attacks through the unique recent living
 target and retire stale scene presence only from explicit validated evidence.
+
+---
+
+## 2026-08-01 - Task 15B.6: Recent-target timeout recovery and presence hygiene
+
+**RED evidence.** A full turn with two present NPCs, a unique recent living target, continuation
+wording, and a hung classifier stage fell to narration-only instead of resolving the sealed attack.
+A second failure showed an exact committed "You are alone now" roster statement could not retire an
+older present NPC. A third edge-case failure showed substring matching could confuse a dramatic use
+of "alone" with physical scene isolation.
+
+**What landed.** `5f4e85d` exposes the classifier's sealed deterministic failure recovery to the turn
+stage fallback, so provider errors and outer stage timeouts use identical action/target validation
+without another model request. Recent focus applies only to continuation wording and only when the
+latest authoritative player ruling identifies one present living non-player target; explicit names
+still override, while ambiguous/dead/absent focus remains unresolved. Existing-character presence
+grounding must now place the actor and evidence in the same sentence. A leave may omit the name only
+when it quotes an exact, narrowly recognized committed roster sentence such as "You are alone now"
+or "No one else remains." Mere omission, player-only claims, and dramatic uses fail closed. Registry
+records remain; cancellation coverage proves transitions do not commit before the atomic save.
+
+**Verification and package.** Focused classifier/turn/NPC-introduction tests passed **101 tests / 3
+files**. Fresh root typecheck passed. Complete suites passed: core **601 tests / 45 files** plus UI
+**156 tests / 25 files**, **757 tests** total. Final root build passed core/UI/Vite and optimized Rust,
+then produced unsigned NSIS and MSI bundles. HANDOFF records exact paths, sizes, signatures, and
+SHA-256 hashes.
+
+**Next:** human provider-backed packaged acceptance. No known Task 15B source item remains; record
+new observations before changing code.

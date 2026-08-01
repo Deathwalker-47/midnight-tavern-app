@@ -149,8 +149,8 @@ Detailed execution plan:
   repair, resume, and provider deadline guarantees.
 - [x] Scale baseline attack damage / encounter health into a meaningful range.
 - [x] Retry transient provider failures and provide richer authority-safe fallback prose.
-- [ ] Apply recent-target continuity to degraded classifier recovery and retire stale scene presence.
-- [ ] Run the full automated/native gate and refresh WORKLOG, HANDOFF, and next-agent prompt. Do not
+- [x] Apply recent-target continuity to degraded classifier recovery and retire stale scene presence.
+- [x] Run the full automated/native gate and refresh WORKLOG, HANDOFF, and next-agent prompt. Do not
   rebuild an installer until the human asks.
 
 ## Internal-Beta exit criteria (the finish line for this phase)

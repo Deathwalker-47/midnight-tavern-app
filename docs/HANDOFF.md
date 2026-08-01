@@ -1,79 +1,77 @@
 # HANDOFF - current live state
 
 **Updated:** 2026-08-01
-**Branch / source baseline:** local `main` at `e7548ab`; not pushed
+**Branch / source baseline:** Task 15B source at `5f4e85d`; this handoff/docs-only closeout follows; not pushed
 **App version:** `0.2.8`, unsigned
 **User-owned/untracked:** `.codex/`, `opencode.json` - preserve
-**Active plan:** `Plan/next-phase-internal-beta.md`, Task 15B in progress
+**Active plan:** `Plan/next-phase-internal-beta.md`; Task 15B automated/source work complete
 **Detailed plan:** `docs/superpowers/plans/2026-08-01-live-combat-remediation.md`
 
 ## Current outcome
 
-Task 15A's seven packaged-acceptance fixes remain complete. Task 15B now has five green slices:
+Task 15A's seven packaged-acceptance fixes remain complete. All six Task 15B source slices are now
+implemented, tested, and committed:
 
-- `bd968fb` guarantees an engine-owned, gate-legal natural attack in every full-stat story,
-  including runtime compatibility for older frozen catalogues.
-- `41c5963` gives newly grounded emergent NPCs a bounded capability loadout selected only from
-  sealed story skill ids. Known unique ids become novice skills; unknown ids cannot enter state.
-- `e3a4801` expands the shared universal registry to v4 and makes the forge produce a validated,
-  premise-grounded rulebook of 30 actions and 6-10 skills.
-- `e43ae50` scales combat damage from authoritative attributes/equipment and gives generic encounters
-  a six-hit pacing floor, including already-persisted fallback creatures.
-- `e7548ab` retries transient provider/network failures inside one bounded request window and replaces
-  vague safe narration with actor/action/outcome prose derived from immutable rulings.
-- Provider attempts are capped at three. Retryable HTTP statuses are 408, 409, 425, 429, and 5xx;
-  authentication, cancellation, malformed responses, and other permanent failures are not retried.
-- Numeric/date `Retry-After` is honored but capped at two seconds. A broken narrator stream retries
-  only before its first visible delta, preventing duplicate prose.
-- Safe fallback includes a benign sealed narration hint only when it contains no mechanical claim or
-  deterministic contradiction. Damage, loot, and death cannot leak from an unsafe hint.
-- Template NPCs keep their forge-authored mechanics. Existing-character presence transitions cannot
-  rewrite hard state. The engine remains the final action/gate/death authority.
-- The browser bridge consumes the same universal registry JSON as core instead of a copied list.
+- `bd968fb`: gate-legal natural attack for every full-stat story, including old frozen catalogues.
+- `41c5963`: bounded sealed-skill capability loadouts for newly grounded emergent NPCs.
+- `e3a4801`: balanced universal registry v4 and premise-grounded 30-action / 6-10-skill forges.
+- `e43ae50`: authoritative attribute/item damage scaling and six-hit generic encounter pacing.
+- `e7548ab`: bounded transient provider retries and actor/action/outcome safe fallback prose.
+- `5f4e85d`: classifier-stage timeout recovery through the unique recent living target, plus narrow
+  explicit-evidence scene-presence retirement.
+
+The final slice reuses the same sealed local recovery for outer classifier timeouts instead of
+falling directly to narration-only. It still fails closed without a unique recent present living
+target, and an explicit named target continues to win. Existing NPCs may leave without being named
+only when the registrar quotes an exact committed sentence such as "You are alone now" or "No one
+else remains." Omission, player-only claims, and dramatic uses of "alone" do not retire anyone.
+Presence transitions stay staged and commit atomically with the narrator message/rulings; a cancelled
+turn leaves prior presence untouched. Registry records are never deleted.
 
 ## Fresh verification
 
-- Task-5 RED was observed in three focused assertions before implementation.
-- Focused router/authority guard: **28 tests**, passed.
+- Task-6 RED was observed for classifier timeout recovery and exact committed roster evidence; a
+  separate RED edge case rejected dramatic "alone" phrasing.
+- Focused classifier/turn/NPC-introduction gate: **101 tests / 3 files**, passed.
 - `npm run typecheck`: passed.
-- Complete core: **596 tests / 45 files**, passed.
+- Complete core: **601 tests / 45 files**, passed.
 - Complete UI: **156 tests / 25 files**, passed.
-- Root total: **752 tests**, passed.
-- `npm run build` passed, but this root command also includes `tauri build` and refreshed local
-  MSI/NSIS bundles. These are not acceptance artifacts and must not be rebuilt or handed off until
-  the human asks. Use direct core/UI builds for interim source slices.
-- Core Vitest intentionally runs one worker after repeated Windows/Node v24 worker `EPIPE` exits.
-- `git diff --check`: passed before the source commit.
+- Root total: **757 tests**, passed.
+- Final `npm run build`: passed, including core, UI/Vite, optimized Rust release, MSI, and NSIS.
+- `git diff --check`: passed before the Task-6 source commit.
 
-## Expanded Task 15B queue
+## Test installers
 
-1. **DONE:** universal natural attack and compatibility for existing frozen stories.
-2. **DONE:** bounded story-grounded emergent-NPC skill loadouts plus planner capability context.
-3. **DONE:** balanced v4 universal registry plus validated 30-action / 6-10-skill story rulebooks.
-4. **DONE:** meaningful deterministic damage scaling and generic encounter-health pacing.
-5. **DONE:** bounded transient provider retries and richer authority-safe fallback prose.
-6. **NEXT (P2):** apply recent-target focus to degraded recovery and retire stale scene presence.
+- Preferred NSIS installer:
+  `packages/shell/src-tauri/target/release/bundle/nsis/Midnight Tavern_0.2.8_x64-setup.exe`
+  - bytes: `5620099`
+  - SHA-256: `467262CF7144E53560A88351142CA113E053C31339489994489104329D7B5E3B`
+- MSI alternative:
+  `packages/shell/src-tauri/target/release/bundle/msi/Midnight Tavern_0.2.8_x64_en-US.msi`
+  - bytes: `9265152`
+  - SHA-256: `9A5E0834616DE18A8F4A05FEFFEEC25EF5A5FB3DC3BB03782D14BABFAAE6E145`
+- Both report `NotSigned`, which is expected until the later signing/release phase.
 
 ## Non-negotiable authority and domain rules
 
-- One story owns one frozen executable action catalogue. NPCs do not own a second action catalogue;
-  their capability loadout determines which story actions gate-pass.
+- One story owns one frozen executable action catalogue. NPCs receive capability loadouts, not a
+  second model-authored action list.
 - Models may select sealed ids and prose; the engine owns gates, dice, effects, damage, death,
   budgets, target legality, persistence, rollback, loot, and progression.
 - Every actual fictional NPC/creature is registry-backed. Scenery, crowds, statues, murals,
   `Nothing`, and vague `Something` are not characters.
 - Registry membership and scene presence differ. Only present, living actors participate.
 - Rulings render before narrator streaming. Prose cannot assert death without threshold-backed
-  `causedDeathOf`.
-- Two player strikes remain legal under the two-action player budget; NPC budget is separate.
-- Browser/native bridge parity is mandatory; keep native dependencies out of the browser path.
-- Preserve `.codex/` and `opencode.json`; do not push.
-- Do not build another installer until the human asks.
+  `causedDeathOf`. Player and NPC action budgets remain separate.
+- Browser/native bridge parity is mandatory. Preserve `.codex/` and `opencode.json`; do not push.
 
 ## Single next action
 
-Start Task 6 test-first. Reproduce a classifier/provider failure for "attack it again" with two
-present NPCs and prove deterministic recovery chooses the unique recent living player target. Then
-retire stale scene presence only from explicit scene evidence; never infer absence merely because a
-character was not named in one narrator turn. Preserve fail-closed ambiguity, registry history, and
-atomic turn commits. Run focused tests, typecheck, and the complete suites, then update every baton.
+Wait for the human's provider-backed packaged acceptance results. They should create/import a fresh
+story and specifically verify: varied 30-action/6-10-skill rulebook; every encountered creature in
+the registry; hostile creature counter-attack with visible ruling and meaningful damage; two legal
+player strikes; death only at lethal threshold; readable fallback during provider degradation;
+"attack it again" continuity with another old NPC present; stale actors leaving only when the scene
+explicitly establishes absence; Possible Moves; Forge cancel/fresh restart; dossier mentality/current
+fields; Overview hierarchy; and stable follow-latest scrolling. Record any observed regressions as a
+new prioritized plan before changing source. Do not claim manual acceptance until the human reports it.
