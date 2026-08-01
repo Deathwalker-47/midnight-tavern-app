@@ -5,7 +5,9 @@
 **App version:** `0.2.8`, unsigned
 **User-owned/untracked:** `.codex/`, `opencode.json` - preserve
 **Active plan:** `Plan/next-phase-internal-beta.md`, Task 15A complete
-**Detailed plan:** `docs/superpowers/plans/2026-07-31-packaged-beta-remediation.md`, complete
+**Detailed plan (complete):** `docs/superpowers/plans/2026-07-31-packaged-beta-remediation.md`
+**Detailed plan (NEW, IN PROGRESS — diagnosis done, code not started):**
+`docs/superpowers/plans/2026-08-01-live-combat-remediation.md` — 4 defects from the 2nd packaged pass.
 
 ## Current outcome
 
@@ -82,7 +84,19 @@ not evidence of a local crash, and the app must continue to report it honestly. 
 prove deterministic fallback paths, persistence contracts, and packaged startup, but they cannot
 replace the human's visual/provider-backed journey or validate the user's credentials.
 
-## Single next action
+## Single next action (2026-08-01 — supersedes the installer step below)
+
+A second provider-backed packaged pass surfaced four defects. Diagnosis is done and recorded in
+`docs/superpowers/plans/2026-08-01-live-combat-remediation.md`. **Start at that plan's Task 1, Step 1**
+(a failing test reproducing "the shadow entity never attacks back"). Verified root cause: generic
+creatures (`bootstrap/instantiate.ts::instantiateGeneric`) have `skills:[]`/`inventory:[]`, so they
+cannot gate-pass a skill/weapon-gated attack, so `npcAgency.ts::chooseCounterAction` finds no legal
+counter. Fix = a config-owned universal natural attack (no skill/weapon requirement, implicit damage).
+Then Tasks 2 (damage scaling / HP balance), 3 (provider retry + richer fallback prose), 4 (ambiguous
+`attack` → recent-target resolution + presence hygiene). No source changed yet; repo green at
+`14e320c`. Do not push; do not rebuild the installer until the human asks.
+
+## Prior next action (installer test — still valid for the already-fixed 7 findings)
 
 Have the human install the fresh NSIS artifact and repeat the affected provider-backed acceptance
 journey:

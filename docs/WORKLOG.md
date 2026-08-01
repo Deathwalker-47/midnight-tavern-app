@@ -6,6 +6,37 @@ landed, why, verification, and any gotcha the next agent needs. Live state is in
 
 ---
 
+## 2026-08-01 — Live combat remediation: diagnosis + plan (no code changed)
+
+Reviewed the app after another agent completed Tasks 1–15A + the 2026-07-31 packaged remediation (HEAD
+`14e320c`, verified green: core 578 / UI 156 = 734, typecheck clean). A second provider-backed packaged
+human pass (Gemini, Solo Leveling RPG) reported four defects with screenshots. Traced root causes to
+source and wrote `docs/superpowers/plans/2026-08-01-live-combat-remediation.md`.
+
+**Key verified finding (Task 1, P0):** "the shadow entity never attacks back." Root cause is NOT
+harm-detection (an initial hypothesis I checked and discarded) — `turn.ts::requireStory` normalizes the
+schema with `applyUniversalActionDefaults` before npcAgency sees it, so the implicit `-4/-8` damage IS
+visible and `dealsTargetHarm` is fine. The real cause: `bootstrap/instantiate.ts::instantiateGeneric`
+builds creatures with `skills:[]`/`inventory:[]`, so they cannot gate-pass a skill/weapon-gated attack,
+so `npcAgency.ts::chooseCounterAction` (and `planHostileNpcFallback`) find no legal counter → the
+creature literally cannot fight back. Fix = a config-owned universal natural attack (no skill/weapon
+requirement, implicit damage) in every full-stat catalog.
+
+**Other three (diagnosed, less deeply source-verified — verify before implementing):** damage too small
+(flat `-4`, STR 10 → `+0`, no weapon prop; generated ~100 HP mismatched) → scale by attribute/weapon
+and/or forge HP; "no prose" = `safeSummary` on provider failure/audit reject → provider retry + richer
+fallback prose; "unresolved target" = classifier fail + ambiguous target (stale "Dead man") → apply the
+existing `targetFocus.deriveRecentPlayerTargetId` to recovery + presence hygiene.
+
+**Verification:** read `npcAgency.ts`, `config/registry.ts`, `turn.ts:127`, `bootstrap/instantiate.ts`.
+No source or test changed this session — repo stays green at `14e320c`. Diagnosis + a test-first entry
+point per task are recorded in the new plan's task list and its Progress log (exact stopping point).
+
+**Next:** the new plan's Task 1, Step 1 (failing test reproducing the shadow_entity bug), then Tasks
+2–4 in order.
+
+---
+
 ## 2026-07-29 — Task 9a: stage deadline primitive + bound the NPC planner
 
 First slice of Task 9 (`2b43325`). Task 9 is split: 9a = the reusable deadline/fallback/telemetry
