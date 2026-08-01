@@ -192,6 +192,28 @@ Bram Kelder. This is Bess” without adding either actor to the registry.
 - [x] Run the complete automated/native gate, update every baton document, commit coherent green
   changes, and build/hash one combined unsigned installer.
 
+## Task 15E: Cyraeth Narrated-Actor Integrity Repair
+
+Packaged testing on 2026-08-02 showed the live Cyraeth roster containing `He`, `It`, and `Third`
+while the narrator's real younger archer, older woman, large dog, and earlier predator were absent.
+Read-only log, transcript, operation, event, and character inspection proved a successful provider
+turn followed by deterministic extraction errors rather than an LLM or UI failure.
+
+- [x] Inspect the installed log and Cyraeth SQLite state to map each phantom and missed actor to the
+  exact narrator prose and completed turn stages.
+- [x] Reject sentence-initial pronouns and ordinal transitions without blocking explicit identities
+  or genuine proper names.
+- [x] Recognize bounded described actors through modifiers and ordinary past-tense verbs while
+  continuing to reject murals, statues, paintings, and other depictions.
+- [x] Scan the caller-bounded recent narration window so the affected save can repair the earlier
+  predator as a historical registry member without returning it to the current scene.
+- [x] When several provisional people are present, use nearby self-introduction context to enrich
+  the matching registry row rather than creating a duplicate named character.
+- [x] Add migration 16 to remove only exact unused auto-generated `He`, `It`, and `Third` rows,
+  scrub every checkpoint dimension, and preserve mechanically referenced actors.
+- [x] Run typecheck, the complete automated suite, native `cargo check`, update all baton documents,
+  commit coherent green changes, and build/hash one combined unsigned installer.
+
 ## Internal-Beta exit criteria (the finish line for this phase)
 
 - A user can create **or import** a story, play it, close the app, reopen it, and continue.

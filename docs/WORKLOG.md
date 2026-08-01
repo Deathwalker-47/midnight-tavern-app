@@ -1441,3 +1441,43 @@ passed core, UI/Vite, optimized Rust, MSI, and NSIS. Fresh unsigned v0.2.8 artif
 All report `NotSigned`. Manual installed-app acceptance remains open. In the affected existing save,
 the first new turn under this build repairs Bram Kelder and Bess from the two recent narrator
 messages before it classifies the player's action.
+
+---
+
+## 2026-08-02 - Task 15E: Cyraeth narrated-actor integrity repair
+
+**Packaged evidence and RED tests.** Read-only inspection of the installed log, transcript,
+operations, events, checkpoints, and SQLite character state for `Cyraeth Adventure` showed a fully
+successful provider turn followed by an invalid roster: the player and Daen were joined by phantom
+rows `It`, `Third`, and `He`, while the narrator's younger archer, older woman, large dog, and an
+earlier alien predator were missing. Focused failures reproduced sentence-initial pronoun/ordinal
+promotion, missed described actors, internal recent-history truncation, historical actors returning
+as present, unsafe cleanup, and a later name reveal creating a duplicate when several provisional
+people existed.
+
+**What landed.** Source commits `c6abef6` and `32a7ac2` harden narrated-actor extraction without
+moving identity authority to the model. Pronouns and ordinals are rejected; described people and
+creatures can cross bounded modifiers into ordinary past-tense agency verbs; depictions remain
+excluded. Discovery now consumes the full caller-bounded narration window, and actors found only in
+older prose enter the registry as historical/absent. Migration 16 deletes only exact unused
+auto-generated `He`, `It`, and `Third` scene rows, scrubs their hard/soft/presence/identity checkpoint
+dimensions, and preserves mechanically referenced short-name characters. Context around an
+unambiguous self-introduction selects the correct provisional human among several, preserving its
+id instead of creating a duplicate. All registry, presence, and identity changes remain atomic with
+the turn.
+
+**Verification and package.** The focused actor/turn/database suite passed **34 tests / 3 files**.
+Fresh root typecheck passed. Complete suites passed: core **625 tests / 45 files** plus UI **160
+tests / 25 files**, **785 tests total**. `cargo check` passed. `npm run build` passed core, UI/Vite,
+optimized Rust, MSI, and NSIS. Fresh unsigned v0.2.8 artifacts:
+
+- NSIS `packages/shell/src-tauri/target/release/bundle/nsis/Midnight Tavern_0.2.8_x64-setup.exe` -
+  5,624,034 bytes - SHA-256 `F19130E9AB40646AA2E41D58E0B5929CA26792431D597FEC9E6A78D6F79E7725`.
+- MSI `packages/shell/src-tauri/target/release/bundle/msi/Midnight Tavern_0.2.8_x64_en-US.msi` -
+  9,269,248 bytes - SHA-256 `88162E67A7F1CC5FD15323AA6A0B5444C06D9A6912C525102C4F6BBA2769DED3`.
+- App EXE `packages/shell/src-tauri/target/release/midnight-tavern.exe` - 22,799,360 bytes -
+  SHA-256 `98B0169A6894DAEA1F9308A7C0EED2770F4B857D28578EAD67C14F95524D9A86`.
+
+All report `NotSigned`. The installed save itself was not manually modified. Its first new turn under
+this build should remove the unused phantom rows, repair real present actors, and register the older
+predator as absent; manual provider-backed acceptance remains the human's next step.
