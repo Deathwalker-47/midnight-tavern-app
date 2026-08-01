@@ -244,7 +244,10 @@ function plannerPrompt(input: NpcPlanInput) {
             JSON.stringify({
               id: npc.characterId,
               name: nameOf(npc.characterId, input.nameById),
+              attributes: npc.attributes,
               resources: npc.resources,
+              skills: npc.skills,
+              inventory: npc.inventory,
             })
           )
           .join("\n") || "(none)"

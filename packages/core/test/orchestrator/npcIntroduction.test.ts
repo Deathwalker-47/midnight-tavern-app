@@ -8,6 +8,8 @@ import type { ChatResponse, Role, RoleBinding, RolePrompt, Router } from "../../
 import { makeEnemy, makeStory } from "../fixtures.js";
 
 class ProposalRouter implements Router {
+  lastPrompt?: RolePrompt;
+
   constructor(
     private readonly proposals: readonly NpcIntroductionProposal[] | string,
     private readonly error?: Error
@@ -17,7 +19,8 @@ class ProposalRouter implements Router {
     return { provider: "openrouter", model: "test", source: "recommended", samplersDirty: false };
   }
 
-  async complete(_role: Role, _prompt: RolePrompt): Promise<ChatResponse> {
+  async complete(_role: Role, prompt: RolePrompt): Promise<ChatResponse> {
+    this.lastPrompt = prompt;
     if (this.error) throw this.error;
     return {
       content:
@@ -105,6 +108,88 @@ describe("planNpcTransitions", () => {
         hard: { characterId: "intro-story:scene:hunched-creature", isPlayer: false },
       },
     });
+  });
+
+  it("grants a grounded generic NPC only unique sealed skills at novice rank", async () => {
+    const result = await plan([
+      {
+        operation: "introduce",
+        name: "Hunched creature",
+        grounding: "A hunched creature crawls from the cistern",
+        skillIds: ["blade", "blade", "unknown_skill"],
+      },
+    ]);
+
+    expect(result[0]?.character.hard.skills).toEqual([
+      { skillId: "blade", rank: "novice", successCount: 0 },
+    ]);
+  });
+
+  it("does not let a proposal override a sealed NPC template loadout", async () => {
+    const result = await plan([
+      {
+        operation: "introduce",
+        name: "Grave-wight",
+        templateId: "wight",
+        grounding: "Grave-wight",
+        skillIds: ["lockpicking"],
+      },
+    ]);
+
+    expect(result[0]?.character.hard.skills).toEqual([
+      { skillId: "blade", rank: "adept", successCount: 0 },
+    ]);
+  });
+
+  it("does not let presence transitions rewrite an existing character loadout", async () => {
+    const wight = existing();
+    const result = await plan(
+      [
+        {
+          operation: "enter",
+          characterId: "wight",
+          name: "Grave-wight",
+          grounding: "The Grave-wight enters the vault",
+          skillIds: ["lockpicking"],
+        },
+      ],
+      {
+        recentNarration: ["The Grave-wight enters the vault."],
+        roster: [wight],
+      }
+    );
+
+    expect(result).toEqual([
+      { operation: "enter", character: { ...wight, present: true } },
+    ]);
+  });
+
+  it("shows the registrar only the sealed skill catalogue and bounds proposed loadouts", async () => {
+    const router = new ProposalRouter([]);
+    await planNpcTransitions(router, {
+      storyId,
+      schema,
+      playerText: "I wait.",
+      recentNarration: [],
+      roster: [],
+    });
+
+    expect(router.lastPrompt?.system).toContain("at most three sealed skill ids");
+    expect(router.lastPrompt?.user).toContain('"id":"blade"');
+    expect(router.lastPrompt?.user).toContain('"description"');
+  });
+
+  it("fails closed when a model exceeds the NPC capability bound", async () => {
+    expect(
+      await plan([
+        {
+          operation: "introduce",
+          name: "Hunched creature",
+          grounding: "A hunched creature crawls from the cistern",
+          skillIds: ["blade", "lockpicking", "survival", "mastery"],
+        },
+      ])
+    ).toEqual([]);
   });
 
   it("reuses a normalized registry identity instead of creating a duplicate", async () => {

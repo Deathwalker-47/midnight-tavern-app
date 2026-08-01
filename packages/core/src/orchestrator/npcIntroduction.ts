@@ -9,6 +9,7 @@ export interface NpcIntroductionProposal {
   characterId?: string;
   name: string;
   templateId?: string;
+  skillIds?: string[];
   grounding: string;
 }
 
@@ -33,6 +34,7 @@ const ProposalSchema = z.object({
   characterId: z.string().min(1).optional(),
   name: z.string().trim().min(1).max(80),
   templateId: z.string().trim().min(1).optional(),
+  skillIds: z.array(z.string().trim().min(1)).max(3).optional(),
   grounding: z.string().trim().min(1).max(500),
 });
 
@@ -119,6 +121,8 @@ function promptFor(input: NpcIntroductionInput) {
       "Use an existing characterId/name whenever the registry already contains that actor.",
       "For a new actor, quote a short grounding excerpt from the player action or recent narration.",
       "Use a sealed templateId only when it exactly identifies the actor. Never invent mechanics.",
+      "For a new actor without a template, select at most three sealed skill ids that fit its portrayed capabilities.",
+      "Never provide skillIds for an existing or template-backed actor. Never invent skill ids or ranks.",
       "Return { transitions: [...] }. Return an empty array when no presence changes are grounded.",
     ].join("\n"),
     user: [
@@ -139,6 +143,13 @@ function promptFor(input: NpcIntroductionInput) {
       `SEALED NPC TEMPLATES:\n${
         input.schema.npcTemplates
           .map((template) => JSON.stringify({ templateId: template.templateId, name: template.name }))
+          .join("\n") || "(none)"
+      }`,
+      `SEALED STORY SKILLS (new non-template actors only):\n${
+        input.schema.skills
+          .map((skill) =>
+            JSON.stringify({ id: skill.id, name: skill.name, description: skill.description })
+          )
           .join("\n") || "(none)"
       }`,
     ].join("\n\n"),
@@ -223,7 +234,7 @@ export async function planNpcTransitions(
       present: true,
       hard: template
         ? instantiateFromTemplate(input.schema, id, template)
-        : instantiateGeneric(input.schema, id),
+        : instantiateGeneric(input.schema, id, proposal.skillIds),
     };
     approved.push({ operation: "introduce", character });
     transitioned.add(id);

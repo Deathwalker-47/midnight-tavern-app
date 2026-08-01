@@ -5,8 +5,8 @@
  *  • `instantiatePlayer` builds the protagonist from `startingState` at freeze time.
  *  • `instantiateFromTemplate` builds an NPC from an `NpcTemplate` (the orchestrator calls
  *    this the first time an NPC acts mechanically — §5 step 3).
- *  • `instantiateGeneric` builds a bare NPC (median lethal resource, no skills) when no
- *    template matches — §5 step 3's fallback.
+ *  • `instantiateGeneric` builds a generic NPC with median lethal resources and any validated
+ *    story skill seeds when no template matches — §5 step 3's fallback.
  *
  * All three are pure: they read the frozen schema and return a fresh state object. Resource
  * ceilings always come from the schema's ResourceDef; a starting value never invents a max.
@@ -99,20 +99,28 @@ function medianLethalMax(schema: StorySchema): number {
 /**
  * Instantiate a generic NPC when no template matches (§5 step 3): only the lethal
  * resource(s), seeded to the median lethal max so a plain foe can still take and deal
- * damage; no skills, no inventory.
+ * damage. Valid proposed story skills are seeded at novice rank; inventory remains empty.
  */
-export function instantiateGeneric(schema: StorySchema, characterId: string): CharacterHardState {
+export function instantiateGeneric(
+  schema: StorySchema,
+  characterId: string,
+  proposedSkillIds: readonly string[] = []
+): CharacterHardState {
   const hp = medianLethalMax(schema);
   const resources: CharacterHardState["resources"] = {};
   for (const def of schema.resources) {
     if (def.lethal) resources[def.id] = { current: hp, max: hp };
   }
+  const knownSkillIds = new Set(schema.skills.map((skill) => skill.id));
+  const skills: LearnedSkill[] = [...new Set(proposedSkillIds)]
+    .filter((skillId) => knownSkillIds.has(skillId))
+    .map((skillId) => ({ skillId, rank: "novice", successCount: 0 }));
   return {
     characterId,
     isPlayer: false,
     attributes: {},
     resources,
-    skills: [],
+    skills,
     inventory: [],
     flags: {},
     alive: true,

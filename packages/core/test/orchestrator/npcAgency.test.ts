@@ -630,6 +630,9 @@ describe("same-turn NPC agency", () => {
     expect((await store.characters.get("kestrel"))!.hard.resources.hp!.current).toBeLessThan(20);
     // The planner ran through the classifier role WITHOUT clobbering the player-classify prompt.
     expect(router.lastPlannerPrompt?.system).toContain("NPC action planner");
+    expect(router.lastPlannerPrompt?.user).toContain('"skills":[{"skillId":"blade"');
+    expect(router.lastPlannerPrompt?.user).toContain('"attributes"');
+    expect(router.lastPlannerPrompt?.user).toContain('"inventory"');
   });
 
   it("lets an ally NPC aid the wounded player with a sealed support action", async () => {
