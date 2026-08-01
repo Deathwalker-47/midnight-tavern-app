@@ -160,15 +160,15 @@ may select only sealed story skill ids; the engine validates and instantiates th
 - Modify (optional): `packages/core/src/bootstrap/generate.ts`
 - Test: `packages/core/test/resolver.test.ts` (or `v7Resolver.test.ts`), bootstrap generate test
 
-- [ ] **Step 1:** Failing test — an implicit-melee strike by a higher-STR attacker deals more than the
+- [x] **Step 1:** Failing test — an implicit-melee strike by a higher-STR attacker deals more than the
   flat `-4` (attribute modifier and/or weapon prop contributes).
-- [ ] **Step 2:** Observe RED (flat `-4` regardless of attacker).
-- [ ] **Step 3:** Scale implicit melee/ranged damage by the governing-attribute modifier (and equipped
+- [x] **Step 2:** Observe RED (flat `-4` regardless of attacker).
+- [x] **Step 3:** Scale implicit melee/ranged damage by the governing-attribute modifier (and equipped
   weapon prop when present), keeping a sane floor. Consider a forge rule sizing creature lethal
   resource to expected per-hit damage so encounters resolve in a reasonable turn count.
-- [ ] **Step 4:** Verify existing damage tests still pass (they encode the old flat default — update
+- [x] **Step 4:** Verify existing damage tests still pass (they encode the old flat default — update
   intentionally, not by number-fudging).
-- [ ] **Step 5:** Commit `core(engine): scale implicit strike damage by attacker power`.
+- [x] **Step 5:** Commit `core(engine): scale implicit strike damage by attacker power`.
 
 ### Task 5 (P1): Fewer "no prose" turns — provider retry + richer deterministic fallback
 
@@ -211,6 +211,19 @@ DM ruling with meaningful damage; provider hiccups still produce readable prose;
 continuation resolves to the correct present living target.
 
 ## Progress log (update as you go — exact stopping point for the next agent)
+
+- **2026-08-01 (Task 4 complete at `e43ae50`):**
+  - Three intended RED failures proved natural attacks remained flat, weapon damage was ignored when
+    a generated attack omitted `scaleByItemProp`, and generic NPCs inherited player-scale health.
+  - Combat attack damage now adds the positive governing-attribute modifier and a bounded item
+    damage prop. A weapon-required attack infers the conventional `damage` prop when omitted.
+  - Any combat involving a generic NPC uses a deterministic six-hit floor against the lethal
+    resource, immediately repairing already-created 100-health fallback creatures. Newly created
+    generic NPCs receive a six-baseline-hit lethal pool; named templates retain authored durability.
+  - Model-provided item damage is clamped to 0-20 before it enters authoritative mutations.
+  - Fresh gate: typecheck; core 592 / UI 156 = 748 tests; direct core/UI builds. Death/rollback/
+    history/difficulty suites remained green; no installer was built.
+  - **NEXT:** Task 5 RED tests for transient provider retries and richer ruling-derived fallback prose.
 
 - **2026-08-01 (Task 3 complete at `e3a4801`):**
   - RED observed for registry version/balance, cross-category family validation, 30-action prompts,

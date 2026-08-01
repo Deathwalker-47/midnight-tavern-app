@@ -1,7 +1,7 @@
 # HANDOFF - current live state
 
 **Updated:** 2026-08-01
-**Branch / source baseline:** local `main` at `e3a4801`; not pushed
+**Branch / source baseline:** local `main` at `e43ae50`; not pushed
 **App version:** `0.2.8`, unsigned
 **User-owned/untracked:** `.codex/`, `opencode.json` - preserve
 **Active plan:** `Plan/next-phase-internal-beta.md`, Task 15B in progress
@@ -9,7 +9,7 @@
 
 ## Current outcome
 
-Task 15A's seven packaged-acceptance fixes remain complete. Task 15B now has three green slices:
+Task 15A's seven packaged-acceptance fixes remain complete. Task 15B now has four green slices:
 
 - `bd968fb` guarantees an engine-owned, gate-legal natural attack in every full-stat story,
   including runtime compatibility for older frozen catalogues.
@@ -17,6 +17,8 @@ Task 15A's seven packaged-acceptance fixes remain complete. Task 15B now has thr
   sealed story skill ids. Known unique ids become novice skills; unknown ids cannot enter state.
 - `e3a4801` expands the shared universal registry to v4 and makes the forge produce a validated,
   premise-grounded rulebook of 30 actions and 6-10 skills.
+- `e43ae50` scales combat damage from authoritative attributes/equipment and gives generic encounters
+  a six-hit pacing floor, including already-persisted fallback creatures.
 - Template NPCs keep their forge-authored mechanics. Existing-character presence transitions cannot
   rewrite hard state.
 - The registrar sees sealed skill metadata and the reaction planner sees gate-relevant character
@@ -25,14 +27,17 @@ Task 15A's seven packaged-acceptance fixes remain complete. Task 15B now has thr
 - Every action category has at least six universal families; forged catalogues contain exactly six
   actions/category and at least four distinct families/category. The natural attack stays ungated.
 - The browser bridge consumes the same universal registry JSON as core instead of a copied list.
+- New generic NPCs receive a six-baseline-hit lethal pool; named templates retain authored health.
+- Weapon props are inferred for weapon attacks and clamped before use. Ledger death authority is
+  unchanged.
 
 ## Fresh verification
 
-- Task-3 RED was observed in five focused assertions before implementation.
+- Task-4 RED was observed in three focused assertions before implementation.
 - `npm run typecheck`: passed.
-- Complete core: **588 tests / 44 files**, passed.
+- Complete core: **592 tests / 45 files**, passed.
 - Complete UI: **156 tests / 25 files**, passed.
-- Root total: **744 tests**, passed.
+- Root total: **748 tests**, passed.
 - Direct core and UI production builds passed; no Tauri package or installer was built.
 - Core Vitest is intentionally single-worker after repeated Windows/Node v24 worker `EPIPE` exits;
   ordinary `npm test` is stable with that setting.
@@ -43,8 +48,8 @@ Task 15A's seven packaged-acceptance fixes remain complete. Task 15B now has thr
 1. **DONE:** universal natural attack and compatibility for existing frozen stories.
 2. **DONE:** bounded story-grounded emergent-NPC skill loadouts plus planner capability context.
 3. **DONE:** balanced v4 universal registry plus validated 30-action / 6-10-skill story rulebooks.
-4. **NEXT (P1):** scale baseline damage / encounter HP into a meaningful deterministic range.
-5. Retry transient provider failures and generate richer ruling-derived safe fallback prose.
+4. **DONE:** meaningful deterministic damage scaling and generic encounter-health pacing.
+5. **NEXT (P1):** retry transient provider failures and generate richer ruling-derived safe fallback prose.
 6. Apply recent-target focus to degraded recovery and improve stale presence hygiene.
 
 ## Non-negotiable authority and domain rules
@@ -65,8 +70,8 @@ Task 15A's seven packaged-acceptance fixes remain complete. Task 15B now has thr
 
 ## Single next action
 
-Start Task 4 test-first. Add RED coverage proving a successful implicit melee strike scales from the
-actor's authoritative governing attribute and applicable equipped weapon data instead of always
-dealing flat `-4`, while remaining deterministic and bounded. Audit generated NPC/encounter health
-against the new range. Preserve the existing threshold-only death transition and narrator authority
-guard, then run the full gate and update this baton before Task 5.
+Start Task 5 test-first. Add RED router coverage proving transient 408/409/425/429 and 5xx failures
+retry with bounded delay while authentication, validation, cancellation, and other permanent errors
+fail immediately. Add authority-guard RED coverage proving provider exhaustion yields concise prose
+that names the actor/action and success/failure result from the sealed ruling without inventing
+damage, death, loot, or state. Then run the full gate and update this baton before Task 6.

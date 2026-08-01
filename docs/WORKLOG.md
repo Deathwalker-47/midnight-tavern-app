@@ -1154,3 +1154,29 @@ passed. `git diff --check` passed before commit. No Tauri package or installer w
 
 **Next:** Task 15B.4 - replace flat implicit strike damage with deterministic attribute/equipment
 scaling and verify generated encounter health remains playable without weakening death authority.
+
+---
+
+## 2026-08-01 - Task 15B.4: Deterministic damage and encounter-health balance
+
+**RED evidence.** Three focused assertions failed before implementation: ordinary and high-Strength
+natural strikes both dealt the authored flat `-4`; a weapon-required attack that omitted
+`scaleByItemProp` ignored the weapon's damage prop; and a generic creature in a 100-health story was
+created at 100/100 rather than an encounter-sized pool.
+
+**What landed.** `e43ae50` makes combat attack damage engineering-owned at resolution time. Positive
+governing-attribute modifiers and bounded item damage add to lethal target damage. Weapon-required
+attacks infer the conventional `damage` prop when generated definitions omit the scaling marker,
+while untrusted prop values are clamped to 0-20. Combat involving an untemplated generic NPC uses a
+six-hit lethal-resource floor, so already-persisted 100-health fallback creatures become playable
+without rewriting their state. Future generic NPCs are created with a six-baseline-natural-hit
+lethal pool. Explicit named templates retain their authored durability, and death remains exclusively
+the ledger's threshold transition.
+
+**Verification.** Focused resolver/instantiation tests passed **31 tests / 2 files**. Fresh root
+typecheck passed. Complete suites passed: core **592 tests / 45 files** plus UI **156 tests / 25
+files**, **748 tests** total. Direct core and UI production builds passed. The history, rollback,
+difficulty, ledger, and playthrough suites remained green. No Tauri package or installer was built.
+
+**Next:** Task 15B.5 - retry transient provider failures and replace generic safe narration with
+richer prose derived strictly from the authoritative ruling.

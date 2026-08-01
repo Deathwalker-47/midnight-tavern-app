@@ -19,10 +19,10 @@ and the active plan, and commit coherent green changes with the required co-auth
 
 ## Current repository state
 
-- Local `main` at `e3a4801`; nothing pushed; unsigned app version `0.2.8`.
+- Local `main` at `e43ae50`; nothing pushed; unsigned app version `0.2.8`.
 - Task 15A's seven earlier packaged fixes remain complete.
-- Task 15B Tasks 1-3 are complete.
-- Fresh gate: core 588 / UI 156 = 744 tests passed; typecheck and direct core/UI builds passed.
+- Task 15B Tasks 1-4 are complete.
+- Fresh gate: core 592 / UI 156 = 748 tests passed; typecheck and direct core/UI builds passed.
 
 ## What just landed
 
@@ -35,32 +35,33 @@ and the active plan, and commit coherent green changes with the required co-auth
   validates 6-10 distinct premise-grounded skills and exactly 30 actions: six/category with at least
   four families/category. Family/category mismatches fail validation, the natural attack stays
   ungated, and browser/core consume the same universal JSON.
+- `e43ae50`: combat attacks add authoritative positive attribute power and bounded item damage.
+  Generic encounters use a six-hit damage floor, new generic NPCs receive a six-baseline-hit lethal
+  pool, and named templates keep authored health. Threshold-only ledger death is unchanged.
 - Registrar and reaction-planner prompts now contain the bounded information needed to choose legal,
   role-appropriate capabilities/actions. Engine gates remain final authority.
 - Core Vitest intentionally runs one worker because repeated Windows/Node v24 pool workers exited
   with `EPIPE`; the ordinary full command is stable with this setting.
 
-## Exact next task: deterministic damage and encounter-health balance
+## Exact next task: provider resilience and authority-safe fallback prose
 
-Implement Task 4 in the detailed plan, test-first:
+Implement Task 5 in the detailed plan, test-first:
 
-1. Trace the resolver's current implicit attack damage, equipped-item representation, generated
-   creature health, and threshold-only death path before changing code.
-2. Add failing resolver tests proving a stronger actor and an applicable equipped weapon can deal
-   more than today's flat implicit `-4`, while identical inputs remain deterministic and damage is
-   bounded.
-3. Implement the smallest engine-owned damage formula using authoritative actor/equipment state.
-   Models and narration must not supply damage totals.
-4. Audit forge defaults and generated NPC health against the formula. Adjust deterministic defaults
-   only if ordinary encounters would be trivial or excessively long; add boundary tests.
-5. Keep death tied exclusively to health reaching its engine-owned lethal threshold and retain
-   `causedDeathOf` narration evidence.
-6. Run focused tests, root typecheck, complete suites, and direct core/UI builds; commit and update
-   every baton document before Task 5.
+1. Trace provider calls and authority-guard fallback construction before editing.
+2. Add failing router tests for bounded retries of transient HTTP/network failures. Permanent
+   authentication, malformed output, explicit cancellation, and non-retryable client errors must
+   fail immediately; respect Retry-After when safely available.
+3. Implement a small shared retry policy with capped attempts, bounded delay, and no duplicate
+   mechanical commits. Retrying model I/O must never rerun the engine transaction.
+4. Add failing authority-guard tests for provider exhaustion after a valid ruling. Safe fallback
+   prose must identify actor/action plus success, failure, critical result, or denial from the ruling
+   and may mention only sealed effect hints/provenance. It must not invent death, damage, loot, or
+   state.
+5. Run focused tests, root typecheck, complete suites, and direct core/UI builds; commit and update
+   every baton document before Task 6.
 
-## Remaining queue after Task 4
+## Remaining queue after Task 5
 
-- Retry transient provider failures and produce richer ruling-derived safe fallback prose.
 - Apply recent-target continuity to degraded classifier recovery and retire stale scene presence.
 
 ## Authority rules

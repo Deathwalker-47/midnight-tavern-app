@@ -147,7 +147,7 @@ Detailed execution plan:
   crafting, and utility coverage.
 - [x] Increase forge-time action and skill breadth while retaining premise relevance, validation,
   repair, resume, and provider deadline guarantees.
-- [ ] Scale baseline attack damage / encounter health into a meaningful range.
+- [x] Scale baseline attack damage / encounter health into a meaningful range.
 - [ ] Retry transient provider failures and provide richer authority-safe fallback prose.
 - [ ] Apply recent-target continuity to degraded classifier recovery and retire stale scene presence.
 - [ ] Run the full automated/native gate and refresh WORKLOG, HANDOFF, and next-agent prompt. Do not
