@@ -19,10 +19,10 @@ and the active plan, and commit coherent green changes with the required co-auth
 
 ## Current repository state
 
-- Local `main` at `41c5963`; nothing pushed; unsigned app version `0.2.8`.
+- Local `main` at `e3a4801`; nothing pushed; unsigned app version `0.2.8`.
 - Task 15A's seven earlier packaged fixes remain complete.
-- Task 15B Tasks 1-2 are complete.
-- Fresh gate: core 585 / UI 156 = 741 tests passed; typecheck passed.
+- Task 15B Tasks 1-3 are complete.
+- Fresh gate: core 588 / UI 156 = 744 tests passed; typecheck and direct core/UI builds passed.
 
 ## What just landed
 
@@ -31,27 +31,35 @@ and the active plan, and commit coherent green changes with the required co-auth
 - `41c5963`: a newly grounded emergent NPC may select at most three sealed story skill ids. Generic
   instantiation filters unknowns, deduplicates, and grants novice rank. Template and existing actors
   cannot be mechanically overwritten by a runtime proposal.
+- `e3a4801`: registry v4 provides at least six universal families in every category. The forge now
+  validates 6-10 distinct premise-grounded skills and exactly 30 actions: six/category with at least
+  four families/category. Family/category mismatches fail validation, the natural attack stays
+  ungated, and browser/core consume the same universal JSON.
 - Registrar and reaction-planner prompts now contain the bounded information needed to choose legal,
   role-appropriate capabilities/actions. Engine gates remain final authority.
+- Core Vitest intentionally runs one worker because repeated Windows/Node v24 pool workers exited
+  with `EPIPE`; the ordinary full command is stable with this setting.
 
-## Exact next task: broader universal and forge catalogues
+## Exact next task: deterministic damage and encounter-health balance
 
-Implement Task 3 in the detailed plan, test-first:
+Implement Task 4 in the detailed plan, test-first:
 
-1. Add failing coverage that every required category has several distinct universal families and
-   crafting is no longer empty.
-2. Add failing forge/generation coverage for exactly six actions/category (30 total), a usable
-   natural attack, family/category consistency, and 6-10 unique premise-grounded skills.
-3. Introduce registry v4 with balanced semantic families. Do not turn universal families into
-   executable character-owned commands; Phase B still specializes them into frozen story actions.
-4. Raise generation breadth without forcing irrelevant magic or combat into peaceful premises.
-   Preserve deterministic validation, structured repair, retained checkpoints, and resume.
-5. Verify action-generation token limits and per-stage deadlines are sufficient for 30 definitions.
-6. Run focused tests, root typecheck, and both complete suites; commit and update every baton doc.
+1. Trace the resolver's current implicit attack damage, equipped-item representation, generated
+   creature health, and threshold-only death path before changing code.
+2. Add failing resolver tests proving a stronger actor and an applicable equipped weapon can deal
+   more than today's flat implicit `-4`, while identical inputs remain deterministic and damage is
+   bounded.
+3. Implement the smallest engine-owned damage formula using authoritative actor/equipment state.
+   Models and narration must not supply damage totals.
+4. Audit forge defaults and generated NPC health against the formula. Adjust deterministic defaults
+   only if ordinary encounters would be trivial or excessively long; add boundary tests.
+5. Keep death tied exclusively to health reaching its engine-owned lethal threshold and retain
+   `causedDeathOf` narration evidence.
+6. Run focused tests, root typecheck, complete suites, and direct core/UI builds; commit and update
+   every baton document before Task 5.
 
-## Remaining queue after Task 3
+## Remaining queue after Task 4
 
-- Scale implicit attack damage and/or generated encounter health into a meaningful range.
 - Retry transient provider failures and produce richer ruling-derived safe fallback prose.
 - Apply recent-target continuity to degraded classifier recovery and retire stale scene presence.
 

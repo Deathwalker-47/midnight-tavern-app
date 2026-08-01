@@ -1126,3 +1126,31 @@ total. `git diff --check` passed before commit. No installer was built.
 
 **Next:** Task 15B.3 - expand the universal registry to balanced v4 coverage and forge a
 premise-grounded 30-action / 6-10-skill rulebook without weakening validation or resume guarantees.
+
+---
+
+## 2026-08-01 - Task 15B.3: Broader story-grounded action and skill catalogues
+
+**RED evidence.** Five focused assertions failed before implementation: the universal registry was
+still v3 and lacked balanced family coverage, an action could claim a family from the wrong
+category, Phase A allowed fewer than six skills, Phase B still requested only three actions per
+category, and the forge prompt did not require the broader final rulebook.
+
+**What landed.** `e3a4801` advances the universal registry to v4 with 31 families across combat,
+social, exploration, crafting, and utility, with at least six families in every category. Forge
+Phase A now validates 6-10 distinct premise-grounded skills. Phase B generates exactly six actions
+per category, 30 total, with at least four distinct families in each category and strict
+family/category validation. Combat always retains the ungated canonical natural attack; skill
+coverage repair cannot accidentally gate it. Prompts explicitly require story relevance and avoid
+inventing irrelevant magic, weapons, or crafts. Provider budgets and the fragment deadline were
+raised for the larger structured result. The browser bridge now consumes the shared universal JSON
+instead of maintaining a drifting copy.
+
+**Verification.** Two repeated full-suite attempts exposed Windows/Node v24 Vitest worker `EPIPE`
+exits rather than assertion failures. Core Vitest now uses one worker, after which the ordinary root
+commands were stable. Fresh root typecheck passed. Complete suites passed: core **588 tests / 44
+files** plus UI **156 tests / 25 files**, **744 tests** total. Direct core and UI production builds
+passed. `git diff --check` passed before commit. No Tauri package or installer was built.
+
+**Next:** Task 15B.4 - replace flat implicit strike damage with deterministic attribute/equipment
+scaling and verify generated encounter health remains playable without weakening death authority.

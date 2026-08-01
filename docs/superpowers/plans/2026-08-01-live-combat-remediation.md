@@ -140,17 +140,17 @@ may select only sealed story skill ids; the engine validates and instantiates th
 **Files:** `config/universal-actions.json`, `config/registry.ts`, `types/actions.ts`,
 `bootstrap/prompts.ts`, `bootstrap/generate.ts`, `bootstrap/validate.ts`, and focused tests.
 
-- [ ] Failing tests: several distinct families exist in every category (including crafting); a new
+- [x] Failing tests: several distinct families exist in every category (including crafting); a new
   forge produces six actions per category (30 total), includes a natural attack, and has a broader
   bounded skill set grounded in the premise.
-- [ ] Introduce universal registry v4 with balanced families such as grapple/control, intimidate/
+- [x] Introduce universal registry v4 with balanced families such as grapple/control, intimidate/
   empathize, track/navigate/decipher, and craft/repair/harvest/concoct/dismantle. Families remain
   semantic; Phase B specializes them into story-specific executable actions.
-- [ ] Raise the generated catalogue to 30 and the skill target to 6-10. Require semantic diversity
+- [x] Raise the generated catalogue to 30 and the skill target to 6-10. Require semantic diversity
   without forcing irrelevant magic, crafting, social, or combat mechanics into every premise.
-- [ ] Ensure each key hostile template has action-enabling capability or explicitly relies on the
+- [x] Ensure each key hostile template has action-enabling capability or explicitly relies on the
   baseline natural attack; support/social NPCs receive role-appropriate skills.
-- [ ] Verify provider token/deadline budgets and resume checkpoints, then commit
+- [x] Verify provider token/deadline budgets and resume checkpoints, then commit
   `core(bootstrap): broaden story-grounded skills and action families`.
 
 ### Task 4 (P1): Meaningful melee damage — scale by attribute/weapon, and/or balance forge HP
@@ -211,6 +211,21 @@ DM ruling with meaningful damage; provider hiccups still produce readable prose;
 continuation resolves to the correct present living target.
 
 ## Progress log (update as you go — exact stopping point for the next agent)
+
+- **2026-08-01 (Task 3 complete at `e3a4801`):**
+  - RED observed for registry version/balance, cross-category family validation, 30-action prompts,
+    6-10 skill bounds, and output budgets.
+  - Universal registry v4 now has at least six semantic families in combat, social, exploration,
+    crafting, and utility. Forge output is exactly six actions/category (30 total), with at least
+    four distinct families/category and a protected ungated `attack_natural` action.
+  - Full-stat Phase A accepts only 6-10 generated premise-grounded skills. Foundation guidance gives
+    key NPC templates role-appropriate sealed skills while hostile creatures may rely on the natural
+    baseline. Family/category mismatches fail both fragment and final validation.
+  - Action batch output budgets scale from 5,000 to 7,500 tokens, repair to 9,000, and per-fragment
+    deadline to 60 seconds. Retained fragments/checkpoints remain unchanged.
+  - Repeated Windows worker-pool EPIPE crashes were eliminated by making the core Vitest gate use one
+    deterministic worker. Fresh gate: typecheck; core 588 / UI 156 = 744 tests; core/UI builds.
+  - **NEXT:** Task 4 RED tests for meaningful implicit damage and encounter-health balance.
 
 - **2026-08-01 (Task 2 complete at `41c5963`):**
   - RED observed in four focused assertions: generic instantiation ignored sealed skill ids, the

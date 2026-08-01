@@ -143,9 +143,9 @@ Detailed execution plan:
   runtime compatibility for already-frozen catalogues.
 - [x] Give emergent NPCs bounded story-grounded capability loadouts selected only from sealed skill
   ids; show those capabilities to the NPC planner without allowing invented mechanics.
-- [ ] Expand the versioned universal family registry with balanced combat, social, exploration,
+- [x] Expand the versioned universal family registry with balanced combat, social, exploration,
   crafting, and utility coverage.
-- [ ] Increase forge-time action and skill breadth while retaining premise relevance, validation,
+- [x] Increase forge-time action and skill breadth while retaining premise relevance, validation,
   repair, resume, and provider deadline guarantees.
 - [ ] Scale baseline attack damage / encounter health into a meaningful range.
 - [ ] Retry transient provider failures and provide richer authority-safe fallback prose.
