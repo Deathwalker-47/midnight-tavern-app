@@ -41,6 +41,55 @@ function cannedFetch(content: string): {
 const configs: ProviderConfigs = { openrouter: { apiKey: "sk-test" } };
 
 describe("router.complete", () => {
+  it("retries a transient provider response and respects a bounded Retry-After delay", async () => {
+    let calls = 0;
+    const delays: number[] = [];
+    const fetch = (async () => {
+      calls += 1;
+      if (calls === 1) {
+        return new Response("busy", {
+          status: 429,
+          headers: { "retry-after": "1" },
+        });
+      }
+      return new Response(
+        JSON.stringify({ choices: [{ message: { content: "recovered" } }] }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      );
+    }) as unknown as FetchLike;
+    const router = makeRouter({
+      providerConfigs: configs,
+      fetchImpl: fetch,
+      retryDelay: async (delayMs) => {
+        delays.push(delayMs);
+      },
+    });
+
+    await expect(
+      router.complete("narrator", { system: "S", user: "U" })
+    ).resolves.toMatchObject({ content: "recovered" });
+    expect(calls).toBe(2);
+    expect(delays).toEqual([1_000]);
+  });
+
+  it("does not retry permanent provider failures", async () => {
+    let calls = 0;
+    const fetch = (async () => {
+      calls += 1;
+      return new Response("invalid key", { status: 401 });
+    }) as unknown as FetchLike;
+    const router = makeRouter({
+      providerConfigs: configs,
+      fetchImpl: fetch,
+      retryDelay: async () => undefined,
+    });
+
+    await expect(
+      router.complete("narrator", { system: "S", user: "U" })
+    ).rejects.toMatchObject({ status: 401 });
+    expect(calls).toBe(1);
+  });
+
   it("dispatches to the role's provider and returns content", async () => {
     const { fetch, calls } = cannedFetch("hello world");
     const router = makeRouter({ providerConfigs: configs, fetchImpl: fetch });
@@ -210,6 +259,42 @@ describe("router.stream (narrator)", () => {
     const res = await router.stream("narrator", { system: "s", user: "u" }, (d) => deltas.push(d));
     expect(deltas).toEqual(["Once ", "upon ", "a time"]);
     expect(res.content).toBe("Once upon a time");
+  });
+
+  it("never retries a broken stream after a delta has reached the caller", async () => {
+    const encoder = new TextEncoder();
+    let calls = 0;
+    let reads = 0;
+    const fetch = (async () => {
+      calls += 1;
+      return new Response(
+        new ReadableStream<Uint8Array>({
+          pull(controller) {
+            if (reads === 0) {
+              reads += 1;
+              controller.enqueue(
+                encoder.encode('data: {"choices":[{"delta":{"content":"Visible beat."}}]}\n')
+              );
+              return;
+            }
+            controller.error(new TypeError("stream disconnected"));
+          },
+        }),
+        { status: 200, headers: { "content-type": "text/event-stream" } }
+      );
+    }) as unknown as FetchLike;
+    const router = makeRouter({
+      providerConfigs: configs,
+      fetchImpl: fetch,
+      retryDelay: async () => undefined,
+    });
+    const deltas: string[] = [];
+
+    await expect(
+      router.stream("narrator", { system: "s", user: "u" }, (delta) => deltas.push(delta))
+    ).rejects.toThrow("stream disconnected");
+    expect(deltas).toEqual(["Visible beat."]);
+    expect(calls).toBe(1);
   });
 });
 

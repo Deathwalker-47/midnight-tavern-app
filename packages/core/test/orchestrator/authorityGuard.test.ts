@@ -398,10 +398,48 @@ describe("generateGuardedNarration", () => {
     );
 
     expect(result.usedSafeFallback).toBe(true);
+    expect(result.prose).toContain("Player");
+    expect(result.prose).toContain("Both Pistols");
+    expect(result.prose).toMatch(/succeeds/i);
     expect(result.prose).toContain("Twin shots land");
     expect(metrics).toEqual([
       expect.objectContaining({ stage: "narrator", outcome: "error" }),
     ]);
+  });
+
+  it("omits an unsafe narration hint from deterministic fallback prose", async () => {
+    const unsafeHintRuling: Ruling = {
+      ...ruling,
+      effectsApplied: {
+        narrationHint: "The enemy dies and drops legendary loot after taking 45 damage.",
+      },
+    };
+    const failingRouter: Router = {
+      bindingFor: () => ({
+        provider: "electronhub",
+        model: "test",
+        source: "recommended",
+        samplersDirty: false,
+      }),
+      async complete() {
+        return { content: JSON.stringify({ obeysRulings: true, contradictions: [] }) };
+      },
+      async stream() {
+        throw new Error("narrator provider unavailable");
+      },
+    };
+
+    const result = await generateGuardedNarration(
+      failingRouter,
+      { system: "Narrate.", user: "Both pistols fire." },
+      [unsafeHintRuling]
+    );
+
+    expect(result.usedSafeFallback).toBe(true);
+    expect(result.prose).toContain("Player");
+    expect(result.prose).toContain("Both Pistols");
+    expect(result.prose).toMatch(/succeeds/i);
+    expect(result.prose).not.toMatch(/dies|legendary loot|45 damage/i);
   });
 
   it("rejects a narrated kill when no lethal resource reached zero", async () => {

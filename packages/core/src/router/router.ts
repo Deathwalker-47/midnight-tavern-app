@@ -109,9 +109,14 @@ export interface RouterDeps {
   logger?: DiagnosticLogger;
   /** Per-provider request deadline. Defaults to 90 seconds. */
   requestTimeoutMs?: number;
+  /** Injectable bounded wait used by retry tests; production uses an abort-aware timer. */
+  retryDelay?: (delayMs: number, signal: AbortSignal) => Promise<void>;
 }
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 180_000;
+const MAX_PROVIDER_ATTEMPTS = 3;
+const RETRY_BASE_DELAY_MS = 250;
+const MAX_RETRY_DELAY_MS = 2_000;
 
 type RequestGuard = {
   signal: AbortSignal;
@@ -170,6 +175,42 @@ function errorMetadata(error: unknown): DiagnosticData {
   return { errorName: error.name, ...(status === undefined ? {} : { status }) };
 }
 
+function isRetryableProviderError(error: unknown): boolean {
+  if (error instanceof TypeError) return true;
+  if (!error || typeof error !== "object") return false;
+  const status = "status" in error && typeof error.status === "number" ? error.status : undefined;
+  return status === 408 || status === 409 || status === 425 || status === 429 || (status !== undefined && status >= 500 && status <= 599);
+}
+
+function providerRetryDelayMs(error: unknown, attempt: number): number {
+  const backoff = RETRY_BASE_DELAY_MS * 2 ** Math.max(0, attempt - 1);
+  const requested =
+    error &&
+    typeof error === "object" &&
+    "retryAfterMs" in error &&
+    typeof error.retryAfterMs === "number" &&
+    Number.isFinite(error.retryAfterMs)
+      ? Math.max(0, error.retryAfterMs)
+      : 0;
+  return Math.min(MAX_RETRY_DELAY_MS, Math.max(backoff, requested));
+}
+
+function abortAwareDelay(delayMs: number, signal: AbortSignal): Promise<void> {
+  if (signal.aborted) return Promise.reject(cancellationError(signal));
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      signal.removeEventListener("abort", onAbort);
+      resolve();
+    }, delayMs);
+    const onAbort = () => {
+      clearTimeout(timer);
+      signal.removeEventListener("abort", onAbort);
+      reject(cancellationError(signal));
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
 function toMessages(prompt: RolePrompt): ChatMessage[] {
   return [
     { role: "system", content: prompt.system },
@@ -183,6 +224,7 @@ export function makeRouter(deps: RouterDeps): Router {
   const fetchImpl = deps.fetchImpl ?? fetch;
   const logger = deps.logger ?? NOOP_DIAGNOSTIC_LOGGER;
   const requestTimeoutMs = deps.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
+  const retryDelay = deps.retryDelay ?? abortAwareDelay;
   let requestSequence = 0;
 
   function log(level: keyof DiagnosticLogger, event: string, data?: DiagnosticData): void {
@@ -207,7 +249,8 @@ export function makeRouter(deps: RouterDeps): Router {
     role: Role,
     signal: AbortSignal | undefined,
     jsonMode: boolean,
-    request: (binding: RoleBinding, config: ProviderConfig, signal: AbortSignal) => Promise<ChatResponse>
+    request: (binding: RoleBinding, config: ProviderConfig, signal: AbortSignal) => Promise<ChatResponse>,
+    canRetry: () => boolean = () => true
   ): Promise<ChatResponse> {
     const startedAt = Date.now();
     const requestId = `llm-${startedAt.toString(36)}-${++requestSequence}`;
@@ -232,17 +275,39 @@ export function makeRouter(deps: RouterDeps): Router {
     };
     log("info", "llm.request.started", common);
     try {
-      const response = await guard.run(request(binding, config, guard.signal));
-      log("info", "llm.request.completed", {
-        ...common,
-        durationMs: Date.now() - startedAt,
-        responseChars: response.content.length,
-        ...(response.finishReason ? { finishReason: response.finishReason } : {}),
-        ...(response.usage?.completionTokens === undefined
-          ? {}
-          : { completionTokens: response.usage.completionTokens }),
-      });
-      return response;
+      for (let attempt = 1; attempt <= MAX_PROVIDER_ATTEMPTS; attempt += 1) {
+        try {
+          const response = await guard.run(request(binding, config, guard.signal));
+          log("info", "llm.request.completed", {
+            ...common,
+            attempt,
+            durationMs: Date.now() - startedAt,
+            responseChars: response.content.length,
+            ...(response.finishReason ? { finishReason: response.finishReason } : {}),
+            ...(response.usage?.completionTokens === undefined
+              ? {}
+              : { completionTokens: response.usage.completionTokens }),
+          });
+          return response;
+        } catch (error) {
+          const shouldRetry =
+            attempt < MAX_PROVIDER_ATTEMPTS &&
+            !guard.signal.aborted &&
+            canRetry() &&
+            isRetryableProviderError(error);
+          if (!shouldRetry) throw error;
+          const delayMs = providerRetryDelayMs(error, attempt);
+          log("warn", "llm.request.retrying", {
+            ...common,
+            attempt,
+            nextAttempt: attempt + 1,
+            delayMs,
+            ...errorMetadata(error),
+          });
+          await guard.run(retryDelay(delayMs, guard.signal));
+        }
+      }
+      throw new Error("Provider retry loop ended unexpectedly.");
     } catch (error) {
       log("error", "llm.request.failed", {
         ...common,
@@ -286,6 +351,7 @@ export function makeRouter(deps: RouterDeps): Router {
     },
 
     async stream(role, prompt, onDelta, opts) {
+      let emittedDelta = false;
       return runProviderRequest(
         "stream",
         role,
@@ -301,9 +367,13 @@ export function makeRouter(deps: RouterDeps): Router {
               signal,
             },
             config,
-            onDelta
+            (delta) => {
+              emittedDelta = true;
+              onDelta(delta);
+            }
           );
-        }
+        },
+        () => !emittedDelta
       );
     },
   };

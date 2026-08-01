@@ -134,29 +134,37 @@ function safeSummary(rulings: readonly Ruling[]): string {
   }
   const beats = rulings
     .map((ruling) => {
+      const actor = humanizeId(ruling.actorId);
+      const actorPossessive = actor.endsWith("s") ? `${actor}'` : `${actor}'s`;
       const action = ruling.actionLabel ?? humanizeId(ruling.actionId);
       if (!ruling.gate.allowed) {
         return sentence(
           ruling.gate.reason
-            ? `${action} cannot begin; ${ruling.gate.reason}`
-            : `${action} cannot begin, and the moment slips away`
+            ? `${actorPossessive} ${action} is denied; ${ruling.gate.reason}`
+            : `${actorPossessive} ${action} is denied`
         );
       }
       const hint = ruling.effectsApplied?.narrationHint?.trim();
+      let result: string;
       if (!ruling.roll) {
-        return hint
-          ? sentence(hint)
-          : sentence(`${action} carries through without resistance`);
+        result = sentence(`${actor} completes ${action}`);
+      } else if (ruling.roll.outcome === "crit_success") {
+        result = sentence(`${actorPossessive} ${action} achieves a critical success`);
+      } else if (ruling.roll.outcome === "success") {
+        result = sentence(`${actorPossessive} ${action} succeeds`);
+      } else if (ruling.roll.outcome === "crit_failure") {
+        result = sentence(`${actorPossessive} ${action} critically fails`);
+      } else {
+        result = sentence(`${actorPossessive} ${action} fails`);
       }
-      if (hint) return sentence(hint);
-      if (ruling.roll.outcome === "crit_success") {
-        return sentence(`${action} lands with sudden, decisive force`);
+      if (hint && !assertsMechanic(hint) && !deterministicContradiction(hint, [ruling])) {
+        result += ` ${sentence(hint)}`;
       }
-      if (ruling.roll.outcome === "success") return sentence(`${action} finds its mark`);
-      if (ruling.roll.outcome === "crit_failure") {
-        return sentence(`${action} goes badly awry, leaving a costly opening`);
+      const deaths = ruling.causedDeathOf ?? [];
+      if (deaths.length > 0) {
+        result += ` ${deaths.map((targetId) => sentence(`${humanizeId(targetId)} dies`)).join(" ")}`;
       }
-      return sentence(`${action} falters before it can achieve its aim`);
+      return result;
     })
     .filter(Boolean);
   return [...new Set(beats)].join("\n\n");

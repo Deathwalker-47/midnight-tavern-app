@@ -42,11 +42,23 @@ export class ProviderHttpError extends Error {
   constructor(
     readonly providerId: string,
     readonly status: number,
-    readonly body: string
+    readonly body: string,
+    readonly retryAfterMs?: number
   ) {
     super(`${providerId}: HTTP ${status}`);
     this.name = "ProviderHttpError";
   }
+}
+
+/** Parse the standard Retry-After header without allowing an unbounded provider-controlled wait. */
+function retryAfterMs(response: Response): number | undefined {
+  const value = response.headers.get("retry-after")?.trim();
+  if (!value) return undefined;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds) && seconds >= 0) return Math.round(seconds * 1_000);
+  const at = Date.parse(value);
+  if (!Number.isFinite(at)) return undefined;
+  return Math.max(0, at - Date.now());
 }
 
 function resolveBaseUrl(spec: ProviderSpec, config: ProviderConfig): string {
@@ -206,7 +218,7 @@ export function makeOpenAiCompatProvider(spec: ProviderSpec, fetchImpl: FetchLik
     const res = await fetchImpl(url, init);
     if (!res.ok) {
       const body = await res.text().catch(() => "");
-      throw new ProviderHttpError(spec.id, res.status, body);
+      throw new ProviderHttpError(spec.id, res.status, body, retryAfterMs(res));
     }
     return res;
   }
@@ -224,7 +236,7 @@ export function makeOpenAiCompatProvider(spec: ProviderSpec, fetchImpl: FetchLik
             const res = await fetchImpl(url, { method: "GET", headers, ...(signal ? { signal } : {}) });
             if (!res.ok) {
               const body = await res.text().catch(() => "");
-              throw new ProviderHttpError(spec.id, res.status, body);
+              throw new ProviderHttpError(spec.id, res.status, body, retryAfterMs(res));
             }
           },
         }
@@ -237,7 +249,7 @@ export function makeOpenAiCompatProvider(spec: ProviderSpec, fetchImpl: FetchLik
       const res = await fetchImpl(url, { method: "GET", headers, ...(signal ? { signal } : {}) });
       if (!res.ok) {
         const body = await res.text().catch(() => "");
-        throw new ProviderHttpError(spec.id, res.status, body);
+        throw new ProviderHttpError(spec.id, res.status, body, retryAfterMs(res));
       }
       return extractModels(await res.json());
     },
