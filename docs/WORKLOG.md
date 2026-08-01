@@ -6,6 +6,33 @@ landed, why, verification, and any gotcha the next agent needs. Live state is in
 
 ---
 
+## 2026-08-01 — Task 15B.1: gate-legal natural attack for every creature
+
+Completed `bd968fb`. Reproduced the installed shadow-creature failure at two independent boundaries:
+config normalization returned no natural attack, and a real submitted turn with a promoted generic
+NPC (`skills: []`, `inventory: []`) emitted only the player's ruling. Both tests were observed RED
+before production changed.
+
+Universal action config v3 now defines `attack_natural`. For full-stat stories,
+`applyUniversalActionDefaults` appends canonical `universal_natural_attack` only when the catalogue has
+no existing natural-family action without skill/item/equipment/cost gates. This deliberately supports
+already-frozen stories at runtime without mutating their persisted source. Its damage is injected by
+the existing program-owned path (`-4` success / `-8` critical), and it resolves through normal gate,
+dice, ruling, mutation, and death authority. Browser fallback config was updated in lockstep with core.
+
+**Verification:** focused config, NPC agency, bootstrap regeneration, repository impact, and bridge
+parity suites passed; `npm run typecheck` passed; complete core **580 / 44** and UI **156 / 25** =
+**736 tests** passed. Existing neutral/dead/absent NPC tests remain green.
+
+**Scope expansion recorded:** the active/detailed plans now include creation-time NPC sealed-skill
+loadouts and broader premise-grounded universal/action/skill generation. One story still owns one
+executable catalogue; NPC capability is hard-state access to it, never a second model-authored list.
+
+**Next:** Task 15B.2 RED tests for bounded sealed `skillIds` on emergent NPC introduction, then expose
+the validated capabilities to the NPC action planner.
+
+---
+
 ## 2026-08-01 — Live combat remediation: diagnosis + plan (no code changed)
 
 Reviewed the app after another agent completed Tasks 1–15A + the 2026-07-31 packaged remediation (HEAD

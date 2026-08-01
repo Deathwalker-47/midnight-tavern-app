@@ -134,6 +134,25 @@ re-grounded against current HEAD (most audit gaps had already been closed by lat
 - [x] Run the full automated/native gate, update baton documents, then rebuild one combined unsigned
   installer for the next human acceptance pass.
 
+## Task 15B: Live Combat and Rulebook Breadth Remediation
+
+Detailed execution plan:
+`docs/superpowers/plans/2026-08-01-live-combat-remediation.md`.
+
+- [x] Guarantee one engine-resolved, gate-legal natural attack in every full-stat story, including
+  runtime compatibility for already-frozen catalogues.
+- [ ] Give emergent NPCs bounded story-grounded capability loadouts selected only from sealed skill
+  ids; show those capabilities to the NPC planner without allowing invented mechanics.
+- [ ] Expand the versioned universal family registry with balanced combat, social, exploration,
+  crafting, and utility coverage.
+- [ ] Increase forge-time action and skill breadth while retaining premise relevance, validation,
+  repair, resume, and provider deadline guarantees.
+- [ ] Scale baseline attack damage / encounter health into a meaningful range.
+- [ ] Retry transient provider failures and provide richer authority-safe fallback prose.
+- [ ] Apply recent-target continuity to degraded classifier recovery and retire stale scene presence.
+- [ ] Run the full automated/native gate and refresh WORKLOG, HANDOFF, and next-agent prompt. Do not
+  rebuild an installer until the human asks.
+
 ## Internal-Beta exit criteria (the finish line for this phase)
 
 - A user can create **or import** a story, play it, close the app, reopen it, and continue.

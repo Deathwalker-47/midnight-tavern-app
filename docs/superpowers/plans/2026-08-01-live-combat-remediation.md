@@ -5,8 +5,9 @@
 > coding agents; complete and commit one task before starting the next. Preserve deterministic
 > framework authority, atomic persistence, and browser/native bridge parity.
 
-**Origin:** Second provider-backed packaged human pass (Solo Leveling RPG story, Gemini classifier).
-Four defects were reported with screenshots; root causes were traced to source before this plan.
+**Origin:** Second provider-backed packaged human pass (Solo Leveling RPG story, Gemini classifier),
+plus the product owner's follow-up that NPCs should receive story-appropriate capabilities when they
+are created and forged stories need substantially broader action and skill variety.
 
 **Goal:** Make same-turn combat actually a fight — enemies attack back, damage is meaningful — and make
 provider degradation degrade gracefully with honest prose, without weakening engine authority.
@@ -48,6 +49,12 @@ provider degradation degrade gracefully with honest prose, without weakening eng
    deterministic recovery could not resolve the target because "Attack" was ambiguous between two
    present NPCs (stale "Dead man" + shadow_entity). `targetFocus.deriveRecentPlayerTargetId` exists but
    is not applied to this recovery path; stale present NPCs worsen ambiguity.
+5. **"Actions and skills feel too limited."** Phase A merely asks for 4-8 skills, while Phase B emits
+   exactly four actions per category (20 total). The v2 universal registry contains only 14 semantic
+   families and contains no crafting family at all, despite crafting being a required category.
+   Forge-time NPC templates may carry skills, but an emergent registry NPC receives none and the NPC
+   action-planner prompt omits its learned skills. The result is narrow player choice and weak NPC
+   differentiation even when the premise supports more.
 
 ## Global Constraints
 
@@ -95,21 +102,58 @@ provider degradation degrade gracefully with honest prose, without weakening eng
 - (B) `chooseCounterAction` emits a program-owned unarmed intent when no cataloged attack is gate-legal
   (keeps the catalog unchanged but the resolver must recognise the synthetic action). (A) is cleaner.
 
-- [ ] **Step 1:** Write a failing test in `npcAgency.test.ts` — seed a present creature with
+- [x] **Step 1:** Write a failing test in `npcAgency.test.ts` — seed a present creature with
   `instantiateGeneric`-shaped hard state (**no skills, no inventory**, lethal resource only), a schema
   whose ONLY offensive action gates on a skill/weapon, then have the player attack it and assert the
   creature produces its OWN authoritative counter ruling targeting the player with committed damage.
   (This reproduces the live shadow_entity bug exactly.)
-- [ ] **Step 2:** Observe RED — today `chooseCounterAction` finds no gate-legal attack, so no counter.
-- [ ] **Step 3:** Implement decision (A): a config-owned universal `natural_attack` (category combat, no
+- [x] **Step 2:** Observe RED — today `chooseCounterAction` finds no gate-legal attack, so no counter.
+- [x] **Step 3:** Implement decision (A): a config-owned universal `natural_attack` (category combat, no
   `requiresSkill`/`requiresItemKind`, `defaultTargetDamage` so it deals implicit damage) present in every
-  full-stat catalog. Confirm the resolver already damages it via the config-v2 path.
-- [ ] **Step 4:** Full suite green; add a negative test (a peaceful present NPC still does not attack; a
+  full-stat catalog. Confirm the resolver already damages it via the config-v3 path.
+- [x] **Step 4:** Full suite green; add a negative test (a peaceful present NPC still does not attack; a
   dead creature still never acts). Watch the existing fixture tests — `attack_wild` already models a
   no-requirement attack, so fixture-based tests may already pass; the gap is generated catalogs.
-- [ ] **Step 5:** Commit `core: guarantee a gate-legal natural attack so creatures fight back`.
+- [x] **Step 5:** Commit `core: guarantee a gate-legal natural attack so creatures fight back`.
 
-### Task 2 (P1): Meaningful melee damage — scale by attribute/weapon, and/or balance forge HP
+### Task 2 (P0): Assign story-grounded NPC capabilities at creation
+
+**Domain decision:** Do not add a second per-character action catalogue. A story action is the
+single frozen executable definition; an NPC capability loadout is the character's learned skills,
+attributes, resources, and equipped items that make a subset of those actions gate-legal. The model
+may select only sealed story skill ids; the engine validates and instantiates them.
+
+**Files:** `orchestrator/npcIntroduction.ts`, `bootstrap/instantiate.ts`,
+`orchestrator/npcAgency.ts`, and their focused tests.
+
+- [ ] Failing tests: a grounded emergent NPC may propose at most three sealed skill ids; known ids
+  are learned at novice rank, unknown/duplicate ids are filtered, and template NPCs retain their
+  authored loadout.
+- [ ] Add bounded `skillIds` to new-actor proposals and expose concise sealed skills to the registrar.
+  Never accept model-authored ranks, actions, effects, equipment, attributes, or resource values.
+- [ ] Include learned skills and gate-relevant state in NPC planner context so proposals reflect what
+  each actor owns; the engine gate remains authoritative.
+- [ ] Full verification and commit `core: assign sealed skill loadouts when NPCs enter the registry`.
+
+### Task 3 (P1): Broaden universal families and forge-time skill/action variety
+
+**Files:** `config/universal-actions.json`, `config/registry.ts`, `types/actions.ts`,
+`bootstrap/prompts.ts`, `bootstrap/generate.ts`, `bootstrap/validate.ts`, and focused tests.
+
+- [ ] Failing tests: several distinct families exist in every category (including crafting); a new
+  forge produces six actions per category (30 total), includes a natural attack, and has a broader
+  bounded skill set grounded in the premise.
+- [ ] Introduce universal registry v4 with balanced families such as grapple/control, intimidate/
+  empathize, track/navigate/decipher, and craft/repair/harvest/concoct/dismantle. Families remain
+  semantic; Phase B specializes them into story-specific executable actions.
+- [ ] Raise the generated catalogue to 30 and the skill target to 6-10. Require semantic diversity
+  without forcing irrelevant magic, crafting, social, or combat mechanics into every premise.
+- [ ] Ensure each key hostile template has action-enabling capability or explicitly relies on the
+  baseline natural attack; support/social NPCs receive role-appropriate skills.
+- [ ] Verify provider token/deadline budgets and resume checkpoints, then commit
+  `core(bootstrap): broaden story-grounded skills and action families`.
+
+### Task 4 (P1): Meaningful melee damage — scale by attribute/weapon, and/or balance forge HP
 
 **Files:**
 - Modify: `packages/core/src/engine/resolver.ts` (+ universal-actions config)
@@ -126,7 +170,7 @@ provider degradation degrade gracefully with honest prose, without weakening eng
   intentionally, not by number-fudging).
 - [ ] **Step 5:** Commit `core(engine): scale implicit strike damage by attacker power`.
 
-### Task 3 (P1): Fewer "no prose" turns — provider retry + richer deterministic fallback
+### Task 5 (P1): Fewer "no prose" turns — provider retry + richer deterministic fallback
 
 **Files:**
 - Modify: `packages/core/src/router/*` (retry/backoff)
@@ -142,7 +186,7 @@ provider degradation degrade gracefully with honest prose, without weakening eng
 - [ ] **Step 4:** Full authority + turn suites green.
 - [ ] **Step 5:** Commit `core: retry transient provider errors and enrich safe fallback prose`.
 
-### Task 4 (P2): Resolve ambiguous "attack" via recent target + presence hygiene
+### Task 6 (P2): Resolve ambiguous "attack" via recent target + presence hygiene
 
 **Files:**
 - Modify: `packages/core/src/classifier/*` and/or `orchestrator/turn.ts`
@@ -160,13 +204,25 @@ provider degradation degrade gracefully with honest prose, without weakening eng
 
 ## Completion Definition
 
-Complete when Tasks 1–4 are checked with fresh RED→GREEN evidence, `npm test` + typecheck are green, and
+Complete when Tasks 1–6 are checked with fresh RED→GREEN evidence, `npm test` + typecheck are green, and
 the WORKLOG/HANDOFF record what landed and what remains. The human then rebuilds the installer and
 repeats the live Solo Leveling journey: attack the shadow entity → it counter-attacks through a visible
 DM ruling with meaningful damage; provider hiccups still produce readable prose; an ambiguous "attack"
 continuation resolves to the correct present living target.
 
 ## Progress log (update as you go — exact stopping point for the next agent)
+
+- **2026-08-01 (Task 1 complete at `bd968fb`):**
+  - RED observed at both boundaries: `applyUniversalActionDefaults` returned no natural action, and a
+    promoted NPC with `skills: []` / `inventory: []` produced only the player's ruling.
+  - Universal config v3 adds `attack_natural`; runtime normalization appends the canonical
+    `universal_natural_attack` only when a full-stat story has no gate-legal natural-family action.
+    Its normal resolver path supplies dice, visible ruling, implicit `-4/-8` lethal-resource damage,
+    and committed state. Persisted older catalogues are not mutated.
+  - Browser fallback config mirrors native core exactly. Existing neutral/dead/absent actor tests
+    continue to fail closed.
+  - Fresh gate: typecheck passed; core 580 / UI 156 = 736 tests passed.
+  - **NEXT:** Task 2 failing registrar/instantiation tests for bounded sealed-skill NPC loadouts.
 
 - **2026-08-01 (session paused here — this is the exact stopping point):**
   - Plan created from the second packaged human pass (Gemini, Solo Leveling RPG).
