@@ -141,7 +141,7 @@ Detailed execution plan:
 
 - [x] Guarantee one engine-resolved, gate-legal natural attack in every full-stat story, including
   runtime compatibility for already-frozen catalogues.
-- [ ] Give emergent NPCs bounded story-grounded capability loadouts selected only from sealed skill
+- [x] Give emergent NPCs bounded story-grounded capability loadouts selected only from sealed skill
   ids; show those capabilities to the NPC planner without allowing invented mechanics.
 - [ ] Expand the versioned universal family registry with balanced combat, social, exploration,
   crafting, and utility coverage.

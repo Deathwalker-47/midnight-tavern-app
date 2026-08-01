@@ -1102,3 +1102,27 @@ All seven packaged findings now have source fixes and regression coverage. The r
 is the human's visual/provider-backed installed-app journey, especially provider rate-limit
 behavior and the seven affected workflows. Automated startup cannot claim that observation.
 Task 16 signing/updater/CSP remains explicitly out of scope.
+
+---
+
+## 2026-08-01 - Task 15B.2: Creation-time NPC capability loadouts
+
+**RED evidence.** Focused registrar/agency tests produced four intended failures: a generic NPC
+ignored proposed sealed skills, the registrar prompt did not expose the story skill catalogue,
+structurally excessive skill proposals were accepted, and the reaction planner could not see the
+actor's learned skills or other gate-relevant hard state.
+
+**What landed.** `41c5963` lets only a newly grounded emergent actor propose up to three sealed story
+skill ids. Generic instantiation filters unknown ids, deduplicates known ids, and grants novice rank
+with zero successes. Template NPC sheets remain entirely forge-authored, and an existing actor's
+presence update cannot rewrite its loadout. The registrar receives concise sealed skill metadata;
+the NPC action planner receives attributes, resources, learned skills, and inventory. The engine's
+ordinary action catalogue and gate remain the only executable authority. `CONTEXT.md` records these
+domain terms and invariants for future agents.
+
+**Verification.** Focused NPC introduction and agency suites passed. Fresh root typecheck passed.
+Complete suites passed: core **585 tests / 44 files** plus UI **156 tests / 25 files**, **741 tests**
+total. `git diff --check` passed before commit. No installer was built.
+
+**Next:** Task 15B.3 - expand the universal registry to balanced v4 coverage and forge a
+premise-grounded 30-action / 6-10-skill rulebook without weakening validation or resume guarantees.

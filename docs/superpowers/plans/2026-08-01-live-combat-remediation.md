@@ -126,14 +126,14 @@ may select only sealed story skill ids; the engine validates and instantiates th
 **Files:** `orchestrator/npcIntroduction.ts`, `bootstrap/instantiate.ts`,
 `orchestrator/npcAgency.ts`, and their focused tests.
 
-- [ ] Failing tests: a grounded emergent NPC may propose at most three sealed skill ids; known ids
+- [x] Failing tests: a grounded emergent NPC may propose at most three sealed skill ids; known ids
   are learned at novice rank, unknown/duplicate ids are filtered, and template NPCs retain their
   authored loadout.
-- [ ] Add bounded `skillIds` to new-actor proposals and expose concise sealed skills to the registrar.
+- [x] Add bounded `skillIds` to new-actor proposals and expose concise sealed skills to the registrar.
   Never accept model-authored ranks, actions, effects, equipment, attributes, or resource values.
-- [ ] Include learned skills and gate-relevant state in NPC planner context so proposals reflect what
+- [x] Include learned skills and gate-relevant state in NPC planner context so proposals reflect what
   each actor owns; the engine gate remains authoritative.
-- [ ] Full verification and commit `core: assign sealed skill loadouts when NPCs enter the registry`.
+- [x] Full verification and commit `core: assign sealed skill loadouts when NPCs enter the registry`.
 
 ### Task 3 (P1): Broaden universal families and forge-time skill/action variety
 
@@ -211,6 +211,20 @@ DM ruling with meaningful damage; provider hiccups still produce readable prose;
 continuation resolves to the correct present living target.
 
 ## Progress log (update as you go — exact stopping point for the next agent)
+
+- **2026-08-01 (Task 2 complete at `41c5963`):**
+  - RED observed in four focused assertions: generic instantiation ignored sealed skill ids, the
+    registrar prompt exposed no skill catalogue, excess proposals were silently accepted, and the
+    NPC planner omitted gate-relevant hard state.
+  - New-actor proposals may select at most three sealed story skill ids. Generic instantiation
+    filters unknown ids, deduplicates known ids, and grants only novice rank with zero successes.
+    Template actors retain their authored loadout and existing-character presence transitions
+    cannot rewrite capability state.
+  - The registrar sees concise sealed skill ids/names/descriptions; the NPC planner sees attributes,
+    resources, learned skills, and inventory. Engine gates remain authoritative.
+  - Fresh gate: typecheck passed; core 585 / UI 156 = 741 tests passed.
+  - **NEXT:** Task 3 RED tests for a balanced v4 family registry, 30 generated actions, and a bounded
+    premise-grounded 6-10 skill set.
 
 - **2026-08-01 (Task 1 complete at `bd968fb`):**
   - RED observed at both boundaries: `applyUniversalActionDefaults` returned no natural action, and a
