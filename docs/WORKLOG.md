@@ -1481,3 +1481,47 @@ optimized Rust, MSI, and NSIS. Fresh unsigned v0.2.8 artifacts:
 All report `NotSigned`. The installed save itself was not manually modified. Its first new turn under
 this build should remove the unused phantom rows, repair real present actors, and register the older
 predator as absent; manual provider-backed acceptance remains the human's next step.
+
+---
+
+## 2026-08-02 - Task 15F: Cyraeth villager coreference and narration-guard repair
+
+**Read-only live-state diagnosis.** The complete `Cyraeth Adventure` transcript, variants, latest
+turn operation, rulings, character hard/soft rows, checkpoints, story schema/blueprint, and native
+log were inspected without changing the installed database. The latest turn was not a provider or
+mechanics failure: all five stages completed, the `Reassure Survivor` attempt validly failed on d20
+6 vs DC 8, and the 77.2-second operation committed one ruling. The narrator returned 3,691
+characters, but only a 1,866-character safe prefix and deterministic recap were stored after the
+keyword-only death guard rejected the unseen remainder. The same evidence established the actual
+cast: `Daen` was the first man, `Daenin` the younger man, `Mera` the older woman (later shortened to
+the woman), and the large dog was distinct. Broad provisional rows had been activated as separate
+characters.
+
+**RED -> GREEN repair.** Focused failures reproduced `First man` beside existing `Daen`, failure to
+resolve the appositive `Younger man - Daenin`, failure to bind the dialogue vocative `Mera` to the
+specific older woman when a broad `Woman` row also existed, retention of the registrar's duplicate
+transitions, and false rejection of `could have killed` / `does not mean anyone is dead`. Source
+commit `bd4f99d` adds bounded third-person name explanations, descriptor-first appositives,
+unambiguous vocative resolution, overlap-specific candidate selection, and narration-grounded alias
+suppression in the atomic transition merge. The deterministic guard now distinguishes questions,
+modal/counterfactual language, explicit negation, and incomplete attempts from concrete death
+assertions, while new edge cases prove unruled `falls dead`, `died`, and `was slain` remain blocked.
+
+**Verification and package.** Focused actor/authority/turn coverage passed **48 tests / 3 files**.
+Fresh root typecheck passed. Complete suites passed: core **632 tests / 45 files** plus UI **160
+tests / 25 files**, **792 tests total**. `cargo check`, `git diff --check`, and `npm run build` passed.
+Fresh unsigned v0.2.8 artifacts:
+
+- NSIS `packages/shell/src-tauri/target/release/bundle/nsis/Midnight Tavern_0.2.8_x64-setup.exe` -
+  5,625,514 bytes - SHA-256 `F2D782561AD92527FA496638189EC1CA40524C7504E0449B380C7115A8443FB7`.
+- MSI `packages/shell/src-tauri/target/release/bundle/msi/Midnight Tavern_0.2.8_x64_en-US.msi` -
+  9,269,248 bytes - SHA-256 `ACEE3C638CFE3C488F77CA6D78195547A40BE69C42FA5FCB9DB11EDF38590402`.
+- App EXE `packages/shell/src-tauri/target/release/midnight-tavern.exe` - 22,799,360 bytes -
+  SHA-256 `1FCE44034D661BEA2430B404016FD551881318863584EDA41951433694FA4C61`.
+
+All report `NotSigned`. The user's installed story was deliberately not repaired in place. Packaged
+acceptance is to install this build, rewind the latest exchange, and replay it; legacy alias shells
+restored by the checkpoint may remain historical/absent, but must not return to the Present strip.
+The same read-only audit also found empty character soft-memory fields and `world_soft = null` after
+the analyzer completed; this is recorded as a separate acceptance signal, not silently claimed fixed
+by the actor/authority changes.

@@ -1,96 +1,114 @@
 # HANDOFF - current live state
 
 **Updated:** 2026-08-02
-**Branch / source baseline:** local `main` at `32a7ac2`; this docs-only closeout follows; not pushed
+**Branch / source baseline:** local `main` at `bd4f99d`; this documentation closeout follows; not pushed
 **App version:** `0.2.8`, unsigned
 **User-owned/untracked:** `.agents/`, `.codex/`, `opencode.json` - preserve
-**Active plan:** `Plan/next-phase-internal-beta.md`; Tasks 15A-15E automated/source work complete
+**Active plan:** `Plan/next-phase-internal-beta.md`; Tasks 15A-15F automated/source work complete
 
 ## Current outcome
 
-Task 15E is implemented, fully verified, and freshly packaged. Read-only inspection of the installed
-`Cyraeth Adventure` log and SQLite state proved the screenshot was not a provider or UI failure:
+Task 15F repairs the two defects exposed by the latest installed `Cyraeth Adventure` exchange. The
+installed save was inspected read-only and was never edited.
 
-- the last turn completed `npc_introduction`, classifier, NPC planner, and narrator successfully;
-- sentence-initial `It`, `Third`, and `He` were incorrectly promoted into character rows;
-- the actual younger archer, older woman, large dog, and earlier predator were absent even though
-  narrator prose established them;
-- `Daen` was the only correctly registered non-player actor in that live save.
+The latest turn itself was mechanically valid. NPC introduction, classifier, NPC planner, narrator,
+and authority audit all completed; the operation committed in about 77.2 seconds. `Reassure
+Survivor` correctly failed on d20 6 + 0 vs DC 8. There was no provider failure. The narrator returned
+3,691 characters, but the deterministic death guard accepted only a 1,866-character prefix before
+substituting a factual recap and the warning shown in the screenshot.
 
-Source commits `c6abef6` and `32a7ac2` repair the full boundary:
+The full transcript established this canonical cast:
 
-- pronouns and ordinal transitions cannot become actors, while explicit names remain eligible;
-- bounded described actors survive modifiers and ordinary past-tense verbs;
-- murals, statues, paintings, and other depictions remain excluded;
-- discovery uses the caller-bounded narration history, so an older creature can be repaired into
-  Characters as historical and absent rather than incorrectly returned to Present;
-- migration 16 removes only exact unused auto-generated `He`, `It`, and `Third` rows and scrubs their
-  checkpoint references, while preserving any mechanically referenced short-name character;
-- if several provisional people exist, nearby self-introduction context enriches the matching row
-  rather than creating a duplicate named NPC;
-- discoveries and presence/identity changes still commit atomically with the turn.
+- `Daen` is the person initially described as the first man.
+- `Daenin` is the younger man with the bow.
+- `Mera` is the older woman, later shortened in prose to the woman.
+- The large dog is a separate creature.
+- The earlier forest creature is historical and absent from the village scene.
 
-The live database and log were queried read-only. No user save was manually edited. Migration 16 and
-history repair take effect when the freshly built app opens the database and the story advances.
+The source fix in `bd4f99d` now understands bounded third-person name explanations, descriptor-first
+appositives, and unambiguous dialogue vocatives. Narration-grounded aliases suppress conflicting
+model registrar transitions, so `First man` is not activated beside `Daen`, `Younger man` is enriched
+to `Daenin`, `Older woman` is enriched to `Mera`, and the overlapping broad `Woman` transition is
+discarded. The complete turn remains atomic.
+
+The death guard now distinguishes a concrete tracked-state assertion from questions,
+counterfactual/modal danger, explicit negation, and incomplete attempts. Dialogue such as “could
+have killed you” or “does not mean anyone is dead” can remain in the narration. Concrete unruled
+`falls dead`, `died`, `was slain`, and kill assertions are still rejected unless deterministic
+mechanics recorded `causedDeathOf` after a lethal resource reached zero.
+
+## Save boundary and replay expectation
+
+Do not manually edit the installed database. The human explicitly intends to rewind the latest
+exchange and replay it under this build.
+
+After rewind/replay:
+
+1. The Present strip should contain the player, `Daen`, `Daenin`, `Mera`, and the large dog when the
+   replayed prose establishes all of them.
+2. `First man` and broad `Woman` must stay inactive rather than appearing as separate present NPCs.
+3. Hypothetical or negated death-language must not truncate otherwise valid narrator prose.
+4. Any real narrated death must still require deterministic damage and `causedDeathOf`.
+5. Because rollback deliberately retains registered identity history, old provisional alias rows
+   already captured by the affected checkpoint may remain in Characters as historical/absent. This
+   batch does not mutate or delete the user's current save.
+
+## Additional read-only finding
+
+All present NPC soft records in the inspected save had empty identity/current/relationship fields,
+and `world_soft` was null even though the background analyzer completed. This is a distinct
+provider-backed dossier-memory acceptance signal. Task 15F does not claim it is repaired. Recheck it
+after the clean replay; if fields remain empty after an exchange with clear character evidence,
+open the next source task against analyzer output/patch persistence rather than altering this save.
+
+The latest NPC planner returned no mechanical NPC action. That was not itself an authority failure:
+the player attempted social reassurance, not a hostile attack, and the villagers responded in
+ordinary narrator dialogue. Continue separate packaged NPC-agency acceptance with an actually
+hostile, living NPC and a legal sealed action.
 
 ## Fresh verification
 
+- Focused actor/authority/turn regression suite: **48 tests / 3 files**, passed.
 - `npm run typecheck`: passed.
-- `npm test`: core **625 / 45 files**, UI **160 / 25 files**, **785 total**, passed.
-- Focused actor/turn/database repair suite: **34 tests / 3 files**, passed.
+- `npm test`: core **632 / 45 files**, UI **160 / 25 files**, **792 total**, passed.
 - `cargo check`: passed.
+- `git diff --check`: passed.
 - `npm run build`: passed core, UI/Vite, optimized Rust, MSI, and NSIS packaging.
-- `git diff --check`: passed before source commits.
 
 ## Fresh test artifacts
 
 - Preferred NSIS installer:
   `packages/shell/src-tauri/target/release/bundle/nsis/Midnight Tavern_0.2.8_x64-setup.exe`
-  - bytes: `5624034`
-  - SHA-256: `F19130E9AB40646AA2E41D58E0B5929CA26792431D597FEC9E6A78D6F79E7725`
+  - bytes: `5625514`
+  - SHA-256: `F2D782561AD92527FA496638189EC1CA40524C7504E0449B380C7115A8443FB7`
 - MSI alternative:
   `packages/shell/src-tauri/target/release/bundle/msi/Midnight Tavern_0.2.8_x64_en-US.msi`
   - bytes: `9269248`
-  - SHA-256: `88162E67A7F1CC5FD15323AA6A0B5444C06D9A6912C525102C4F6BBA2769DED3`
+  - SHA-256: `ACEE3C638CFE3C488F77CA6D78195547A40BE69C42FA5FCB9DB11EDF38590402`
 - Standalone app executable:
   `packages/shell/src-tauri/target/release/midnight-tavern.exe`
   - bytes: `22799360`
-  - SHA-256: `98B0169A6894DAEA1F9308A7C0EED2770F4B857D28578EAD67C14F95524D9A86`
+  - SHA-256: `1FCE44034D661BEA2430B404016FD551881318863584EDA41951433694FA4C61`
 - All report `NotSigned`, expected until the later signing/release phase.
-
-## Expected Cyraeth acceptance behavior
-
-After installing this build and opening the affected save:
-
-1. Migration 16 removes the unused phantom `He`, `It`, and `Third` rows.
-2. On the first new story turn, the actual younger man, older woman, and large dog are promoted as
-   present registry actors; `Daen` remains.
-3. The earlier alien predator is repaired into Characters as a historical absent actor and must not
-   appear in the Present strip unless later prose explicitly returns it.
-4. A later unambiguous name reveal enriches the matching provisional actor row; it must not add a
-   duplicate person.
 
 ## Non-negotiable authority and domain rules
 
-- One story owns one frozen executable action catalogue. NPCs receive capability loadouts, not a
-  second model-authored private action list.
-- Models may introduce actors, select sealed ids, and write prose. The engine owns gates, dice,
-  effects, damage, death, budgets, direction/target legality, persistence, rollback, loot, and
+- Models may introduce actors and write prose. The registry owns persistent identity/presence; the
+  engine owns gates, dice, effects, damage, death, budgets, persistence, rollback, loot, and
   progression.
-- Every actual fictional NPC/creature that appears must be registry-backed. A later identity reveal
-  enriches the same actor when it is unambiguous; scenery, crowds, statues, murals, pronouns,
-  ordinals, and vague nouns remain non-characters.
+- Every actual fictional NPC/creature that appears must be registry-backed. A later unambiguous name
+  reveal enriches the same actor; scenery, crowds, depictions, pronouns, and ordinals do not become
+  characters.
 - Registry membership and scene presence differ. Only present, living actors participate.
-- Rulings render before narrator streaming. Prose cannot assert death without threshold-backed
-  `causedDeathOf`. Player and NPC action budgets remain separate.
-- Browser/native bridge parity is mandatory. Preserve `.agents/`, `.codex/`, and `opencode.json`;
-  do not push.
+- Rulings render before narrator streaming. Prose cannot assert a tracked death without
+  threshold-backed `causedDeathOf`. Player and NPC budgets remain separate.
+- Preserve browser/native bridge parity and the user-owned `.agents/`, `.codex/`, and
+  `opencode.json`. Do not push.
 
 ## Single next action
 
-The human should install the fresh NSIS artifact over the prior build and continue `Cyraeth
-Adventure` for one new turn. Record whether the exact four acceptance expectations above hold before
-changing source. If they do, continue the provider-backed journey for organic NPC action, useful
-Possible Moves, two-action combat, threshold-backed damage/death, ruling-before-prose, narrator
-retry, per-character dossier memory, Overview hierarchy, Forge restart, and follow-latest scrolling.
-Do not claim manual acceptance until the human reports the installed result.
+Install the fresh NSIS artifact over the previous build, rewind only the latest affected Cyraeth
+exchange, and replay the same social action. Capture the resulting Present strip, full narration,
+and warning state. Then inspect the log and database read-only to verify canonical actor rows,
+presence, ruling/operation completion, and whether character/world soft memory gained evidence. Do
+not infer another source fix until that packaged replay establishes the remaining boundary.

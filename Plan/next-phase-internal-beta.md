@@ -214,6 +214,30 @@ turn followed by deterministic extraction errors rather than an LLM or UI failur
 - [x] Run typecheck, the complete automated suite, native `cargo check`, update all baton documents,
   commit coherent green changes, and build/hash one combined unsigned installer.
 
+## Task 15F: Cyraeth Villager Coreference and Narration-Guard Repair
+
+The next packaged turn registered broad descriptions as separate villagers and replaced the latter
+half of otherwise valid prose with a safe recap. Read-only inspection of the complete transcript,
+operation record, story configuration, checkpoints, character hard/soft state, and native log proved
+two source defects: third-person name reveals were not reconciled with provisional rows, and the
+deterministic death guard treated negated or hypothetical death-language as a concrete state change.
+
+- [x] Inspect the installed Cyraeth log and SQLite state without modifying the user's save, including
+  every message, variant, ruling, operation stage, character row, checkpoint, and story prompt.
+- [x] Confirm the latest `Reassure Survivor` failure was a valid ruling and distinguish it from the
+  narration truncation and actor-coreference defects.
+- [x] Reconcile `Daen` with `First man`, enrich `Younger man` to `Daenin`, and enrich the specific
+  `Older woman` to `Mera` while suppressing the overlapping broad `Woman` registrar transition.
+- [x] Support narrator-bounded name explanations, descriptor-first appositives, and unambiguous
+  dialogue vocatives without promoting arbitrary capitalized prose.
+- [x] Allow questions, counterfactuals, explicit negations, and incomplete attempts that mention
+  death while retaining deterministic rejection for concrete unruled `falls dead`, `died`, `slain`,
+  and kill assertions.
+- [x] Reproduce the exact packaged actor aliases and authority warning through RED tests, then prove
+  the repaired full turn atomically preserves the canonical roster.
+- [x] Run the complete typecheck/test/native/package gate, update every baton document, commit the
+  documentation closeout, and hash one fresh unsigned installer for rewind/replay acceptance.
+
 ## Internal-Beta exit criteria (the finish line for this phase)
 
 - A user can create **or import** a story, play it, close the app, reopen it, and continue.
