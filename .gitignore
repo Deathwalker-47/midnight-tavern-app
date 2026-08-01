@@ -28,6 +28,11 @@ npm-debug.log*
 .DS_Store
 Thumbs.db
 
+# Local AI tooling
+.agents/
+.codex/
+opencode.json
+
 # Env / secrets
 .env
 .env.local
