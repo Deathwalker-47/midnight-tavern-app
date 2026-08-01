@@ -723,10 +723,11 @@ const MEMORY_MODEL_RECOMMENDATION_CONFIG: ModelRecommendationConfigView = {
 
 /** Browser/dev fallback only; the packaged SQLite bridge reads the canonical core JSON config. */
 const MEMORY_UNIVERSAL_ACTIONS_CONFIG: UniversalActionConfig = {
-  version: 2,
+  version: 3,
   actions: [
     { id: "attack_melee", category: "combat", label: "Attack (melee)", description: "Strike a target at close range.", aliases: ["attack", "strike", "stab", "slash", "lunge", "punch", "kick"], defaultRequiresItemKind: "weapon", defaultTargetDamage: { success: 4, crit_success: 8 }, requiresCharacterTarget: true },
     { id: "attack_ranged", category: "combat", label: "Attack (ranged)", description: "Attack a target from a distance.", aliases: ["shoot", "fire", "throw", "snipe"], defaultRequiresItemKind: "weapon", defaultTargetDamage: { success: 4, crit_success: 8 }, requiresCharacterTarget: true },
+    { id: "attack_natural", category: "combat", label: "Natural attack", description: "Strike at close range with the actor's body or an innate natural weapon.", aliases: ["punch", "kick", "bite", "claw", "gore", "slam"], defaultTargetDamage: { success: 4, crit_success: 8 }, requiresCharacterTarget: true },
     { id: "defend", category: "combat", label: "Defend", description: "Brace, block, or parry an incoming threat.", aliases: ["block", "parry", "guard", "brace"], requiresCharacterTarget: false },
     { id: "evade", category: "combat", label: "Evade", description: "Avoid a threat through movement or positioning.", aliases: ["dodge", "duck", "escape", "sidestep"], requiresCharacterTarget: false },
     { id: "move", category: "utility", label: "Move", description: "Change position in the current scene.", aliases: ["walk", "run", "sprint", "climb", "swim"], requiresCharacterTarget: false },

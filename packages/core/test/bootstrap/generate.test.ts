@@ -1018,7 +1018,9 @@ describe("generateStorySchema — repair loop", () => {
     expect(terrainCondition).toBeUndefined();
     expect(setFlags.has("terrain_mapped")).toBe(false);
     expect(remainingDeadFlags).toEqual([]);
-    const effectsWithoutProgramDefaults = out.actions.map((action) => {
+    const effectsWithoutProgramDefaults = out.actions
+      .filter((action) => action.id !== "universal_natural_attack")
+      .map((action) => {
       if (
         action.universalFamily !== "attack_melee" &&
         action.universalFamily !== "attack_ranged"
@@ -1211,7 +1213,7 @@ describe("generateStorySchema — repair loop", () => {
     expect(out.npcTemplates.every((template) => template.inventory.length === 0)).toBe(true);
     expect(out.actionBudget).toBe(2);
     expect(out.mechanicsConfigVersions).toEqual({
-      universalActions: 2,
+      universalActions: 3,
       progression: 1,
       equipmentLoot: 1,
       attributeAdvancement: 1,

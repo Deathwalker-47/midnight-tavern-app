@@ -16,7 +16,7 @@ import { makeStory } from "./fixtures.js";
 describe("V7 mechanics configuration registry", () => {
   it("loads versioned action, progression, and equipment assets", () => {
     expect(MECHANICS_CONFIG_VERSIONS).toEqual({
-      universalActions: 2,
+      universalActions: 3,
       progression: 1,
       equipmentLoot: 1,
       attributeAdvancement: 1,
@@ -70,6 +70,30 @@ describe("V7 mechanics configuration registry", () => {
     expect(normalized.actions[0]!.effects.success.resourceDeltaTarget).toEqual({ hp: -4 });
     expect(normalized.actions[0]!.effects.crit_success.resourceDeltaTarget).toEqual({ hp: -8 });
     expect(story.actions[0]!.effects.success.resourceDeltaTarget).toBeUndefined();
+  });
+
+  it("installs a gate-legal natural attack into an older full-stat catalogue", () => {
+    const story = makeStory();
+    story.actions = story.actions.filter((action) => action.id !== "attack_wild");
+
+    const normalized = applyUniversalActionDefaults(story);
+    const naturalAttack = normalized.actions.find(
+      (action) => action.universalFamily === "attack_natural"
+    );
+
+    expect(naturalAttack).toMatchObject({
+      id: "universal_natural_attack",
+      category: "combat",
+      universalFamily: "attack_natural",
+      effects: {
+        success: { resourceDeltaTarget: { hp: -4 } },
+        crit_success: { resourceDeltaTarget: { hp: -8 } },
+      },
+    });
+    expect(naturalAttack?.requiresSkill).toBeUndefined();
+    expect(naturalAttack?.requiresItemKind).toBeUndefined();
+    expect(naturalAttack?.costs).toBeUndefined();
+    expect(story.actions.some((action) => action.id === "universal_natural_attack")).toBe(false);
   });
 });
 

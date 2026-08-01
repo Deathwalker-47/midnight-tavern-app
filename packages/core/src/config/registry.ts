@@ -11,6 +11,7 @@ import {
   ItemTierSchema,
   MasteryRankSchema,
   EquipmentSlotSchema,
+  type ActionDef,
   type StorySchema,
 } from "../types/index.js";
 
@@ -242,8 +243,34 @@ export function applyUniversalActionDefaults(schema: StorySchema): StorySchema {
   const lethalId = schema.resources.find((resource) => resource.lethal)?.id;
   if (!lethalId) return schema;
 
-  let changed = false;
-  const actions = schema.actions.map((action) => {
+  const hasGateLegalNaturalAttack = schema.actions.some(
+    (action) =>
+      action.universalFamily === "attack_natural" &&
+      !action.requiresSkill &&
+      !action.requiresItemKind &&
+      !action.requiresEquipmentEnabler &&
+      !action.costs
+  );
+  const naturalAttack: ActionDef = {
+    id: "universal_natural_attack",
+    category: "combat",
+    label: "Natural attack",
+    description: "Strike a nearby character with the actor's body or innate natural weapon.",
+    aliases: ["punch", "kick", "bite", "claw", "gore", "slam"],
+    universalFamily: "attack_natural",
+    dc: 10,
+    effects: {
+      crit_success: { narrationHint: "The natural attack lands with devastating force." },
+      success: { narrationHint: "The natural attack lands cleanly." },
+      failure: { narrationHint: "The natural attack misses its target." },
+      crit_failure: { narrationHint: "The attacker overextends and loses position." },
+    },
+  };
+  let changed = !hasGateLegalNaturalAttack;
+  const sourceActions = hasGateLegalNaturalAttack
+    ? schema.actions
+    : [...schema.actions, naturalAttack];
+  const actions = sourceActions.map((action) => {
     const family = action.universalFamily
       ? findUniversalAction(action.universalFamily)
       : undefined;

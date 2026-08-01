@@ -269,6 +269,63 @@ describe("same-turn NPC agency", () => {
     });
   });
 
+  it("lets a skill-less promoted creature counter through the universal natural attack", async () => {
+    const persisted = await store.stories.get(storyId);
+    await store.stories.update({
+      ...persisted!,
+      schema: {
+        ...persisted!.schema,
+        actions: persisted!.schema.actions.filter((action) => action.id !== "attack_wild"),
+      },
+    });
+    await store.messages.insert({
+      id: "gated-scene-intro",
+      storyId,
+      idx: 0,
+      role: "narrator",
+      content: "A hunched beast drops from the arch and attacks Kestrel.",
+      createdAt: 0,
+    });
+    const creatureId = "fixture-story:scene:hunched-beast";
+
+    const result = await submitTurn(
+      new AgencyRouter(
+        {
+          playerIntents: [{ ...PLAYER_ATTACK, targetId: creatureId }],
+          npcIntents: [],
+          freeText: "",
+        },
+        "The hunched beast recoils but remains in the fight.",
+        [
+          {
+            operation: "introduce",
+            name: "Hunched beast",
+            grounding: "hunched beast",
+          },
+        ]
+      ),
+      store,
+      storyId,
+      "I strike the hunched beast with my sword.",
+      { rng: d20Sequence([15]) }
+    );
+    await result.background;
+
+    const creature = await store.characters.get(creatureId);
+    expect(creature?.hard.skills).toEqual([]);
+    expect(creature?.hard.inventory).toEqual([]);
+    expect(result.rulings).toContainEqual(
+      expect.objectContaining({
+        actorId: creatureId,
+        actionId: "universal_natural_attack",
+        targetId: "kestrel",
+        gate: { allowed: true },
+        roll: expect.objectContaining({ natural: 15 }),
+      })
+    );
+    expect((await store.characters.get("kestrel"))!.hard.resources.hp!.current).toBe(16);
+  });
+
   it("registers the current undocumented creature before classifying two player strikes", async () => {
     await store.characters.insert({
       id: "old-dead-man",

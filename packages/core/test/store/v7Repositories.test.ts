@@ -379,7 +379,7 @@ describe("V7 persistence repositories", () => {
     expect(impact).toMatchObject({
       attributes: schema.attributes.length,
       skills: schema.skills.length,
-      storyActions: schema.actions.length,
+      storyActions: 11,
       characters: 1,
       rulings: 0,
       checkpoints: 0,
