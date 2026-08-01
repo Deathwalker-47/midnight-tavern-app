@@ -461,6 +461,35 @@ function hardFailureIssues(error: unknown): ClassifierRecoveryIssue[] {
 }
 
 /**
+ * Apply the same sealed, deterministic recovery policy when an outer stage deadline interrupts the
+ * classifier. Keeping this separate from provider I/O lets the orchestrator recover a clear action
+ * without starting another model request or weakening target validation.
+ */
+export function recoverClassifierFailure(
+  schema: StorySchema,
+  input: ClassifyInput,
+  failureIssues: readonly ClassifierRecoveryIssue[],
+  failureErrorKind: string
+): ClassifierRecoveryResult {
+  const issues = [...failureIssues];
+  const catalogFallback = recoverPlayerIntents(schema, input);
+  if (catalogFallback.issue) issues.push(catalogFallback.issue);
+  return {
+    turn: {
+      playerIntents: catalogFallback.intents ?? [],
+      npcIntents: [],
+      freeText: catalogFallback.intents ? UNIVERSAL_RECOVERY_NOTE : RECOVERY_NOTE,
+    },
+    recovered: true,
+    recovery: {
+      policy: catalogFallback.intents ? "partial_mechanics" : "narration_only",
+      issues,
+    },
+    errorKind: failureErrorKind,
+  };
+}
+
+/**
  * Product-facing classifier entrypoint. A provider returning an empty or malformed body is
  * already repaired by `callStructured`; if every repair is exhausted, this converts the turn to a
  * typed narration-only recovery instead of leaving a persisted player message and a stuck UI.
@@ -520,21 +549,11 @@ export async function classifyWithRecovery(
     };
   } catch (error) {
     if (isCancellation(error, opts?.signal)) throw error;
-    const issues = hardFailureIssues(error);
-    const catalogFallback = recoverPlayerIntents(schema, input);
-    if (catalogFallback.issue) issues.push(catalogFallback.issue);
-    return {
-      turn: {
-        playerIntents: catalogFallback.intents ?? [],
-        npcIntents: [],
-        freeText: catalogFallback.intents ? UNIVERSAL_RECOVERY_NOTE : RECOVERY_NOTE,
-      },
-      recovered: true,
-      recovery: {
-        policy: catalogFallback.intents ? "partial_mechanics" : "narration_only",
-        issues,
-      },
-      errorKind: errorKind(error),
-    };
+    return recoverClassifierFailure(
+      schema,
+      input,
+      hardFailureIssues(error),
+      errorKind(error)
+    );
   }
 }

@@ -336,6 +336,123 @@ describe("submitTurn — pipeline order & transaction", () => {
     });
   });
 
+  it("recovers attack-it-again against recent focus when the classifier stage times out", async () => {
+    await store.characters.insert({
+      id: "old-foe",
+      storyId,
+      name: "Old foe",
+      isPlayer: false,
+      hard: {
+        ...(await store.characters.get("wight"))!.hard,
+        characterId: "old-foe",
+      },
+    });
+    await store.messages.insert({
+      id: "prior-player",
+      storyId,
+      idx: 0,
+      role: "player",
+      content: "I attack the Grave-wight.",
+      createdAt: 1,
+    });
+    await store.messages.insert({
+      id: "prior-narrator",
+      storyId,
+      idx: 1,
+      role: "narrator",
+      content: "Your blade catches the Grave-wight.",
+      createdAt: 2,
+    });
+    await store.events.insert({
+      id: "prior-attack-event",
+      storyId,
+      messageId: "prior-narrator",
+      turnIndex: 1,
+      actorId: "kestrel",
+      kind: "roll",
+      payload: {
+        ruling: {
+          actorId: "kestrel",
+          targetId: "wight",
+          actionId: "attack_melee",
+          gate: { allowed: true },
+          roll: { outcome: "success" },
+        },
+      },
+      rulebookVersion: 1,
+      createdAt: 2,
+    });
+    const clock = controllableStageSchedule();
+    let classifierAborted = false;
+    const router: Router = {
+      bindingFor: () => ({
+        provider: "openrouter",
+        model: "test",
+        source: "recommended",
+        samplersDirty: false,
+      }),
+      async complete(_role, prompt, opts) {
+        if (prompt.system.includes("NPC presence registrar")) {
+          return { content: JSON.stringify({ transitions: [] }) };
+        }
+        if (prompt.system.includes("mechanical intent classifier")) {
+          return new Promise<never>((_resolve, reject) => {
+            opts?.signal?.addEventListener("abort", () => {
+              classifierAborted = true;
+              reject(opts.signal?.reason);
+            });
+          });
+        }
+        if (prompt.system.includes("NPC action planner")) {
+          return { content: JSON.stringify({ actions: [] }) };
+        }
+        if (prompt.system.includes("strict consistency auditor")) {
+          return { content: JSON.stringify({ obeysRulings: true, contradictions: [] }) };
+        }
+        if (prompt.system.includes("DM loot adjudicator")) {
+          return { content: JSON.stringify({ award: false, reason: "No completed encounter." }) };
+        }
+        return { content: "{}" };
+      },
+      async stream(_role, _prompt, onDelta) {
+        const content = "You press the attack against the Grave-wight.";
+        onDelta(content);
+        return { content };
+      },
+    };
+
+    const pending = submitTurn(router, store, storyId, "I attack it again.", {
+      rng: d20Sequence([15, 10]),
+      stagePolicy: {
+        deadlines: {
+          npc_introduction: 301,
+          classifier: 302,
+          npc_planner: 303,
+          narrator: 304,
+          authority_audit: 305,
+        },
+        schedule: clock.schedule,
+      },
+    });
+    for (let index = 0; index < 10 && !clock.has(302); index++) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    expect(clock.has(302)).toBe(true);
+    clock.trigger(302);
+
+    const result = await pending;
+    await result.background;
+    expect(classifierAborted).toBe(true);
+    expect(result.classifierRecovered).toBe(true);
+    expect(result.classifierRecovery?.policy).toBe("partial_mechanics");
+    expect(result.rulings[0]).toMatchObject({
+      actorId: "kestrel",
+      actionId: "attack_melee",
+      targetId: "wight",
+      gate: { allowed: true },
+    });
+  });
+
   it("calls only the narrator and writes no mechanics in No Stats mode", async () => {
     const current = (await store.stories.get(storyId))!;
     await store.stories.update({
@@ -425,9 +542,9 @@ describe("submitTurn — pipeline order & transaction", () => {
     const result = await pending;
     expect(classifierAborted).toBe(true);
     expect(result.classifierRecovered).toBe(true);
-    expect(result.classifierRecovery?.issues).toEqual([
-      expect.objectContaining({ kind: "timeout" }),
-    ]);
+    expect(result.classifierRecovery?.issues).toEqual(
+      expect.arrayContaining([expect.objectContaining({ kind: "timeout" })])
+    );
     expect(result.rulings).toEqual([]);
     expect(result.prose).toContain("empty crypt");
     const messages = await store.messages.listByStory(storyId);
@@ -511,5 +628,53 @@ describe("submitTurn — pipeline order & transaction", () => {
         expect.objectContaining({ stage: "narrator", outcome: "ok" }),
       ])
     );
+  });
+
+  it("does not commit an approved presence exit when the turn is cancelled before saving", async () => {
+    await store.messages.insert({
+      id: "scene-before-cancel",
+      storyId,
+      idx: 0,
+      role: "narrator",
+      content: "The gate seals behind you. You are alone now.",
+      createdAt: 1,
+    });
+    const controller = new AbortController();
+    const router: Router = {
+      bindingFor: () => ({
+        provider: "openrouter",
+        model: "test",
+        source: "recommended",
+        samplersDirty: false,
+      }),
+      async complete(_role, prompt) {
+        if (prompt.system.includes("NPC presence registrar")) {
+          return {
+            content: JSON.stringify({
+              transitions: [{
+                operation: "leave",
+                characterId: "wight",
+                name: "Grave-wight",
+                grounding: "You are alone now",
+              }],
+            }),
+          };
+        }
+        return {
+          content: JSON.stringify({ playerIntents: [], npcIntents: [], freeText: "I listen." }),
+        };
+      },
+      async stream() {
+        const cancellation = new DOMException("Cancelled", "AbortError");
+        controller.abort(cancellation);
+        throw cancellation;
+      },
+    };
+
+    await expect(
+      submitTurn(router, store, storyId, "I listen.", { signal: controller.signal })
+    ).rejects.toMatchObject({ name: "AbortError" });
+
+    expect((await store.characters.get("wight"))?.present).toBe(true);
   });
 });

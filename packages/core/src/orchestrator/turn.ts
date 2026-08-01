@@ -28,6 +28,7 @@ import type {
 import {
   classify,
   classifyWithRecovery,
+  recoverClassifierFailure,
   type ClassifierRecoveryMetadata,
 } from "../classifier/index.js";
 import { resolve, commit, enforceActionBudget } from "../engine/index.js";
@@ -672,28 +673,18 @@ async function runTurnOperation(
             const timedOut =
               stageMetrics.at(-1)?.stage === "classifier" &&
               stageMetrics.at(-1)?.outcome === "timeout";
-            return {
-              turn: {
-                playerIntents: [],
-                npcIntents: [],
-                freeText:
-                  "The mechanical classifier did not complete; continue this turn as narration only.",
-              },
-              recovered: true,
-              recovery: {
-                policy: "narration_only" as const,
-                issues: [
-                  {
-                    kind: timedOut ? ("timeout" as const) : ("provider_error" as const),
-                    message: timedOut
-                      ? "The classifier exceeded its deadline and the turn continued without mechanics."
-                      : "The classifier failed and the turn continued without mechanics.",
-                    retryable: true,
-                  },
-                ],
-              },
-              errorKind: timedOut ? "StageTimeout" : "ClassifierError",
-            };
+            return recoverClassifierFailure(
+              schema,
+              classifierInput,
+              [{
+                kind: timedOut ? "timeout" : "provider_error",
+                message: timedOut
+                  ? "The classifier exceeded its deadline; sealed local recovery was applied."
+                  : "The classifier failed; sealed local recovery was applied.",
+                retryable: true,
+              }],
+              timedOut ? "StageTimeout" : "ClassifierError"
+            );
           },
           ...(opts.signal ? { signal: opts.signal } : {}),
           onMetric: recordStageMetric,

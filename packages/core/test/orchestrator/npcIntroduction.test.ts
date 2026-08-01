@@ -228,6 +228,68 @@ describe("planNpcTransitions", () => {
     });
   });
 
+  it("accepts an existing NPC leave from exact committed alone-in-scene evidence", async () => {
+    const wight = existing({ present: true });
+    const result = await plan(
+      [{
+        operation: "leave",
+        characterId: "wight",
+        name: "Grave-wight",
+        grounding: "You are alone now",
+      }],
+      {
+        playerText: "I listen.",
+        recentNarration: ["The gate seals behind you. You are alone now."],
+        roster: [wight],
+      }
+    );
+
+    expect(result).toEqual([
+      { operation: "leave", character: { ...wight, present: false } },
+    ]);
+  });
+
+  it("never retires a present NPC merely because recent narration omits its name", async () => {
+    const wight = existing({ present: true });
+    expect(
+      await plan(
+        [{
+          operation: "leave",
+          characterId: "wight",
+          name: "Grave-wight",
+          grounding: "Dust drifts through the chamber",
+        }],
+        {
+          playerText: "I listen.",
+          recentNarration: ["Dust drifts through the chamber."],
+          roster: [wight],
+        }
+      )
+    ).toEqual([]);
+  });
+
+  it("does not mistake a dramatic use of alone for exact scene-roster evidence", async () => {
+    const wight = existing({ present: true });
+    expect(
+      await plan(
+        [{
+          operation: "leave",
+          characterId: "wight",
+          name: "Grave-wight",
+          grounding: "You are alone now",
+        }],
+        {
+          playerText: "I listen.",
+          recentNarration: [
+            "The Grave-wight watches from the doorway.",
+            "You are alone now in believing the darkness is dangerous.",
+          ],
+          roster: [wight],
+        }
+      )
+    ).toEqual([]);
+  });
+
   it("persists hostility only when committed narration explicitly targets the player", async () => {
     const wight = existing({ present: true });
     const result = await plan([], {

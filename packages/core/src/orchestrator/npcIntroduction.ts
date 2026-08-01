@@ -111,6 +111,40 @@ function grounded(proposal: NpcIntroductionProposal, corpus: string): boolean {
   );
 }
 
+function groundedExistingTransition(
+  proposal: NpcIntroductionProposal,
+  corpus: string
+): boolean {
+  const evidence = normalize(proposal.grounding);
+  const name = normalize(proposal.name);
+  if (evidence.length < 3 || !name || AMBIENT_DEPICTION.test(proposal.grounding)) return false;
+  return corpus.split(/[.!?;\n]+/).some((rawSentence) => {
+    const sentence = normalize(rawSentence);
+    return sentence.includes(evidence) && sentence.includes(name);
+  });
+}
+
+/**
+ * A leave transition may omit the NPC's name only when it quotes an unambiguous, already-committed
+ * scene-roster statement. The intentionally narrow grammar avoids treating dramatic uses of
+ * "alone" or a character's mere omission as authority to remove anyone from the scene.
+ */
+function groundedCommittedIsolation(
+  proposal: NpcIntroductionProposal,
+  recentNarration: readonly string[]
+): boolean {
+  const evidence = normalize(proposal.grounding);
+  const quotesCommittedSentence = recentNarration.some((line) =>
+    line.split(/[.!?;\n]+/).some((candidate) => normalize(candidate) === evidence)
+  );
+  if (!evidence || !quotesCommittedSentence) {
+    return false;
+  }
+  return /^(?:you are|you're|you stand|you remain|you find yourself) (?:now )?(?:completely )?alone(?: here| now)?$|^no one else (?:is here|remains|is present)$|^you are the only (?:one|person|living soul) (?:here|present|remaining)$/i.test(
+    evidence
+  );
+}
+
 function promptFor(input: NpcIntroductionInput) {
   return {
     system: [
@@ -120,6 +154,7 @@ function promptFor(input: NpcIntroductionInput) {
       "Do not propose scenery, corpses with no agency, murals, statues, paintings, crowds, shadows, or vague pronouns.",
       "Use an existing characterId/name whenever the registry already contains that actor.",
       "For a new actor, quote a short grounding excerpt from the player action or recent narration.",
+      "Never infer leave from omission. A leave must name the actor in its grounding, except when committed recent narration exactly says the player is alone/no one else remains; then propose leave for each present non-player actor using that exact roster statement.",
       "Use a sealed templateId only when it exactly identifies the actor. Never invent mechanics.",
       "For a new actor without a template, select at most three sealed skill ids that fit its portrayed capabilities.",
       "Never provide skillIds for an existing or template-backed actor. Never invent skill ids or ranks.",
@@ -203,7 +238,11 @@ export async function planNpcTransitions(
     }
 
     if (existing) {
-      if (!grounded(proposal, corpus) || transitioned.has(existing.id)) continue;
+      const isGrounded =
+        groundedExistingTransition(proposal, corpus) ||
+        (proposal.operation === "leave" &&
+          groundedCommittedIsolation(proposal, input.recentNarration));
+      if (!isGrounded || transitioned.has(existing.id)) continue;
       const operation = proposal.operation === "leave" ? "leave" : "enter";
       approved.push({
         operation,

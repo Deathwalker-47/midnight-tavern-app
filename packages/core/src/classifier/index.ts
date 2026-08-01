@@ -4,6 +4,7 @@
 export {
   classify,
   classifyWithRecovery,
+  recoverClassifierFailure,
   type ClassifierRecoveryKind,
   type ClassifierRecoveryIssue,
   type ClassifierRecoveryMetadata,
