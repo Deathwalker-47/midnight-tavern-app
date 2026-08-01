@@ -177,14 +177,14 @@ may select only sealed story skill ids; the engine validates and instantiates th
 - Modify: `packages/core/src/orchestrator/authorityGuard.ts` (fallback prose states the ruling)
 - Test: router retry test, `authorityGuard.test.ts`
 
-- [ ] **Step 1:** Failing tests — a transient provider error retries once before falling back; the
+- [x] **Step 1:** Failing tests — a transient provider error retries once before falling back; the
   deterministic fallback prose names the committed outcome (e.g. "the strike lands for 4 damage")
   instead of a generic line, WITHOUT asserting any unrecorded mechanic.
-- [ ] **Step 2:** Observe RED.
-- [ ] **Step 3:** Add bounded retry/backoff (respect the stage deadline from `stagePolicy.ts`); enrich
+- [x] **Step 2:** Observe RED.
+- [x] **Step 3:** Add bounded retry/backoff (respect the stage deadline from `stagePolicy.ts`); enrich
   `safeSummary` from ruling facts (allowed/outcome/committed effect) while keeping the authority wall.
-- [ ] **Step 4:** Full authority + turn suites green.
-- [ ] **Step 5:** Commit `core: retry transient provider errors and enrich safe fallback prose`.
+- [x] **Step 4:** Full authority + turn suites green.
+- [x] **Step 5:** Commit `core: retry transient provider errors and enrich safe fallback prose`.
 
 ### Task 6 (P2): Resolve ambiguous "attack" via recent target + presence hygiene
 
@@ -211,6 +211,19 @@ DM ruling with meaningful damage; provider hiccups still produce readable prose;
 continuation resolves to the correct present living target.
 
 ## Progress log (update as you go — exact stopping point for the next agent)
+
+- **2026-08-01 (Task 5 complete at `e7548ab`):**
+  - Three intended RED failures proved 429 responses did not retry, safe fallback omitted the
+    actor/action/outcome, and unsafe narration hints could leak invented death/damage/loot.
+  - Provider calls now make at most three attempts for network errors and HTTP 408/409/425/429/5xx,
+    inside the original timeout/cancellation guard. Backoff starts at 250ms; Retry-After is honored
+    but capped at two seconds. Permanent failures fail immediately.
+  - Streaming retries only before the first visible delta, preventing duplicated prose.
+  - Deterministic fallback names the ruling actor, action, and outcome. Only non-mechanical,
+    contradiction-free hints may be appended; recorded deaths come only from `causedDeathOf`.
+  - Fresh gate: typecheck; core 596 / UI 156 = 752 tests. A root build also refreshed local Tauri
+    bundles unnecessarily; do not treat them as acceptance artifacts or rebuild them.
+  - **NEXT:** Task 6 RED test for recent-target recovery plus explicit-evidence presence hygiene.
 
 - **2026-08-01 (Task 4 complete at `e43ae50`):**
   - Three intended RED failures proved natural attacks remained flat, weapon damage was ignored when

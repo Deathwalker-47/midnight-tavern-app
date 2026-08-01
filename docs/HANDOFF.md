@@ -1,7 +1,7 @@
 # HANDOFF - current live state
 
 **Updated:** 2026-08-01
-**Branch / source baseline:** local `main` at `e43ae50`; not pushed
+**Branch / source baseline:** local `main` at `e7548ab`; not pushed
 **App version:** `0.2.8`, unsigned
 **User-owned/untracked:** `.codex/`, `opencode.json` - preserve
 **Active plan:** `Plan/next-phase-internal-beta.md`, Task 15B in progress
@@ -9,7 +9,7 @@
 
 ## Current outcome
 
-Task 15A's seven packaged-acceptance fixes remain complete. Task 15B now has four green slices:
+Task 15A's seven packaged-acceptance fixes remain complete. Task 15B now has five green slices:
 
 - `bd968fb` guarantees an engine-owned, gate-legal natural attack in every full-stat story,
   including runtime compatibility for older frozen catalogues.
@@ -19,28 +19,30 @@ Task 15A's seven packaged-acceptance fixes remain complete. Task 15B now has fou
   premise-grounded rulebook of 30 actions and 6-10 skills.
 - `e43ae50` scales combat damage from authoritative attributes/equipment and gives generic encounters
   a six-hit pacing floor, including already-persisted fallback creatures.
+- `e7548ab` retries transient provider/network failures inside one bounded request window and replaces
+  vague safe narration with actor/action/outcome prose derived from immutable rulings.
+- Provider attempts are capped at three. Retryable HTTP statuses are 408, 409, 425, 429, and 5xx;
+  authentication, cancellation, malformed responses, and other permanent failures are not retried.
+- Numeric/date `Retry-After` is honored but capped at two seconds. A broken narrator stream retries
+  only before its first visible delta, preventing duplicate prose.
+- Safe fallback includes a benign sealed narration hint only when it contains no mechanical claim or
+  deterministic contradiction. Damage, loot, and death cannot leak from an unsafe hint.
 - Template NPCs keep their forge-authored mechanics. Existing-character presence transitions cannot
-  rewrite hard state.
-- The registrar sees sealed skill metadata and the reaction planner sees gate-relevant character
-  state, while the engine remains the final action/gate authority.
-- `CONTEXT.md` records the shared action/catalogue/loadout language and invariants.
-- Every action category has at least six universal families; forged catalogues contain exactly six
-  actions/category and at least four distinct families/category. The natural attack stays ungated.
+  rewrite hard state. The engine remains the final action/gate/death authority.
 - The browser bridge consumes the same universal registry JSON as core instead of a copied list.
-- New generic NPCs receive a six-baseline-hit lethal pool; named templates retain authored health.
-- Weapon props are inferred for weapon attacks and clamped before use. Ledger death authority is
-  unchanged.
 
 ## Fresh verification
 
-- Task-4 RED was observed in three focused assertions before implementation.
+- Task-5 RED was observed in three focused assertions before implementation.
+- Focused router/authority guard: **28 tests**, passed.
 - `npm run typecheck`: passed.
-- Complete core: **592 tests / 45 files**, passed.
+- Complete core: **596 tests / 45 files**, passed.
 - Complete UI: **156 tests / 25 files**, passed.
-- Root total: **748 tests**, passed.
-- Direct core and UI production builds passed; no Tauri package or installer was built.
-- Core Vitest is intentionally single-worker after repeated Windows/Node v24 worker `EPIPE` exits;
-  ordinary `npm test` is stable with that setting.
+- Root total: **752 tests**, passed.
+- `npm run build` passed, but this root command also includes `tauri build` and refreshed local
+  MSI/NSIS bundles. These are not acceptance artifacts and must not be rebuilt or handed off until
+  the human asks. Use direct core/UI builds for interim source slices.
+- Core Vitest intentionally runs one worker after repeated Windows/Node v24 worker `EPIPE` exits.
 - `git diff --check`: passed before the source commit.
 
 ## Expanded Task 15B queue
@@ -49,8 +51,8 @@ Task 15A's seven packaged-acceptance fixes remain complete. Task 15B now has fou
 2. **DONE:** bounded story-grounded emergent-NPC skill loadouts plus planner capability context.
 3. **DONE:** balanced v4 universal registry plus validated 30-action / 6-10-skill story rulebooks.
 4. **DONE:** meaningful deterministic damage scaling and generic encounter-health pacing.
-5. **NEXT (P1):** retry transient provider failures and generate richer ruling-derived safe fallback prose.
-6. Apply recent-target focus to degraded recovery and improve stale presence hygiene.
+5. **DONE:** bounded transient provider retries and richer authority-safe fallback prose.
+6. **NEXT (P2):** apply recent-target focus to degraded recovery and retire stale scene presence.
 
 ## Non-negotiable authority and domain rules
 
@@ -70,8 +72,8 @@ Task 15A's seven packaged-acceptance fixes remain complete. Task 15B now has fou
 
 ## Single next action
 
-Start Task 5 test-first. Add RED router coverage proving transient 408/409/425/429 and 5xx failures
-retry with bounded delay while authentication, validation, cancellation, and other permanent errors
-fail immediately. Add authority-guard RED coverage proving provider exhaustion yields concise prose
-that names the actor/action and success/failure result from the sealed ruling without inventing
-damage, death, loot, or state. Then run the full gate and update this baton before Task 6.
+Start Task 6 test-first. Reproduce a classifier/provider failure for "attack it again" with two
+present NPCs and prove deterministic recovery chooses the unique recent living player target. Then
+retire stale scene presence only from explicit scene evidence; never infer absence merely because a
+character was not named in one narrator turn. Preserve fail-closed ambiguity, registry history, and
+atomic turn commits. Run focused tests, typecheck, and the complete suites, then update every baton.

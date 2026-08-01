@@ -1180,3 +1180,30 @@ difficulty, ledger, and playthrough suites remained green. No Tauri package or i
 
 **Next:** Task 15B.5 - retry transient provider failures and replace generic safe narration with
 richer prose derived strictly from the authoritative ruling.
+
+---
+
+## 2026-08-01 - Task 15B.5: Provider resilience and authority-safe fallback prose
+
+**RED evidence.** Three focused assertions failed before implementation: an HTTP 429 response was
+returned immediately rather than retried; deterministic fallback contained only a model-authored
+hint and omitted actor/action/outcome; and a mechanically unsafe hint could assert unrecorded death,
+damage, and loot.
+
+**What landed.** `e7548ab` gives router completion and streaming calls at most three attempts for
+network failures and HTTP 408/409/425/429/5xx. Attempts share the original timeout and cancellation
+guard. Exponential delay begins at 250ms; numeric/date `Retry-After` is honored but capped at two
+seconds. Authentication, malformed output, cancellation, and permanent client failures do not
+retry. Narrator streaming retries only before any delta is visible, so a disconnect cannot duplicate
+already-shown prose. Deterministic safe narration now names the ruling actor, action, and outcome;
+it appends only hints with no mechanical vocabulary or deterministic contradiction and derives death
+solely from authoritative `causedDeathOf` evidence.
+
+**Verification.** Focused router/authority guard tests passed **28 tests / 2 files**. Fresh root
+typecheck passed. Complete suites passed: core **596 tests / 45 files** plus UI **156 tests / 25
+files**, **752 tests** total. `git diff --check` passed before commit. A root `npm run build` also
+invoked Tauri and refreshed local MSI/NSIS bundles despite no installer being needed; those outputs
+are not acceptance artifacts and will not be rebuilt or handed off.
+
+**Next:** Task 15B.6 - route degraded ambiguous continuation attacks through the unique recent living
+target and retire stale scene presence only from explicit validated evidence.

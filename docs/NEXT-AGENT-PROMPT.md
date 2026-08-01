@@ -5,10 +5,11 @@ Continue Midnight Tavern in `C:\Users\anuji\Documents\midnight-tavern-app`.
 Act as engineering manager and hands-on implementation agent. Work autonomously and sequentially;
 this repository forbids parallel coding agents. Do not ask the human to choose TypeScript
 architecture. Do not push. Preserve the user-owned untracked `.codex/` directory and
-`opencode.json`. Do not build an installer until the human asks.
+`opencode.json`. Do not build an installer until the human asks; root `npm run build` invokes Tauri,
+so use direct core/UI builds while source work remains.
 
-Read in full before editing: `AGENTS.md`, `CONTEXT.md`, `docs/HANDOFF.md`, newest `docs/WORKLOG.md`
-entries, `Plan/next-phase-internal-beta.md` Task 15B, and
+Read in full before editing: `AGENTS.md`, `CONTEXT.md`, `docs/HANDOFF.md`, newest
+`docs/WORKLOG.md` entries, `Plan/next-phase-internal-beta.md` Task 15B, and
 `docs/superpowers/plans/2026-08-01-live-combat-remediation.md`.
 
 Use codebase-memory-mcp before text search and re-index if symbols are stale. Follow strict RED ->
@@ -19,50 +20,45 @@ and the active plan, and commit coherent green changes with the required co-auth
 
 ## Current repository state
 
-- Local `main` at `e43ae50`; nothing pushed; unsigned app version `0.2.8`.
-- Task 15A's seven earlier packaged fixes remain complete.
-- Task 15B Tasks 1-4 are complete.
-- Fresh gate: core 592 / UI 156 = 748 tests passed; typecheck and direct core/UI builds passed.
+- Local `main` at `e7548ab`; nothing pushed; unsigned app version `0.2.8`.
+- Task 15A and Task 15B Tasks 1-5 are complete.
+- Fresh gate: core 596 / UI 156 = 752 tests passed; typecheck passed.
+- An unnecessary root build refreshed local MSI/NSIS bundles. They are not acceptance artifacts;
+  do not rebuild or distribute them.
 
-## What just landed
+## What landed in Task 15B
 
-- `bd968fb`: universal config v3 and runtime normalization guarantee a gate-legal, engine-resolved
-  `attack_natural` action for any full-stat creature, including older frozen stories.
-- `41c5963`: a newly grounded emergent NPC may select at most three sealed story skill ids. Generic
-  instantiation filters unknowns, deduplicates, and grants novice rank. Template and existing actors
-  cannot be mechanically overwritten by a runtime proposal.
-- `e3a4801`: registry v4 provides at least six universal families in every category. The forge now
-  validates 6-10 distinct premise-grounded skills and exactly 30 actions: six/category with at least
-  four families/category. Family/category mismatches fail validation, the natural attack stays
-  ungated, and browser/core consume the same universal JSON.
-- `e43ae50`: combat attacks add authoritative positive attribute power and bounded item damage.
-  Generic encounters use a six-hit damage floor, new generic NPCs receive a six-baseline-hit lethal
-  pool, and named templates keep authored health. Threshold-only ledger death is unchanged.
-- Registrar and reaction-planner prompts now contain the bounded information needed to choose legal,
-  role-appropriate capabilities/actions. Engine gates remain final authority.
-- Core Vitest intentionally runs one worker because repeated Windows/Node v24 pool workers exited
-  with `EPIPE`; the ordinary full command is stable with this setting.
+- `bd968fb`: every full-stat story has a gate-legal natural attack, including runtime compatibility.
+- `41c5963`: emergent NPCs select at most three sealed story skills and the planner sees their actual
+  gate-relevant capability state; the engine still owns legal actions.
+- `e3a4801`: universal registry v4 has balanced families and Forge validates 30 actions plus 6-10
+  premise-grounded skills, sharing the exact registry JSON across browser/core.
+- `e43ae50`: attacks scale with authoritative attributes/bounded item damage and generic encounters
+  use a six-hit health/damage pacing floor while threshold-only death remains authoritative.
+- `e7548ab`: complete/stream provider I/O retries transient network/408/409/425/429/5xx failures up
+  to three attempts inside the original timeout. Retry-After is capped at two seconds; permanent
+  failures do not retry; a stream never retries after emitting visible text. Deterministic fallback
+  names actor, action, and ruling outcome, keeps only non-mechanical safe hints, and cannot invent
+  damage, death, loot, or state.
 
-## Exact next task: provider resilience and authority-safe fallback prose
+## Exact next task: recent-target recovery and presence hygiene
 
-Implement Task 5 in the detailed plan, test-first:
+Implement Task 6 in the detailed plan, test-first:
 
-1. Trace provider calls and authority-guard fallback construction before editing.
-2. Add failing router tests for bounded retries of transient HTTP/network failures. Permanent
-   authentication, malformed output, explicit cancellation, and non-retryable client errors must
-   fail immediately; respect Retry-After when safely available.
-3. Implement a small shared retry policy with capped attempts, bounded delay, and no duplicate
-   mechanical commits. Retrying model I/O must never rerun the engine transaction.
-4. Add failing authority-guard tests for provider exhaustion after a valid ruling. Safe fallback
-   prose must identify actor/action plus success, failure, critical result, or denial from the ruling
-   and may mention only sealed effect hints/provenance. It must not invent death, damage, loot, or
-   state.
-5. Run focused tests, root typecheck, complete suites, and direct core/UI builds; commit and update
-   every baton document before Task 6.
-
-## Remaining queue after Task 5
-
-- Apply recent-target continuity to degraded classifier recovery and retire stale scene presence.
+1. Trace `deriveRecentPlayerTargetId`, classifier deterministic recovery, target resolution, turn
+   orchestration, and NPC presence transitions before editing.
+2. Add a failing end-to-end test: the classifier/provider fails for "attack it again" while two NPCs
+   are marked present, but exactly one living NPC was the player's most recent authoritative target.
+   Recovery must resolve that target and produce a normal ruling instead of `unresolved target`.
+3. Preserve fail-closed behavior when there is no unique recent living target, the target is dead or
+   absent, or the current text explicitly names a different/ambiguous target.
+4. Add presence-hygiene tests. Retire stale presence only from explicit, validated scene-exit or
+   scene-roster evidence. Do not delete registry characters or mark them absent merely because a
+   narrator turn omitted their name. Dead characters remain registry history but cannot act/target.
+5. Keep NPC-introduction/presence changes staged before classifier context and commit them atomically
+   with the turn; rollback/cancellation must leave no partial presence mutation.
+6. Run focused tests, root typecheck, and complete suites. Use direct core/UI builds only. Update all
+   baton documents and commit before claiming Task 15B source completion.
 
 ## Authority rules
 
