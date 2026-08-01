@@ -53,7 +53,10 @@ import {
   type StageMetric,
   type TurnStage,
 } from "./stagePolicy.js";
-import { discoverNarratedSceneEntities } from "./sceneEntityPromotion.js";
+import {
+  discoverNarratedSceneEntities,
+  type SceneEntityCandidate,
+} from "./sceneEntityPromotion.js";
 import { deriveRecentPlayerTargetId } from "./targetFocus.js";
 import {
   planNpcTransitions,
@@ -128,6 +131,56 @@ export async function requireStory(store: Store, storyId: string): Promise<Story
   const story = await store.stories.get(storyId);
   if (!story) throw new Error(`requireStory: unknown story ${storyId}`);
   return { ...story, schema: applyUniversalActionDefaults(story.schema) };
+}
+
+/** Merge deterministic narrator discoveries with model proposals without duplicating identities. */
+function mergeNarratedEntityTransitions(
+  transitions: readonly ApprovedNpcTransition[],
+  entities: readonly SceneEntityCandidate[],
+  roster: readonly CharacterRecord[],
+  storyId: string,
+  schema: StorySchema
+): ApprovedNpcTransition[] {
+  const merged = [...transitions];
+  const normalizedName = (name: string) => name.trim().toLocaleLowerCase("en-US");
+
+  for (const entity of entities) {
+    const byId = merged.find((transition) => transition.character.id === entity.id);
+    if (byId) {
+      byId.character = { ...byId.character, name: entity.name };
+      continue;
+    }
+
+    const existingCharacter = roster.find((character) => character.id === entity.id);
+    const sameNameIndex = merged.findIndex(
+      (transition) => normalizedName(transition.character.name) === normalizedName(entity.name)
+    );
+    if (existingCharacter) {
+      // A registrar may propose a new "Bram" while deterministic identity enrichment has proved
+      // that the already-registered "Man" is Bram. Replace that proposal with one update.
+      if (sameNameIndex >= 0 && merged[sameNameIndex]!.operation === "introduce") {
+        merged.splice(sameNameIndex, 1);
+      }
+      merged.push({
+        operation: "update",
+        character: { ...existingCharacter, name: entity.name },
+      });
+      continue;
+    }
+    if (sameNameIndex >= 0) continue;
+    merged.push({
+      operation: "introduce",
+      character: {
+        id: entity.id,
+        storyId,
+        name: entity.name,
+        isPlayer: false,
+        present: true,
+        hard: instantiateGeneric(schema, entity.id, entity.skillIds),
+      },
+    });
+  }
+  return merged;
 }
 
 /** True when a hard-state shell actually carries engine state (not an analyzer stub). */
@@ -614,26 +667,20 @@ async function runTurnOperation(
             : {}),
         }
       );
-      // Transitional deterministic fallback for older/smaller classifier routes. It is staged
-      // through the same atomic contract; narrator prose itself no longer writes the registry.
-      if (npcTransitions.length === 0) {
-        npcTransitions = discoverNarratedSceneEntities({
+      // Deterministic grammar supplements the registrar and reconciles identity reveals with an
+      // existing generic actor. Both sources still flow through the same atomic transition list.
+      npcTransitions = mergeNarratedEntityTransitions(
+        npcTransitions,
+        discoverNarratedSceneEntities({
           storyId,
           schema,
           recentNarration,
           roster,
-        }).map((entity) => ({
-          operation: "introduce" as const,
-          character: {
-            id: entity.id,
-            storyId,
-            name: entity.name,
-            isPlayer: false,
-            present: true,
-            hard: instantiateGeneric(schema, entity.id),
-          },
-        }));
-      }
+        }),
+        roster,
+        storyId,
+        schema
+      );
       const transitionById = new Map(
         npcTransitions.map((transition) => [transition.character.id, transition])
       );
@@ -1005,35 +1052,18 @@ async function runTurnOperation(
       // registry before the turn commits, so a named person/creature is never left as prose-only
       // canon. These actors become mechanically active on the following beat; this turn cannot
       // retroactively give them an unruled action.
-      const narratedIntroductions = discoverNarratedSceneEntities({
-        storyId,
-        schema,
-        recentNarration: [prose],
-        roster,
-      }).map((entity) => ({
-        operation: "introduce" as const,
-        character: {
-          id: entity.id,
+      npcTransitions = mergeNarratedEntityTransitions(
+        npcTransitions,
+        discoverNarratedSceneEntities({
           storyId,
-          name: entity.name,
-          isPlayer: false,
-          present: true,
-          hard: instantiateGeneric(schema, entity.id, entity.skillIds),
-        },
-      }));
-      const knownIds = new Set(npcTransitions.map((transition) => transition.character.id));
-      const knownNames = new Set(
-        [...roster, ...npcTransitions.map((transition) => transition.character)].map((character) =>
-          character.name.trim().toLocaleLowerCase("en-US")
-        )
+          schema,
+          recentNarration: [prose],
+          roster,
+        }),
+        roster,
+        storyId,
+        schema
       );
-      for (const transition of narratedIntroductions) {
-        const name = transition.character.name.trim().toLocaleLowerCase("en-US");
-        if (knownIds.has(transition.character.id) || knownNames.has(name)) continue;
-        npcTransitions.push(transition);
-        knownIds.add(transition.character.id);
-        knownNames.add(name);
-      }
     }
     const narratorIdx = playerIdx + 1;
     const narratorMessageId = randomUUID();
@@ -1067,6 +1097,14 @@ async function runTurnOperation(
         await store.characters.setPresent(
           transition.character.id,
           transition.operation !== "leave"
+        );
+      }
+
+      for (const transition of npcTransitions) {
+        if (transition.operation === "introduce") continue;
+        await store.characters.updateName(
+          transition.character.id,
+          transition.character.name
         );
       }
 

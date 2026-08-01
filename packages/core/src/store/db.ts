@@ -464,6 +464,15 @@ WHERE id = story_id || ':scene:nothing'
 ALTER TABLE turn_operations ADD COLUMN stage_metrics_json TEXT;
 `,
   },
+  {
+    version: 15,
+    name: "checkpoint_character_identity",
+    // Identity enrichment is timeline state: rewind must restore the provisional name that was
+    // known before a narrator-established canonical identity landed.
+    sql: `
+ALTER TABLE turn_checkpoints ADD COLUMN identity_pre_json TEXT NOT NULL DEFAULT '{}';
+`,
+  },
 ];
 
 /**

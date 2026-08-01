@@ -21,6 +21,7 @@ const ACTOR_HEADS = new Set([
   "boy",
   "child",
   "creature",
+  "dog",
   "elder",
   "enemy",
   "girl",
@@ -53,7 +54,16 @@ const ACTOR_VERBS = [
   "laughs",
   "asks",
   "calls",
+  "called",
+  "descended",
+  "emerged",
+  "glanced",
+  "held",
+  "jerked",
+  "left",
+  "lowered",
   "lurks",
+  "made",
   "moves",
   "runs",
   "says",
@@ -62,9 +72,25 @@ const ACTOR_VERBS = [
   "steps",
   "turns",
   "replies",
+  "repeated",
+  "said",
+  "sniffed",
+  "studied",
   "walks",
   "watches",
+  "wagged",
 ];
+
+const GENERIC_HUMAN_ACTORS = new Set([
+  "boy",
+  "child",
+  "elder",
+  "girl",
+  "man",
+  "stranger",
+  "survivor",
+  "woman",
+]);
 
 /** Capitalized sentence starters that can satisfy the proper-name grammar but never name an NPC. */
 const NON_CHARACTER_PROPER_ACTORS = new Set([
@@ -104,6 +130,31 @@ function properDisplayName(value: string): string {
       part.length > 0 ? part[0]!.toLocaleUpperCase("en-US") + part.slice(1) : part
     )
     .join(" ");
+}
+
+interface ExplicitIdentities {
+  all: Set<string>;
+  self: Set<string>;
+}
+
+/** Extract direct identity declarations without treating arbitrary capitalized prose as a name. */
+function explicitIdentities(narration: string): ExplicitIdentities {
+  const all = new Set<string>();
+  const self = new Set<string>();
+  const proper = "([A-Z][\\p{L}'-]+(?:\\s+[A-Z][\\p{L}'-]+){0,2})";
+  const selfPattern = new RegExp(`\\b(?:I am|I['’]m|my name is)\\s+${proper}\\b`, "gu");
+  for (const match of narration.matchAll(selfPattern)) {
+    const identity = normalize(match[1] ?? "");
+    if (!identity || NON_CHARACTER_PROPER_ACTORS.has(identity)) continue;
+    self.add(identity);
+    all.add(identity);
+  }
+  const introducedPattern = new RegExp(`\\b(?:This is|Meet)\\s+${proper}\\b`, "gu");
+  for (const match of narration.matchAll(introducedPattern)) {
+    const identity = normalize(match[1] ?? "");
+    if (identity && !NON_CHARACTER_PROPER_ACTORS.has(identity)) all.add(identity);
+  }
+  return { all, self };
 }
 
 function narratedActors(narration: string, schema: StorySchema): string[] {
@@ -218,9 +269,37 @@ export function discoverNarratedSceneEntities(
   const knownIds = new Set(input.roster.map((character) => character.id));
   const found = new Map<string, SceneEntityCandidate>();
   const establishedActors = new Set(narratedActors(rawNarration, input.schema));
+  const identities = explicitIdentities(rawNarration);
+  const playerNames = new Set(
+    input.roster.filter((character) => character.isPlayer).map((character) => normalize(character.name))
+  );
+  for (const identity of [...identities.self]) {
+    if (!playerNames.has(identity)) continue;
+    identities.self.delete(identity);
+    identities.all.delete(identity);
+  }
+  for (const identity of identities.all) establishedActors.add(identity);
+  const genericHumans = input.roster.filter(
+    (character) =>
+      !character.isPlayer &&
+      character.present &&
+      GENERIC_HUMAN_ACTORS.has(normalize(character.name))
+  );
+  const selfIdentity = identities.self.size === 1 ? [...identities.self][0] : undefined;
+  const identityTarget = selfIdentity && genericHumans.length === 1 ? genericHumans[0] : undefined;
 
   for (const target of establishedActors) {
-    if (!narration.includes(target) || knownNames.has(target)) continue;
+    if (!narration.includes(target)) continue;
+    // "Bram repeated ... I am Bram Kelder" is one person, not Bram plus Bram Kelder.
+    if ([...identities.all].some((identity) => identity !== target && identity.startsWith(`${target} `))) {
+      continue;
+    }
+    // A revealed self-identity replaces the generic human from the same recent scene. When an
+    // older package failed to register that generic row, suppress it so repair creates only the
+    // canonical named person.
+    if (selfIdentity && GENERIC_HUMAN_ACTORS.has(target)) continue;
+    const enrichesGeneric = target === selfIdentity && identityTarget !== undefined;
+    if (knownNames.has(target) && !enrichesGeneric) continue;
 
     const template = input.schema.npcTemplates.find((candidate) => {
       const templateName = normalize(candidate.name);
@@ -234,8 +313,10 @@ export function discoverNarratedSceneEntities(
     const properName = properDisplayName(target);
     const name =
       template?.name ?? (rawNarration.includes(properName) ? properName : displayName(target));
-    const baseId = `${input.storyId}:scene:${slug(template?.templateId ?? target)}`;
-    if (knownIds.has(baseId)) continue;
+    const baseId = enrichesGeneric
+      ? identityTarget.id
+      : `${input.storyId}:scene:${slug(template?.templateId ?? target)}`;
+    if (knownIds.has(baseId) && !enrichesGeneric) continue;
     found.set(baseId, { id: baseId, name, skillIds: inferredSkillIds(rawNarration, input.schema) });
   }
 

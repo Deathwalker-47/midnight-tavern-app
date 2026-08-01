@@ -11,7 +11,7 @@
  */
 import { describe, it, expect, beforeEach } from "vitest";
 import { openStore, type Store } from "../../src/store/index.js";
-import { submitTurn } from "../../src/orchestrator/index.js";
+import { deleteLastTurn, submitTurn } from "../../src/orchestrator/index.js";
 import { d20Sequence } from "../../src/engine/dice.js";
 import type {
   Router,
@@ -560,6 +560,120 @@ describe("submitTurn — pipeline order & transaction", () => {
         }),
       ])
     );
+  });
+
+  it("enriches a generic narrated actor with a revealed name without duplicating the NPC", async () => {
+    await store.characters.setPresent("wight", false);
+    const genericId = `${storyId}:scene:man`;
+    const genericHard = structuredClone((await store.characters.get("wight"))!.hard);
+    genericHard.characterId = genericId;
+    await store.characters.insert({
+      id: genericId,
+      storyId,
+      name: "Man",
+      isPlayer: false,
+      hard: genericHard,
+    });
+    const narratorProse =
+      'Bram repeated your name. "I am Bram Kelder. This is Bess," he said.';
+    const router: Router = {
+      bindingFor: () => ({
+        provider: "openrouter",
+        model: "test",
+        source: "recommended",
+        samplersDirty: false,
+      }),
+      async complete(_role, prompt) {
+        if (prompt.system.includes("NPC presence registrar")) {
+          return { content: JSON.stringify({ transitions: [] }) };
+        }
+        if (prompt.system.includes("mechanical intent classifier")) {
+          return { content: JSON.stringify({ playerIntents: [], npcIntents: [], freeText: "" }) };
+        }
+        if (prompt.system.includes("strict consistency auditor")) {
+          return { content: JSON.stringify({ obeysRulings: true, contradictions: [] }) };
+        }
+        if (prompt.system.includes("DM loot adjudicator")) {
+          return { content: JSON.stringify({ award: false, reason: "No encounter." }) };
+        }
+        return { content: "{}" };
+      },
+      async stream(_role, _prompt, onDelta) {
+        onDelta(narratorProse);
+        return { content: narratorProse };
+      },
+    };
+
+    const result = await submitTurn(router, store, storyId, "What is your name?");
+    await result.background;
+
+    const roster = await store.characters.listByStory(storyId);
+    expect(roster.filter((character) => character.id === genericId)).toHaveLength(1);
+    expect((await store.characters.get(genericId))?.name).toBe("Bram Kelder");
+    expect(roster).toEqual(expect.arrayContaining([expect.objectContaining({ name: "Bess" })]));
+
+    await deleteLastTurn(store, storyId);
+    expect((await store.characters.get(genericId))?.name).toBe("Man");
+    expect((await store.characters.listByStory(storyId)).find((character) => character.name === "Bess"))
+      .toEqual(expect.objectContaining({ present: false }));
+  });
+
+  it("repairs narrator-established identities from an older prose-only transcript on the next turn", async () => {
+    await store.characters.setPresent("wight", false);
+    await store.messages.insert({
+      id: "legacy-man-introduction",
+      storyId,
+      idx: 0,
+      role: "narrator",
+      content: "The man called from the farmhouse. Bess made a low sound beside him.",
+      createdAt: 1,
+    });
+    await store.messages.insert({
+      id: "legacy-name-reveal",
+      storyId,
+      idx: 1,
+      role: "narrator",
+      content: 'Bram repeated your name. "I am Bram Kelder. This is Bess," he said.',
+      createdAt: 2,
+    });
+    const router: Router = {
+      bindingFor: () => ({
+        provider: "openrouter",
+        model: "test",
+        source: "recommended",
+        samplersDirty: false,
+      }),
+      async complete(_role, prompt) {
+        if (prompt.system.includes("NPC presence registrar")) {
+          return { content: JSON.stringify({ transitions: [] }) };
+        }
+        if (prompt.system.includes("mechanical intent classifier")) {
+          return { content: JSON.stringify({ playerIntents: [], npcIntents: [], freeText: "" }) };
+        }
+        if (prompt.system.includes("strict consistency auditor")) {
+          return { content: JSON.stringify({ obeysRulings: true, contradictions: [] }) };
+        }
+        if (prompt.system.includes("DM loot adjudicator")) {
+          return { content: JSON.stringify({ award: false, reason: "No encounter." }) };
+        }
+        return { content: "{}" };
+      },
+      async stream(_role, _prompt, onDelta) {
+        const prose = "Bram and Bess wait beside the road while you consider your next move.";
+        onDelta(prose);
+        return { content: prose };
+      },
+    };
+
+    const result = await submitTurn(router, store, storyId, "I thank them and look west.");
+    await result.background;
+
+    const roster = await store.characters.listByStory(storyId);
+    expect(roster).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "Bram Kelder", present: true }),
+      expect.objectContaining({ name: "Bess", present: true }),
+    ]));
+    expect(roster.some((character) => character.name === "Man")).toBe(false);
   });
 
   it("times out a hung classifier, persists the metric, and completes one narration-only exchange", async () => {

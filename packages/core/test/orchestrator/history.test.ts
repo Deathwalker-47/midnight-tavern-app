@@ -22,6 +22,7 @@ import {
   setStoryDifficulty,
 } from "../../src/orchestrator/index.js";
 import { d20Sequence } from "../../src/engine/dice.js";
+import { capture, restore } from "../../src/orchestrator/checkpoint.js";
 import type {
   Router,
   RolePrompt,
@@ -144,6 +145,16 @@ describe("history ops — swipe / delete / rewind (§6)", () => {
       kestrel: true,
       wight: true,
     });
+  });
+
+  it("restores a character's prior display name after identity enrichment", async () => {
+    const checkpoint = await capture(store, storyId, "identity-message", 1);
+
+    await store.characters.updateName("wight", "Bram Kelder");
+    expect((await store.characters.get("wight"))?.name).toBe("Bram Kelder");
+
+    await restore(store, checkpoint);
+    expect((await store.characters.get("wight"))?.name).toBe("Grave-wight");
   });
 
   it("swipe regenerates prose as a new active variant without re-committing state", async () => {

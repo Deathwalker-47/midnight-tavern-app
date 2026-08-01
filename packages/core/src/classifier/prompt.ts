@@ -151,6 +151,7 @@ export const CLASSIFIER_SYSTEM = [
   "- Match by meaning and aliases, not merely exact wording. A concrete attack such as a knife lunge maps to the closest valid attack action.",
   "- Prefer narration (empty intents) over guessing. If no clear mechanical action is attempted, return empty playerIntents.",
   "- Dialogue, thoughts, ordinary prayer, routine maintenance, safe travel, and atmospheric gestures are narration, not mechanical intents, unless the player seeks a tracked change or faces a concrete obstacle.",
+  "- Assist means the player gives help to somebody else. Asking, calling, or pleading to receive help is dialogue, never Assist.",
   "- For every intent set stakes to one of: none, uncertain, danger, opposed, time_pressure, scarcity.",
   "- Use stakes=none for an unopposed routine action with no concrete risk. Future or atmospheric danger alone does not create stakes.",
   "- Use non-none stakes only when the current attempt faces a specific obstacle, active opposition, immediate danger, deadline, or scarce resource; briefly explain it in stakesReason.",

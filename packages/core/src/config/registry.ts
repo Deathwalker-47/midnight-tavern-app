@@ -239,6 +239,42 @@ function normalizePhrase(value: string): string {
     .trim();
 }
 
+/**
+ * Distinguish asking to receive help from offering help to somebody else. The universal `assist`
+ * aliases intentionally include the broad word "help", so direction must be established before
+ * deterministic recovery treats dialogue as a mechanical action.
+ */
+export function isPlayerRequestingHelp(phrase: string): boolean {
+  const normalized = normalizePhrase(phrase);
+  if (!normalized) return false;
+
+  // An explicit outward object wins even if the surrounding sentence also mentions needing help.
+  if (
+    /\b(?:i|we) (?:help|aid|assist|support) (?!me\b|us\b|myself\b|ourselves\b)(?:the )?[\p{L}\p{N}'-]+/u.test(
+      normalized
+    )
+  ) {
+    return false;
+  }
+
+  return (
+    /^(?:please )?help(?: me| us)?$/u.test(normalized) ||
+    /\b(?:i|we) (?:need|want|require|could use) (?:some )?(?:help|aid|assistance|support)\b/u.test(
+      normalized
+    ) ||
+    /\b(?:help|aid|assist|support) (?:me|us)\b/u.test(normalized) ||
+    /\b(?:can|could|will|would) (?:anyone|anybody|someone|somebody|you) (?:please )?(?:help|aid|assist|support)\b/u.test(
+      normalized
+    ) ||
+    /\b(?:ask|call|cry|shout|yell)(?:ing|ed|s)?\b.{0,40}\bfor (?:help|aid|assistance|support)\b/u.test(
+      normalized
+    ) ||
+    /\b(?:seek|seeking|find|finding|look|looking|get|getting)\b.{0,30}\b(?:help|aid|assistance|support)\b/u.test(
+      normalized
+    )
+  );
+}
+
 export function findUniversalAction(id: string) {
   return UNIVERSAL_ACTIONS_CONFIG.actions.find((action) => action.id === id);
 }
@@ -344,6 +380,7 @@ export function matchUniversalAction(phrase: string) {
   if (!normalized) return undefined;
   const padded = ` ${normalized} `;
   return UNIVERSAL_ACTIONS_CONFIG.actions.find((action) => {
+    if (action.id === "assist" && isPlayerRequestingHelp(phrase)) return false;
     if (normalizePhrase(action.id) === normalized || normalizePhrase(action.label) === normalized) {
       return true;
     }

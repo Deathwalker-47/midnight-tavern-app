@@ -65,6 +65,8 @@ export interface CharacterRepo {
   listPresentByStory(storyId: string): Promise<CharacterRecord[]>;
   /** Change scene presence without removing the character from the registry. */
   setPresent(id: string, present: boolean): Promise<void>;
+  /** Replace a provisional display name when narration establishes the character's identity. */
+  updateName(id: string, name: string): Promise<void>;
   /** Overwrite the engine-owned hard state for one character. */
   updateHard(id: string, hard: CharacterHardState): Promise<void>;
   /** Overwrite the analyzer-owned soft state (and tier) for one character. */
@@ -125,6 +127,13 @@ export function makeCharacterRepo(db: Db): CharacterRepo {
         toInt(present),
         id
       );
+      if (info.changes === 0) throw new Error(`No character with id "${id}" to update.`);
+    },
+
+    async updateName(id, name) {
+      const normalized = name.trim();
+      if (!normalized) throw new Error("Character name cannot be empty.");
+      const info = await db.run("UPDATE characters SET name = ? WHERE id = ?", normalized, id);
       if (info.changes === 0) throw new Error(`No character with id "${id}" to update.`);
     },
 

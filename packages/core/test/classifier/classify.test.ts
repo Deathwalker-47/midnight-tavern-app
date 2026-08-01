@@ -41,6 +41,20 @@ const reassureStory = makeStory({
     },
   ],
 });
+const assistStory = makeStory({
+  actions: [
+    ...story.actions,
+    {
+      ...story.actions.find((action) => action.id === "pick_lock")!,
+      id: "utility_assist",
+      label: "Assist",
+      description: "Help another character with their immediate action.",
+      aliases: ["help", "aid", "support"],
+      universalFamily: "assist",
+      requiresSkill: undefined,
+    },
+  ],
+});
 const present = [
   { id: "player", name: "Hero", isPlayer: true },
   { id: "guard", name: "Guard", isPlayer: false },
@@ -180,6 +194,44 @@ describe("buildClassifierSchema", () => {
 });
 
 describe("classify — behavior", () => {
+  it("keeps asking for help as dialogue instead of reversing it into an Assist action", async () => {
+    const spoken = '"Is anyone there? I need help!" you call out as you reach the road.';
+    const out = await classifyWithRecovery(
+      scripted([turn({ freeText: spoken })]),
+      assistStory,
+      {
+        playerMessage: spoken,
+        presentCharacters: [{ id: "player", name: "Hero", isPlayer: true }],
+        recentNarration: ["The road is empty and no one has answered yet."],
+      }
+    );
+
+    expect(out.recovered).toBe(false);
+    expect(out.recovery).toBeUndefined();
+    expect(out.turn.playerIntents).toEqual([]);
+    expect(out.turn.freeText).toBe(spoken);
+  });
+
+  it("still recovers Assist when the player clearly helps a named present character", async () => {
+    const out = await classifyWithRecovery(
+      scripted([turn({})]),
+      assistStory,
+      {
+        playerMessage: "I help the Guard lift the fallen beam.",
+        presentCharacters: present,
+        recentNarration: ["The Guard strains against the beam."],
+      }
+    );
+
+    expect(out.turn.playerIntents).toEqual([
+      expect.objectContaining({
+        actorId: "player",
+        actionId: "utility_assist",
+        targetId: "guard",
+      }),
+    ]);
+  });
+
   it("keeps a call for help narration-only instead of reassuring an absent survivor", async () => {
     const mistaken = turn({
       playerIntents: [{

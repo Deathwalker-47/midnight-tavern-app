@@ -19,6 +19,7 @@ import {
 import type { ClassifiedTurn, MechanicalIntent, StorySchema } from "../types/index.js";
 import {
   actionRequiresCharacterTarget,
+  isPlayerRequestingHelp,
   matchUniversalAction,
 } from "../config/index.js";
 import {
@@ -159,10 +160,14 @@ function recoverExplicitCatalogPlayerIntents(
   input: ClassifyInput
 ): CatalogFallback {
   const normalizedMessage = ` ${normalizePhrase(input.playerMessage)} `;
+  const requestingHelp = isPlayerRequestingHelp(input.playerMessage);
   const phraseOwners = new Map<string, Set<string>>();
   const phrasesByAction = new Map<string, string[]>();
 
   for (const action of schema.actions) {
+    if (requestingHelp && (action.id === "assist" || action.universalFamily === "assist")) {
+      continue;
+    }
     const phrases = [...new Set([action.id, action.label, ...(action.aliases ?? [])]
       .map(normalizePhrase)
       .filter(Boolean))];
@@ -177,6 +182,9 @@ function recoverExplicitCatalogPlayerIntents(
 
   const matches: ExplicitCatalogMatch[] = [];
   for (const action of schema.actions) {
+    if (requestingHelp && (action.id === "assist" || action.universalFamily === "assist")) {
+      continue;
+    }
     const uniquePhrases = (phrasesByAction.get(action.id) ?? []).filter(
       (phrase) => phraseOwners.get(phrase)?.size === 1
     );
@@ -347,7 +355,7 @@ async function classifyDetailed(
   const anyDropped = player.dropped + npc.dropped > 0;
   const activePlayers = input.presentCharacters.filter((character) => character.isPlayer);
   const activePlayerId = activePlayers.length === 1 ? activePlayers[0]!.id : undefined;
-  const playerIntents = activePlayerId
+  let playerIntents = activePlayerId
     ? player.kept.map((intent) => {
         if (intent.actorId === activePlayerId) return intent;
         const mistakenActorId = intent.actorId;
@@ -358,6 +366,12 @@ async function classifyDetailed(
         };
       })
     : player.kept;
+  if (isPlayerRequestingHelp(input.playerMessage)) {
+    playerIntents = playerIntents.filter((intent) => {
+      const action = schema.actions.find((candidate) => candidate.id === intent.actionId);
+      return action?.id !== "assist" && action?.universalFamily !== "assist";
+    });
+  }
 
   return {
     turn: {
