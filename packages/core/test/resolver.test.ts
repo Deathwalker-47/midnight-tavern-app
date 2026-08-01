@@ -163,6 +163,102 @@ describe("resolve — outcome branches", () => {
 });
 
 describe("resolve — effects & mutations", () => {
+  it("scales a natural strike by attacker power and generic encounter durability", () => {
+    const story = makeStory();
+    story.resources = [
+      { id: "hp", label: "Health", start: 100, max: 100, playerVisible: true, lethal: true },
+    ];
+    story.actions.push({
+      id: "universal_natural_attack",
+      universalFamily: "attack_natural",
+      category: "combat",
+      label: "Natural Attack",
+      governingAttribute: "str",
+      dc: 10,
+      effects: {
+        crit_success: { resourceDeltaTarget: { hp: -8 }, narrationHint: "A crushing hit." },
+        success: { resourceDeltaTarget: { hp: -4 }, narrationHint: "The strike lands." },
+        failure: { narrationHint: "The strike misses." },
+        crit_failure: { narrationHint: "The attacker overextends." },
+      },
+    });
+    const target = makeEnemy({ resources: { hp: { current: 100, max: 100 } } });
+    delete target.templateId;
+    const naturalIntent = intent({
+      actionId: "universal_natural_attack",
+      itemId: undefined,
+    });
+
+    const ordinary = resolve(
+      story,
+      makePlayer({ attributes: { str: 10 } }),
+      target,
+      naturalIntent,
+      d20Sequence([10])
+    );
+    const strong = resolve(
+      story,
+      makePlayer({ attributes: { str: 18 } }),
+      target,
+      naturalIntent,
+      d20Sequence([10])
+    );
+    const ordinaryDamage = ordinary.mutations.find(
+      (mutation) => mutation.kind === "resourceDelta" && mutation.characterId === "wight"
+    );
+    const strongDamage = strong.mutations.find(
+      (mutation) => mutation.kind === "resourceDelta" && mutation.characterId === "wight"
+    );
+
+    expect(ordinaryDamage).toMatchObject({ resourceId: "hp" });
+    expect(strongDamage).toMatchObject({ resourceId: "hp" });
+    expect(ordinaryDamage?.kind === "resourceDelta" ? ordinaryDamage.delta : 0).toBeLessThan(-4);
+    expect(strongDamage?.kind === "resourceDelta" ? strongDamage.delta : 0).toBeLessThan(
+      ordinaryDamage?.kind === "resourceDelta" ? ordinaryDamage.delta : 0
+    );
+  });
+
+  it("uses an applicable weapon damage prop even when an attack omits scaleByItemProp", () => {
+    const story = makeStory();
+    const attack = story.actions.find((action) => action.id === "attack_melee")!;
+    attack.governingAttribute = "str";
+    delete attack.effects.success.scaleByItemProp;
+
+    const result = resolve(
+      story,
+      makePlayer({ attributes: { str: 18 } }),
+      makeEnemy(),
+      intent(),
+      d20Sequence([7])
+    );
+    const damage = result.mutations.find(
+      (mutation) => mutation.kind === "resourceDelta" && mutation.characterId === "wight"
+    );
+
+    expect(result.ruling.roll?.outcome).toBe("success");
+    expect(damage).toMatchObject({ resourceId: "hp", delta: -14 });
+  });
+
+  it("bounds untrusted weapon damage props before applying them", () => {
+    const story = makeStory();
+    const attack = story.actions.find((action) => action.id === "attack_melee")!;
+    attack.governingAttribute = "str";
+    story.items.find((item) => item.id === "sword")!.props.damage = 999;
+
+    const result = resolve(
+      story,
+      makePlayer({ attributes: { str: 18 } }),
+      makeEnemy(),
+      intent(),
+      d20Sequence([7])
+    );
+    const damage = result.mutations.find(
+      (mutation) => mutation.kind === "resourceDelta" && mutation.characterId === "wight"
+    );
+
+    expect(damage).toMatchObject({ resourceId: "hp", delta: -28 });
+  });
+
   it("stages target damage scaled by the weapon's damage prop on success", () => {
     // success base -4 hp, sword damage prop 6 ⇒ -10.
     const r = resolve(makeStory(), makePlayer(), makeEnemy(), intent(), d20Sequence([11]));

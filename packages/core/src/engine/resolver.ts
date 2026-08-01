@@ -11,7 +11,8 @@
  *   3. modifier = MASTERY_MOD[rank] of the required skill (0 if the action has none).
  *   4. total = d20 + modifier. nat 20 ⇒ crit_success; nat 1 ⇒ crit_failure;
  *      opposed ⇒ higher total wins (ties defend); else total >= dc ? success : failure.
- *   5. apply effects[outcome]; scale resourceDeltaTarget by an item prop if used.
+ *   5. apply effects[outcome]; attacks add bounded attribute/equipment power and generic
+ *      encounters receive a six-hit damage floor before difficulty scaling.
  *   6. on success/crit_success of a skill-gated action: advance mastery deterministically.
  */
 import {
@@ -59,6 +60,30 @@ export interface ResolveOptions {
   recentSimilarUses?: number;
 }
 
+const GENERIC_ENCOUNTER_HITS = 6;
+const MAX_ITEM_DAMAGE_BONUS = 20;
+
+function isAttackAction(action: ActionDef): boolean {
+  const family = action.universalFamily ?? action.id;
+  return action.category === "combat" && family.startsWith("attack_");
+}
+
+function isGenericNpc(character: CharacterHardState | undefined): boolean {
+  return Boolean(character && !character.isPlayer && !character.templateId);
+}
+
+function boundedDamageBonus(value: number | undefined): number {
+  if (value === undefined || !Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(MAX_ITEM_DAMAGE_BONUS, Math.round(value)));
+}
+
+interface AttackDamageContext {
+  lethalResourceIds: ReadonlySet<string>;
+  attributeBonus: number;
+  itemBonus: number;
+  genericEncounter: boolean;
+}
+
 /** The learned skill an action uses for its modifier, if any. */
 function skillFor(actor: CharacterHardState, action: ActionDef): LearnedSkill | undefined {
   return action.requiresSkill
@@ -94,7 +119,8 @@ function stageEffect(
   actor: CharacterHardState,
   target: CharacterHardState | undefined,
   itemPropValue: number | undefined,
-  difficulty: DifficultyConfig
+  difficulty: DifficultyConfig,
+  attackDamage?: AttackDamageContext
 ): { mutations: StagedMutation[]; damageAdjustments: DamageAdjustment[] } {
   const muts: StagedMutation[] = [];
   const damageAdjustments: DamageAdjustment[] = [];
@@ -138,11 +164,27 @@ function stageEffect(
   }
 
   if (effect.resourceDeltaTarget && target) {
-    const deltas =
-      effect.scaleByItemProp && itemPropValue !== undefined
-        ? scaleTargetDeltas(effect.resourceDeltaTarget, itemPropValue)
-        : effect.resourceDeltaTarget;
-    for (const [resId, delta] of Object.entries(deltas)) {
+    for (const [resId, authoredDelta] of Object.entries(effect.resourceDeltaTarget)) {
+      if (
+        authoredDelta < 0 &&
+        attackDamage &&
+        attackDamage.lethalResourceIds.has(resId)
+      ) {
+        const targetMaximum = target.resources[resId]?.max ?? 0;
+        const encounterFloor = attackDamage.genericEncounter
+          ? Math.max(1, Math.ceil(targetMaximum / GENERIC_ENCOUNTER_HITS))
+          : 1;
+        const magnitude =
+          Math.max(Math.abs(authoredDelta), encounterFloor) +
+          attackDamage.attributeBonus +
+          attackDamage.itemBonus;
+        stageResource(target, resId, -magnitude);
+        continue;
+      }
+      const delta =
+        effect.scaleByItemProp && itemPropValue !== undefined
+          ? scaleTargetDeltas({ [resId]: authoredDelta }, itemPropValue)[resId]!
+          : authoredDelta;
       stageResource(target, resId, delta);
     }
   }
@@ -444,9 +486,29 @@ export function resolve(
           intent.itemId
         )
       : undefined) ?? itemFor(schema, intent);
-  const itemPropValue =
-    effect.scaleByItemProp && item ? item.props[effect.scaleByItemProp] : undefined;
-  const stagedEffect = stageEffect(effect, actor, target, itemPropValue, difficulty);
+  const attack = isAttackAction(action);
+  const itemPropName =
+    effect.scaleByItemProp ??
+    (attack && action.requiresItemKind === "weapon" ? "damage" : undefined);
+  const itemPropValue = itemPropName && item ? item.props[itemPropName] : undefined;
+  const attackDamage: AttackDamageContext | undefined = attack
+    ? {
+        lethalResourceIds: new Set(
+          schema.resources.filter((resource) => resource.lethal).map((resource) => resource.id)
+        ),
+        attributeBonus: Math.max(0, attributeModifier),
+        itemBonus: boundedDamageBonus(itemPropValue),
+        genericEncounter: isGenericNpc(actor) || isGenericNpc(target),
+      }
+    : undefined;
+  const stagedEffect = stageEffect(
+    effect,
+    actor,
+    target,
+    itemPropValue,
+    difficulty,
+    attackDamage
+  );
   mutations.push(...stagedEffect.mutations);
 
   // 6. mastery advancement on a successful skill-gated action.

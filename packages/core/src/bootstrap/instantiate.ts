@@ -5,11 +5,11 @@
  *  • `instantiatePlayer` builds the protagonist from `startingState` at freeze time.
  *  • `instantiateFromTemplate` builds an NPC from an `NpcTemplate` (the orchestrator calls
  *    this the first time an NPC acts mechanically — §5 step 3).
- *  • `instantiateGeneric` builds a generic NPC with median lethal resources and any validated
+ *  • `instantiateGeneric` builds a generic NPC with encounter-sized lethal resources and validated
  *    story skill seeds when no template matches — §5 step 3's fallback.
  *
- * All three are pure: they read the frozen schema and return a fresh state object. Resource
- * ceilings always come from the schema's ResourceDef; a starting value never invents a max.
+ * All three are pure: they read the frozen schema and return a fresh state object. Player and
+ * template ceilings come from ResourceDef; generic fallback ceilings are deterministically bounded.
  */
 import type {
   StorySchema,
@@ -88,28 +88,35 @@ export function instantiateFromTemplate(
   };
 }
 
-/** The median of the lethal resources' maxima (generic NPC hp), or 0 when stat-less. */
-function medianLethalMax(schema: StorySchema): number {
-  const maxima = schema.resources.filter((r) => r.lethal).map((r) => r.max).sort((a, b) => a - b);
-  if (maxima.length === 0) return 0;
-  const mid = Math.floor(maxima.length / 2);
-  return maxima.length % 2 === 1 ? maxima[mid]! : Math.round((maxima[mid - 1]! + maxima[mid]!) / 2);
+const GENERIC_ENCOUNTER_HITS = 6;
+
+function genericLethalMaximum(schema: StorySchema, resourceId: string, schemaMax: number): number {
+  const naturalAttack = schema.actions.find(
+    (action) =>
+      action.universalFamily === "attack_natural" || action.id === "universal_natural_attack"
+  );
+  const successDelta = naturalAttack?.effects.success.resourceDeltaTarget?.[resourceId];
+  if (successDelta === undefined || successDelta >= 0) return schemaMax;
+  return Math.min(schemaMax, Math.max(1, Math.abs(successDelta) * GENERIC_ENCOUNTER_HITS));
 }
 
 /**
  * Instantiate a generic NPC when no template matches (§5 step 3): only the lethal
- * resource(s), seeded to the median lethal max so a plain foe can still take and deal
- * damage. Valid proposed story skills are seeded at novice rank; inventory remains empty.
+ * resource(s), sized for six baseline natural hits so a plain foe remains playable even when
+ * player-scale health is much larger. Valid proposed story skills are seeded at novice rank;
+ * inventory remains empty.
  */
 export function instantiateGeneric(
   schema: StorySchema,
   characterId: string,
   proposedSkillIds: readonly string[] = []
 ): CharacterHardState {
-  const hp = medianLethalMax(schema);
   const resources: CharacterHardState["resources"] = {};
   for (const def of schema.resources) {
-    if (def.lethal) resources[def.id] = { current: hp, max: hp };
+    if (def.lethal) {
+      const maximum = genericLethalMaximum(schema, def.id, def.max);
+      resources[def.id] = { current: maximum, max: maximum };
+    }
   }
   const knownSkillIds = new Set(schema.skills.map((skill) => skill.id));
   const skills: LearnedSkill[] = [...new Set(proposedSkillIds)]
