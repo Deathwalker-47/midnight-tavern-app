@@ -172,6 +172,26 @@ were handled as one dependency-ordered batch before the requested combined insta
 - [x] Run the complete automated/native gate, update every baton document, commit coherent green
   changes, and build/hash one combined unsigned installer.
 
+## Task 15D: Directional Intent and Revealed-Identity Repair
+
+Packaged testing on 2026-08-01 showed a spoken request for help being reversed into an `Assist`
+ruling, while ordinary past-tense narration introduced a man and Bess and later established “I am
+Bram Kelder. This is Bess” without adding either actor to the registry.
+
+- [x] Inspect the packaged SQLite transcript, turn operations, and character rows to establish the
+  exact failure boundary rather than infer it from the screenshot.
+- [x] Treat receiving/requesting help as dialogue at both model-output and deterministic-recovery
+  boundaries while preserving an explicit outward Assist to a named present character.
+- [x] Recognize bounded past-tense actor prose and direct identity declarations, including ordinary
+  people and animals, without promoting scenery, quantifiers, or the player's repeated identity.
+- [x] Reconcile a revealed proper name with one existing generic actor id; do not add a duplicate.
+- [x] Persist display-name enrichment atomically and add migration/checkpoint support so rewind or
+  delete restores the earlier provisional identity.
+- [x] Repair the already-persisted prose-only Bram/Bess transcript on its first turn under the new
+  build before classification.
+- [x] Run the complete automated/native gate, update every baton document, commit coherent green
+  changes, and build/hash one combined unsigned installer.
+
 ## Internal-Beta exit criteria (the finish line for this phase)
 
 - A user can create **or import** a story, play it, close the app, reopen it, and continue.

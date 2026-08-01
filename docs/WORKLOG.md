@@ -1402,3 +1402,42 @@ optimized Rust, MSI, and NSIS; a fresh incremental `cargo check` also passed. Fr
 
 All three report `NotSigned`, expected until the later release/signing phase. Manual provider-backed
 acceptance remains the human's next step; automated success does not claim that visual journey.
+
+---
+
+## 2026-08-01 — Task 15D: directional Assist and narrator identity repair
+
+**Packaged evidence and RED tests.** Read-only inspection of
+`%APPDATA%\com.midnighttavern.app\midnight-tavern.db` confirmed the exact live state. The classifier
+operation for “Is anyone there? I need help!” had fallen into deterministic recovery and matched the
+broad `help` alias as outward `Assist`, even though the structured classifier returned narration
+only. The next two narrator messages established a man, Bess, and then “I am Bram Kelder. This is
+Bess,” while the `characters` table still contained only the player. Five focused failures captured
+direction reversal, past-tense actor discovery, prose-only history repair, generic-name enrichment,
+and identity rollback.
+
+**What landed.** Source commit `963d71a` makes Assist directional: requests to receive help are
+dialogue at both model-output and local-recovery boundaries, while “I help the Guard…” still resolves
+normally. Bounded entity grammar now recognizes ordinary past-tense actor prose, dogs, and direct
+self/introduction declarations. A revealed name enriches one present generic human row instead of
+creating a second person; the player's own repeated introduction is excluded. Deterministic
+discoveries supplement and reconcile registrar proposals, so a smaller provider cannot omit a real
+actor or create a duplicate. Character display names can now be updated, migration 15 snapshots
+identity in turn checkpoints, and rewind/delete restores the prior provisional name. An exact
+integration fixture starts with the already-broken Bram/Bess transcript and proves the next turn
+registers both before classification.
+
+**Verification and package.** Fresh root typecheck passed. Complete suites passed: core **618 tests /
+45 files** plus UI **160 tests / 25 files**, **778 tests** total. `cargo check` passed. `npm run build`
+passed core, UI/Vite, optimized Rust, MSI, and NSIS. Fresh unsigned v0.2.8 artifacts:
+
+- NSIS `packages/shell/src-tauri/target/release/bundle/nsis/Midnight Tavern_0.2.8_x64-setup.exe` —
+  5,626,573 bytes — SHA-256 `1BE6146A299C1BEAB9FB2B40EE3DE11C00E64D49A3B0B34A714DF90D5F4DC059`.
+- MSI `packages/shell/src-tauri/target/release/bundle/msi/Midnight Tavern_0.2.8_x64_en-US.msi` —
+  9,269,248 bytes — SHA-256 `8237481D91917278E731B3ED387C3788293E9020A8BAFAC87563A650C9ED5CCB`.
+- App EXE `packages/shell/src-tauri/target/release/midnight-tavern.exe` — 22,799,360 bytes —
+  SHA-256 `FFD55BC0A7F5F7DBD06494BBC8B565A4FA7D60CB5DBF359D72911A38591D532D`.
+
+All report `NotSigned`. Manual installed-app acceptance remains open. In the affected existing save,
+the first new turn under this build repairs Bram Kelder and Bess from the two recent narrator
+messages before it classifies the player's action.
