@@ -238,14 +238,56 @@ function assertsMechanic(paragraph: string): boolean {
 }
 
 const DEATH_ASSERTION =
-  /\b(?:kill(?:ed|s)?|slay(?:s|ing|ed)?|dies?|falls?\s+dead|is\s+dead|lifeless\s+corpse)\b/i;
+  /\b(?:kill(?:ed|s)?|slain|slay(?:s|ing|ed)?|d(?:ie|ied|ies)|falls?\s+dead|is\s+dead|lifeless\s+corpse)\b/giu;
+
+/**
+ * The hard guard protects tracked life state, not the mere presence of a death-related word. Model
+ * prose may safely discuss danger in questions, counterfactuals, or explicit negations. Keep this
+ * deliberately grammatical and local so an earlier "not wounded" cannot excuse a later concrete
+ * "falls dead" assertion in the same paragraph.
+ */
+function assertsConcreteDeath(prose: string): boolean {
+  const matcher = new RegExp(DEATH_ASSERTION.source, DEATH_ASSERTION.flags);
+  for (const match of prose.matchAll(matcher)) {
+    const index = match.index ?? 0;
+    const clauseStart = Math.max(
+      prose.lastIndexOf(".", index - 1),
+      prose.lastIndexOf("!", index - 1),
+      prose.lastIndexOf("?", index - 1),
+      prose.lastIndexOf(";", index - 1),
+      prose.lastIndexOf("\n", index - 1)
+    ) + 1;
+    const nextStops = [".", "!", "?", ";", "\n"]
+      .map((token) => prose.indexOf(token, index + match[0].length))
+      .filter((candidate) => candidate >= 0);
+    const clauseEnd = nextStops.length > 0 ? Math.min(...nextStops) : prose.length;
+    const punctuation = prose[clauseEnd];
+    if (punctuation === "?") continue;
+
+    const prefix = prose
+      .slice(Math.max(clauseStart, index - 140), index)
+      .toLocaleLowerCase("en-US")
+      .replace(/[’]/g, "'")
+      .replace(/[^\p{L}\p{N}'-]+/gu, " ")
+      .trim();
+    const modal = /\b(?:can|cannot|can't|could|couldn't|may|might|should|would|wouldn't)(?:\s+(?:already|ever|have|perhaps|possibly|still|yet)){0,3}\s*$/u;
+    const negated = /\b(?:(?:no\s+one|neither|nobody|none|not|never|without)(?:\s+[\p{L}'-]+){0,2}|(?:did|do|does|had|has|have|is|was|were)\s+not(?:\s+[\p{L}'-]+){0,2}|(?:can't|couldn't|didn't|doesn't|hadn't|hasn't|haven't|isn't|wasn't|weren't|won't)(?:\s+[\p{L}'-]+){0,2})\s*$/u;
+    const incomplete = /\b(?:(?:almost|nearly)(?:\s+(?:had|has|have))?|(?:attempted|refused|threatened|tried|trying)\s+to(?:\s+have)?|(?:wanted|wants)(?:\s+[\p{L}'-]+){0,2})\s*$/u;
+    const conditional = /\bif\b[^.!?;\n]{0,120}$/u;
+    if (modal.test(prefix) || negated.test(prefix) || incomplete.test(prefix) || conditional.test(prefix)) {
+      continue;
+    }
+    return true;
+  }
+  return false;
+}
 
 function deterministicContradiction(
   prose: string,
   rulings: readonly Ruling[]
 ): string | undefined {
   const recordedDeaths = rulings.flatMap((ruling) => ruling.causedDeathOf ?? []);
-  if (recordedDeaths.length === 0 && DEATH_ASSERTION.test(prose)) {
+  if (recordedDeaths.length === 0 && assertsConcreteDeath(prose)) {
     return "The draft declares a death, but no ruling reduced a lethal resource to zero.";
   }
   return undefined;

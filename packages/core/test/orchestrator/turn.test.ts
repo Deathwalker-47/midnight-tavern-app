@@ -676,6 +676,106 @@ describe("submitTurn — pipeline order & transaction", () => {
     expect(roster.some((character) => character.name === "Man")).toBe(false);
   });
 
+  it("reconciles Cyraeth villager aliases across registrar proposals and same-turn name reveals", async () => {
+    await store.characters.setPresent("wight", false);
+    const daenId = `${storyId}:scene:daen`;
+    const firstId = `${storyId}:scene:first-man`;
+    const youngerId = `${storyId}:scene:younger-man`;
+    const olderId = `${storyId}:scene:older-woman`;
+    const womanId = `${storyId}:scene:woman`;
+    const baseHard = structuredClone((await store.characters.get("wight"))!.hard);
+    for (const [id, name, present] of [
+      [daenId, "Daen", true],
+      [firstId, "First man", false],
+      [youngerId, "Younger man", false],
+      [olderId, "Older woman", false],
+      [womanId, "Woman", false],
+    ] as const) {
+      await store.characters.insert({
+        id,
+        storyId,
+        name,
+        isPlayer: false,
+        present,
+        hard: { ...structuredClone(baseHard), characterId: id },
+      });
+    }
+    await store.messages.insert({
+      id: "cyraeth-village-arrival",
+      storyId,
+      idx: 0,
+      role: "narrator",
+      content: [
+        "The first man raised his lantern. Daen \u2014 apparently the first man's name \u2014 lowered his weapon.",
+        "The younger man stepped onto his threshold. The older woman appeared beside him. The woman said nothing.",
+      ].join(" "),
+      createdAt: 1,
+    });
+    const narratorProse = [
+      "The younger man \u2014 Daenin, apparently some relation \u2014 shook his head.",
+      'The older woman drew closer. "He does not smell like blood," the woman said.',
+      '"That does not mean he is safe, Mera." Daenin still had not lowered his bow.',
+    ].join(" ");
+    const router: Router = {
+      bindingFor: () => ({
+        provider: "openrouter",
+        model: "test",
+        source: "recommended",
+        samplersDirty: false,
+      }),
+      async complete(_role, prompt) {
+        if (prompt.system.includes("NPC presence registrar")) {
+          return {
+            content: JSON.stringify({
+              transitions: [
+                { operation: "enter", characterId: firstId, name: "First man", grounding: "The first man raised his lantern" },
+                { operation: "enter", characterId: youngerId, name: "Younger man", grounding: "The younger man stepped onto his threshold" },
+                { operation: "enter", characterId: olderId, name: "Older woman", grounding: "The older woman appeared beside him" },
+                { operation: "enter", characterId: womanId, name: "Woman", grounding: "The woman said nothing" },
+              ],
+            }),
+          };
+        }
+        if (prompt.system.includes("mechanical intent classifier")) {
+          return { content: JSON.stringify({ playerIntents: [], npcIntents: [], freeText: "" }) };
+        }
+        if (prompt.system.includes("NPC action planner")) {
+          return { content: JSON.stringify({ actions: [] }) };
+        }
+        if (prompt.system.includes("strict consistency auditor")) {
+          return { content: JSON.stringify({ obeysRulings: true, contradictions: [] }) };
+        }
+        if (prompt.system.includes("DM loot adjudicator")) {
+          return { content: JSON.stringify({ award: false, reason: "No encounter." }) };
+        }
+        return { content: "{}" };
+      },
+      async stream(_role, _prompt, onDelta) {
+        onDelta(narratorProse);
+        return { content: narratorProse };
+      },
+    };
+
+    const result = await submitTurn(router, store, storyId, "I show them my empty hands.");
+    await result.background;
+
+    expect(await store.characters.get(daenId)).toEqual(
+      expect.objectContaining({ name: "Daen", present: true })
+    );
+    expect(await store.characters.get(firstId)).toEqual(
+      expect.objectContaining({ name: "First man", present: false })
+    );
+    expect(await store.characters.get(youngerId)).toEqual(
+      expect.objectContaining({ name: "Daenin", present: true })
+    );
+    expect(await store.characters.get(olderId)).toEqual(
+      expect.objectContaining({ name: "Mera", present: true })
+    );
+    expect(await store.characters.get(womanId)).toEqual(
+      expect.objectContaining({ name: "Woman", present: false })
+    );
+  });
+
   it("backfills an older departed creature into the registry without returning it to the scene", async () => {
     await store.characters.setPresent("wight", false);
     for (const [index, content] of [

@@ -213,6 +213,87 @@ describe("discoverNarratedSceneEntities", () => {
     ]);
   });
 
+  it("treats a narrative name explanation as an alias of an existing named villager", () => {
+    const daenId = "story-1:scene:daen";
+    const found = discoverNarratedSceneEntities({
+      storyId: "story-1",
+      schema: makeStory(),
+      recentNarration: [
+        'The first man raised his lantern. "Daen," the archer warned. Daen \u2014 apparently the first man\'s name \u2014 lowered his weapon.',
+      ],
+      roster: [
+        {
+          id: daenId,
+          storyId: "story-1",
+          name: "Daen",
+          isPlayer: false,
+          present: true,
+          hard: makeEnemy({ characterId: daenId }),
+        },
+      ],
+    });
+
+    expect(found.map(({ id, name, aliases }) => ({ id, name, aliases }))).toEqual([
+      {
+        id: daenId,
+        name: "Daen",
+        aliases: ["first man"],
+      },
+    ]);
+  });
+
+  it("enriches overlapping provisional villagers from appositive and vocative name reveals", () => {
+    const youngerId = "story-1:scene:younger-man";
+    const olderId = "story-1:scene:older-woman";
+    const womanId = "story-1:scene:woman";
+    const found = discoverNarratedSceneEntities({
+      storyId: "story-1",
+      schema: makeStory(),
+      recentNarration: [
+        'The younger man \u2014 Daenin, apparently some relation \u2014 shook his head. The older woman drew closer. "He does not smell like blood," the woman said. "That does not mean he is safe, Mera." Daenin still had not lowered his bow.',
+      ],
+      roster: [
+        {
+          id: youngerId,
+          storyId: "story-1",
+          name: "Younger man",
+          isPlayer: false,
+          present: true,
+          hard: makeEnemy({ characterId: youngerId }),
+        },
+        {
+          id: olderId,
+          storyId: "story-1",
+          name: "Older woman",
+          isPlayer: false,
+          present: true,
+          hard: makeEnemy({ characterId: olderId }),
+        },
+        {
+          id: womanId,
+          storyId: "story-1",
+          name: "Woman",
+          isPlayer: false,
+          present: true,
+          hard: makeEnemy({ characterId: womanId }),
+        },
+      ],
+    });
+
+    expect(found.map(({ id, name, aliases }) => ({ id, name, aliases }))).toEqual([
+      {
+        id: youngerId,
+        name: "Daenin",
+        aliases: ["younger man"],
+      },
+      {
+        id: olderId,
+        name: "Mera",
+        aliases: ["older woman", "woman"],
+      },
+    ]);
+  });
+
   it("does not rename a generic NPC when narration repeats the player's own introduction", () => {
     const genericId = "story-1:scene:man";
     const found = discoverNarratedSceneEntities({

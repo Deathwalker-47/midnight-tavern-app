@@ -145,6 +145,20 @@ function mergeNarratedEntityTransitions(
   const normalizedName = (name: string) => name.trim().toLocaleLowerCase("en-US");
 
   for (const entity of entities) {
+    const aliases = new Set((entity.aliases ?? []).map(normalizedName));
+    // A grounded reveal can prove that a model-proposed provisional row is another character's
+    // alias (Daen/First man, Mera/Woman). Do not activate or introduce that duplicate. A grounded
+    // leave is retained because it safely removes an already-present legacy duplicate.
+    for (let index = merged.length - 1; index >= 0; index -= 1) {
+      const transition = merged[index]!;
+      if (
+        transition.character.id !== entity.id &&
+        transition.operation !== "leave" &&
+        aliases.has(normalizedName(transition.character.name))
+      ) {
+        merged.splice(index, 1);
+      }
+    }
     const byId = merged.find((transition) => transition.character.id === entity.id);
     if (byId) {
       byId.character = { ...byId.character, name: entity.name };

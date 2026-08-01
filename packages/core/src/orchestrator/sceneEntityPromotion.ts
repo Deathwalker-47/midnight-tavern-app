@@ -4,6 +4,8 @@ import type { StorySchema } from "../types/index.js";
 export interface SceneEntityCandidate {
   id: string;
   name: string;
+  /** Narration-grounded provisional labels that refer to this same character. */
+  aliases?: string[];
   skillIds: string[];
   present?: boolean;
 }
@@ -181,6 +183,12 @@ interface ExplicitIdentities {
   self: Set<string>;
 }
 
+interface NarrativeIdentityReveal {
+  identity: string;
+  alias?: string;
+  index: number;
+}
+
 /** Extract direct identity declarations without treating arbitrary capitalized prose as a name. */
 function explicitIdentities(narration: string): ExplicitIdentities {
   const all = new Set<string>();
@@ -199,6 +207,117 @@ function explicitIdentities(narration: string): ExplicitIdentities {
     if (identity && !NON_CHARACTER_IDENTITIES.has(identity)) all.add(identity);
   }
   return { all, self };
+}
+
+/**
+ * Extract bounded third-person identity reveals used by ordinary narrator prose. These patterns
+ * require both a proper name and either an actor description or a dialogue vocative; they do not
+ * promote arbitrary capitalized words.
+ */
+function narrativeIdentityReveals(narration: string): NarrativeIdentityReveal[] {
+  const reveals: NarrativeIdentityReveal[] = [];
+  const proper = "([A-Z][\\p{L}'-]+(?:\\s+[A-Z][\\p{L}'-]+){0,2})";
+  const heads = [...ACTOR_HEADS].join("|");
+  const actor = `((?:[a-z'-]+\\s+){0,3}(?:${heads}))`;
+  const dash = "(?:\\u2014|\\u2013|-)";
+
+  // "Daen — apparently the first man's name — lowered his weapon."
+  const explainedName = new RegExp(
+    `\\b${proper}\\s*${dash}\\s*(?:apparently\\s+)?(?:the\\s+)?${actor}['\\u2019]s\\s+name\\s*${dash}`,
+    "gu"
+  );
+  for (const match of narration.matchAll(explainedName)) {
+    const identity = normalize(match[1] ?? "");
+    const alias = normalize(match[2] ?? "");
+    if (!identity || !alias || NON_CHARACTER_PROPER_ACTORS.has(identity)) continue;
+    reveals.push({ identity, alias, index: match.index ?? 0 });
+  }
+
+  // "The younger man — Daenin, apparently some relation — shook his head."
+  const appositiveName = new RegExp(
+    `\\b(?:[Aa]n?|[Tt]he)\\s+${actor}\\s*${dash}\\s*${proper}(?:\\s*,[^\\u2014\\u2013\\n-]{0,100})?\\s*${dash}`,
+    "gu"
+  );
+  for (const match of narration.matchAll(appositiveName)) {
+    const alias = normalize(match[1] ?? "");
+    const identity = normalize(match[2] ?? "");
+    if (!identity || !alias || NON_CHARACTER_PROPER_ACTORS.has(identity)) continue;
+    reveals.push({ identity, alias, index: match.index ?? 0 });
+  }
+
+  // Dialogue vocatives can reveal a nearby provisional actor: `"Not safe, Mera."`
+  const vocativeName = new RegExp(`,\\s*${proper}\\s*[.!?]?\\s*["”']`, "gu");
+  for (const match of narration.matchAll(vocativeName)) {
+    const identity = normalize(match[1] ?? "");
+    if (!identity || NON_CHARACTER_PROPER_ACTORS.has(identity)) continue;
+    reveals.push({ identity, index: match.index ?? 0 });
+  }
+
+  const unique = new Map<string, NarrativeIdentityReveal>();
+  for (const reveal of reveals.sort((left, right) => left.index - right.index)) {
+    unique.set(`${reveal.index}:${reveal.identity}:${reveal.alias ?? ""}`, reveal);
+  }
+  return [...unique.values()];
+}
+
+function aliasFamily(
+  seed: string,
+  candidates: readonly CharacterRecord[]
+): string[] {
+  const normalizedSeed = normalize(seed);
+  const related = candidates
+    .map((candidate) => normalize(candidate.name))
+    .filter(
+      (name) =>
+        name === normalizedSeed ||
+        normalizedSeed.endsWith(` ${name}`) ||
+        name.endsWith(` ${normalizedSeed}`)
+    )
+    .sort((left, right) => right.length - left.length);
+  return [...new Set([normalizedSeed, ...related])].filter(Boolean);
+}
+
+/** Prefer a more specific provisional label when a broad duplicate overlaps it (Woman/Older woman). */
+function canonicalContextCandidates(
+  narration: string,
+  candidates: readonly CharacterRecord[]
+): CharacterRecord[] {
+  const normalizedNarration = normalize(narration);
+  return candidates.filter((candidate) => {
+    const name = normalize(candidate.name);
+    return !candidates.some((other) => {
+      if (other.id === candidate.id) return false;
+      const otherName = normalize(other.name);
+      return otherName.endsWith(` ${name}`) && normalizedNarration.includes(otherName);
+    });
+  });
+}
+
+function contextualNarrativeTarget(
+  narration: string,
+  revealIndex: number,
+  candidates: readonly CharacterRecord[]
+): CharacterRecord | undefined {
+  const before = narration.slice(Math.max(0, revealIndex - 600), revealIndex);
+  let best: { candidate: CharacterRecord; score: number } | undefined;
+  let tied = false;
+  for (const candidate of canonicalContextCandidates(narration, candidates)) {
+    const pattern = new RegExp(
+      `\\b${escapeRegExp(candidate.name).replace(/\\s+/g, "\\s+")}\\b`,
+      "giu"
+    );
+    let lastIndex = -1;
+    for (const match of before.matchAll(pattern)) lastIndex = match.index ?? lastIndex;
+    if (lastIndex < 0) continue;
+    const score = lastIndex * 100 + normalize(candidate.name).length;
+    if (!best || score > best.score) {
+      best = { candidate, score };
+      tied = false;
+    } else if (score === best.score && candidate.id !== best.candidate.id) {
+      tied = true;
+    }
+  }
+  return tied ? undefined : best?.candidate;
 }
 
 function isDepictedActor(narration: string, index: number | undefined): boolean {
@@ -384,12 +503,55 @@ export function discoverNarratedSceneEntities(
     identities.all.delete(identity);
   }
   for (const identity of identities.all) establishedActors.add(identity);
-  const genericHumans = input.roster.filter(
+  const allGenericHumans = input.roster.filter(
     (character) =>
       !character.isPlayer &&
-      character.present &&
       isGenericHumanActor(character.name)
   );
+  const genericHumans = allGenericHumans.filter((character) => character.present);
+  const claimedGenericIds = new Set<string>();
+  const aliasesByIdentity = new Map<string, string[]>();
+
+  for (const reveal of narrativeIdentityReveals(rawNarration)) {
+    if (playerNames.has(reveal.identity)) continue;
+    const existingIdentity = input.roster.find(
+      (character) => normalize(character.name) === reveal.identity
+    );
+    const exactAliasTarget = reveal.alias
+      ? allGenericHumans.find((character) => normalize(character.name) === reveal.alias)
+      : undefined;
+    const contextualCandidates = genericHumans.filter(
+      (character) => !claimedGenericIds.has(character.id)
+    );
+    const target =
+      existingIdentity ??
+      exactAliasTarget ??
+      contextualNarrativeTarget(rawNarration, reveal.index, contextualCandidates);
+    if (target?.isPlayer) continue;
+
+    const aliasSeed = reveal.alias ?? (target && isGenericHumanActor(target.name) ? target.name : "");
+    const aliases = aliasSeed ? aliasFamily(aliasSeed, allGenericHumans) : [];
+    for (const alias of aliases) establishedActors.delete(alias);
+
+    if (!target) {
+      establishedActors.add(reveal.identity);
+      if (aliases.length > 0) aliasesByIdentity.set(reveal.identity, aliases);
+      continue;
+    }
+    if (isGenericHumanActor(target.name)) claimedGenericIds.add(target.id);
+    const meaningfulAliases = aliases.filter((alias) => alias !== reveal.identity);
+    if (normalize(target.name) === reveal.identity && meaningfulAliases.length === 0) continue;
+    const existing = found.get(target.id);
+    found.set(target.id, {
+      id: target.id,
+      name: properDisplayName(reveal.identity),
+      ...(meaningfulAliases.length > 0
+        ? { aliases: [...new Set([...(existing?.aliases ?? []), ...meaningfulAliases])] }
+        : {}),
+      skillIds: inferredSkillIds(rawNarration, input.schema),
+    });
+  }
+
   const selfIdentity = identities.self.size === 1 ? [...identities.self][0] : undefined;
   const identityTarget = selfIdentity
     ? contextualIdentityTarget(rawNarration, selfIdentity, genericHumans) ??
@@ -428,6 +590,9 @@ export function discoverNarratedSceneEntities(
     found.set(baseId, {
       id: baseId,
       name,
+      ...(aliasesByIdentity.get(target)?.length
+        ? { aliases: aliasesByIdentity.get(target)! }
+        : {}),
       skillIds: inferredSkillIds(rawNarration, input.schema),
       ...(!latestNarration.includes(target) ? { present: false } : {}),
     });

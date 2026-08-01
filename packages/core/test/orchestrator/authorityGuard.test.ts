@@ -242,6 +242,50 @@ describe("generateGuardedNarration — progressive verified streaming", () => {
     expect(result.usedSafeFallback).toBe(true);
   });
 
+  it("does not mistake negated or hypothetical death-language in dialogue for a narrated death", async () => {
+    const beats = [
+      'Daenin says, "The shade-stalker could have killed you in those woods."',
+      '"That does not mean anyone is dead," Mera replies.',
+    ];
+    const { router } = streamingRouterFor(
+      beats,
+      JSON.stringify({ obeysRulings: true, contradictions: [] })
+    );
+    const deltas: string[] = [];
+
+    const result = await generateGuardedNarration(
+      router,
+      { system: "Narrate.", user: "Reassure the villagers." },
+      [ruling],
+      { onDelta: (delta) => deltas.push(delta) }
+    );
+
+    expect(result.usedSafeFallback).toBe(false);
+    expect(result.prose).toContain("could have killed you");
+    expect(result.prose).toContain("does not mean anyone is dead");
+    expect(deltas.join("")).toBe(result.prose);
+  });
+
+  it.each([
+    "He is not wounded, but he falls dead at your feet.",
+    "The villager died at your feet.",
+    "The shade-stalker was slain by the blow.",
+  ])("still rejects a concrete unruled death despite nearby wording: %s", async (prose) => {
+    const { router } = streamingRouterFor(
+      [prose],
+      JSON.stringify({ obeysRulings: true, contradictions: [] })
+    );
+
+    const result = await generateGuardedNarration(
+      router,
+      { system: "Narrate.", user: "Advance the scene." },
+      [ruling]
+    );
+
+    expect(result.usedSafeFallback).toBe(true);
+    expect(result.prose).not.toBe(prose);
+  });
+
   it("never exposes a mechanical paragraph the auditor rejects", async () => {
     const { router } = streamingRouterFor(
       [SAFE_PARAGRAPH, MECHANICAL_LIE],
