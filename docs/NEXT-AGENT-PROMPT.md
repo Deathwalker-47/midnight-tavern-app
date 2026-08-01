@@ -7,78 +7,78 @@ this repository forbids parallel coding agents. Do not ask the human to choose T
 architecture. Do not push. Preserve the user-owned untracked `.codex/` directory and
 `opencode.json`.
 
-Read in full before editing: `AGENTS.md`, `CONTEXT.md`, `docs/HANDOFF.md`, newest
-`docs/WORKLOG.md` entries, `Plan/next-phase-internal-beta.md` Task 15B, and
-`docs/superpowers/plans/2026-08-01-live-combat-remediation.md`.
+Read in full before editing: `AGENTS.md`, `CONTEXT.md`, `docs/HANDOFF.md`, the newest
+`docs/WORKLOG.md` entries, and Tasks 15A-15C in `Plan/next-phase-internal-beta.md`. Use
+codebase-memory-mcp before text search and re-index if symbols are stale. For defects, follow strict
+RED -> observe the intended failure -> minimal implementation -> GREEN. Begin every PowerShell
+command with an explicit `Set-Location -LiteralPath
+'C:\Users\anuji\Documents\midnight-tavern-app'`.
 
-Use codebase-memory-mcp before text search and re-index if symbols are stale. For new defects follow
-strict RED -> observe the intended failure -> minimal implementation -> GREEN. Every PowerShell
-command must begin with explicit
-`Set-Location -LiteralPath 'C:\Users\anuji\Documents\midnight-tavern-app'`. Before stopping, run
-typecheck and the complete suite, append WORKLOG, overwrite HANDOFF, update this prompt and the active
-plan, and commit coherent green changes with the required co-author trailer.
+Before stopping, run typecheck and the complete test suite, append WORKLOG, overwrite HANDOFF,
+update this prompt and the active plan, and commit coherent green changes with the required
+co-author trailer.
 
 ## Current repository state
 
-- Local `main` source at `5f4e85d`, followed by a docs-only Task 15B closeout commit; nothing pushed.
-- Unsigned app version `0.2.8`.
-- Task 15A and all six Task 15B source slices are complete.
-- Fresh gate: core 601 / UI 156 = 757 tests passed; typecheck and optimized package build passed.
+- Local `main` source is `76c6c5e`, followed by a docs-only Task 15C closeout; nothing is pushed.
+- Unsigned app version `0.2.8`; Tasks 15A-15C source and automated gates are complete.
+- Fresh gate: core 609 / UI 160 = **769 tests** passed; typecheck, `cargo check`, and optimized
+  package build passed.
 - Preferred installer:
   `packages/shell/src-tauri/target/release/bundle/nsis/Midnight Tavern_0.2.8_x64-setup.exe`
-  SHA-256 `467262CF7144E53560A88351142CA113E053C31339489994489104329D7B5E3B`.
+  SHA-256 `CC5624D67E6CA6454BBFB5C5C19207B1E55E91D0A78C27FC4A0C695C4DE0F2CF`.
 - MSI alternative:
   `packages/shell/src-tauri/target/release/bundle/msi/Midnight Tavern_0.2.8_x64_en-US.msi`
-  SHA-256 `9A5E0834616DE18A8F4A05FEFFEEC25EF5A5FB3DC3BB03782D14BABFAAE6E145`.
+  SHA-256 `601C5A8ABE573A876424A1BAB7818C2E76D5449B6C0A566AB159D76F9FFC4CCC`.
 - Both installers are intentionally unsigned.
 
-## What Task 15B delivered
+## What Task 15C delivered
 
-- A gate-legal natural attack in every full-stat story, including old frozen catalogues.
-- At most three sealed story skills for a newly grounded emergent NPC; planners see actual learned
-  skills/resources/inventory, while the engine remains the only action/gate authority.
-- Universal registry v4 with balanced combat/social/exploration/crafting/utility families.
-- Forge validation for exactly 30 premise-grounded actions and 6-10 skills with protected natural
-  attack, family/category validation, resume, and repair guarantees.
-- Attribute/item-scaled damage and a six-hit generic encounter pacing floor; named templates retain
-  authored durability and death still requires lethal threshold evidence.
-- Up to three transient network/408/409/425/429/5xx provider attempts inside one original timeout;
-  capped Retry-After, no retry on permanent errors, and no streaming retry after visible output.
-- Safe fallback prose names actor/action/outcome and filters unrecorded damage/death/loot/state.
-- Classifier-stage timeout recovery uses only a unique recent present living target for continuation
-  wording. Explicit names override it; ambiguous/dead/absent focus still fails closed.
-- Existing NPC presence can retire from a named exit or an exact committed roster sentence such as
-  "You are alone now." Omission, player-only assertions, and dramatic uses of "alone" do not count.
-  Presence commits atomically; registry history is retained.
+- Every target-requiring sealed action needs one unambiguous, present, non-player target; a call for
+  help with no survivor stays narration-only.
+- Stateful output filtering strips internal Chronicle Note blocks from streamed and persisted prose.
+- The narrator may create NPCs organically. Every actual named/described person or creature is
+  promoted into the registry before the same turn commits, with hard state and up to three usable
+  sealed story skills. It cannot act retroactively in its introduction prose; it can act through the
+  authoritative planner/engine from the next beat.
+- Provider-key validation uses an authenticated minimal chat even when model discovery is public.
+- Narration retry clears stale provider notices and always settles Play state.
+- The same package includes the retained-Forge import guard, 120-second Forge fragment deadline,
+  UUID-safe fallback names, visible narrator degradation/retry controls, and ruling-before-streaming.
 
-## Exact next task: process human packaged acceptance
+## Exact next task: consume human packaged acceptance
 
-Do not invent another source task before the human tests. Ask for or consume their packaged results,
-then reproduce each observed issue and create a new dependency-ordered plan. The intended acceptance
-journey should cover:
+Do not invent another source task before the human tests. Consume their installed-app results,
+reproduce each problem, and create a dependency-ordered plan before editing. The journey must cover:
 
-1. Fresh create/import and Forge cancel -> fresh restart behavior.
-2. A premise-relevant 30-action / 6-10-skill rulebook and usable Possible Moves.
-3. Every encountered NPC/creature appearing in the registry, with per-character mentality/current
-   fields and character-specific history.
-4. A hostile creature autonomously attacking through an engine ruling; meaningful HP changes; two
-   player strikes allowed; death only when lethal health reaches zero.
-5. Rulings visible before verified narration; readable deterministic prose if providers fail.
-6. "Attack it again" choosing the newest living target despite an older present NPC, while explicit
-   names override and ambiguity still pauses safely.
-7. Explicit scene departure retiring presence without deleting registry history.
-8. Overview hierarchy and follow-latest scrolling remaining stable.
+1. Fresh create/import and Forge cancel -> genuinely fresh restart.
+2. Premise-relevant 30-action / 6-10-skill rulebook and useful Possible Moves.
+3. Organic named NPC/creature introduction immediately creating a registry dossier with mentality,
+   current fields, character-specific history, hard state, and story-appropriate usable skills.
+4. The newly introduced NPC remaining prose-only in its introduction beat, then autonomously taking
+   a legal engine-resolved action from the next beat when its hostility/goal warrants it.
+5. Two legal player strikes, meaningful health changes, and death only at lethal health threshold.
+6. Rulings visible before verified narration; no Chronicle Note/internal markup; safe readable
+   fallback when a provider fails; Retry Narration always settles.
+7. Targetless calls/dialogue never resolving against an invented survivor, while explicit names and
+   unique recent-target continuation still work and ambiguity pauses safely.
+8. Correct NanoGPT key validation, Overview hierarchy, per-character dossier memory, and stable
+   follow-latest scrolling.
 
-Do not claim manual acceptance until the human reports it. If they find defects, preserve the same
-authority rules and update `Plan/`, `docs/HANDOFF.md`, `docs/WORKLOG.md`, and this prompt before stopping.
+Do not claim manual acceptance until the human reports it. If defects appear, preserve the same
+authority rules and update `Plan/`, `docs/HANDOFF.md`, `docs/WORKLOG.md`, and this prompt before
+stopping.
 
 ## Authority rules
 
 - One story owns one frozen executable action catalogue. NPCs receive capability loadouts, never
   model-authored private action lists.
+- The narrator may originate fictional actors, but the registry owns their existence and the engine
+  owns all subsequent mechanical agency.
 - Engine/DM owns gates, dice, effects, damage, death, budgets, target legality, loot, progression,
   persistence, and rollback. Models select sealed ids and write prose only.
-- Every actual fictional NPC/creature must be registry-backed; scenery and vague nouns must not.
+- Every actual fictional NPC/creature must be registry-backed; scenery, crowds, statues, murals, and
+  vague nouns must not become characters.
 - Only present living actors participate. Rulings appear before narration. Death requires lethal
   threshold evidence. Player and NPC action budgets remain separate.
 - Browser/SQLite bridge parity is mandatory; browser code cannot import native or `node:` modules.

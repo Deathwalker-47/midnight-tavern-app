@@ -6,6 +6,131 @@ landed, why, verification, and any gotcha the next agent needs. Live state is in
 
 ---
 
+## 2026-08-01 — Feature: surface the narrator degradation reason (no more silent fallback)
+
+Follow-up to the "no prose = provider 429" diagnosis. When the narrator falls back to the deterministic
+summary, the app now tells the player WHY instead of showing a silent terse recap that reads as a bug.
+
+- `authorityGuard.ts`: `GuardedNarrationResult.fallbackReason?: string`. Captures the narrator stream
+  error (runStage swallows it into the fallback, so it's grabbed in a wrapper first) and sets a short
+  player-facing reason at every safe-fallback return: `describeProviderFailure` maps HTTP 429 →
+  "the AI provider is rate-limiting requests (HTTP 429)", 5xx/other statuses, and timeout; audit-driven
+  fallbacks use a fixed "couldn't be verified against the DM rulings" reason.
+- `turn.ts`: `TurnResult.narratorFallbackReason` populated from the narration result.
+- Bridge: `SubmitTurnResult.narratorFallbackReason` (core.ts type) threaded in both submit and retry
+  paths (`sqliteBridge.ts`); in-memory design-mode stub unchanged (canned success).
+- `playStore.ts`: new `narratorNotice?: string` state + `clearNarratorNotice()`; set from
+  `outcome.usedNarratorFallback` on submit/retry completion, cleared on the next turn / reset.
+- `Play.tsx`: a warn `InlineNotice` (`data-testid="narrator-notice"`) shown on a completed-but-degraded
+  turn — "Full narration unavailable this turn … {reason} …" with **Retry narration** (swipeLast),
+  **Change narrator model** (→ Role Matrix), and **Dismiss**.
+
+Tests: authorityGuard "reports a provider rate-limit (429) as the fallback reason"; Play "surfaces the
+fallback reason when the narrator degraded". Verified: typecheck clean; **core 604 / 45 + UI 158 / 25 =
+762** green. Not committed; no installer rebuilt.
+
+---
+
+## 2026-08-01 — Fix: raise Forge fragment deadline (60s clipped legit action-batch generation)
+
+Packaged v0.2.8 testing: Forge failed with "Story forging timed out while processing
+actions-exploration-crafting-utility after 60000ms." Logs
+(`%LOCALAPPDATA%/com.midnighttavern.app/logs/midnight-tavern.log`, `bootstrapper` role) show the
+fragments completing SUCCESSFULLY but slowly on `gemini-3.6-flash`: 45299 ms (2002 tokens) and
+49087 ms (3492 tokens) for the large action batches — then one crossed the 60s cap →
+`BootstrapTimeoutError`. This was NOT a 429; it was a genuine slow-but-working generation clipped by
+too-tight a deadline.
+
+**Fix.** `bootstrap/generate.ts` default `fragmentDeadlineMs` 60_000 → **120_000**. The deadline is a
+hung-provider backstop, not a cap on a legitimately slow large fragment; observed real durations
+(45–49s) left almost no headroom at 60s. 120s still catches a truly hung provider. No caller overrides
+the default (only tests pass it explicitly, unaffected). Verified: core **603 / 45** green, typecheck
+clean. Not committed; no installer rebuilt.
+
+**Note.** The 45–49s fragment times are themselves inflated by `gemini-3.6-flash` being the bound
+bootstrapper model under Electron Hub trial load. A faster/less-throttled model would forge quicker;
+the deadline bump makes the current binding reliable rather than racing the clock.
+
+---
+
+## 2026-08-01 — Fix: UUID leak in fallback prose + diagnose "no prose" as provider 429
+
+Packaged v0.2.8 testing, "Attack with your dagger" turn: the narration was the terse deterministic
+summary AND it leaked a raw actor id — *"74d6414e 2421 4fba B350 85ccbce8e8a7's Weapon Strike
+succeeds…"* — while the NPC ("Shadow Entity") rendered fine.
+
+**Bug fixed (UUID leak, source-verified + test-first).** `orchestrator/authorityGuard.ts::safeSummary`
+built the actor label with `humanizeId(ruling.actorId)`. For an NPC whose id is a readable slug
+(`shadow_entity` → "Shadow Entity") it looked fine by luck; the player's `actorId` is a UUID, so it
+rendered the raw id. Fix: `safeSummary` now takes an optional `nameFor(id)` resolver (added to
+`GuardedNarrationOptions`), resolves actor and `causedDeathOf` ids through it, and falls back to a
+UUID-safe humanization (`readableActor`/`isOpaqueId`) that never prints an opaque id — a resolved
+name wins, a readable slug is humanized, an opaque id becomes "The unnamed figure". `turn.ts` wires a
+roster-backed `nameFor` (full registry + this turn's NPC transitions) into `generateGuardedNarration`.
+Two RED tests in `authorityGuard.test.ts` reproduced the leak (resolved-name and no-resolver cases)
+before the fix. Verified: core **603 / 45** (+2), typecheck clean.
+
+**Root cause of "no prose" (NOT an app bug — provider rate limit).** App logs
+(`%LOCALAPPDATA%/com.midnighttavern.app/logs/midnight-tavern.log`) show the exact turn
+(2026-08-01 18:58:12, session `4c114d44`): narrator stream `electronhub` / `gemini-3.6-flash`,
+retried attempts 1→2 (250 ms) and 2→3 (500 ms), all `ProviderHttpError status 429`, then
+`llm.request.failed` at 3065 ms → deterministic fallback. Same 429 pattern at 16:31 (three fails) and
+2026-07-31 19:44. The provider (Electron Hub trial) is rate-limiting the narrator model; the retry
+loop (`router.ts`, 3 attempts, honors `Retry-After`) worked correctly and the fallback is by design.
+No code change resolves a sustained provider 429.
+
+**Recommended follow-ups (not yet done — needs product-owner call).**
+1. Surface the degradation reason to the user: when `generateGuardedNarration` falls back due to a
+   provider error, capture and thread the reason (e.g. "provider rate limit · 429") so Play shows a
+   clear notice instead of silent terse prose that reads as a bug. Cross-layer (router → stage → turn
+   → bridge → Play); the classifier path already has a "Mechanics safely paused" precedent.
+2. User-side immediate remedy: rebind the narrator role to a less rate-limited model, or add the
+   user's own provider key (Settings → Role Matrix). gemini-3.6-flash on the Electron Hub trial is the
+   throttled binding.
+
+Not committed pending the human's call. No installer rebuilt.
+
+---
+
+## 2026-08-01 — Fix: stale retained Forge hijacking a freshly imported card
+
+Packaged v0.2.8 testing: importing any character card (e.g. "The Mojave") landed on a Story
+Blueprint pre-filled with a *previous* story ("Dungeon Master Enhanced V2" — persona Jinwoo, a
+dragonborn-necromancer opening) regardless of what was imported. Screenshots also showed a retained
+Forge banner "electronhub: HTTP 429".
+
+**Root cause (source-verified via codebase-memory trace).**
+`screens/StoryBlueprint.tsx`'s mount effect (the retained-Forge rehydration) ran on every `creating`
+mount and, whenever a persisted `story-create` Forge operation existed, **unconditionally** overwrote
+`title`/`premise`/`statMode`/`blueprint`/`selectedOpening`/`personaId`/`continueWithoutPersona` from
+that old operation's request. The user's earlier Dungeon-Master forge had failed with HTTP 429,
+leaving a retained operation in SQLite; `Library.tsx::useImportedCard` set a fresh Mojave draft and
+navigated to the blueprint, whose `storedDraft` initializers loaded Mojave — then this effect clobbered
+it all back to the stale operation. It reproduced on every import until that retained Forge was cleared.
+
+**Fix.** A fresh draft the user deliberately brought in — a just-imported card, or a typed
+premise/title — is now authoritative. The rehydration effect early-returns when the arriving draft has
+an `importedCard` or a non-empty `premise`/`title`, so a stale, unrelated retained Forge never hijacks
+it. The retained Forge stays in storage and is still offered when creation starts from an empty draft
+(the existing resume / start-new paths are unchanged and still green). UI-only change; no bridge
+surface touched, so no parity impact.
+
+**Test-first.** New RED test in `StoryBlueprint.test.tsx` ("keeps a freshly imported card and does not
+let a stale retained Forge hijack it") reproduced the bug exactly (title read "Recovered Blueprint"
+instead of "The Mojave") before the one-guard fix made it green.
+
+**Verification.** `npm run typecheck` clean; focused StoryBlueprint suite 9/9 (incl. the two retained-
+Forge resume/start-new tests); full `npm test` **core 601 / 45 + UI 157 / 25 = 758** green. No installer
+rebuilt yet — the fix is in source only; a packaged rebuild is needed before it shows in the installed
+app. Not committed pending the human's call.
+
+**Gotcha for next agent.** The retained Forge is only offered from an *empty* new-story draft now. If a
+user with a stale retained Forge wants to resume it, they must start a new story without importing/typing
+first. That matches the reported intent (imports must win) but revisit if resume-after-import is ever
+wanted.
+
+---
+
 ## 2026-08-01 — Task 15B.1: gate-legal natural attack for every creature
 
 Completed `bd968fb`. Reproduced the installed shadow-creature failure at two independent boundaries:
@@ -1236,3 +1361,44 @@ SHA-256 hashes.
 
 **Next:** human provider-backed packaged acceptance. No known Task 15B source item remains; record
 new observations before changing code.
+
+---
+
+## 2026-08-01 — Task 15C: narration, organic NPC registry, and provider integrity
+
+**Packaged evidence and RED tests.** The installed app produced a targetless `Reassure Survivor`
+ruling when no survivor existed, exposed a `[Chronicle Note]` planning block, and let the narrator
+introduce Marta Hearthwright plus other individuals without registry rows. A NanoGPT key could be
+reported valid after only its public model catalogue loaded. Retrying degraded narration retained
+the old 401 banner while the busy indicator ran. Focused tests were observed failing for the action
+schema/recovery path, split-chunk internal-note stream, current-turn organic NPC promotion, public
+catalogue authentication false positive, and stale retry state.
+
+**What landed.** Target legality is now one shared catalogue rule used by prompt validation and
+deterministic recovery: opposed/target-effect/target-required universal actions need one different,
+present character, so a plain call for help stays narration-only. A stateful stream filter removes
+internal Chronicle Note blocks from deltas and stored prose even when markers span chunks. The
+narrator remains free to introduce people and creatures organically; bounded proper-name,
+appositive, actor-noun, and actor-verb grammar promotes them into the registry before the same turn
+commits. Generic promoted actors receive up to three sealed, story-authored usable skills, while
+mechanical action is deferred to the next beat and remains engine-gated. Provider key validation now
+requires a one-token authenticated chat request after discovery. Narration retry clears the stale
+fallback notice at start and settles `thinking`/phase on both success and failure.
+
+This batch also packages the already-tested retained-Forge import guard, 120-second Forge fragment
+deadline, UUID-safe fallback names, narrator degradation reason/actions, and ruling-before-streaming
+work that had remained source-only after the previous packaged build.
+
+**Verification and package.** Source landed as `76c6c5e`. Fresh root typecheck passed. Complete suites passed: core **609 tests /
+45 files** plus UI **160 tests / 25 files**, **769 tests** total. `npm run build` passed core, UI/Vite,
+optimized Rust, MSI, and NSIS; a fresh incremental `cargo check` also passed. Fresh unsigned v0.2.8 artifacts:
+
+- NSIS `packages/shell/src-tauri/target/release/bundle/nsis/Midnight Tavern_0.2.8_x64-setup.exe` —
+  5,624,379 bytes — SHA-256 `CC5624D67E6CA6454BBFB5C5C19207B1E55E91D0A78C27FC4A0C695C4DE0F2CF`.
+- MSI `packages/shell/src-tauri/target/release/bundle/msi/Midnight Tavern_0.2.8_x64_en-US.msi` —
+  9,265,152 bytes — SHA-256 `601C5A8ABE573A876424A1BAB7818C2E76D5449B6C0A566AB159D76F9FFC4CCC`.
+- App EXE `packages/shell/src-tauri/target/release/midnight-tavern.exe` — 22,795,264 bytes —
+  SHA-256 `053AB2F0FB98A9A5CAC59976F605DF7D7C48275C9A98962DB2390E039251902C`.
+
+All three report `NotSigned`, expected until the later release/signing phase. Manual provider-backed
+acceptance remains the human's next step; automated success does not claim that visual journey.

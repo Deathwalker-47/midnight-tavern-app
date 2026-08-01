@@ -153,6 +153,25 @@ Detailed execution plan:
 - [x] Run the full automated/native gate and refresh WORKLOG, HANDOFF, and next-agent prompt. Do not
   rebuild an installer until the human asks.
 
+## Task 15C: Live Narration and Registry Integrity Remediation
+
+Packaged testing on 2026-08-01 exposed one invalid social ruling, internal narrator markup, organic
+NPCs that remained prose-only, false-positive provider-key validation, and stale retry UI. These
+were handled as one dependency-ordered batch before the requested combined installer rebuild.
+
+- [x] Require an unambiguous present non-player target for every sealed action family/effect that
+  acts on another character; a call for help with no survivor present remains narration-only.
+- [x] Strip internal `[Chronicle Note]...[/Chronicle Note]` planning blocks from both streamed and
+  persisted narration, including tags split across provider chunks.
+- [x] Let the narrator introduce NPCs organically, then promote bounded named/described actors into
+  the registry before the turn commits; grant generic actors up to three usable sealed story skills.
+- [x] Validate provider credentials with a minimal authenticated chat request even when the provider
+  exposes a public model catalogue.
+- [x] Clear stale narrator-degradation notices when retry starts and always settle the Play busy
+  state after success or failure.
+- [x] Run the complete automated/native gate, update every baton document, commit coherent green
+  changes, and build/hash one combined unsigned installer.
+
 ## Internal-Beta exit criteria (the finish line for this phase)
 
 - A user can create **or import** a story, play it, close the app, reopen it, and continue.
