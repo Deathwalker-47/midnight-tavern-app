@@ -175,6 +175,44 @@ describe("discoverNarratedSceneEntities", () => {
     ]);
   });
 
+  it("enriches the contextually identified provisional human when several are present", () => {
+    const youngerId = "story-1:scene:younger-man";
+    const olderId = "story-1:scene:older-woman";
+    const found = discoverNarratedSceneEntities({
+      storyId: "story-1",
+      schema: makeStory(),
+      recentNarration: [
+        'The older woman waits by the door. The younger man lowers his bow. "I am Ewan," he said.',
+      ],
+      roster: [
+        {
+          id: youngerId,
+          storyId: "story-1",
+          name: "Younger man",
+          isPlayer: false,
+          present: true,
+          hard: makeEnemy({ characterId: youngerId }),
+        },
+        {
+          id: olderId,
+          storyId: "story-1",
+          name: "Older woman",
+          isPlayer: false,
+          present: true,
+          hard: makeEnemy({ characterId: olderId }),
+        },
+      ],
+    });
+
+    expect(found).toEqual([
+      {
+        id: youngerId,
+        name: "Ewan",
+        skillIds: ["silver_tongue", "lockpicking", "blade"],
+      },
+    ]);
+  });
+
   it("does not rename a generic NPC when narration repeats the player's own introduction", () => {
     const genericId = "story-1:scene:man";
     const found = discoverNarratedSceneEntities({

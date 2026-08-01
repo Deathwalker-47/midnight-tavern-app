@@ -143,6 +143,10 @@ const NON_CHARACTER_PROPER_ACTORS = new Set([
   "yours",
 ]);
 
+function isGenericHumanActor(value: string): boolean {
+  return GENERIC_HUMAN_ACTORS.has(normalize(value).split(" ").at(-1) ?? "");
+}
+
 function normalize(value: string): string {
   return value
     .toLocaleLowerCase("en-US")
@@ -166,6 +170,10 @@ function properDisplayName(value: string): string {
       part.length > 0 ? part[0]!.toLocaleUpperCase("en-US") + part.slice(1) : part
     )
     .join(" ");
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 interface ExplicitIdentities {
@@ -205,6 +213,39 @@ function isDepictedActor(narration: string, index: number | undefined): boolean 
   return /\b(?:carving|fresco|mural|painting|portrait|statue|tapestry)\b[^.!?\n]{0,60}\b(?:depicts?|depicted|of|portrays?|portrayed|shows?|showed)\s*$/iu.test(
     sentencePrefix
   );
+}
+
+function contextualIdentityTarget(
+  narration: string,
+  identity: string,
+  candidates: readonly CharacterRecord[]
+): CharacterRecord | undefined {
+  const declaration = new RegExp(
+    `\\b(?:I am|I['’]m|my name is)\\s+${escapeRegExp(properDisplayName(identity))}\\b`,
+    "giu"
+  );
+  let best: { candidate: CharacterRecord; score: number } | undefined;
+  let tied = false;
+  for (const match of narration.matchAll(declaration)) {
+    const start = match.index ?? 0;
+    const end = start + match[0].length;
+    const before = normalize(narration.slice(Math.max(0, start - 240), start));
+    const after = normalize(narration.slice(end, end + 160));
+    for (const candidate of candidates) {
+      const name = normalize(candidate.name);
+      const afterIndex = after.indexOf(name);
+      const beforeIndex = before.lastIndexOf(name);
+      const score = afterIndex >= 0 ? 10_000 - afterIndex : beforeIndex;
+      if (score < 0) continue;
+      if (!best || score > best.score) {
+        best = { candidate, score };
+        tied = false;
+      } else if (score === best.score && candidate.id !== best.candidate.id) {
+        tied = true;
+      }
+    }
+  }
+  return tied ? undefined : best?.candidate;
 }
 
 function narratedActors(narration: string, schema: StorySchema): string[] {
@@ -347,10 +388,13 @@ export function discoverNarratedSceneEntities(
     (character) =>
       !character.isPlayer &&
       character.present &&
-      GENERIC_HUMAN_ACTORS.has(normalize(character.name))
+      isGenericHumanActor(character.name)
   );
   const selfIdentity = identities.self.size === 1 ? [...identities.self][0] : undefined;
-  const identityTarget = selfIdentity && genericHumans.length === 1 ? genericHumans[0] : undefined;
+  const identityTarget = selfIdentity
+    ? contextualIdentityTarget(rawNarration, selfIdentity, genericHumans) ??
+      (genericHumans.length === 1 ? genericHumans[0] : undefined)
+    : undefined;
 
   for (const target of establishedActors) {
     if (!narration.includes(target)) continue;
@@ -361,7 +405,7 @@ export function discoverNarratedSceneEntities(
     // A revealed self-identity replaces the generic human from the same recent scene. When an
     // older package failed to register that generic row, suppress it so repair creates only the
     // canonical named person.
-    if (selfIdentity && GENERIC_HUMAN_ACTORS.has(target)) continue;
+    if (selfIdentity && isGenericHumanActor(target)) continue;
     const enrichesGeneric = target === selfIdentity && identityTarget !== undefined;
     if (knownNames.has(target) && !enrichesGeneric) continue;
 
