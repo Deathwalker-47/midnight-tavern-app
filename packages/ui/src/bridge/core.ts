@@ -62,6 +62,10 @@ export type {
   RulebookRegenerationImpact,
   AttributeAdvancementDecision,
 } from "@midnight-tavern/core";
+
+// Browser-safe shared data: importing the JSON avoids a hand-maintained catalogue copy without
+// evaluating core's native runtime graph.
+import universalActionsJson from "../../../core/src/config/universal-actions.json";
 export type {
   CharacterRecord,
   LivingCardView,
@@ -722,26 +726,8 @@ const MEMORY_MODEL_RECOMMENDATION_CONFIG: ModelRecommendationConfigView = {
 };
 
 /** Browser/dev fallback only; the packaged SQLite bridge reads the canonical core JSON config. */
-const MEMORY_UNIVERSAL_ACTIONS_CONFIG: UniversalActionConfig = {
-  version: 3,
-  actions: [
-    { id: "attack_melee", category: "combat", label: "Attack (melee)", description: "Strike a target at close range.", aliases: ["attack", "strike", "stab", "slash", "lunge", "punch", "kick"], defaultRequiresItemKind: "weapon", defaultTargetDamage: { success: 4, crit_success: 8 }, requiresCharacterTarget: true },
-    { id: "attack_ranged", category: "combat", label: "Attack (ranged)", description: "Attack a target from a distance.", aliases: ["shoot", "fire", "throw", "snipe"], defaultRequiresItemKind: "weapon", defaultTargetDamage: { success: 4, crit_success: 8 }, requiresCharacterTarget: true },
-    { id: "attack_natural", category: "combat", label: "Natural attack", description: "Strike at close range with the actor's body or an innate natural weapon.", aliases: ["punch", "kick", "bite", "claw", "gore", "slam"], defaultTargetDamage: { success: 4, crit_success: 8 }, requiresCharacterTarget: true },
-    { id: "defend", category: "combat", label: "Defend", description: "Brace, block, or parry an incoming threat.", aliases: ["block", "parry", "guard", "brace"], requiresCharacterTarget: false },
-    { id: "evade", category: "combat", label: "Evade", description: "Avoid a threat through movement or positioning.", aliases: ["dodge", "duck", "escape", "sidestep"], requiresCharacterTarget: false },
-    { id: "move", category: "utility", label: "Move", description: "Change position in the current scene.", aliases: ["walk", "run", "sprint", "climb", "swim"], requiresCharacterTarget: false },
-    { id: "observe", category: "exploration", label: "Observe", description: "Study immediately visible details.", aliases: ["look", "watch", "listen", "inspect"], requiresCharacterTarget: false },
-    { id: "search", category: "exploration", label: "Search", description: "Examine a person or place for something concealed.", aliases: ["investigate", "loot", "scavenge", "examine"], requiresCharacterTarget: false },
-    { id: "interact", category: "utility", label: "Interact", description: "Manipulate an object or environmental feature.", aliases: ["use", "open", "close", "pull", "push", "activate"], requiresCharacterTarget: false },
-    { id: "influence", category: "social", label: "Influence", description: "Persuade, reassure, command, or negotiate with someone.", aliases: ["persuade", "convince", "charm", "command", "negotiate"], requiresCharacterTarget: true },
-    { id: "deceive", category: "social", label: "Deceive", description: "Mislead someone through words or behavior.", aliases: ["lie", "bluff", "misdirect", "disguise"], requiresCharacterTarget: true },
-    { id: "use_item", category: "utility", label: "Use item", description: "Use an owned item for its intended purpose.", aliases: ["drink", "consume", "equip", "apply"], requiresCharacterTarget: false },
-    { id: "assist", category: "utility", label: "Assist", description: "Help another character with their immediate action.", aliases: ["help", "aid", "support"], requiresCharacterTarget: true },
-    { id: "recover", category: "utility", label: "Recover", description: "Catch breath or tend to an immediate condition.", aliases: ["rest", "heal", "bandage", "regain"], requiresCharacterTarget: false },
-    { id: "wait", category: "utility", label: "Wait", description: "Hold position and allow the scene to advance.", aliases: ["pause", "hold", "do nothing"], requiresCharacterTarget: false },
-  ],
-};
+const MEMORY_UNIVERSAL_ACTIONS_CONFIG =
+  universalActionsJson as UniversalActionConfig;
 
 const MEMORY_EQUIPMENT_LOOT_CONFIG: EquipmentLootConfig = {
   version: 1,

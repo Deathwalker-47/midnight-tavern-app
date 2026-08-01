@@ -22,14 +22,15 @@ const CATEGORIES: ActionCategory[] = [
   "utility",
 ];
 
-function universalFamily(category: ActionCategory): string {
-  return {
-    combat: "attack_melee",
-    social: "influence",
-    exploration: "search",
-    crafting: "interact",
-    utility: "wait",
-  }[category];
+function universalFamily(category: ActionCategory, index: number): string {
+  const families: Record<ActionCategory, readonly string[]> = {
+    combat: ["attack_melee", "attack_ranged", "attack_natural", "grapple", "control", "defend"],
+    social: ["influence", "deceive", "intimidate", "empathize", "provoke", "barter"],
+    exploration: ["observe", "search", "track", "navigate", "scout", "decipher"],
+    crafting: ["craft", "repair", "modify", "harvest", "concoct", "dismantle"],
+    utility: ["move", "interact", "use_item", "assist", "recover", "wait"],
+  };
+  return families[category][index]!;
 }
 
 const PHASE_A = {
@@ -68,15 +69,26 @@ const PHASE_A = {
     },
   ],
   tiers: [{ id: "common", label: "Common", minProgress: 0 }],
-  skills: CATEGORIES.map((category) => ({
-    id: `${category}_skill`,
-    name: `${category} skill`,
-    description: `Capability used for ${category}.`,
-    tier: "common",
-    prerequisites: [],
-    unlockPaths: [{ method: "trainer" as const, npcHint: "A suitable mentor", cost: {} }],
-    masteryAdvance: { successesPerRank: 3 },
-  })),
+  skills: [
+    ...CATEGORIES.map((category) => ({
+      id: `${category}_skill`,
+      name: `${category} skill`,
+      description: `Capability used for ${category}.`,
+      tier: "common",
+      prerequisites: [],
+      unlockPaths: [{ method: "trainer" as const, npcHint: "A suitable mentor", cost: {} }],
+      masteryAdvance: { successesPerRank: 3 },
+    })),
+    {
+      id: "premise_specialty",
+      name: "Premise Specialty",
+      description: "A capability grounded in the imported character premise.",
+      tier: "common",
+      prerequisites: [],
+      unlockPaths: [{ method: "trainer" as const, npcHint: "A suitable mentor", cost: {} }],
+      masteryAdvance: { successesPerRank: 3 },
+    },
+  ],
 };
 
 function effects(category: ActionCategory) {
@@ -89,14 +101,21 @@ function effects(category: ActionCategory) {
 }
 
 const ACTIONS: ActionDef[] = CATEGORIES.flatMap((category) =>
-  Array.from({ length: 4 }, (_, index) => ({
+  Array.from({ length: 6 }, (_, index) => ({
     id: `${category}_${index}`,
     category,
     label: `${category} ${index}`,
     description: `A bounded ${category} action.`,
     aliases: [`${category} option ${index}`],
-    universalFamily: universalFamily(category),
-    requiresSkill: `${category}_skill`,
+    universalFamily: universalFamily(category, index),
+    ...(category === "combat" && index === 2
+      ? {}
+      : {
+          requiresSkill:
+            category === "exploration" && index === 5
+              ? "premise_specialty"
+              : `${category}_skill`,
+        }),
     dc: 10 + index,
     effects: effects(category),
   }))

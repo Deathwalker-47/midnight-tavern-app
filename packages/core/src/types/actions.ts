@@ -85,7 +85,7 @@ export type ActionDef = z.infer<typeof ActionDefSchema>;
 export const LEARN_SKILL_ACTION_ID = "learn_skill";
 
 /** Catalog-shape invariants the bootstrapper must satisfy (§2.2). */
-export const CATALOG_MIN_ACTIONS = 20;
-export const CATALOG_MIN_PER_CATEGORY = 3;
+export const CATALOG_MIN_ACTIONS = 30;
+export const CATALOG_MIN_PER_CATEGORY = 6;
 export const DC_MIN = 5; // trivial
 export const DC_MAX = 25; // near-impossible

@@ -45,7 +45,7 @@ import {
 
 const CATEGORIES: ActionCategory[] = ["combat", "social", "exploration", "crafting", "utility"];
 
-/** One skill per category so every skill is exercised; ids are `${category}_skill`. */
+/** Baseline skill per category; the fixture adds one premise-specific specialty. */
 function skillFor(category: ActionCategory) {
   return {
     id: `${category}_skill`,
@@ -68,29 +68,35 @@ function effects(hint: string) {
   };
 }
 
-function universalFamily(category: ActionCategory): string {
-  return {
-    combat: "attack_melee",
-    social: "influence",
-    exploration: "search",
-    crafting: "interact",
-    utility: "wait",
-  }[category];
+function universalFamily(category: ActionCategory, index: number): string {
+  const families: Record<ActionCategory, readonly string[]> = {
+    combat: ["attack_melee", "attack_ranged", "attack_natural", "grapple", "control", "defend"],
+    social: ["influence", "deceive", "intimidate", "empathize", "provoke", "barter"],
+    exploration: ["observe", "search", "track", "navigate", "scout", "decipher"],
+    crafting: ["craft", "repair", "modify", "harvest", "concoct", "dismantle"],
+    utility: ["move", "interact", "use_item", "assist", "recover", "wait"],
+  };
+  return families[category][index]!;
 }
 
-/** Build a §M5.2-valid schema: 5 categories × 4 actions, one skill each, all refs resolve. */
+/** Build a §M5.2-valid schema: 5 categories × 6 actions, six skills, all refs resolve. */
 function makeValidBootstrapSchema(overrides: Partial<StorySchema> = {}): StorySchema {
   const actions: ActionDef[] = [];
   for (const category of CATEGORIES) {
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 6; i++) {
+      const isNaturalAttack = category === "combat" && i === 2;
       actions.push({
         id: `${category}_${i}`,
         category,
         label: `${category} ${i}`,
         description: `A precise ${category} action.`,
         aliases: [`${category} option ${i}`],
-        universalFamily: universalFamily(category),
-        requiresSkill: `${category}_skill`,
+        universalFamily: universalFamily(category, i),
+        ...(!isNaturalAttack
+          ? { requiresSkill: category === "exploration" && i === 5
+              ? "premise_specialty"
+              : `${category}_skill` }
+          : {}),
         dc: 10 + i, // 10–13, inside 5–25
         ...(i === 0
           ? {
@@ -125,7 +131,10 @@ function makeValidBootstrapSchema(overrides: Partial<StorySchema> = {}): StorySc
       { id: "hp", label: "Health", start: 20, max: 20, playerVisible: true, lethal: true },
       { id: "stamina", label: "Stamina", start: 10, max: 10, playerVisible: true },
     ],
-    skills: CATEGORIES.map(skillFor),
+    skills: [
+      ...CATEGORIES.map(skillFor),
+      { ...skillFor("exploration"), id: "premise_specialty", name: "Premise Specialty" },
+    ],
     items: [
       { id: "manual", name: "Manual", description: "Teaches skills.", kind: "misc", tier: "common", props: {} },
       { id: "blade", name: "Blade", description: "A weapon.", kind: "weapon", tier: "common", props: { damage: 6 } },
@@ -260,7 +269,7 @@ describe("validateStorySchema — fuzz against §M5.2 invariants", () => {
     const overConditioned = STORY.actions.map((action, index) => ({
       ...action,
       advantageWhen:
-        index < 7
+        index < 10
           ? [
               {
                 condition: {
@@ -275,7 +284,7 @@ describe("validateStorySchema — fuzz against §M5.2 invariants", () => {
     }));
     expect(
       validateStorySchema({ ...STORY, actions: overConditioned }).some(
-        (error) => /Conditional action coverage.*at most 6 actions/i.test(error)
+        (error) => /Conditional action coverage.*at most 9 actions/i.test(error)
       )
     ).toBe(true);
   });
@@ -284,6 +293,26 @@ describe("validateStorySchema — fuzz against §M5.2 invariants", () => {
     const [first, ...rest] = STORY.actions;
     const errs = validateStorySchema({ ...STORY, actions: [{ ...first!, requiresSkill: "no_such" }, ...rest] });
     expect(errs.some((e) => /unknown skill "no_such"/.test(e))).toBe(true);
+  });
+
+  it("rejects a universal family from a different action category", () => {
+    const [first, ...rest] = STORY.actions;
+    const errs = validateStorySchema({
+      ...STORY,
+      actions: [{ ...first!, universalFamily: "influence" }, ...rest],
+    });
+    expect(errs).toContain(
+      `Action "${first!.id}" uses social universal family "influence" in category "combat".`
+    );
+  });
+
+  it("rejects a category collapsed onto too few universal families", () => {
+    const actions = STORY.actions.map((action) =>
+      action.category === "social" ? { ...action, universalFamily: "influence" } : action
+    );
+    expect(validateStorySchema({ ...STORY, actions })).toContain(
+      'Category "social" uses 1 universal families; at least 4 distinct families are required.'
+    );
   });
 
   it("flags a dead skill exercised by no action", () => {
@@ -428,32 +457,67 @@ describe("generateStorySchema — repair loop", () => {
   });
 
   it("keeps the large Phase B catalog concise and gives it a larger output budget", async () => {
-    expect(PHASE_B_ACTION_BATCH_SYSTEM).toMatch(/exactly 4 concise actions/i);
+    expect(PHASE_A_SYSTEM).toMatch(/6-10.*premise-grounded skills/i);
+    expect(PHASE_B_ACTION_BATCH_SYSTEM).toMatch(/exactly 6 concise actions/i);
     expect(PHASE_B_ACTION_BATCH_SYSTEM).toMatch(/12 words or fewer/i);
     const { router, budgets, prompts } = phasedRouter({
       a: [J(PHASE_A)],
       b: [J(PHASE_B)],
     });
-    await generateStorySchema(router, input);
-    expect(budgets).toEqual({ a: [5000], b: [3000, 5000, 5000] });
+    const out = await generateStorySchema(router, input);
+    expect(budgets).toEqual({ a: [5000], b: [3000, 7500, 7500] });
     const actionPrompts = prompts.filter((prompt) =>
       prompt.system.includes("PHASE B ACTION BATCH")
     );
     expect(actionPrompts).toHaveLength(2);
     expect(actionPrompts.map((prompt) =>
       prompt.user.match(/CONDITIONAL ACTION TARGET: exactly (\d+)/)?.[1]
-    )).toEqual(["2", "3"]);
+    )).toEqual(["3", "5"]);
     expect(
       actionPrompts.every((prompt) =>
         prompt.user.includes("MUST be set by an action effect in this same batch")
       )
     ).toBe(true);
+    expect(out.actions).toHaveLength(30);
+    expect(
+      Object.fromEntries(
+        CATEGORIES.map((category) => [
+          category,
+          out.actions.filter((action) => action.category === category).length,
+        ])
+      )
+    ).toEqual({ combat: 6, social: 6, exploration: 6, crafting: 6, utility: 6 });
+    const naturalAttack = out.actions.find(
+      (action) => action.category === "combat" && action.universalFamily === "attack_natural"
+    );
+    expect(naturalAttack).toBeDefined();
+    expect(naturalAttack?.requiresSkill).toBeUndefined();
+    expect(naturalAttack?.requiresItemKind).toBeUndefined();
   });
 
   it("splits Phase B into a foundation and bounded action batches", () => {
     expect(PHASE_B_FOUNDATION_SYSTEM).toMatch(/do not output actions/i);
-    expect(PHASE_B_ACTION_BATCH_SYSTEM).toMatch(/exactly 4 concise actions/i);
+    expect(PHASE_B_ACTION_BATCH_SYSTEM).toMatch(/exactly 6 concise actions/i);
     expect(PHASE_B_ACTION_BATCH_SYSTEM).toMatch(/no other categories/i);
+  });
+
+  it("requires a bounded broad skill foundation for full-stat forging", () => {
+    expect(PhaseASchema.safeParse({ ...PHASE_A, skills: PHASE_A.skills.slice(0, 5) }).success).toBe(false);
+    const sixSkills = {
+      ...PHASE_A,
+      skills: PHASE_A.skills,
+    };
+    expect(PhaseASchema.safeParse(sixSkills).success).toBe(true);
+    expect(
+      PhaseASchema.safeParse({
+        ...sixSkills,
+        skills: Array.from({ length: 11 }, (_, index) => ({
+          ...PHASE_A.skills[0]!,
+          id: `skill_${index}`,
+          name: `Skill ${index}`,
+        })),
+      }).success
+    ).toBe(false);
   });
 
   it("runs the independent foundation and action batches in one concurrent Phase B stage", async () => {
@@ -523,11 +587,13 @@ describe("generateStorySchema — repair loop", () => {
     expect(PHASE_B_FOUNDATION_SYSTEM).toMatch(/startingGear: 1-7 runtime item proposals/i);
     expect(PHASE_B_FOUNDATION_SYSTEM).toMatch(/NOT a universe item catalog/i);
     expect(PHASE_B_FOUNDATION_SYSTEM).toMatch(/All other equipment and loot.*on demand/i);
+    expect(PHASE_B_FOUNDATION_SYSTEM).toMatch(/each key NPC template 1-3 role-appropriate/i);
     expect(PHASE_B_ACTION_BATCH_SYSTEM).toMatch(/Do not grant or consume item ids/i);
     expect(PHASE_B_ACTION_BATCH_SYSTEM).toMatch(/roughly 25-33%/i);
     expect(PHASE_B_ACTION_BATCH_SYSTEM).toMatch(/at most 2/i);
     expect(PHASE_B_ACTION_BATCH_SYSTEM).toMatch(/40 characters or fewer/i);
     expect(PHASE_B_ACTION_BATCH_SYSTEM).toMatch(/never invent an unreachable flag/i);
+    expect(PHASE_B_ACTION_BATCH_SYSTEM).toMatch(/at least four distinct universal families/i);
     expect(PHASE_B_ACTION_BATCH_SYSTEM).toMatch(
       /Do not emit item-id conditions.*generated on demand/is
     );
@@ -932,7 +998,7 @@ describe("generateStorySchema — repair loop", () => {
       )
     );
 
-    expect(conditioned).toHaveLength(6);
+    expect(conditioned).toHaveLength(8);
     expect(
       deadConditions.every(({ flagId }) => !referencedFlags.has(flagId))
     ).toBe(true);
@@ -1023,7 +1089,8 @@ describe("generateStorySchema — repair loop", () => {
       .map((action) => {
       if (
         action.universalFamily !== "attack_melee" &&
-        action.universalFamily !== "attack_ranged"
+        action.universalFamily !== "attack_ranged" &&
+        action.universalFamily !== "attack_natural"
       ) {
         return action.effects;
       }
@@ -1213,7 +1280,7 @@ describe("generateStorySchema — repair loop", () => {
     expect(out.npcTemplates.every((template) => template.inventory.length === 0)).toBe(true);
     expect(out.actionBudget).toBe(2);
     expect(out.mechanicsConfigVersions).toEqual({
-      universalActions: 3,
+      universalActions: 4,
       progression: 1,
       equipmentLoot: 1,
       attributeAdvancement: 1,

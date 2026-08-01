@@ -4,6 +4,11 @@ export default defineConfig({
   test: {
     include: ["test/**/*.test.ts"],
     environment: "node",
+    // Native SQLite plus Node's process pool intermittently exits with EPIPE on Windows when
+    // many files run concurrently. A single worker is slower but makes the primary safety gate
+    // deterministic and still completes comfortably within the development timeout.
+    minWorkers: 1,
+    maxWorkers: 1,
     coverage: {
       provider: "v8",
       reporter: ["text", "html"],

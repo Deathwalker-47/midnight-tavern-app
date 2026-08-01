@@ -16,12 +16,18 @@ import { makeStory } from "./fixtures.js";
 describe("V7 mechanics configuration registry", () => {
   it("loads versioned action, progression, and equipment assets", () => {
     expect(MECHANICS_CONFIG_VERSIONS).toEqual({
-      universalActions: 3,
+      universalActions: 4,
       progression: 1,
       equipmentLoot: 1,
       attributeAdvancement: 1,
     });
-    expect(UNIVERSAL_ACTIONS_CONFIG.actions.length).toBeGreaterThan(10);
+    expect(UNIVERSAL_ACTIONS_CONFIG.actions.length).toBeGreaterThanOrEqual(30);
+    for (const category of ["combat", "social", "exploration", "crafting", "utility"] as const) {
+      expect(
+        UNIVERSAL_ACTIONS_CONFIG.actions.filter((action) => action.category === category).length,
+        `${category} universal family count`
+      ).toBeGreaterThanOrEqual(6);
+    }
     expect(PROGRESSION_CONFIG.ranks.map((entry) => entry.minimumXp)).toEqual([
       0, 100, 300, 700,
     ]);

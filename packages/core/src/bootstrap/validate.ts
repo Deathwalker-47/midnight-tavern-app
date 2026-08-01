@@ -21,6 +21,7 @@ import {
   type Condition,
   type ConditionWithReason,
 } from "../types/index.js";
+import { findUniversalAction } from "../config/registry.js";
 
 /** Every flag value an action can cause (the only way a true flag comes into existence). */
 function definedFlagValues(actions: ActionDef[]): Map<string, Set<boolean>> {
@@ -179,10 +180,17 @@ export function validateStorySchema(schema: StorySchema): string[] {
     );
   }
   for (const category of ActionCategorySchema.options) {
-    const count = schema.actions.filter((a) => a.category === category).length;
+    const categoryActions = schema.actions.filter((a) => a.category === category);
+    const count = categoryActions.length;
     if (count < CATALOG_MIN_PER_CATEGORY) {
       errors.push(
         `Category "${category}" has ${count} actions; at least ${CATALOG_MIN_PER_CATEGORY} are required.`
+      );
+    }
+    const familyCount = new Set(categoryActions.map((action) => action.universalFamily)).size;
+    if (familyCount < 4) {
+      errors.push(
+        `Category "${category}" uses ${familyCount} universal families; at least 4 distinct families are required.`
       );
     }
   }
@@ -201,6 +209,16 @@ export function validateStorySchema(schema: StorySchema): string[] {
   // --- Per-action checks: DC scale, references ---
   const exercisedSkills = new Set<string>();
   for (const a of schema.actions) {
+    if (a.universalFamily) {
+      const family = findUniversalAction(a.universalFamily);
+      if (!family) {
+        errors.push(`Action "${a.id}" references unknown universal family "${a.universalFamily}".`);
+      } else if (family.category !== a.category) {
+        errors.push(
+          `Action "${a.id}" uses ${family.category} universal family "${family.id}" in category "${a.category}".`
+        );
+      }
+    }
     if (a.dc < DC_MIN || a.dc > DC_MAX) {
       errors.push(`Action "${a.id}" has DC ${a.dc}; must be within ${DC_MIN}–${DC_MAX}.`);
     }

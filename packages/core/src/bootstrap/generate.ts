@@ -322,7 +322,15 @@ const PhaseAObjectSchema = z.object({
   attributes: z.array(AttributeDefSchema),
   resources: z.array(ResourceDefSchema),
   tiers: z.array(TierDefSchema),
-  skills: z.array(SkillDefSchema),
+  skills: z.array(SkillDefSchema).max(10),
+}).superRefine((phaseA, context) => {
+  if (phaseA.statMode === "full" && phaseA.skills.length < 6) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["skills"],
+      message: "Full-stat stories require 6-10 premise-grounded skills.",
+    });
+  }
 });
 export type PhaseA = z.infer<typeof PhaseAObjectSchema>;
 
@@ -601,6 +609,7 @@ function ensureActionCoverage(
   for (const skillId of requiredSkills) {
     if ((skillCounts.get(skillId) ?? 0) > 0) continue;
     const actionIndex = repaired.findIndex((action) => {
+      if (action.universalFamily === "attack_natural") return false;
       const current = action.requiresSkill;
       return !current || !requiredSkills.has(current) || (skillCounts.get(current) ?? 0) > 1;
     });
@@ -908,6 +917,18 @@ function phaseBActionBatchSchema(
               message: `Category ${category} must contain exactly ${ACTIONS_PER_CATEGORY} actions; received ${count}.`,
             });
           }
+          const familyCount = new Set(
+            actions
+              .filter((action) => action.category === category)
+              .map((action) => action.universalFamily)
+          ).size;
+          if (familyCount < 4) {
+            context.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ["actions"],
+              message: `Category ${category} must use at least 4 distinct universal families; received ${familyCount}.`,
+            });
+          }
         }
         const unexpected = actions.find((action) => !allowed.has(action.category));
         if (unexpected) {
@@ -917,8 +938,8 @@ function phaseBActionBatchSchema(
             message: `Unexpected category ${unexpected.category}; requested only ${categories.join(", ")}.`,
           });
         }
-        const universalIds = new Set(
-          UNIVERSAL_ACTIONS_CONFIG.actions.map((action) => action.id)
+        const universalFamilies = new Map(
+          UNIVERSAL_ACTIONS_CONFIG.actions.map((action) => [action.id, action])
         );
         for (const [index, action] of actions.entries()) {
           if (!action.description?.trim()) {
@@ -935,11 +956,41 @@ function phaseBActionBatchSchema(
               message: "Every action requires at least one natural-language alias.",
             });
           }
-          if (!action.universalFamily || !universalIds.has(action.universalFamily)) {
+          const family = action.universalFamily
+            ? universalFamilies.get(action.universalFamily)
+            : undefined;
+          if (!family) {
             context.addIssue({
               code: z.ZodIssueCode.custom,
               path: ["actions", index, "universalFamily"],
               message: "Every action must reference an existing universal action family.",
+            });
+          } else if (family.category !== action.category) {
+            context.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ["actions", index, "universalFamily"],
+              message: `Universal family ${family.id} belongs to ${family.category}, not ${action.category}.`,
+            });
+          }
+        }
+        if (allowed.has("combat")) {
+          const naturalAttack = actions.find(
+            (action) => action.category === "combat" && action.universalFamily === "attack_natural"
+          );
+          const resourceCosts = Object.keys(naturalAttack?.costs?.resources ?? {});
+          const itemCosts = naturalAttack?.costs?.items ?? [];
+          if (
+            !naturalAttack ||
+            naturalAttack.requiresSkill ||
+            naturalAttack.requiresItemKind ||
+            naturalAttack.requiresEquipmentEnabler ||
+            resourceCosts.length > 0 ||
+            itemCosts.length > 0
+          ) {
+            context.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ["actions"],
+              message: "Combat must include one ungated attack_natural action.",
             });
           }
         }
@@ -1087,7 +1138,7 @@ export interface BootstrapOptions {
   maxRepairs?: number;
   /** Whole-schema cross-validation repair passes on Phase B (default 1). */
   maxSchemaRepairs?: number;
-  /** Deadline applied independently to each provider-backed fragment (default 45 seconds). */
+  /** Deadline applied independently to each provider-backed fragment (default 60 seconds). */
   fragmentDeadlineMs?: number;
   /** Injectable clock used by deterministic progress/deadline tests. */
   now?: () => number;
@@ -1357,7 +1408,7 @@ export async function generateStorySchema(
 ): Promise<StorySchema> {
   const maxRepairs = options.maxRepairs ?? DEFAULT_BOOTSTRAP_REPAIR_BUDGET;
   const maxSchemaRepairs = options.maxSchemaRepairs ?? DEFAULT_BOOTSTRAP_REPAIR_BUDGET;
-  const fragmentDeadlineMs = options.fragmentDeadlineMs ?? 45_000;
+  const fragmentDeadlineMs = options.fragmentDeadlineMs ?? 60_000;
   const now = options.now ?? Date.now;
   const schedule: BootstrapSchedule =
     options.schedule ??
@@ -1742,8 +1793,8 @@ export async function generateStorySchema(
           batchSchema,
           {
             maxRepairs,
-            maxTokens: 5_000,
-            maxRepairTokens: 6_500,
+            maxTokens: 7_500,
+            maxRepairTokens: 9_000,
             signal,
             onRepair: repairReporter(fragment),
             }

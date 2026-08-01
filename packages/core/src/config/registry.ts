@@ -48,6 +48,16 @@ const UniversalActionConfigSchema = z.object({
     }
     ids.add(action.id);
   });
+  for (const category of ActionCategorySchema.options) {
+    const count = config.actions.filter((action) => action.category === category).length;
+    if (count < 6) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["actions"],
+        message: `Universal action category ${category} must define at least 6 families.`,
+      });
+    }
+  }
 });
 export type UniversalActionConfig = z.infer<typeof UniversalActionConfigSchema>;
 

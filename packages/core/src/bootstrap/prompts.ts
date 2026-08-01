@@ -78,7 +78,7 @@ export const PHASE_A_SYSTEM = [
   '  {"method":"trial","flagId":"flag_id"}',
   "  Do not create manual/item unlocks during forging; runtime loot may introduce manuals later.",
   "  Trainer cost is ALWAYS an object. Never use a bare number or string for cost; use {} for no cost.",
-  "Keep ids lowercase snake_case. Design 4–8 skills and 3–5 tiers. Keep descriptions concise.",
+  "Keep ids lowercase snake_case. Design 6-10 distinct, premise-grounded skills and 3-5 tiers. Keep descriptions concise.",
 ].join("\n");
 
 /**
@@ -125,6 +125,7 @@ export const PHASE_B_FOUNDATION_SYSTEM = [
   "Do not place startingGear in startingState.inventory; runtime item instances are installed separately.",
   "All other equipment and loot is proposed by the DM on demand during play.",
   "Use only Phase A resource and skill ids.",
+  "Give each key NPC template 1-3 role-appropriate Phase A skills when the premise supports them; hostile creatures may rely on the ungated natural attack baseline.",
   "Keep ids lowercase snake_case and descriptions concise. Do not output actions or an item catalog.",
 ].join("\n");
 
@@ -157,9 +158,11 @@ export const PHASE_B_ACTION_BATCH_SYSTEM = [
   "requiresSkill must be a Phase A skill id; requiresItemKind is optional.",
   "governingAttribute should be a Phase A attribute id for capability-based actions; omit only for flat luck.",
   "Resource deltas/costs use Phase A resource ids.",
-  "Every attack_melee and attack_ranged action MUST reduce the target's lethal resource on success and crit_success.",
+  "Every attack_melee, attack_ranged, and attack_natural action MUST reduce the target's lethal resource on success and crit_success.",
+  "The combat batch MUST include one attack_natural action with no skill, item, equipment-enabler, or resource cost gate so any creature can fight.",
   "Do not grant or consume item ids. Loot is generated and validated on demand during play.",
   "Prefix every action id with its category so ids remain unique across batches.",
+  "Use at least four distinct universal families within each requested category. Specialize them to the premise; do not invent magic, weapons, or specialist crafts the premise does not support.",
   "Use every REQUIRED SKILL ID at least once and set every REQUIRED TRIAL FLAG at least once.",
 ].join("\n");
 
