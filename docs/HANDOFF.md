@@ -1,114 +1,122 @@
 # HANDOFF - current live state
 
 **Updated:** 2026-08-02
-**Branch / source baseline:** local `main` at `bd4f99d`; this documentation closeout follows; not pushed
-**App version:** `0.2.8`, unsigned
+**Branch / source baseline:** local `main`; Task 15G docs commit is based on parent `a56fe49`; not
+pushed
+**App version:** `0.2.8`, unsigned; no new installer was built for this diagnostic batch
 **User-owned/untracked:** `.agents/`, `.codex/`, `opencode.json` - preserve
-**Active plan:** `Plan/next-phase-internal-beta.md`; Tasks 15A-15F automated/source work complete
+**Active plan:** `Plan/next-phase-internal-beta.md`; Task 15G is open
+**Detailed plan:** `docs/superpowers/plans/2026-08-02-npc-scene-system-redesign.md`
 
 ## Current outcome
 
-Task 15F repairs the two defects exposed by the latest installed `Cyraeth Adventure` exchange. The
-installed save was inspected read-only and was never edited.
+The latest packaged NPC failure was analyzed as a system-boundary problem. No gameplay source was
+changed and the installed save was inspected read-only only. Do not apply another isolated regex,
+planner-prompt, or UI filter patch before the Task 15G lifecycle fixture exists.
 
-The latest turn itself was mechanically valid. NPC introduction, classifier, NPC planner, narrator,
-and authority audit all completed; the operation committed in about 77.2 seconds. `Reassure
-Survivor` correctly failed on d20 6 + 0 vs DC 8. There was no provider failure. The narrator returned
-3,691 characters, but the deterministic death guard accepted only a 1,866-character prefix before
-substituting a factual recap and the warning shown in the screenshot.
+The current implementation has multiple independent authorities interpreting raw prose:
 
-The full transcript established this canonical cast:
+- the model registrar proposes identity/presence transitions;
+- deterministic narration grammar promotes/reconciles actors;
+- the classifier decides player mechanics;
+- `planNpcReactions` treats provocation mechanically;
+- `planNpcActions` invents current NPC intent from recent prose;
+- the narrator attempts to cover rulings;
+- the analyzer updates soft memory;
+- suggestion fallback tokenizes the latest prose.
 
-- `Daen` is the person initially described as the first man.
-- `Daenin` is the younger man with the bow.
-- `Mera` is the older woman, later shortened in prose to the woman.
-- The large dog is a separate creature.
-- The earlier forest creature is historical and absent from the village scene.
+All can satisfy their local schema while disagreeing about who exists, who is present, what happened
+this turn, and what the player can do. `runTurnOperation` currently coordinates these paths in 676
+lines with cyclomatic complexity 39 and cognitive complexity 103.
 
-The source fix in `bd4f99d` now understands bounded third-person name explanations, descriptor-first
-appositives, and unambiguous dialogue vocatives. Narration-grounded aliases suppress conflicting
-model registrar transitions, so `First man` is not activated beside `Daen`, `Younger man` is enriched
-to `Daenin`, `Older woman` is enriched to `Mera`, and the overlapping broad `Woman` transition is
-discarded. The complete turn remains atomic.
+## Exact packaged evidence
 
-The death guard now distinguishes a concrete tracked-state assertion from questions,
-counterfactual/modal danger, explicit negation, and incomplete attempts. Dialogue such as “could
-have killed you” or “does not mean anyone is dead” can remain in the narration. Concrete unruled
-`falls dead`, `died`, `was slain`, and kill assertions are still rejected unless deterministic
-mechanics recorded `causedDeathOf` after a lethal resource reached zero.
+Installed story: `Cyraeth Adventure`, id `ab1c6258-e244-4e7d-9147-1b0d3396a2c7`.
 
-## Save boundary and replay expectation
+- Database: `C:\Users\anuji\AppData\Roaming\com.midnighttavern.app\midnight-tavern.db`
+- Native log: `C:\Users\anuji\AppData\Local\com.midnighttavern.app\logs\midnight-tavern.log`
+- Inspect SQLite with URI `mode=ro` and `PRAGMA query_only=ON`; WAL/SHM may be active.
+- The human will rewind and replay. Do not repair the current save in place.
 
-Do not manually edit the installed database. The human explicitly intends to rewind the latest
-exchange and replay it under this build.
+The relevant exchange proved:
 
-After rewind/replay:
+1. Failed `Reassure Survivor` triggered a Daen punch because `isProvocation` treats every opposed
+   action as hostile. Reassurance is supportive even when opposed.
+2. On the next player text, `Describe what you now`, player classification contained no mechanics,
+   but the NPC planner repeated Daen's prior punch as a fresh Unarmed Strike because it reads recent
+   prose without current trigger ids, disposition/goal state, or event consumption.
+3. Each strike removed 10 Health. The latest action's `stagnation_exposure` flag landed on Daen
+   because `setFlag` is actor-only even though the fiction framed exposure on the target.
+4. The latest narrator call timed out at roughly 60 seconds after writing prose that did not depict a
+   fresh strike. The turn still committed the ruling/damage and appended the deterministic sentence
+   `Daen's Unarmed Strike succeeds. A solid blow lands against the target.`
+5. Prose established the archer as `Kellan` and physically included the older woman and dog, but the
+   Present strip retained only the player and Daen.
+6. `The archer - Kellan -` is outside current reveal grammar; `Kellan finally lowered...` is missed
+   because an adverb separates the name and actor verb. Existing absent actors are skipped by
+   deterministic discovery unless they enrich a generic identity, so known older-woman/dog rows do
+   not re-enter from clear current prose.
+7. Possible Moves used `describe` and `slowly` as scene subjects because the deterministic fallback
+   takes reversed surviving words from narration rather than typed actors/facts/affordances.
+8. Emergent actor skill selection scans the whole narrator message, so unrelated actors can receive
+   the same keyword-derived loadout.
 
-1. The Present strip should contain the player, `Daen`, `Daenin`, `Mera`, and the large dog when the
-   replayed prose establishes all of them.
-2. `First man` and broad `Woman` must stay inactive rather than appearing as separate present NPCs.
-3. Hypothetical or negated death-language must not truncate otherwise valid narrator prose.
-4. Any real narrated death must still require deterministic damage and `causedDeathOf`.
-5. Because rollback deliberately retains registered identity history, old provisional alias rows
-   already captured by the affected checkpoint may remain in Characters as historical/absent. This
-   batch does not mutate or delete the user's current save.
+Current installed character state at inspection included the player at 80/100 Health, Daen present,
+and multiple other actors absent. There was no `Kellan` character row. Do not treat that state as the
+target or mutate it; it is evidence for the RED fixture.
 
-## Additional read-only finding
+## Target architecture accepted for Task 15G
 
-All present NPC soft records in the inspected save had empty identity/current/relationship fields,
-and `world_soft` was null even though the background analyzer completed. This is a distinct
-provider-backed dossier-memory acceptance signal. Task 15F does not claim it is repaired. Recheck it
-after the clean replay; if fields remain empty after an exchange with clear character evidence,
-open the next source task against analyzer output/patch persistence rather than altering this save.
+- One engine-owned, active-variant **Scene State** is the shared input for classification, NPC
+  agency, narration, soft memory, UI presence, and suggestions.
+- Model registrar/prose grammar become candidate generators of evidence-backed `SceneObservation`s;
+  one deterministic Scene Reconciler owns id, alias, actor-kind, and presence decisions.
+- A bounded **Narrative Beat Plan** proposes organic actors before prose. The engine reconciles and
+  stages them, grants actor-local sealed capabilities, and gives the narrator an immutable contract.
+- Committed prose may contain an individual actor only when the contract resolves that actor to one
+  registry id. Scenery and background collectives remain non-characters.
+- NPC mechanics consume a current hostile trigger event or a persisted validated agenda. Prior prose
+  is context, not a fresh trigger. `opposed` is not equivalent to hostile.
+- Rulings render before prose and own mechanical detail. Prose covers each current ruling causally
+  once. Provider timeout/fallback status remains separate UI metadata; no engine recap is appended
+  to story prose.
+- Possible Moves compose from typed scene affordances, never arbitrary nearby words.
+- Identity, aliases, presence, trigger consumption, rulings, prose, and active narrator-variant
+  scene snapshots remain atomic and rewind/retry/restart safe.
 
-The latest NPC planner returned no mechanical NPC action. That was not itself an authority failure:
-the player attempted social reassurance, not a hostile attack, and the villagers responded in
-ordinary narrator dialogue. Continue separate packaged NPC-agency acceptance with an actually
-hostile, living NPC and a legal sealed action.
+The detailed plan is dependency ordered: RED lifecycle fixture; domain/persistence; reconciler;
+pre-narration contract; actor-local capabilities; event-driven agency; ruling/presentation split;
+affordance suggestions; turn-coordinator decomposition; then one combined package.
 
-## Fresh verification
+## Verification state
 
-- Focused actor/authority/turn regression suite: **48 tests / 3 files**, passed.
+Fresh verification after this docs-only diagnosis:
+
 - `npm run typecheck`: passed.
 - `npm test`: core **632 / 45 files**, UI **160 / 25 files**, **792 total**, passed.
-- `cargo check`: passed.
 - `git diff --check`: passed.
-- `npm run build`: passed core, UI/Vite, optimized Rust, MSI, and NSIS packaging.
+- Git retained only user-owned `.agents/`, `.codex/`, and `opencode.json` alongside these Task 15G
+  documentation changes.
 
-## Fresh test artifacts
+No native/package gate is needed for a documentation-only diagnosis. Before any later source
+completion claim, run the focused suites plus full typecheck/tests, direct builds, and `cargo check`.
 
-- Preferred NSIS installer:
-  `packages/shell/src-tauri/target/release/bundle/nsis/Midnight Tavern_0.2.8_x64-setup.exe`
-  - bytes: `5625514`
-  - SHA-256: `F2D782561AD92527FA496638189EC1CA40524C7504E0449B380C7115A8443FB7`
-- MSI alternative:
-  `packages/shell/src-tauri/target/release/bundle/msi/Midnight Tavern_0.2.8_x64_en-US.msi`
-  - bytes: `9269248`
-  - SHA-256: `ACEE3C638CFE3C488F77CA6D78195547A40BE69C42FA5FCB9DB11EDF38590402`
-- Standalone app executable:
-  `packages/shell/src-tauri/target/release/midnight-tavern.exe`
-  - bytes: `22799360`
-  - SHA-256: `1FCE44034D661BEA2430B404016FD551881318863584EDA41951433694FA4C61`
-- All report `NotSigned`, expected until the later signing/release phase.
+## Non-negotiable rules
 
-## Non-negotiable authority and domain rules
-
-- Models may introduce actors and write prose. The registry owns persistent identity/presence; the
-  engine owns gates, dice, effects, damage, death, budgets, persistence, rollback, loot, and
-  progression.
-- Every actual fictional NPC/creature that appears must be registry-backed. A later unambiguous name
-  reveal enriches the same actor; scenery, crowds, depictions, pronouns, and ordinals do not become
-  characters.
-- Registry membership and scene presence differ. Only present, living actors participate.
-- Rulings render before narrator streaming. Prose cannot assert a tracked death without
-  threshold-backed `causedDeathOf`. Player and NPC budgets remain separate.
-- Preserve browser/native bridge parity and the user-owned `.agents/`, `.codex/`, and
-  `opencode.json`. Do not push.
+- Models may propose actors, intents, soft state, and prose. The engine owns mechanics, ids, gates,
+  budgets, effects, damage, death, persistence, rollback, and active scene membership.
+- Every actual individual NPC/creature in committed prose must be registry-backed. Do not create
+  characters for scenery, depictions, crowds, pronouns, ordinals, or prose-transition words.
+- Only present living actors participate. Player and NPC action budgets remain separate.
+- A later name reveal enriches one actor; active-branch/variant evidence controls current aliases and
+  presence.
+- Do not weaken threshold-backed death or ruling-before-prose behavior.
+- Preserve browser/native bridge parity and user-owned untracked paths. Do not push.
+- Do not build intermediate installers. Build once after all Task 15G source slices are complete.
 
 ## Single next action
 
-Install the fresh NSIS artifact over the previous build, rewind only the latest affected Cyraeth
-exchange, and replay the same social action. Capture the resulting Present strip, full narration,
-and warning state. Then inspect the log and database read-only to verify canonical actor rows,
-presence, ruling/operation completion, and whether character/world soft memory gained evidence. Do
-not infer another source fix until that packaged replay establishes the remaining boundary.
+Implement only Task 15G Task 1 from the detailed plan: add the provider-scripted Cyraeth NPC scene
+lifecycle fixture and observe the intended RED failures for registry/presence, supportive opposed
+actions, stale NPC intent replay, causal narration coverage, fallback prose separation, suggestions,
+and history operations. Record the RED evidence before editing any Scene State production code.

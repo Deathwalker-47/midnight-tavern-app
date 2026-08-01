@@ -8,137 +8,268 @@ architecture. Do not push. Preserve the user-owned/untracked `.agents/`, `.codex
 `opencode.json` paths. Never mutate an installed story database unless the human explicitly asks for
 that exact data operation; packaged diagnosis is read-only by default.
 
-Read in full before editing: `AGENTS.md`, `CONTEXT.md`, `docs/HANDOFF.md`, the newest
-`docs/WORKLOG.md` entries, and Tasks 15A-15F in `Plan/next-phase-internal-beta.md`. Use
-codebase-memory-mcp before text search and re-index if symbols are stale. For defects, follow strict
-RED -> observe the intended failure -> minimal implementation -> GREEN. Begin every PowerShell
-command with an explicit `Set-Location -LiteralPath
-'C:\Users\anuji\Documents\midnight-tavern-app'` because the shell sometimes ignores its supplied
-working directory.
+Read in full before editing:
+
+1. `AGENTS.md`
+2. `CONTEXT.md`
+3. `ARCHITECTURE.md`
+4. `docs/HANDOFF.md`
+5. the newest `docs/WORKLOG.md` entries
+6. Task 15G in `Plan/next-phase-internal-beta.md`
+7. `docs/superpowers/plans/2026-08-02-npc-scene-system-redesign.md`
+
+Use codebase-memory-mcp before text search and re-index if symbols are stale. Use systematic
+debugging and strict RED -> observe failure -> minimal coherent implementation -> GREEN. Begin every
+PowerShell command with:
+
+`Set-Location -LiteralPath 'C:\Users\anuji\Documents\midnight-tavern-app'`
+
+because the shell sometimes ignores its supplied working directory.
 
 Before stopping, run fresh typecheck and complete tests, run the relevant native/build gates, append
-WORKLOG, overwrite HANDOFF, update this prompt and the active plan, and commit coherent green
-changes with the required co-author trailer. Build one installer only after the current defect list
-is complete or when the human asks for a fresh packaged test.
+WORKLOG, overwrite HANDOFF, update this prompt and the active plan, and commit coherent green changes
+with the required co-author trailer. Build one installer only after all current Task 15G source
+slices are complete; do not package each intermediate refactor.
 
 ## Current repository state
 
-- Local `main` source ends at `bd4f99d` (`core: reconcile narrated villager identities`), followed
-  by a documentation closeout; not pushed.
-- Unsigned app version `0.2.8`; Tasks 15A-15F source and automated gates are complete.
-- Fresh gates: core **632 / 45 files**, UI **160 / 25 files**, **792 tests total**; typecheck,
-  `cargo check`, `git diff --check`, and the optimized package build passed.
-- Preferred installer:
-  `packages/shell/src-tauri/target/release/bundle/nsis/Midnight Tavern_0.2.8_x64-setup.exe`
-  SHA-256 `F2D782561AD92527FA496638189EC1CA40524C7504E0449B380C7115A8443FB7`.
-- MSI alternative:
-  `packages/shell/src-tauri/target/release/bundle/msi/Midnight Tavern_0.2.8_x64_en-US.msi`
-  SHA-256 `ACEE3C638CFE3C488F77CA6D78195547A40BE69C42FA5FCB9DB11EDF38590402`.
-- Both installers and the standalone executable are intentionally unsigned.
+- Local `main` has Task 15G documentation based on parent `a56fe49`; not pushed.
+- App version `0.2.8`, unsigned.
+- No Task 15G gameplay implementation has started. The previous turn deliberately analyzed before
+  coding because the observed defects share one broken NPC lifecycle boundary.
+- Baseline before the docs-only diagnosis: root typecheck passed; core **632 / 45 files**, UI
+  **160 / 25 files**, **792 tests total**, passed.
+- Run the baseline again before source edits. If it is red on the current tree, fix/log that first.
+- The most recently built installer belongs to Task 15F and is stale for Task 15G acceptance. Do not
+  hand it off as a fix for this work.
 
-## Affected installed story and evidence locations
+## User goal
 
-The installed story is `Cyraeth Adventure`, id
-`ab1c6258-e244-4e7d-9147-1b0d3396a2c7`.
+The user wants a coherent role-playing scene, not a collection of heuristics:
 
-- Database: `C:\Users\anuji\AppData\Roaming\com.midnighttavern.app\midnight-tavern.db`
-- WAL/SHM may be active beside it; use SQLite URI `mode=ro` plus `PRAGMA query_only=ON`.
-- Native log: `C:\Users\anuji\AppData\Local\com.midnighttavern.app\logs\midnight-tavern.log`
+- every actual individual NPC or creature that appears in committed narration is part of the
+  character registry;
+- a later name reveal enriches the same actor rather than creating a duplicate;
+- only genuinely current/present/living actors can act or be targeted;
+- NPCs can act autonomously when their current goal/disposition and legal sealed capabilities justify
+  it, but a prior narrated action cannot replay as a new action;
+- supportive or social failure does not automatically become violence;
+- the engine owns mechanics and the narrator depicts them naturally without overriding them;
+- ruling details remain visible before prose, but no mechanical `X succeeds. Hint.` recap is appended
+  under every story response;
+- Possible Moves are meaningful and scene-specific, not templates around arbitrary words;
+- rewind, swipe, retry, cancellation, restart, and provider degradation preserve the same story
+  truth.
 
-The user explicitly said not to repair the current story in place; they will rewind and retry. The
-prior agent queried the database and log read-only and made no save writes.
+Do not solve this by hiding characters/rulings in UI, adding another proper-name regex, broadening
+the planner prompt, or weakening authority checks.
 
-## Complete latest-turn diagnosis
+## Installed evidence: inspect read-only only
 
-The story had 13 messages at inspection. The latest operation completed successfully in roughly
-77.2 seconds. NPC introduction, classifier, NPC planner, narrator, authority audit, save, and
-background analyzer all completed. The classifier selected `Reassure Survivor` against Daen. The
-deterministic ruling was valid: d20 6 + 0 vs DC 8, failure. There was no health/death mutation and no
-provider error.
+Story: `Cyraeth Adventure`
 
-The narrator provider returned 3,691 characters. The authority model accepted the response, but the
-old deterministic keyword guard detected death-language in a later unseen beat. Because an earlier
-prefix had already been safely released, the engine persisted only 1,866 characters: the accepted
-prefix plus the factual `Reassure Survivor fails` recap. This produced the visible “narrated death
-wasn't backed by a DM ruling” warning. The rejected raw remainder is not recoverable from the DB or
-log because it was deliberately never persisted.
+Story id: `ab1c6258-e244-4e7d-9147-1b0d3396a2c7`
 
-The full transcript and state establish the canonical scene actors:
+- SQLite database:
+  `C:\Users\anuji\AppData\Roaming\com.midnighttavern.app\midnight-tavern.db`
+- Native log:
+  `C:\Users\anuji\AppData\Local\com.midnighttavern.app\logs\midnight-tavern.log`
+- WAL/SHM may be live. Use SQLite URI `mode=ro` and `PRAGMA query_only=ON`.
+- The user will rewind and replay. Do not repair this save in place.
 
-- `Daen` is the first man; prose says “Daen - apparently the first man's name”.
-- `Daenin` is the younger man with the bow; prose uses a descriptor-first appositive.
-- `Mera` is the older woman, later referred to as the woman; her name appears as a dialogue vocative.
-- The large dog is distinct.
-- The earlier forest creature is historical/absent.
-- `First man`, `Woman`, `Younger man`, and `Older woman` were provisional rows, not four additional
-  villagers. `First man` and broad `Woman` must not be active duplicates after replay.
+The exact latest sequence was:
 
-All inspected character soft records had empty identity/current/relationship/observation data, and
-`world_soft` was null even though background analysis completed. Record this as a separate live
-acceptance signal. Do not claim it fixed merely because actor registration is fixed.
+1. Narration introduced/described Daen, an archer, an older woman, and a large dog.
+2. The player tried `Reassure Survivor` against Daen. It failed.
+3. Daen automatically punched the player because the reaction heuristic treats every opposed action
+   as provocation.
+4. The next player message was `Describe what you now`. The classifier found no player mechanic.
+5. The NPC planner nevertheless proposed another Daen Unarmed Strike by reading the earlier punch in
+   recent prose as if it were a new current intent.
+6. The engine applied another 10 Health damage. The narrator timed out at 60 seconds after producing
+   prose that did not depict a fresh strike.
+7. Fallback appended `Daen's Unarmed Strike succeeds. A solid blow lands against the target.` below
+   the prose even though the UI already had the ruling card.
+8. That prose revealed `The archer - Kellan -`, mentioned the older woman at her doorway, and her dog,
+   but Present still contained only the player and Daen. There was no Kellan character row.
+9. Possible Moves later offered phrases such as asking about `describe` and `slowly`.
 
-The NPC planner returned no mechanical actions on this social turn. That is not evidence that the
-hostile agency system failed: the player was reassuring suspicious villagers, not attacking a
-hostile living NPC. Test autonomous/retaliatory NPC mechanics separately with a hostile actor and a
-legal sealed action.
+At inspection the player was 80/100 Health. Daen was present; the other previously registered actors
+were absent. Do not bake this corrupted state into expected behavior; use the transcript/log as a
+fixture source.
 
-## What Task 15F changed
+## Confirmed source causes
 
-`packages/core/src/orchestrator/sceneEntityPromotion.ts` now:
+### Identity and presence
 
-- extracts bounded third-person name explanations such as Daen/first man;
-- extracts descriptor-first appositives such as younger man/Daenin;
-- resolves an unambiguous dialogue vocative to the nearest unclaimed provisional person;
-- prefers a specific overlapping label (`Older woman`) over its broad duplicate (`Woman`);
-- emits narration-grounded aliases alongside canonical identity candidates.
+`packages/core/src/orchestrator/turn.ts`
 
-`packages/core/src/orchestrator/turn.ts` now removes conflicting non-leave registrar transitions
-when deterministic narration proves that their displayed label aliases another canonical row. The
-turn integration fixture proves `Daen` remains active, `First man` stays inactive, `Younger man`
-becomes `Daenin`, `Older woman` becomes `Mera`, and `Woman` stays inactive in one atomic commit.
+- `runTurnOperation` is 676 lines, cyclomatic complexity 39, cognitive complexity 103.
+- It owns registrar, deterministic entity discovery, classifier, reaction, NPC planner, resolver,
+  narrator, post-prose discovery, transaction, and analyzer sequencing.
+- `mergeNarratedEntityTransitions` merges incompatible transition sources without one evidence model.
 
-`packages/core/src/orchestrator/authorityGuard.ts` now treats questions, modal/counterfactual danger,
-explicit negation, and incomplete attempts as non-assertive death-language. It still deterministically
-rejects concrete unruled `falls dead`, `died`, `was slain`, and kill assertions. Do not weaken this
-authority boundary: narrator prose never decides tracked life state.
+`packages/core/src/orchestrator/npcIntroduction.ts`
 
-The RED/GREEN regressions are in:
+- `ApprovedNpcTransition` contains a full `CharacterRecord` plus only
+  `introduce|enter|leave|update`; it has no evidence span, actor kind, provenance, confidence, or
+  identity-link decision.
+- Existing enter/leave validation proves quoted text occurs but does not own scene semantics.
 
+`packages/core/src/orchestrator/sceneEntityPromotion.ts`
+
+- Free-form regex grammar is a second identity authority.
+- `archer` and `hound` are not consistently recognized actor heads.
+- `The archer - Kellan -` is outside the supported name-reveal patterns.
+- `Kellan finally lowered...` is missed because an adverb separates the name and actor verb.
+- `discoverNarratedSceneEntities` skips a candidate whose name is already known unless it enriches a
+  generic identity. Therefore a clear current mention cannot reactivate an existing absent older
+  woman or dog.
+- `inferredSkillIds` scans the whole narrator response and gives the same global keyword-derived
+  skills to unrelated promoted actors.
+
+### NPC intent and mechanics
+
+`packages/core/src/orchestrator/npcAgency.ts`
+
+- `isProvocation` returns true for combat, any opposed action, harmful effects, committed harm, or
+  danger/opposed stakes. The existing test explicitly requires retaliation after an opposed contest.
+- `planNpcReactions` chooses the first gate-legal damaging action. That turned failed reassurance
+  into a punch.
+- `NpcPlanInput` contains raw player text, recent narration, hard-state candidates/names/presence, and
+  hard state. It does not contain character soft disposition/goals/relationships, current trigger
+  ids, event consumption, last acted turn, or a structured scene.
+- `NpcActionProposal.reason` is model prose and not linked to a current event. The planner repeated a
+  prior punch on a narration-only player turn.
+
+`packages/core/src/types/actions.ts`
+
+- `ActionDef` has category, universal family, opposed, gates, costs, and effects but no explicit
+  hostile/supportive/neutral interaction semantic.
+- `EffectSpec.setFlag` applies to the actor only. The observed exposure flag landed on Daen although
+  the fiction framed the player as exposed; actor/target flag effects need distinct fields.
+
+### Narration and ruling presentation
+
+`packages/core/src/orchestrator/authorityGuard.ts`
+
+- `safeSummary` deliberately creates actor/action/outcome/hint prose.
+- `generateGuardedNarration` appends it when the narrator is unavailable or a safe prefix exists.
+- Existing tests require this fallback wording. Replace the contract through RED tests; do not merely
+  delete the function.
+- Current auditing catches mechanical contradictions but does not require exact causal coverage of
+  every current ruling before commit when generation times out.
+
+`packages/ui/src/screens/Play.tsx` and `packages/ui/src/state/playStore.ts`
+
+- The UI already renders ruling artifacts and a narration-degradation notice. Mechanical fallback
+  prose therefore duplicates presentation and reads as part of the story.
+
+### Possible Moves
+
+`packages/core/src/orchestrator/context.ts`
+
+- `buildSceneAnchors` uses character names, location, then reversed words from the latest narrator
+  message.
+
+`packages/core/src/orchestrator/suggestions.ts`
+
+- `deterministicFallbackSuggestions` templates around the first surviving anchors. This produced
+  `describe` and `slowly` as fake scene subjects.
+- Tests currently prove only lexical overlap, not semantic affordance grounding.
+
+### Persistence/history
+
+`packages/core/src/store/db.ts`
+
+- Migration 11 added `characters.present`; migration 12 checkpointed presence; migration 15
+  checkpointed display identity; migration 16 removed exact unused pronoun/ordinal phantoms.
+- There is no alias/provenance table, actor kind, active-variant Scene State snapshot, or event
+  consumption ledger.
+
+`packages/core/src/store/repositories/turnOperations.ts`
+
+- Durable `staged` JSON can carry a typed Narrative Contract/Scene State without rerunning model
+  decisions on retry, but it is currently untyped at the repository boundary.
+
+`packages/core/src/store/repositories/storyEvents.ts`
+
+- The event enum has mechanical/journal events but no actor-observation, presence-transition,
+  NPC-intent, or trigger-consumption events.
+
+## Accepted target architecture
+
+Implement the detailed plan, not a narrower substitute:
+
+1. Add one typed, engine-owned **Scene State** with actor identities/aliases/kinds, active presence,
+   disposition/goals, current triggers, and scene affordances.
+2. Make registrar and deterministic grammar emit evidence-backed `SceneObservation` candidates. One
+   Scene Reconciler decides id/alias/presence and records rejected reasons.
+3. Add a pre-narration **Narrative Beat Plan**. The storyteller can still introduce organic actors,
+   but the engine registers/stages them and actor-local sealed capabilities before prose.
+4. Give the narrator an immutable Narrative Contract. Post-audit requires every individual actor to
+   resolve to the approved cast and every current ruling to have one causal fictional consequence.
+5. Make NPC intent event-driven. A response references one unconsumed current hostile trigger or a
+   validated persisted agenda. `opposed` alone is neutral. Prior prose cannot authorize a new action.
+6. Keep rulings before prose but separate presentation: concise routine ruling line plus expandable
+   details. Narration status/retry is UI metadata; no `safeSummary` paragraph enters story prose.
+7. Generate Possible Moves from typed actors/interactables/hazards/exits/open questions/goals.
+8. Snapshot Scene State by active narrator variant and restore it through swipe/rewind/delete/retry.
+9. Decompose the oversized turn coordinator only after the new contracts have tests and callers.
+
+The plan proposes a legacy-safe migration 17 with actor kind/aliases/provenance and active timeline
+state. Follow the detailed tasks and adjust exact schema only if RED fixtures prove a safer shape;
+preserve atomicity and old-save compatibility.
+
+## Exact next action: Task 15G Task 1 only
+
+Do not edit production Scene State code first.
+
+Create:
+
+- `packages/core/test/fixtures/cyraethNpcScene.ts`
+- `packages/core/test/orchestrator/npcSceneLifecycle.test.ts`
+
+Update focused tests only as needed to freeze the current broken contracts:
+
+- `packages/core/test/orchestrator/npcAgency.test.ts`
 - `packages/core/test/orchestrator/sceneEntityPromotion.test.ts`
 - `packages/core/test/orchestrator/authorityGuard.test.ts`
-- `packages/core/test/orchestrator/turn.test.ts`
+- `packages/core/test/orchestrator/suggestions.test.ts`
 
-## Exact next action
+Script the exact provider outputs and assert:
 
-Do not invent another source change before packaged replay evidence. Ask the human to install the
-fresh NSIS artifact, rewind only the latest affected exchange, and replay the same social action.
-Then inspect the new UI plus log/database read-only and verify:
+1. Daen, Kellan, older woman, and dog each resolve to one registry identity; current mentions make
+   known absent actors present; aliases do not duplicate people.
+2. Failed supportive/opposed reassurance causes no automatic damaging response.
+3. The narration-only next player turn cannot replay the prior Daen strike; player Health stays at
+   the pre-turn value.
+4. Every valid current ruling is covered once; narrator timeout never appends mechanical recap prose.
+5. Suggestions use real scene actors/facts and never use `describe`, `slowly`, `alone`, or pronouns as
+   subjects.
+6. Retry/restart/swipe/rewind/delete/cancellation restore one coherent active Scene State.
 
-1. Present contains the player, `Daen`, and the genuinely established villagers/creatures.
-2. `First man` and broad `Woman` do not return as separate present NPCs.
-3. The provisional younger/older rows are enriched to `Daenin` and `Mera` rather than duplicated.
-4. The narration is not truncated merely because dialogue mentions hypothetical or negated death.
-5. The ruling remains visible before prose; any genuine death remains threshold-backed.
-6. The operation returns to idle with no stale warning.
-7. Character/world soft-memory fields gain evidence after a clear exchange. If they remain empty,
-   open a new Task 15G for analyzer response normalization/patch persistence with a fresh RED test.
+Observe and record the expected RED failures before production edits. Then implement Task 2 onward
+one coherent slice at a time, updating the checklist and WORKLOG after each green slice.
 
-Checkpoint semantics deliberately retain registered identity history. Therefore provisional alias
-shells already captured by the affected old checkpoint may remain visible in Characters as
-historical/absent after rewind. The current batch guarantees they are not activated as separate
-present actors; deleting or merging historical rows in the user's save requires separate explicit
-product authority and must not be improvised.
+## Required verification and closeout
 
-## Non-negotiable architecture
+For each source slice:
 
-- Program-owned mechanics are authoritative and versioned. Models provide prose, classification,
-  bounded actor proposals, and soft memory only.
-- Every actual fictional NPC/creature that appears must be registry-backed, but registry membership
-  and current presence are separate.
-- A later unambiguous identity reveal enriches the same actor. Scenery, crowds, statues, murals,
-  pronouns, ordinal transitions, and vague nouns are not characters.
-- Only present, living actors participate. NPC and player action budgets remain separate.
-- Rulings render before narrator streaming. Damage/death requires deterministic resource changes;
-  narrator prose cannot override them.
-- Preserve browser/native bridge parity. Do not edit historical Design handoff prototypes. Do not
-  begin signing/updater/CSP work during this phase.
+- focused RED/GREEN tests;
+- `npm run typecheck`;
+- `npm test` before commit;
+- `git diff --check`;
+- preserve bridge parity and no user-owned changes.
+
+Before Task 15G completion/package:
+
+- full root typecheck/tests;
+- direct core/UI production builds;
+- `cargo check` in `packages/shell/src-tauri`;
+- one root `npm run build` only after all source slices are complete;
+- installer sizes, hashes, and unsigned status in HANDOFF/WORKLOG;
+- update active plan, CONTEXT, ARCHITECTURE, HANDOFF, and this prompt with what actually landed.
+
+Do not claim packaged/provider acceptance until the human installs, rewinds, replays, and the new log
+and database are inspected read-only.

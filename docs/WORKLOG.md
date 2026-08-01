@@ -1525,3 +1525,48 @@ restored by the checkpoint may remain historical/absent, but must not return to 
 The same read-only audit also found empty character soft-memory fields and `world_soft = null` after
 the analyzer completed; this is recorded as a separate acceptance signal, not silently claimed fixed
 by the actor/authority changes.
+
+---
+
+## 2026-08-02 - Task 15G diagnosis: NPC scene authority is fragmented
+
+**Read-only live-state reconstruction.** The installed `Cyraeth Adventure` database and native log
+were inspected without modifying the save. The exchange after failed reassurance applied two
+separate Daen Unarmed Strike rulings to the player. The first was a deterministic reaction because
+`Reassure Survivor` is opposed; the second was proposed on the next player message, `Describe what
+you now`, even though the classifier found no player mechanic. That second operation removed another
+10 Health and set the action's exposure flag on Daen. Its narrator stage timed out at the 60-second
+boundary after producing prose that did not depict a fresh strike, then the authority fallback
+appended `Daen's Unarmed Strike succeeds. A solid blow lands against the target.` to the story.
+
+The same active prose clearly contained the archer's revealed name `Kellan`, the older woman, and her
+dog, but the current roster had only the player and Daen present. Existing absent older-woman/dog
+rows cannot be reactivated by deterministic discovery because known names are skipped unless a
+generic identity is enriched. `The archer - Kellan -` is outside the current reveal grammar, and an
+intervening adverb prevents the proper-name actor-verb matcher. Generic capability inference also
+uses keywords from the whole narrator response, so unrelated emergent actors can receive the same
+skills. No installed state was repaired; the human will rewind and replay later.
+
+**System cause.** `runTurnOperation` is a 676-line coordinator with 39 cyclomatic / 103 cognitive
+complexity. Model registrar, deterministic prose extraction, classifier, opposed-action reaction,
+NPC planner, narrator, analyzer, and suggestion fallback independently reinterpret raw text without
+one shared identity/presence/event model. Local tests encode those local contracts: any opposed
+contest may provoke damage, safe fallback prose must include actor/action/outcome, and lexical
+suggestion grounding accepts arbitrary surviving words. Each subsystem can therefore pass while the
+story, registry, ruling, and prose disagree.
+
+**Architecture decision and plan.** Task 15G is opened with the dependency-ordered plan at
+`docs/superpowers/plans/2026-08-02-npc-scene-system-redesign.md`. The target introduces one typed,
+timeline/variant-safe Scene State; evidence-backed actor observations and alias reconciliation; a
+pre-narration Narrative Beat Plan for organic NPC creation; actor-local sealed capabilities;
+current-event-driven NPC intent with explicit hostile/supportive/neutral semantics; exact causal
+ruling coverage; fallback status outside story prose; and affordance-backed Possible Moves. The
+first implementation slice is an end-to-end Cyraeth RED fixture across retry/restart/swipe/rewind,
+not another production regex edit. No gameplay source or installer was changed in this diagnosis.
+
+**Verification.** Fresh post-documentation root typecheck passed. Complete suites passed: core **632
+tests / 45 files** plus UI **160 tests / 25 files**, **792 tests total**. `git diff --check` passed.
+No native or package gate was run because this batch changes documentation only.
+
+**Next:** implement Task 15G Task 1 only: add the provider-scripted lifecycle fixture, observe each
+intended RED failure, and record it before touching the Scene State production implementation.

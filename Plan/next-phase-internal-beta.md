@@ -238,6 +238,38 @@ deterministic death guard treated negated or hypothetical death-language as a co
 - [x] Run the complete typecheck/test/native/package gate, update every baton document, commit the
   documentation closeout, and hash one fresh unsigned installer for rewind/replay acceptance.
 
+## Task 15G: Authoritative NPC Scene System Redesign
+
+The next packaged replay showed that Tasks 15C-15F repaired individual extraction cases but did not
+produce one coherent NPC lifecycle. The narrator mentioned Kellan, an older woman, and a dog while
+only Daen remained present; failed reassurance provoked an automatic punch; the next narration-only
+player message let the planner repeat that old punch as a fresh ruling; the narrator timed out
+without depicting it; the engine appended a duplicate mechanical recap; and Possible Moves treated
+`describe` and `slowly` as scene subjects. This is a system-boundary failure, not another regex case.
+
+Detailed diagnosis and execution plan:
+`docs/superpowers/plans/2026-08-02-npc-scene-system-redesign.md`.
+
+- [x] Inspect the installed Cyraeth transcript, operations, character rows, action definitions, and
+  native log read-only; do not mutate the user's save.
+- [x] Trace identity, presence, capability, NPC intent, ruling, narration fallback, suggestion, and
+  rewind/variant ownership through the current code and define one target Scene State contract.
+- [ ] Freeze the complete Cyraeth lifecycle as an end-to-end RED fixture, including provider
+  degradation, retry/restart, swipe, rewind, delete, and cancellation.
+- [ ] Add typed Scene State, evidence spans, alias/provenance persistence, trigger events,
+  affordances, and active-variant scene snapshots with a legacy-safe migration.
+- [ ] Replace registrar/regex write paths with one Scene Reconciler and make organic narrator actors
+  part of a pre-narration Narrative Beat Plan that commits atomically with prose.
+- [ ] Provision emergent NPC capabilities from actor-local evidence and sealed story assets.
+- [ ] Make NPC agency consume current semantic trigger events or persisted agendas; `opposed` alone
+  must never imply hostility, and prior prose must never replay an action.
+- [ ] Require causal narrative coverage for each current ruling and remove deterministic mechanical
+  recap sentences from story prose; retain concise ruling UI plus retryable narration status.
+- [ ] Generate Possible Moves from typed scene affordances rather than arbitrary prose tokens.
+- [ ] Decompose the turn coordinator, remove superseded authority paths, run the full automated and
+  native gate, update every baton document, and build one combined installer only after all Task
+  15G source slices are complete.
+
 ## Internal-Beta exit criteria (the finish line for this phase)
 
 - A user can create **or import** a story, play it, close the app, reopen it, and continue.
