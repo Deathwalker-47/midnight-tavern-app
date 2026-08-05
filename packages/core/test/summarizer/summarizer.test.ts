@@ -20,7 +20,7 @@ import type { Router, RolePrompt, ChatResponse } from "../../src/router/index.js
 import { maybeSummarizeChapter, MESSAGES_PER_CHAPTER_KEY } from "../../src/summarizer/chapter.js";
 import { maybeSummarizeArc, CHAPTERS_PER_ARC_KEY } from "../../src/summarizer/arc.js";
 import { buildMemoryBlock, condenseArcDoc, condenseSoftSlice } from "../../src/summarizer/injector.js";
-import { newSoftState } from "../../src/memory/softStore.js";
+import { newSoftState, applySoftPatch } from "../../src/memory/softStore.js";
 import { makeStory } from "../fixtures.js";
 import type { ArcDoc, ArcRecord } from "../../src/index.js";
 
@@ -238,6 +238,57 @@ describe("injector — condensing", () => {
     expect(line).toContain("Nobody [secondary]");
     expect(line).toContain("no notable observations");
   });
+
+  it("condenseSoftSlice renders relationship names, never raw ids", () => {
+    let soft = newSoftState("mara", "Mara");
+    soft = {
+      ...soft,
+      relationships: [
+        { toCharacterId: "story-1:scene:warden", trust: -0.9, power: 0.5, feeling: "fears" },
+      ],
+    };
+    const nameOf = (id: string) => (id === "story-1:scene:warden" ? "The Warden" : undefined);
+    const line = condenseSoftSlice(soft, nameOf);
+    expect(line).toContain("The Warden");
+    expect(line).not.toContain("story-1:scene:warden");
+  });
+
+  it("condenseSoftSlice falls back to a humanised label for unresolvable ids", () => {
+    let soft = newSoftState("mara", "Mara");
+    soft = {
+      ...soft,
+      relationships: [{ toCharacterId: "story-1:scene:unknown-xyz", trust: 0.3, power: 0 }],
+    };
+    const line = condenseSoftSlice(soft, () => undefined);
+    expect(line).not.toMatch(/story-1:scene:/);
+  });
+
+  it("condenseSoftSlice surfaces the most recent observations, newest first", () => {
+    let soft = newSoftState("mara", "Mara");
+    soft = {
+      ...soft,
+      observations: [
+        { turnIdx: 1, text: "found a rusted key" },
+        { turnIdx: 2, text: "lied about the fire" },
+        { turnIdx: 3, text: "drew a dagger" },
+      ],
+    };
+    const line = condenseSoftSlice(soft);
+    expect(line).toContain("drew a dagger");
+    // Newest first: the most recent observation appears before an older one.
+    expect(line.indexOf("drew a dagger")).toBeLessThan(line.indexOf("lied about the fire"));
+  });
+
+  it("condenseSoftSlice caps observations to the most recent few, not the whole capped log", () => {
+    let soft = newSoftState("mara", "Mara");
+    soft = {
+      ...soft,
+      observations: Array.from({ length: 50 }, (_, i) => ({ turnIdx: i, text: `event ${i}` })),
+    };
+    const line = condenseSoftSlice(soft);
+    expect(line).toContain("event 49");
+    expect(line).not.toContain("event 0");
+  });
 });
 
 describe("buildMemoryBlock", () => {
@@ -296,5 +347,28 @@ describe("buildMemoryBlock", () => {
     expect(block.arc).toBeUndefined();
     expect(block.chapters).toEqual([]);
     expect(block.softSlices).toEqual([]);
+  });
+
+  it("includes world overview when set", async () => {
+    await applySoftPatch(
+      store,
+      STORY_ID,
+      { characterOps: [], worldOps: [{ op: "set_overview_hint", text: "war looms in the north" }] },
+      1
+    );
+    const block = await buildMemoryBlock(store, STORY_ID, []);
+    expect(block.worldOverview).toBe("war looms in the north");
+  });
+
+  it("includes unresolved threads", async () => {
+    await applySoftPatch(
+      store,
+      STORY_ID,
+      { characterOps: [], worldOps: [{ op: "add_thread", title: "The debt", note: "owed to a fence" }] },
+      1
+    );
+    const block = await buildMemoryBlock(store, STORY_ID, []);
+    expect(block.unresolvedThreads).toHaveLength(1);
+    expect(block.unresolvedThreads[0]).toContain("The debt");
   });
 });

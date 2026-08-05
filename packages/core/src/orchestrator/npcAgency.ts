@@ -21,6 +21,7 @@ import { NPC_HOSTILE_TO_PLAYER_FLAG } from "./npcIntroduction.js";
 import type {
   ActionDef,
   CharacterHardState,
+  CharacterSoftState,
   MechanicalIntent,
   Ruling,
   StorySchema,
@@ -47,9 +48,14 @@ export interface NpcReactionContext {
   /**
    * Optional `ruling.turnId → intent.stakes` for the player's rulings this turn, so provocation
    * can factor in the classifier's sealed hostility grade (Task 6). Omission is safe — the
-   * predicate still fires on combat/opposed/target-harm signals.
+   * predicate still fires on combat/target-harm signals.
    */
   stakesByTurnId?: ReadonlyMap<string, MechanicalIntent["stakes"]>;
+  /**
+   * Soft profiles keyed by characterId, for disposition (Plan 13 Phase 2). Absent or missing
+   * entries read as neutral — no relationship data is a safe, non-hostile default.
+   */
+  softById?: ReadonlyMap<string, CharacterSoftState>;
 }
 
 /** True when an action can reduce a target resource — i.e. it is genuinely offensive. */
@@ -65,28 +71,60 @@ function dealtCommittedTargetHarm(ruling: Ruling): boolean {
 }
 
 /**
- * Is a landed player action hostile toward its target (plan Task 6)? The decision uses only SEALED
- * signals — never raw prose:
+ * A genuinely offensive act (Plan 13 Phase 2, superseding plan Task 6's `isProvocation`).
+ * Deliberately EXCLUDES bare `opposed` and bare `stakes === "opposed"`: a contest of nerve,
+ * persuasion, or intimidation is not violence merely because it is resolved adversarially
+ * (CONTEXT.md invariant 8). Uses only SEALED signals — never raw prose:
  *  - `category === "combat"` — the classic attack;
- *  - `opposed === true` — a direct contest of force/will against the target (intimidation, a
- *    duel of nerve), adversarial even when it deals no damage;
  *  - the sealed outcome table can reduce a target resource, or the committed effect actually did;
- *  - the classifier marked the attempt with hostile stakes (`danger`/`opposed`).
- * Beneficial acts (healing, aid), harmless dialogue, and self-directed actions are not provocations.
+ *  - the classifier marked the attempt with `danger` stakes.
+ * Beneficial acts (healing, aid), harmless dialogue, and self-directed actions are never hostile.
  */
-export function isProvocation(
+export function isHostileAct(
   action: ActionDef,
   ruling: Ruling,
   stakes?: MechanicalIntent["stakes"]
 ): boolean {
   return (
     action.category === "combat" ||
-    action.opposed === true ||
     dealsTargetHarm(action) ||
     dealtCommittedTargetHarm(ruling) ||
-    stakes === "danger" ||
-    stakes === "opposed"
+    stakes === "danger"
   );
+}
+
+/**
+ * A direct contest of force or will that is not itself violence (intimidation, persuasion
+ * against resistance, a duel of nerve). Warrants a response from the target, but never alone
+ * justifies a counter-attack — see {@link chooseCounterAction}'s disposition-gated tiers.
+ */
+export function isOpposedContest(action: ActionDef): boolean {
+  return action.opposed === true && !dealsTargetHarm(action);
+}
+
+/** Engine-derived stance of one NPC toward one actor. Ordered least→most cooperative. */
+export type NpcDisposition = "hostile" | "wary" | "neutral" | "friendly";
+
+/** Relationship trust at or below this reads as wary; at or above its positive twin, friendly. */
+export const WARY_TRUST_THRESHOLD = -0.4;
+export const FRIENDLY_TRUST_THRESHOLD = 0.4;
+
+/**
+ * Derive a graded disposition from the two facts the engine actually owns: the validated
+ * hostility flag (authoritative — set only from an explicit narrated attack on the player, see
+ * `npcIntroduction.ts`) and the analyzer's accumulated relationship trust (advisory). The flag
+ * always wins: a validated-hostile actor is hostile no matter what the analyzer's trust reads.
+ */
+export function deriveDisposition(
+  npc: CharacterHardState,
+  npcSoft: CharacterSoftState | undefined,
+  towardId: string
+): NpcDisposition {
+  if (npc.flags[NPC_HOSTILE_TO_PLAYER_FLAG] === true) return "hostile";
+  const trust = npcSoft?.relationships.find((r) => r.toCharacterId === towardId)?.trust ?? 0;
+  if (trust <= WARY_TRUST_THRESHOLD) return "wary";
+  if (trust >= FRIENDLY_TRUST_THRESHOLD) return "friendly";
+  return "neutral";
 }
 
 /** The NPC's first held weapon item id (for damage scaling on weapon actions), if any. */
@@ -100,30 +138,55 @@ function heldWeaponId(schema: StorySchema, npc: CharacterHardState): string | un
 }
 
 /**
- * Pick the NPC's counter-attack: the first sealed combat action that (a) can harm a target
- * and (b) the NPC's own gate permits right now (skill, rank, item, cost, prerequisites). The
- * gate is re-run by the caller on resolve; checking here only avoids emitting a dead intent.
+ * Pick the NPC's reaction, gated by disposition rather than catalog order (Plan 13 Phase 2,
+ * closing D-1/D-2). Every candidate still passes the same gate the player does — this only
+ * changes WHICH sealed action is proposed, never whether the engine adjudicates it.
+ *
+ * Preference order per disposition:
+ *  - hostile: harmful first, always — a validated-hostile actor answers with force.
+ *  - wary: peaceful options first; falls back to harmful only if genuinely harmed this turn.
+ *  - neutral: same as wary — no reason yet to expect violence either way.
+ *  - friendly: peaceful options first, and falls back to harmful only if genuinely harmed and no
+ *    peaceful option is available — a friend tries to de-escalate before it defends itself.
  */
 function chooseCounterAction(
   schema: StorySchema,
   npc: CharacterHardState,
-  attackerId: string
+  attackerId: string,
+  disposition: NpcDisposition,
+  wasHarmed: boolean
 ): MechanicalIntent | undefined {
   const weaponId = heldWeaponId(schema, npc);
-  for (const action of schema.actions) {
-    if (action.category !== "combat") continue;
-    if (!dealsTargetHarm(action)) continue;
-    const intent: MechanicalIntent = {
-      actorId: npc.characterId,
-      actionId: action.id,
-      targetId: attackerId,
-      stakes: "danger", // a defensive strike is always a genuine, uncertain attempt
-      confidence: 1,
-      ...(action.requiresItemKind === "weapon" && weaponId ? { itemId: weaponId } : {}),
-    };
-    if (checkGate(schema, npc, intent).allowed) return intent;
+  const build = (action: ActionDef): MechanicalIntent => ({
+    actorId: npc.characterId,
+    actionId: action.id,
+    targetId: attackerId,
+    stakes: action.category === "combat" ? "danger" : "uncertain",
+    confidence: 1,
+    ...(action.requiresItemKind === "weapon" && weaponId ? { itemId: weaponId } : {}),
+  });
+  const legal = (action: ActionDef): boolean => checkGate(schema, npc, build(action)).allowed;
+
+  const harmful = schema.actions.filter((a) => a.category === "combat" && dealsTargetHarm(a));
+  const nonHarmful = schema.actions.filter((a) => !dealsTargetHarm(a) && a.opposed === true);
+  const social = schema.actions.filter((a) => a.category === "social" && !dealsTargetHarm(a));
+
+  const order: ActionDef[][] =
+    disposition === "hostile"
+      ? [harmful, nonHarmful, social]
+      : disposition === "friendly"
+        ? wasHarmed
+          ? [social, nonHarmful, harmful]
+          : [social, nonHarmful]
+        : wasHarmed // wary and neutral share the same rule
+          ? [harmful, nonHarmful, social]
+          : [nonHarmful, social];
+
+  for (const tier of order) {
+    const found = tier.find(legal);
+    if (found) return build(found);
   }
-  return undefined;
+  return undefined; // Silence is correct here. A manufactured counter is not.
 }
 
 /**
@@ -133,7 +196,7 @@ function chooseCounterAction(
  * computed once over `priorRulings`, so a reaction can never trigger further reactions.
  */
 export function planNpcReactions(ctx: NpcReactionContext): MechanicalIntent[] {
-  const { schema, priorRulings, workingById, present, stakesByTurnId } = ctx;
+  const { schema, priorRulings, workingById, present, stakesByTurnId, softById } = ctx;
   const intents: MechanicalIntent[] = [];
   const spent = new Map<string, number>();
 
@@ -144,9 +207,13 @@ export function planNpcReactions(ctx: NpcReactionContext): MechanicalIntent[] {
     if (present.get(targetId) !== false) continue; // must be a present NON-player NPC
 
     const action = schema.actions.find((candidate) => candidate.id === ruling.actionId);
-    // Only a SEALED hostile act provokes — combat, an opposed contest, target harm, or hostile
-    // stakes. Harmless dialogue and beneficial acts (healing/aid) never trigger a reaction.
-    if (!action || !isProvocation(action, ruling, stakesByTurnId?.get(ruling.turnId))) continue;
+    if (!action) continue;
+    const stakes = stakesByTurnId?.get(ruling.turnId);
+    const hostile = isHostileAct(action, ruling, stakes);
+    const contest = isOpposedContest(action);
+    // A reaction requires either a genuinely hostile act or an opposed contest (Plan 13 Phase 2).
+    // Harmless dialogue and beneficial acts (healing/aid) never trigger a reaction at all.
+    if (!hostile && !contest) continue;
 
     const npc = workingById.get(targetId);
     if (!npc || !npc.alive) continue; // dead/off-scene NPCs never act
@@ -156,7 +223,9 @@ export function planNpcReactions(ctx: NpcReactionContext): MechanicalIntent[] {
     if (!attacker || !attacker.alive) continue; // don't strike an attacker who is already down
     if (present.get(ruling.actorId) === undefined) continue; // attacker must be on-scene
 
-    const reaction = chooseCounterAction(schema, npc, ruling.actorId);
+    const disposition = deriveDisposition(npc, softById?.get(targetId), ruling.actorId);
+    const wasHarmed = dealtCommittedTargetHarm(ruling);
+    const reaction = chooseCounterAction(schema, npc, ruling.actorId, disposition, wasHarmed);
     if (!reaction) continue;
 
     intents.push(reaction);
@@ -280,7 +349,9 @@ export function planHostileNpcFallback(input: NpcPlanInput): MechanicalIntent[] 
   for (const npc of input.candidates) {
     if (!npc.alive || input.present.get(npc.characterId) !== false) continue;
     if (npc.flags[NPC_HOSTILE_TO_PLAYER_FLAG] !== true) continue;
-    const intent = chooseCounterAction(input.schema, npc, playerId);
+    // Already validated hostile by the engine flag — always the "hostile" tier, and treat as
+    // harmed so a hostile actor with no legal weapon still exhausts every tier before giving up.
+    const intent = chooseCounterAction(input.schema, npc, playerId, "hostile", true);
     if (intent) intents.push(intent);
   }
   return intents;

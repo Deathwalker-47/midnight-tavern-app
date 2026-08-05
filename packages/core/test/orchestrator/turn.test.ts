@@ -481,10 +481,43 @@ describe("submitTurn — pipeline order & transaction", () => {
     const result = await submitTurn(router, store, storyId, "I tell a terrible joke.");
     await result.background;
 
-    expect(router.calls).toEqual(["narrator"]);
+    // The analyzer now runs in No-Stats mode too (Plan 13 step 1.6): narrator, then analyzer.
+    expect(router.calls).toEqual(["narrator", "analyzer"]);
     expect(result.rulings).toEqual([]);
     expect(await store.rulings.listByStory(storyId)).toEqual([]);
     expect((await store.characters.get("wight"))!.hard.resources.hp!.current).toBe(12);
+  });
+
+  it("No-Stats story: an analyzer-proposed observation actually reaches the character's soft state", async () => {
+    const current = (await store.stories.get(storyId))!;
+    await store.stories.update({
+      ...current,
+      schema: {
+        ...current.schema,
+        statMode: "none",
+        attributes: [],
+        resources: [],
+        skills: [],
+        actions: [],
+        items: [],
+        npcTemplates: [],
+        startingState: { attributes: {}, resources: {}, skills: [], inventory: [] },
+      },
+    });
+    const router = new ScriptedRouter({
+      classified: { playerIntents: [], npcIntents: [], freeText: "" },
+      narratorProse: "The rain finally stops.",
+      analyzer: {
+        characterOps: [{ characterId: "kestrel", ops: [{ op: "observe", text: "watched the sky clear" }] }],
+        worldOps: [],
+      },
+    });
+
+    const result = await submitTurn(router, store, storyId, "I watch the sky clear.");
+    await result.background;
+
+    const after = await store.characters.get("kestrel");
+    expect(after?.soft?.observations).toContainEqual({ turnIdx: 1, text: "watched the sky clear" });
   });
 
   it("promotes an NPC introduced organically by the current narration before committing the turn", async () => {

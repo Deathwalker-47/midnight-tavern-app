@@ -60,7 +60,7 @@ const worldState = (): WorldSoftState => ({
   overview: "A haunted valley.",
   locations: [{ name: "The Vale", description: "Mist-choked." }],
   arcs: [],
-  unresolvedThreads: [{ title: "The wight", note: "Still stirs.", resolved: false }],
+  unresolvedThreads: [{ id: "t1", title: "The wight", note: "Still stirs.", resolved: false }],
 });
 
 const ruling = (): Ruling => ({

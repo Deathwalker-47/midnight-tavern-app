@@ -102,6 +102,9 @@ export type WorldLocation = z.infer<typeof WorldLocationSchema>;
 
 /** An unresolved narrative thread. */
 export const StoryThreadSchema = z.object({
+  // Threads live inside world_soft.soft_json as JSON, not a SQL column, so a legacy thread
+  // predating this field has none. Backfilled on parse rather than via a migration.
+  id: z.string().optional().transform((v) => v ?? crypto.randomUUID()),
   title: z.string(),
   note: z.string(),
   resolved: z.boolean(),

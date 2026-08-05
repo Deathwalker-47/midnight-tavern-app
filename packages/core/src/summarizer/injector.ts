@@ -31,8 +31,16 @@ export function condenseArcDoc(doc: ArcDoc): string {
   return lines.join("\n");
 }
 
+/** A raw id with no resolvable name humanizes to its last `:`-separated segment. */
+function humanizeUnresolvedId(id: string): string {
+  return id.split(":").at(-1) ?? id;
+}
+
 /** Condense one soft profile into a single line for present-character context. */
-export function condenseSoftSlice(soft: CharacterSoftState): string {
+export function condenseSoftSlice(
+  soft: CharacterSoftState,
+  nameOf: (id: string) => string | undefined = () => undefined
+): string {
   const bits: string[] = [];
   if (soft.identity.traits.length) bits.push(`traits: ${soft.identity.traits.slice(0, 6).join(", ")}`);
   if (soft.current.mood) bits.push(`mood: ${soft.current.mood}`);
@@ -42,8 +50,15 @@ export function condenseSoftSlice(soft: CharacterSoftState): string {
   const rels = [...soft.relationships]
     .sort((a, b) => Math.abs(b.trust) - Math.abs(a.trust))
     .slice(0, 3)
-    .map((r) => `${r.toCharacterId}(trust ${r.trust.toFixed(1)}${r.feeling ? `, ${r.feeling}` : ""})`);
+    .map((r) => {
+      const label = nameOf(r.toCharacterId) ?? humanizeUnresolvedId(r.toCharacterId);
+      return `${label}(trust ${r.trust.toFixed(1)}${r.feeling ? `, ${r.feeling}` : ""})`;
+    });
   if (rels.length) bits.push(`relationships: ${rels.join(", ")}`);
+  // Most recent observations, newest first — the narrator's only view into the analyzer's
+  // capped narrative log (types/softState.ts OBSERVATION_CAP), which was previously write-only.
+  const obs = soft.observations.slice(-3).reverse().map((o) => o.text);
+  if (obs.length) bits.push(`recent: ${obs.join("; ")}`);
   return `${soft.name} [${soft.tier}] — ${bits.length ? bits.join(" | ") : "no notable observations"}`;
 }
 
@@ -54,13 +69,22 @@ export interface MemoryBlock {
   chapters: string[];
   /** One condensed line per present character with a soft profile. */
   softSlices: string[];
+  /** World-level narrative overview, or undefined if the analyzer hasn't set one yet. */
+  worldOverview?: string;
+  /** Open story threads not yet resolved, rendered as "title: note". */
+  unresolvedThreads: string[];
 }
 
 /**
  * Build the memory block for a story given the ids of characters present this turn. The
  * assembler renders and budgets these; here we only gather and condense.
  */
-export async function buildMemoryBlock(store: Store, storyId: string, presentIds: string[]): Promise<MemoryBlock> {
+export async function buildMemoryBlock(
+  store: Store,
+  storyId: string,
+  presentIds: string[],
+  nameOf: (id: string) => string | undefined = () => undefined
+): Promise<MemoryBlock> {
   const latestArc = await store.arcs.latest(storyId);
 
   // Chapters after the latest arc's coverage (all chapters when there's no arc yet).
@@ -74,12 +98,20 @@ export async function buildMemoryBlock(store: Store, storyId: string, presentIds
   const softSlices: string[] = [];
   for (const id of presentIds) {
     const soft = (await store.characters.get(id))?.soft;
-    if (soft) softSlices.push(condenseSoftSlice(soft));
+    if (soft) softSlices.push(condenseSoftSlice(soft, nameOf));
   }
+
+  const worldSoft = await store.worldSoft.get(storyId);
+  const worldOverview = worldSoft?.overview || undefined;
+  const unresolvedThreads = (worldSoft?.unresolvedThreads ?? [])
+    .filter((t) => !t.resolved)
+    .map((t) => `${t.title}${t.note ? `: ${t.note}` : ""}`);
 
   return {
     ...(latestArc ? { arc: condenseArcDoc(latestArc.doc) } : {}),
     chapters,
     softSlices,
+    worldOverview,
+    unresolvedThreads,
   };
 }

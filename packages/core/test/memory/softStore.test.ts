@@ -22,7 +22,7 @@ import {
   newWorldSoftState,
   OBSERVATION_CAP,
 } from "../../src/memory/softStore.js";
-import { SoftStatePatchSchema, type CharacterSoftState } from "../../src/types/index.js";
+import { SoftStatePatchSchema, WorldSoftStateSchema, type CharacterSoftState } from "../../src/types/index.js";
 import { makeStory } from "../fixtures.js";
 
 const base = (): CharacterSoftState => newSoftState("npc-1", "Mara");
@@ -66,23 +66,39 @@ describe("applyCharacterOp — merge rules", () => {
     expect(s.observations[OBSERVATION_CAP - 1]!.text).toBe(`obs ${OBSERVATION_CAP + 4}`);
   });
 
-  it("adjust_relationship creates then accumulates, clamping trust/power to [-1,1]", () => {
+  it("adjust_relationship creates then accumulates with asymptotic attenuation near the ceiling/floor", () => {
     let s = applyCharacterOp(
       base(),
       { op: "adjust_relationship", toCharacterId: "kestrel", trustDelta: 0.7, powerDelta: -0.4, feeling: "ally" },
       0
     );
     expect(s.relationships).toHaveLength(1);
-    // Accumulate past the ceiling/floor — must clamp, not overflow.
+    // A second large delta toward the same boundary is attenuated by proximity, not linear.
     s = applyCharacterOp(
       s,
       { op: "adjust_relationship", toCharacterId: "kestrel", trustDelta: 0.9, powerDelta: -0.9 },
       1
     );
     const rel = s.relationships[0]!;
-    expect(rel.trust).toBe(1); // 0.7 + 0.9 = 1.6 → clamp 1
-    expect(rel.power).toBe(-1); // -0.4 - 0.9 = -1.3 → clamp -1
+    expect(rel.trust).toBeCloseTo(0.97, 2); // 0.7 + 0.9*(1-0.7) = 0.97, not clamped to 1
+    expect(rel.power).toBeCloseTo(-0.94, 2); // -0.4 + -0.9*(1-0.4) = -0.94, not clamped to -1
     expect(rel.feeling).toBe("ally"); // preserved when a later op omits it
+  });
+
+  it("large delta does not pin trust at 1 — a subsequent negative delta still moves it", () => {
+    let s = applyCharacterOp(
+      base(),
+      { op: "adjust_relationship", toCharacterId: "k", trustDelta: 0.95, powerDelta: 0 },
+      0
+    );
+    expect(s.relationships[0]!.trust).toBeLessThan(1);
+    const before = s.relationships[0]!.trust;
+    s = applyCharacterOp(
+      s,
+      { op: "adjust_relationship", toCharacterId: "k", trustDelta: -0.3, powerDelta: 0 },
+      1
+    );
+    expect(s.relationships[0]!.trust).toBeLessThan(before);
   });
 
   it("does not mutate the input state (pure)", () => {
@@ -109,6 +125,23 @@ describe("applyWorldOp — merge rules", () => {
     expect(w.unresolvedThreads[0]!.resolved).toBe(false);
     w = applyWorldOp(w, { op: "resolve_thread", title: "the debt" }); // CI match
     expect(w.unresolvedThreads[0]!.resolved).toBe(true);
+  });
+
+  it("add_thread assigns a stable id", () => {
+    const w = applyWorldOp(newWorldSoftState(), { op: "add_thread", title: "The debt", note: "owed to a fence" });
+    expect(typeof w.unresolvedThreads[0]!.id).toBe("string");
+    expect(w.unresolvedThreads[0]!.id.length).toBeGreaterThan(0);
+  });
+
+  it("legacy thread without id gets a backfilled id on parse", () => {
+    const raw = {
+      unresolvedThreads: [{ title: "Old", note: "", resolved: false }],
+      locations: [],
+      arcs: [],
+      overview: "",
+    };
+    const parsed = WorldSoftStateSchema.parse(raw);
+    expect(parsed.unresolvedThreads[0]!.id).toBeDefined();
   });
 });
 

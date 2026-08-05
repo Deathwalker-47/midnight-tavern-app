@@ -31,6 +31,17 @@ function clamp01(n: number): number {
   return Math.max(-1, Math.min(1, n));
 }
 
+/**
+ * Attenuate a relationship delta by proximity to the boundary it's heading toward, so repeated
+ * large deltas approach ±1 asymptotically instead of saturating and pinning in one step. A delta
+ * heading away from the current value's sign (or off a zero baseline) is unaffected.
+ */
+function asymptoticDelta(current: number, delta: number): number {
+  if (delta === 0) return 0;
+  const towardBoundary = (delta > 0 && current > 0) || (delta < 0 && current < 0);
+  return towardBoundary ? delta * (1 - Math.abs(current)) : delta;
+}
+
 /** Case-insensitive membership test for deduping string lists. */
 function includesCI(list: string[], value: string): boolean {
   const v = value.toLowerCase();
@@ -79,8 +90,8 @@ export function applyCharacterOp(
       const existing = state.relationships.find((r) => r.toCharacterId === op.toCharacterId);
       const next = {
         toCharacterId: op.toCharacterId,
-        trust: clamp01((existing?.trust ?? 0) + op.trustDelta),
-        power: clamp01((existing?.power ?? 0) + op.powerDelta),
+        trust: clamp01((existing?.trust ?? 0) + asymptoticDelta(existing?.trust ?? 0, op.trustDelta)),
+        power: clamp01((existing?.power ?? 0) + asymptoticDelta(existing?.power ?? 0, op.powerDelta)),
         ...(op.feeling !== undefined
           ? { feeling: op.feeling }
           : existing?.feeling !== undefined
@@ -108,7 +119,10 @@ export function applyWorldOp(state: WorldSoftState, op: WorldOp): WorldSoftState
       if (state.unresolvedThreads.some((t) => t.title.toLowerCase() === op.title.toLowerCase())) return state;
       return {
         ...state,
-        unresolvedThreads: [...state.unresolvedThreads, { title: op.title, note: op.note, resolved: false }],
+        unresolvedThreads: [
+          ...state.unresolvedThreads,
+          { id: crypto.randomUUID(), title: op.title, note: op.note, resolved: false },
+        ],
       };
     }
     case "resolve_thread": {

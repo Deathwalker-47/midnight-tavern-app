@@ -393,167 +393,18 @@ async function recordRulingEvents(
 }
 
 /**
- * Run one full turn. See the module header for the sequence; the numbered comments below map
- * to §7 steps exactly.
+ * The intended per-turn order, preserved verbatim from the retired `submitTurnLegacy`. This is the
+ * product's core insight — compute (3) strictly precedes narrate (5), and commit (6) is atomic:
+ *
+ *   1. Persist the player message
+ *   2. Classify — turn free text into a catalog action
+ *   3. Resolve every intent into a staged ruling, nothing committed yet
+ *   4. Assemble narrator context with rulings inline as facts
+ *   5. Stream the narrator prose
+ *   6. Persist prose + commit rulings in ONE transaction
+ *   7. Fire-and-forget: analyzer patch, chapter/arc summaries
+ *   8. Return prose + rulings for dice toasts
  */
-async function submitTurnLegacy(
-  router: Router,
-  store: Store,
-  storyId: string,
-  playerText: string,
-  opts: SubmitTurnOptions = {}
-) {
-  const story = await requireStory(store, storyId);
-  const schema = story.schema;
-  if (schema.migrationPending) {
-    throw new Error("This legacy Light Rules story needs a one-time stat-system choice before play can continue.");
-  }
-  const rng = opts.rng ?? cryptoRng;
-
-  // 1. Persist the player message at idx = n.
-  const playerIdx = await store.messages.nextIdx(storyId);
-  await store.messages.insert({
-    id: randomUUID(),
-    storyId,
-    idx: playerIdx,
-    role: "player",
-    content: playerText,
-    createdAt: Date.now(),
-  });
-
-  const roster = await store.characters.listByStory(storyId);
-  const presentRoster = await store.characters.listPresentByStory(storyId);
-  const presentCharacters = presentRoster.map((c) => ({
-    id: c.id,
-    name: c.name,
-    isPlayer: c.isPlayer,
-  }));
-
-  const rulings: Ruling[] = [];
-  const staged: { ruling: Ruling; mutations: ReturnType<typeof resolve>["mutations"] }[] = [];
-  if (schema.statMode === "full") {
-
-  // 2. Classify (always). Recent narrator lines give the classifier scene context.
-  const recentMsgs = await store.messages.recent(storyId, 6);
-  const recentNarration = recentMsgs.filter((m) => m.role === "narrator").map((m) => m.content);
-  const classified = await classify(
-    router,
-    schema,
-    { playerMessage: playerText, presentCharacters, recentNarration },
-    { signal: opts.signal }
-  );
-
-  // 3. Resolve every intent into a staged ruling. Nothing is committed yet; we collect the
-  //    ledger mutations alongside so step 6 can commit atomically.
-  const intents: MechanicalIntent[] = [...classified.playerIntents, ...classified.npcIntents];
-
-  // Template hint for a to-be-instantiated NPC is its roster display name (§5 step 3); the
-  // classifier constrains actor/target ids to present characters, so the name is on hand.
-  const nameById = new Map(roster.map((c) => [c.id, c.name]));
-
-  for (const intent of intents) {
-    const actorHard = await ensureHardState(
-      store,
-      schema,
-      storyId,
-      intent.actorId,
-      nameById.get(intent.actorId)
-    );
-    const targetHard = intent.targetId
-      ? await ensureHardState(store, schema, storyId, intent.targetId, nameById.get(intent.targetId))
-      : undefined;
-    const result = resolve(schema, actorHard, targetHard, intent, rng);
-    rulings.push(result.ruling);
-    staged.push({ ruling: result.ruling, mutations: result.mutations });
-  }
-  }
-
-  // 4. Assemble the narrator context with the rulings inline as authoritative facts (§7.3).
-  //    Blueprint style inputs (§3) are composed into the system frame ABOVE the authority clause;
-  //    they are style-only and can never displace it.
-  const presentIds = presentCharacters.map((c) => c.id);
-  const styleInputs = blueprintToStyleInputs(story.blueprint);
-  const context = await assembleContext(store, {
-    storyId,
-    schema,
-    rulings,
-    presentIds,
-    playerText,
-    styleInputs,
-    ...(opts.personaBlock ? { personaBlock: opts.personaBlock } : {}),
-  });
-
-  // 5. Stream the narrator prose. `stream` aggregates and returns the full text.
-  const response = await router.stream(
-    "narrator",
-    { system: context.system, user: context.user },
-    opts.onDelta ?? (() => {}),
-    { ...(opts.signal ? { signal: opts.signal } : {}) }
-  );
-  const prose = response.content;
-
-  // 6. Persist prose and commit rulings in ONE transaction (all-or-nothing).
-  const narratorIdx = playerIdx + 1;
-  const narratorMsgId = randomUUID();
-  await store.transaction(async () => {
-    // Snapshot the pre-turn state BEFORE any hard-state write, so swipe/delete/rewind can roll
-    // back to exactly what existed before this turn (low-level-plan-v2 §6). Bound to this turn's
-    // narrator message.
-    const checkpoint = await capture(store, storyId, narratorMsgId, narratorIdx);
-
-    await store.messages.insert({
-      id: narratorMsgId,
-      storyId,
-      idx: narratorIdx,
-      role: "narrator",
-      content: prose,
-      createdAt: Date.now(),
-      variants: [prose],
-      activeVariant: 0,
-    });
-    await store.checkpoints.insert(checkpoint);
-
-    if (staged.length > 0) {
-      // Commit mutates hard state in a map; write each touched character back.
-      const charsById = new Map<string, CharacterHardState>();
-      for (const s of staged) {
-        for (const id of [s.ruling.actorId, s.ruling.targetId].filter(Boolean) as string[]) {
-          if (!charsById.has(id)) {
-            const hard = (await store.characters.get(id))?.hard;
-            if (hard) charsById.set(id, structuredClone(hard));
-          }
-        }
-      }
-      for (const s of staged) {
-        const died = commit(schema, s.mutations, charsById);
-        s.ruling.messageId = narratorMsgId;
-        if (died.length) s.ruling.causedDeathOf = died;
-        await store.rulings.insert({
-          id: randomUUID(),
-          storyId,
-          messageId: narratorMsgId,
-          ruling: s.ruling,
-        });
-      }
-      for (const [id, hard] of charsById) await store.characters.updateHard(id, hard);
-    }
-  });
-
-  // 7. Fire-and-forget: analyzer patch, then chapter/arc summaries. Never blocks the return
-  //    and never throws into the caller.
-  const background = schema.statMode === "full"
-    ? runBackground(router, store, {
-        storyId,
-        turnIdx: narratorIdx,
-        playerText,
-        narratorText: prose,
-        ...(opts.onBackgroundError ? { onError: opts.onBackgroundError } : {}),
-      })
-    : Promise.resolve();
-
-  // 8. Hand prose + rulings back for rendering (dice toasts).
-  return { prose, rulings, narratorIdx, background };
-}
 
 /**
  * V7 turn pipeline. Unlike the legacy implementation above, this persists an explicit operation
@@ -883,6 +734,11 @@ async function runTurnOperation(
         workingById,
         present: new Map(presentRoster.map((character) => [character.id, character.isPlayer])),
         stakesByTurnId,
+        softById: new Map(
+          presentRoster
+            .filter((character) => character.soft !== undefined)
+            .map((character) => [character.id, character.soft!])
+        ),
       });
       for (const intent of npcReactionIntents) {
         const actorHard = await workingState(intent.actorId);
@@ -1210,16 +1066,13 @@ async function runTurnOperation(
       errorKind: undefined,
     });
 
-    const background =
-      schema.statMode === "full"
-        ? runBackground(router, store, {
-            storyId,
-            turnIdx: narratorIdx,
-            playerText,
-            narratorText: prose,
-            ...(opts.onBackgroundError ? { onError: opts.onBackgroundError } : {}),
-          })
-        : Promise.resolve();
+    const background = runBackground(router, store, {
+      storyId,
+      turnIdx: narratorIdx,
+      playerText,
+      narratorText: prose,
+      ...(opts.onBackgroundError ? { onError: opts.onBackgroundError } : {}),
+    });
 
     return {
       prose,

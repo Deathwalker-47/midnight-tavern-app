@@ -358,10 +358,10 @@ describe("getCharacterDossier", () => {
       locations: [],
       arcs: [],
       unresolvedThreads: [
-        { title: "The Grave-wight stirs", note: "It hunts the ridge.", resolved: false },
-        { title: "Mira's debt", note: "Owed to the Grave-wight.", resolved: false },
-        { title: "An old, resolved grudge", note: "Grave-wight laid to rest.", resolved: true },
-        { title: "Unrelated", note: "Weather turns cold.", resolved: false },
+        { id: "t1", title: "The Grave-wight stirs", note: "It hunts the ridge.", resolved: false },
+        { id: "t2", title: "Mira's debt", note: "Owed to the Grave-wight.", resolved: false },
+        { id: "t3", title: "An old, resolved grudge", note: "Grave-wight laid to rest.", resolved: true },
+        { id: "t4", title: "Unrelated", note: "Weather turns cold.", resolved: false },
       ],
     };
     await store.worldSoft.set(STORY_ID, world);

@@ -479,7 +479,11 @@ export async function assembleContext(
     args.presentCharacters ?? (await store.characters.listPresentByStory(storyId))
   ).filter((record) => requestedIds.has(record.id) && record.present);
   // Name lookup stays synchronous for the render helpers; back it with the records already fetched.
-  const nameById = new Map(present.map((r) => [r.id, r.name]));
+  // Widened beyond the present set (§M-8): a relationship can point at an absent/dead/off-scene
+  // character, and that raw id must not leak into the prompt. Present wins on conflict.
+  const allChars = await store.characters.listByStory(storyId);
+  const nameById = new Map(allChars.map((r) => [r.id, r.name]));
+  for (const r of present) nameById.set(r.id, r.name);
   const nameFor = (id: string) => nameById.get(id) ?? id;
   const actionsById = new Map(schema.actions.map((a) => [a.id, a]));
 
@@ -494,10 +498,10 @@ export async function assembleContext(
   // Block 3: hard-state snapshot of present characters (never dropped).
   const hardLines = present.map((r) => renderHardSnapshot(r, schema));
 
-  // Blocks 5–6: memory (soft slices + arc + chapters).
-  const memory = schema.statMode === "full"
-    ? await buildMemoryBlock(store, storyId, presentIds)
-    : { softSlices: [] as string[], chapters: [] as string[], arc: undefined as string | undefined };
+  // Blocks 5–6: memory (soft slices + arc + chapters). Runs regardless of statMode — a No-Stats
+  // story still accumulates narrative memory now that the analyzer fires for it (step 1.6); the
+  // block is budget-gated below, so an empty one costs nothing.
+  const memory = await buildMemoryBlock(store, storyId, presentIds, nameFor);
 
   // Block 7: triggered lorebook, matched against player text + recent narration.
   const recent = await store.messages.recent(storyId, 8);
@@ -544,6 +548,16 @@ export async function assembleContext(
 
   // 5: soft-state slices.
   if (memory.softSlices.length) pushIfFits("Character notes", memory.softSlices.join("\n"));
+
+  // 5b: world-level soft state (overview + open threads), same drop priority as character notes.
+  if (memory.worldOverview || memory.unresolvedThreads.length > 0) {
+    const worldParts = ["WORLD STATE:"];
+    if (memory.worldOverview) worldParts.push(`Overview: ${memory.worldOverview}`);
+    if (memory.unresolvedThreads.length > 0) {
+      worldParts.push(`Open threads: ${memory.unresolvedThreads.join(" · ")}`);
+    }
+    pushIfFits("World state", worldParts.join("\n"));
+  }
 
   // 6: arc doc + chapters since arc.
   const memParts: string[] = [];

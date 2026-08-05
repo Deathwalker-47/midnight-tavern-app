@@ -179,17 +179,15 @@ export async function swipeLastTurn(
     const presentSoft = roster
       .map((c) => c.soft)
       .filter((s): s is NonNullable<typeof s> => s !== undefined);
-    if (schema.statMode === "full") {
-      await runAnalyzer(router, store, {
-        storyId,
-        turnIdx: narrator.idx,
-        playerText,
-        narratorText: response.prose,
-        presentSoft,
-        nameFor: (id) => nameById.get(id),
-        ...(opts.signal ? { signal: opts.signal } : {}),
-      });
-    }
+    await runAnalyzer(router, store, {
+      storyId,
+      turnIdx: narrator.idx,
+      playerText,
+      narratorText: response.prose,
+      presentSoft,
+      nameFor: (id) => nameById.get(id),
+      ...(opts.signal ? { signal: opts.signal } : {}),
+    });
 
     // (5) Snapshot the new variant's post-analyzer state; make it active. Persist the message and
     //     its parallel state array atomically so a storage failure cannot leave them out of sync.

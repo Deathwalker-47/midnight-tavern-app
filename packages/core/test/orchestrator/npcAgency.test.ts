@@ -19,6 +19,7 @@ import type {
   RoleBinding,
   RolePrompt,
   Router,
+  Ruling,
   StreamHandler,
 } from "../../src/index.js";
 import { openStore, type Store } from "../../src/store/index.js";
@@ -26,10 +27,15 @@ import { makeEnemy, makePlayer, makeStory } from "../fixtures.js";
 import type { NpcIntroductionProposal } from "../../src/orchestrator/npcIntroduction.js";
 import {
   planHostileNpcFallback,
+  deriveDisposition,
+  isHostileAct,
+  isOpposedContest,
   type NpcActionProposal,
   type NpcPlanInput,
 } from "../../src/orchestrator/npcAgency.js";
+import { NPC_HOSTILE_TO_PLAYER_FLAG } from "../../src/orchestrator/npcIntroduction.js";
 import type { StageMetric } from "../../src/orchestrator/stagePolicy.js";
+import { newSoftState } from "../../src/memory/softStore.js";
 
 /** Minimal V7 router: canned classifier + loot decline + a fixed narrator stream. */
 class AgencyRouter implements Router {
@@ -971,5 +977,165 @@ describe("same-turn NPC agency", () => {
     // Healing raises the target's resource — a positive delta is never a provocation.
     expect(result.rulings.some((ruling) => ruling.actorId === "wight")).toBe(false);
     expect((await store.characters.get("wight"))!.hard.resources.hp!.current).toBeGreaterThan(6);
+  });
+
+  // ── Plan 13 Phase 2: graded disposition, not catalog-order retaliation ────────────────────
+  //
+  // Supersedes the "opposed contest is a sealed provocation" framing above at the DAMAGE
+  // level only: an opposed contest still warrants a response (see the MENACE test above, which
+  // stays green — a neutral, unharmed wight answers Menace with an in-kind, non-damaging reply),
+  // but it must never alone justify a counter-ATTACK. Only a genuinely hostile act (combat,
+  // target-harming, or actually-committed harm) can select from the harmful tier.
+
+  const PERSUADE_OPPOSED: ActionDef = {
+    id: "persuade_opposed",
+    category: "social",
+    label: "Persuade",
+    dc: 10,
+    opposed: true,
+    effects: {
+      crit_success: { narrationHint: "it agrees at once" },
+      success: { narrationHint: "it grudgingly agrees" },
+      failure: { narrationHint: "it refuses" },
+      crit_failure: { narrationHint: "it grows suspicious" },
+    },
+  };
+
+  it("a failed opposed SOCIAL action against a neutral NPC never produces a damaging counter", async () => {
+    await addActions(PERSUADE_OPPOSED);
+    await seedWightHp(12); // neutral: no hostile flag
+    const result = await submitTurn(
+      new AgencyRouter({
+        playerIntents: [
+          { actorId: "kestrel", actionId: "persuade_opposed", targetId: "wight", stakes: "opposed", confidence: 1 },
+        ],
+        npcIntents: [],
+        freeText: "",
+      }),
+      store,
+      storyId,
+      "I try to talk the wight down.",
+      // Player's persuade roll (face 1) fails against DC 10; the wight's reaction roll (face 15)
+      // would succeed if it picked a real combat attack — proving the fix isn't passing by luck.
+      { rng: d20Sequence([1, 15]) }
+    );
+    await result.background;
+
+    // The wight may answer in kind (an opposed contest still warrants a response), but nothing
+    // it does this turn may reduce the player's health — that is the "manufactures violence" bug.
+    const wightRulings = result.rulings.filter((ruling) => ruling.actorId === "wight");
+    for (const ruling of wightRulings) {
+      const kestrelDelta = ruling.effectsApplied?.resourceDeltaTarget?.hp;
+      expect(kestrelDelta === undefined || kestrelDelta >= 0).toBe(true);
+    }
+  });
+
+  it("a validated hostile NPC still answers a genuine attack with a real counter-attack", async () => {
+    await seedWightHp(12, true); // hostile flag set
+    const result = await submitTurn(
+      new AgencyRouter({
+        playerIntents: [{ ...PLAYER_ATTACK }],
+        npcIntents: [],
+        freeText: "",
+      }),
+      store,
+      storyId,
+      "I swing my sword at the wight.",
+      { rng: d20Sequence([15, 15]) }
+    );
+    await result.background;
+
+    const reaction = result.rulings.find(
+      (ruling) => ruling.actorId === "wight" && ruling.targetId === "kestrel"
+    );
+    expect(reaction).toBeDefined();
+    expect(reaction!.effectsApplied?.resourceDeltaTarget?.hp ?? 0).toBeLessThan(0);
+  });
+});
+
+describe("deriveDisposition / isHostileAct / isOpposedContest — pure predicates", () => {
+  const combat: ActionDef = {
+    id: "strike",
+    category: "combat",
+    label: "Strike",
+    dc: 10,
+    effects: {
+      crit_success: { resourceDeltaTarget: { hp: -8 }, narrationHint: "" },
+      success: { resourceDeltaTarget: { hp: -4 }, narrationHint: "" },
+      failure: { narrationHint: "" },
+      crit_failure: { narrationHint: "" },
+    },
+  };
+  const socialOpposed: ActionDef = {
+    id: "persuade",
+    category: "social",
+    label: "Persuade",
+    dc: 10,
+    opposed: true,
+    effects: {
+      crit_success: { narrationHint: "" },
+      success: { narrationHint: "" },
+      failure: { narrationHint: "" },
+      crit_failure: { narrationHint: "" },
+    },
+  };
+  const harmlessRuling: Ruling = {
+    turnId: "t1",
+    actorId: "kestrel",
+    actionId: "persuade",
+    gate: { allowed: true },
+    effectsApplied: null,
+  };
+
+  describe("deriveDisposition", () => {
+    it("returns hostile when the engine flag is set, regardless of trust", () => {
+      const npc = makeEnemy({ flags: { [NPC_HOSTILE_TO_PLAYER_FLAG]: true } });
+      let soft = newSoftState("wight", "Grave-wight");
+      soft = { ...soft, relationships: [{ toCharacterId: "kestrel", trust: 0.9, power: 0 }] };
+      expect(deriveDisposition(npc, soft, "kestrel")).toBe("hostile");
+    });
+
+    it("returns wary at low trust with no flag", () => {
+      const npc = makeEnemy({ flags: {} });
+      let soft = newSoftState("wight", "Grave-wight");
+      soft = { ...soft, relationships: [{ toCharacterId: "kestrel", trust: -0.5, power: 0 }] };
+      expect(deriveDisposition(npc, soft, "kestrel")).toBe("wary");
+    });
+
+    it("returns friendly at high trust with no flag", () => {
+      const npc = makeEnemy({ flags: {} });
+      let soft = newSoftState("wight", "Grave-wight");
+      soft = { ...soft, relationships: [{ toCharacterId: "kestrel", trust: 0.6, power: 0 }] };
+      expect(deriveDisposition(npc, soft, "kestrel")).toBe("friendly");
+    });
+
+    it("returns neutral with no flag and no relationship data", () => {
+      const npc = makeEnemy({ flags: {} });
+      expect(deriveDisposition(npc, undefined, "kestrel")).toBe("neutral");
+    });
+  });
+
+  describe("isHostileAct vs isOpposedContest", () => {
+    it("a bare opposed social action is NOT a hostile act, but IS an opposed contest", () => {
+      expect(isHostileAct(socialOpposed, harmlessRuling, undefined)).toBe(false);
+      expect(isOpposedContest(socialOpposed)).toBe(true);
+    });
+
+    it("a combat action IS a hostile act", () => {
+      expect(isHostileAct(combat, harmlessRuling, undefined)).toBe(true);
+    });
+
+    it("an action whose committed ruling dealt target harm IS a hostile act", () => {
+      const ruling: Ruling = {
+        ...harmlessRuling,
+        actionId: "shove",
+        effectsApplied: { resourceDeltaTarget: { hp: -3 }, narrationHint: "" },
+      };
+      const utility: ActionDef = { id: "shove", category: "utility", label: "Shove", dc: 8, effects: {
+        crit_success: { narrationHint: "" }, success: { narrationHint: "" },
+        failure: { narrationHint: "" }, crit_failure: { narrationHint: "" },
+      } };
+      expect(isHostileAct(utility, ruling, undefined)).toBe(true);
+    });
   });
 });
