@@ -19,6 +19,7 @@ import type {
   ProviderId,
   Role,
   RoleMap,
+  StageMetric,
   Store,
   TurnOperationState,
 } from "@midnight-tavern/core";
@@ -42,6 +43,7 @@ import type {
 } from "./core.js";
 import { parseForgeOperation } from "./core.js";
 import { diagnosticError, diagnosticsLogger } from "../observability/logger.js";
+import { z } from "zod";
 
 const FORGE_OPERATION_SETTING_KEY = "forge.operation.active.v1";
 
@@ -100,6 +102,20 @@ export function buildSqliteBridge(
     return effective;
   }
 
+  /** Counts the two provider events the router already logs. Adds no new call site in core. */
+  const countingLogger: import("@midnight-tavern/core").DiagnosticLogger = {
+    debug: (event, data) => diagnosticsLogger.debug(event, data),
+    info: (event, data) => diagnosticsLogger.info(event, data),
+    warn: (event, data) => {
+      diagnosticsLogger.warn(event, data);
+      if (event === "llm.request.retrying") void bumpCounter("provider.retried");
+    },
+    error: (event, data) => {
+      diagnosticsLogger.error(event, data);
+      if (event === "llm.request.failed") void bumpCounter("provider.failed");
+    },
+  };
+
   async function currentRouter(requiredRoles: readonly Role[] = core.ROLES) {
     const providerConfigs =
       (await store.settings.get(core.PROVIDER_CONFIGS_SETTING_KEY, core.ProviderConfigsSchema)) ?? {};
@@ -118,7 +134,7 @@ export function buildSqliteBridge(
     return core.makeRouter({
       providerConfigs,
       roleMap,
-      logger: diagnosticsLogger,
+      logger: countingLogger,
       // Route every role/forge/turn provider call through native HTTP (no browser CORS).
       fetchImpl: tauriFetch as typeof fetch,
     });
@@ -128,6 +144,50 @@ export function buildSqliteBridge(
     const record = await store.stories.get(storyId);
     if (!record) throw new Error(`No story with id ${storyId}.`);
     return record;
+  }
+
+  async function diagnosticsEnabled(): Promise<boolean> {
+    return (
+      (await store.settings.get(core.DIAGNOSTICS_ENABLED_SETTING_KEY, z.boolean())) ?? false
+    );
+  }
+
+  /** Fold a turn's outputs into the persisted counter set. Opt-in; never throws into the turn. */
+  async function recordTurnCounters(input: import("@midnight-tavern/core").TurnCounterInput): Promise<void> {
+    try {
+      if (!(await diagnosticsEnabled())) return;
+      const current =
+        (await store.settings.get(
+          core.DIAGNOSTIC_COUNTERS_SETTING_KEY,
+          core.DiagnosticCountersSchema
+        )) ?? core.EMPTY_DIAGNOSTIC_COUNTERS;
+      await store.settings.set(
+        core.DIAGNOSTIC_COUNTERS_SETTING_KEY,
+        core.DiagnosticCountersSchema,
+        core.mergeCounters(current, core.countersForTurn(input))
+      );
+    } catch (error) {
+      diagnosticsLogger.warn("diagnostics.counters.failed", { error: diagnosticError(error) });
+    }
+  }
+
+  /** Counts the two provider events the router already logs. Adds no new call site in core. */
+  async function bumpCounter(key: string): Promise<void> {
+    try {
+      if (!(await diagnosticsEnabled())) return;
+      const current =
+        (await store.settings.get(
+          core.DIAGNOSTIC_COUNTERS_SETTING_KEY,
+          core.DiagnosticCountersSchema
+        )) ?? core.EMPTY_DIAGNOSTIC_COUNTERS;
+      await store.settings.set(
+        core.DIAGNOSTIC_COUNTERS_SETTING_KEY,
+        core.DiagnosticCountersSchema,
+        core.mergeCounters(current, { [key]: 1 })
+      );
+    } catch {
+      /* a counter must never break a provider call */
+    }
   }
 
   // The per-story Lorebook screen edits ONE lorebook (v2 §2's global library is a separate surface).
@@ -369,6 +429,7 @@ export function buildSqliteBridge(
       try {
         const story = await requireStory(args.storyId);
         const router = await currentRouter(story.schema.statMode === "none" ? ["narrator"] : core.ROLES);
+        const turnStageMetrics: StageMetric[] = [];
         const result = await core.submitTurn(router, store, args.storyId, args.playerText, {
           ...(args.onDelta ? { onDelta: args.onDelta } : {}),
           ...(args.onRulings ? { onRulings: args.onRulings } : {}),
@@ -376,13 +437,24 @@ export function buildSqliteBridge(
           ...(args.onPhase
             ? { onPhase: (phase: TurnOperationState) => args.onPhase!(toUiPhase(phase)) }
             : {}),
-          ...(args.onStageMetric ? { onStageMetric: args.onStageMetric } : {}),
+          onStageMetric: (metric: StageMetric) => {
+            turnStageMetrics.push(metric);
+            args.onStageMetric?.(metric);
+          },
           ...(args.signal ? { signal: args.signal } : {}),
         });
         diagnosticsLogger.info("turn.submit.completed", {
           operationId: args.storyId,
           durationMs: Date.now() - startedAt,
           rulingCount: result.rulings.length,
+        });
+        await recordTurnCounters({
+          rulings: result.rulings,
+          stageMetrics: turnStageMetrics,
+          classifierRecovered: result.classifierRecovered,
+          usedNarratorFallback: result.usedNarratorFallback,
+          narratorRepairCount:
+            turnStageMetrics.filter((m) => m.stage === "narrator" && m.outcome !== "cancelled").length - 1,
         });
         // Analyzer + summaries continue after prose. Keep the UI responsive while recording their
         // terminal state and preventing an unhandled rejection.
@@ -432,6 +504,7 @@ export function buildSqliteBridge(
       const router = await currentRouter(
         story.schema.statMode === "none" ? ["narrator"] : core.ROLES
       );
+      const turnStageMetrics: StageMetric[] = [];
       const result = await core.retryTurnOperation(router, store, args.operationId, {
         ...(args.onDelta ? { onDelta: args.onDelta } : {}),
         ...(args.onRulings ? { onRulings: args.onRulings } : {}),
@@ -442,7 +515,10 @@ export function buildSqliteBridge(
                 args.onPhase!(toUiPhase(phase)),
             }
           : {}),
-        ...(args.onStageMetric ? { onStageMetric: args.onStageMetric } : {}),
+        onStageMetric: (metric: StageMetric) => {
+          turnStageMetrics.push(metric);
+          args.onStageMetric?.(metric);
+        },
         ...(args.signal ? { signal: args.signal } : {}),
       });
       void result.background.then(
@@ -456,6 +532,14 @@ export function buildSqliteBridge(
             error: diagnosticError(error),
           })
       );
+      await recordTurnCounters({
+        rulings: result.rulings,
+        stageMetrics: turnStageMetrics,
+        classifierRecovered: result.classifierRecovered,
+        usedNarratorFallback: result.usedNarratorFallback,
+        narratorRepairCount:
+          turnStageMetrics.filter((m) => m.stage === "narrator" && m.outcome !== "cancelled").length - 1,
+      });
       return {
         prose: result.prose,
         rulings: result.rulings,
@@ -553,6 +637,27 @@ export function buildSqliteBridge(
 
     async exportStoryJournal(storyId, format = "markdown") {
       return core.exportStoryJournal(store, storyId, format);
+    },
+
+    async getDiagnosticsEnabled() {
+      return diagnosticsEnabled();
+    },
+
+    async setDiagnosticsEnabled(enabled) {
+      await store.settings.set(core.DIAGNOSTICS_ENABLED_SETTING_KEY, z.boolean(), enabled);
+    },
+
+    async readDiagnosticCounters() {
+      return (
+        (await store.settings.get(
+          core.DIAGNOSTIC_COUNTERS_SETTING_KEY,
+          core.DiagnosticCountersSchema
+        )) ?? core.EMPTY_DIAGNOSTIC_COUNTERS
+      );
+    },
+
+    async clearDiagnosticCounters() {
+      await store.settings.delete(core.DIAGNOSTIC_COUNTERS_SETTING_KEY);
     },
 
     async universalActionsConfig() {

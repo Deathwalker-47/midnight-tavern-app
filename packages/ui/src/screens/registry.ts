@@ -45,6 +45,9 @@ const Wizard = lazy(() => import("./Wizard.js").then((m) => ({ default: m.Wizard
 const DesignSystem = lazy(() =>
   import("./DesignSystem.js").then((m) => ({ default: m.DesignSystem }))
 );
+const Diagnostics = lazy(() =>
+  import("./Diagnostics.js").then((m) => ({ default: m.Diagnostics }))
+);
 
 /** route → screen component. */
 export const registry: Record<Route, ScreenComponent> = {
@@ -64,4 +67,5 @@ export const registry: Record<Route, ScreenComponent> = {
   lorebook: Lorebook,
   wizard: Wizard,
   designsystem: DesignSystem,
+  diagnostics: Diagnostics,
 };

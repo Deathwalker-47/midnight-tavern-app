@@ -14,6 +14,14 @@
 import { describe, expect, it, vi } from "vitest";
 import { buildSqliteBridge } from "../../src/bridge/sqliteBridge.js";
 import { diagnosticsLogger } from "../../src/observability/logger.js";
+import {
+  DIAGNOSTICS_ENABLED_SETTING_KEY,
+  DIAGNOSTIC_COUNTERS_SETTING_KEY,
+  DiagnosticCountersSchema,
+  EMPTY_DIAGNOSTIC_COUNTERS,
+  countersForTurn,
+  mergeCounters,
+} from "@midnight-tavern/core";
 
 // A permissive fake core namespace. Individual tests override the members they exercise; the rest
 // are present so `buildSqliteBridge` can close over them without throwing on unrelated paths.
@@ -54,6 +62,12 @@ function fakeCore(overrides: Record<string, unknown> = {}) {
     parseJsonCardBytes: vi.fn(),
     importCardFromUrl: vi.fn(),
     mapCardToImport: vi.fn(() => ({ mapped: true })),
+    DIAGNOSTICS_ENABLED_SETTING_KEY,
+    DIAGNOSTIC_COUNTERS_SETTING_KEY,
+    DiagnosticCountersSchema,
+    EMPTY_DIAGNOSTIC_COUNTERS,
+    countersForTurn,
+    mergeCounters,
     ...overrides,
   } as unknown as typeof import("@midnight-tavern/core");
 }
@@ -264,8 +278,14 @@ describe("buildSqliteBridge", () => {
     });
     expect(out).toEqual({ prose: "text", rulings: [], narratorIdx: 5 });
     expect(submitTurn.mock.calls[0]?.[4]).toEqual(
-      expect.objectContaining({ onRulings, onStageMetric })
+      expect.objectContaining({ onRulings, onStageMetric: expect.any(Function) })
     );
+    // onStageMetric is wrapped (to tee into the counters fold) but must still forward to the caller's callback.
+    const forwardedStageMetric = (submitTurn.mock.calls[0]?.[4] as { onStageMetric: (m: unknown) => void })
+      .onStageMetric;
+    const metric = { stage: "narrator", startedAt: 0, durationMs: 1, outcome: "ok" };
+    forwardedStageMetric(metric);
+    expect(onStageMetric).toHaveBeenCalledWith(metric);
     await new Promise((r) => setTimeout(r, 0)); // let the .catch run
     expect(errSpy).toHaveBeenCalledWith("turn.background.failed", expect.objectContaining({ operationId: "s1" }));
     errSpy.mockRestore();
@@ -325,6 +345,55 @@ describe("buildSqliteBridge", () => {
     expect(out.prose).toContain("The gunman broke and ran.");
   });
 
+  function fullTurnResult() {
+    return {
+      prose: "text",
+      rulings: [{ gate: { allowed: true } }],
+      narratorIdx: 1,
+      background: Promise.resolve(),
+      classifierRecovered: false,
+      refusedActionCount: 0,
+      usedNarratorFallback: false,
+      attributeAdvancements: [],
+    };
+  }
+
+  describe("diagnostic counters (Plan 11 / W-10, opt-in and local-only)", () => {
+    it("does not persist counters while diagnostics are disabled", async () => {
+      const bridge = buildSqliteBridge(
+        fakeStore({ stories: { get: vi.fn(async () => ({ id: "s1", schema: { statMode: "full" } })) } }),
+        fakeCore({ submitTurn: vi.fn(async () => fullTurnResult()) })
+      );
+      expect(await bridge.getDiagnosticsEnabled()).toBe(false);
+      await bridge.submitTurn({ storyId: "s1", playerText: "look around" });
+      expect(await bridge.readDiagnosticCounters()).toEqual({});
+    });
+
+    it("persists counters across turns once diagnostics are enabled", async () => {
+      const bridge = buildSqliteBridge(
+        fakeStore({ stories: { get: vi.fn(async () => ({ id: "s1", schema: { statMode: "full" } })) } }),
+        fakeCore({ submitTurn: vi.fn(async () => fullTurnResult()) })
+      );
+      await bridge.setDiagnosticsEnabled(true);
+      await bridge.submitTurn({ storyId: "s1", playerText: "look around" });
+      const first = await bridge.readDiagnosticCounters();
+      expect(first["turn.completed"]).toBe(1);
+      await bridge.submitTurn({ storyId: "s1", playerText: "again" });
+      expect((await bridge.readDiagnosticCounters())["turn.completed"]).toBe(2);
+    });
+
+    it("clearDiagnosticCounters empties the set", async () => {
+      const bridge = buildSqliteBridge(
+        fakeStore({ stories: { get: vi.fn(async () => ({ id: "s1", schema: { statMode: "full" } })) } }),
+        fakeCore({ submitTurn: vi.fn(async () => fullTurnResult()) })
+      );
+      await bridge.setDiagnosticsEnabled(true);
+      await bridge.submitTurn({ storyId: "s1", playerText: "look around" });
+      await bridge.clearDiagnosticCounters();
+      expect(await bridge.readDiagnosticCounters()).toEqual({});
+    });
+  });
+
   it("forwards stage telemetry when retrying a persisted turn operation", async () => {
     const retryTurnOperation = vi.fn(
       async (
@@ -359,8 +428,15 @@ describe("buildSqliteBridge", () => {
     await bridge.retryTurnOperation({ operationId: "op-1", onStageMetric });
 
     expect(retryTurnOperation.mock.calls[0]?.[3]).toEqual(
-      expect.objectContaining({ onStageMetric })
+      expect.objectContaining({ onStageMetric: expect.any(Function) })
     );
+    // onStageMetric is wrapped (to tee into the counters fold) but must still forward to the caller's callback.
+    const forwardedStageMetric = (
+      retryTurnOperation.mock.calls[0]?.[3] as { onStageMetric: (m: unknown) => void }
+    ).onStageMetric;
+    const metric = { stage: "narrator", startedAt: 0, durationMs: 1, outcome: "ok" };
+    forwardedStageMetric(metric);
+    expect(onStageMetric).toHaveBeenCalledWith(metric);
   });
 
   it("listPresentCast condenses each LivingCardView to name/alive/hp/mood", async () => {

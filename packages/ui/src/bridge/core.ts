@@ -62,6 +62,7 @@ export type {
   EquipmentLootConfig,
   RulebookRegenerationImpact,
   AttributeAdvancementDecision,
+  DiagnosticCounters,
 } from "@midnight-tavern/core";
 
 // Browser-safe shared data: importing the JSON avoids a hand-maintained catalogue copy without
@@ -154,6 +155,7 @@ import type {
   EquipmentLootConfig,
   RulebookRegenerationImpact,
   AttributeAdvancementDecision,
+  DiagnosticCounters,
 } from "@midnight-tavern/core";
 
 // Value import: the Tauri storage driver. Browser-safe — it only pulls `@tauri-apps/api/core`
@@ -511,6 +513,11 @@ export interface CoreBridge {
   suggestActions(storyId: string, signal?: AbortSignal): Promise<SuggestedAction[]>;
   listStoryJournal(storyId: string, query?: StoryJournalQuery): Promise<StoryJournalPage>;
   exportStoryJournal(storyId: string, format?: "markdown" | "csv"): Promise<string>;
+  /** Local, opt-in diagnostics (Plan 11 / W-10) — never networked. */
+  getDiagnosticsEnabled(): Promise<boolean>;
+  setDiagnosticsEnabled(enabled: boolean): Promise<void>;
+  readDiagnosticCounters(): Promise<DiagnosticCounters>;
+  clearDiagnosticCounters(): Promise<void>;
   /** Versioned, upgradable global action catalog used by every Full Stats story. */
   universalActionsConfig(): Promise<UniversalActionConfig>;
   /** Universal seven-slot, tier-budget, and on-demand loot policy. */
@@ -1009,7 +1016,12 @@ function persistMemoryForgeOperation(operation: ForgeOperationRecord | undefined
   }
 }
 
-export function makeMemoryBridge(): CoreBridge {
+/** Test-only seam for seeding diagnostic counters without a real turn pipeline. */
+export type MemoryBridge = CoreBridge & {
+  __seedDiagnosticCounters(counters: DiagnosticCounters): void;
+};
+
+export function makeMemoryBridge(): MemoryBridge {
   const stories = new Map<string, MemStory>();
   const lorebooks = new Map<string, MemLorebook>();
   let forgeOperation = readMemoryForgeOperation();
@@ -1020,6 +1032,8 @@ export function makeMemoryBridge(): CoreBridge {
   const personas: PersonaRecord[] = [];
   let licenseState: LicenseState = { status: "unlicensed" };
   let trialStartedAt: number | undefined;
+  let memDiagnosticsEnabled = false;
+  let memCounters: DiagnosticCounters = {};
 
   function trialStatus(now = Date.now()): TrialStatus | undefined {
     if (trialStartedAt === undefined) return undefined;
@@ -1616,6 +1630,26 @@ export function makeMemoryBridge(): CoreBridge {
       return format === "csv"
         ? '"turn_index","chapter","kind","actor","summary","details"\n'
         : `# ${requireStory(storyId).record.title} — Mechanical Journal\n\n_No mechanical events have been recorded in design mode._\n`;
+    },
+
+    async getDiagnosticsEnabled() {
+      return memDiagnosticsEnabled;
+    },
+
+    async setDiagnosticsEnabled(enabled) {
+      memDiagnosticsEnabled = enabled;
+    },
+
+    async readDiagnosticCounters() {
+      return { ...memCounters };
+    },
+
+    async clearDiagnosticCounters() {
+      memCounters = {};
+    },
+
+    __seedDiagnosticCounters(counters) {
+      memCounters = { ...counters };
     },
 
     async universalActionsConfig() {

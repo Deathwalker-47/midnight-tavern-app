@@ -40,7 +40,7 @@ const NAV: NavItem[] = [
   { label: "Story", glyph: "✎", route: "play", activeOn: STORY_ROUTES },
   { label: "Personas", glyph: "☙", route: "personas", activeOn: ["personas"] },
   { label: "Lore", glyph: "❦", route: "lorebook", activeOn: ["lorebook"] },
-  { label: "Settings", glyph: "⚙", route: "settings", activeOn: ["settings", "designsystem"] },
+  { label: "Settings", glyph: "⚙", route: "settings", activeOn: ["settings", "designsystem", "diagnostics"] },
 ];
 
 /** The story sub-tabs (only shown when a story is open). */
@@ -315,6 +315,7 @@ function screenTitle(route: Route): string {
     lorebook: "Lorebook",
     wizard: "New story",
     designsystem: "Design System",
+    diagnostics: "Diagnostics",
   };
   return map[route];
 }

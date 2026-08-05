@@ -20,3 +20,4 @@ export * from "./importer/index.js";
 export * from "./macros/index.js";
 export * from "./orchestrator/index.js";
 export * from "./licensing/index.js";
+export * from "./observability/index.js";

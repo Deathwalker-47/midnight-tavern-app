@@ -26,6 +26,7 @@ export const ROUTES = [
   "lorebook",
   "wizard",
   "designsystem",
+  "diagnostics",
 ] as const;
 
 export type Route = (typeof ROUTES)[number];

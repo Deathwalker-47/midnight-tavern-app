@@ -5,6 +5,7 @@ import { RoleMatrixEditor } from "./RoleMatrix.js";
 import { useSettingsStore, type KeyState } from "../state/settingsStore.js";
 import type { ProviderId } from "../bridge/core.js";
 import { getBridge } from "../bridge/core.js";
+import { useRoute } from "../app/router.js";
 import {
   Button,
   Chip,
@@ -474,9 +475,12 @@ export function Settings(_props: ScreenProps): JSX.Element {
             <code style={LOG_PATH}>
               {diagnosticsPath ?? "The log folder is available in the installed desktop app."}
             </code>
-            <div style={{ marginTop: 14 }}>
+            <div style={{ marginTop: 14, display: "flex", gap: 10 }}>
               <Button variant="system" disabled={!diagnosticsPath || diagnosticsBusy} onClick={() => void openDiagnostics()}>
                 {diagnosticsBusy ? "Opening…" : "Open logs folder"}
+              </Button>
+              <Button variant="secondary" onClick={() => useRoute.getState().navigate("diagnostics")}>
+                View local counters
               </Button>
             </div>
             {diagnosticsError ? <div style={{ marginTop: 12 }}><InlineNotice severity="error" title="Couldn't open logs" detail={diagnosticsError} /></div> : null}
