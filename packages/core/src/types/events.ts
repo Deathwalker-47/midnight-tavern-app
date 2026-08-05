@@ -11,7 +11,7 @@ import { z } from "zod";
 import { OutcomeSchema, EffectSpecSchema, RollModeSchema } from "./actions.js";
 import { CostSpecSchema } from "./schema.js";
 import { DifficultySnapshotSchema } from "./difficulty.js";
-import { ItemTierSchema } from "./equipment.js";
+import { ItemTierSchema, EquipmentEffectSchema } from "./equipment.js";
 
 /**
  * One attempted action mapped onto the catalog. `actionId` MUST be a catalog id
@@ -151,7 +151,7 @@ export const LootRulingSchema = z.object({
   quantity: z.number().int().positive(),
   provenanceSummary: z.string(),
   description: z.string().optional(),
-  effects: z.array(z.unknown()).optional(),
+  effects: z.array(EquipmentEffectSchema).optional(),
   eligibleSlots: z.array(z.string()).optional(),
   requirement: z.string().optional(),
 });
@@ -180,5 +180,10 @@ export const RulingSchema = z.object({
   loot: z.array(LootRulingSchema).optional(),
   // True when a lethal resource hit 0 as a result of this ruling (target or self).
   causedDeathOf: z.array(z.string()).optional(),
+  /**
+   * Why the engine proposed this NPC reaction, in player-facing words. Advisory and
+   * display-only — never an input to a gate, roll, or effect. Absent on every player ruling.
+   */
+  npcReactionReason: z.string().max(200).optional(),
 });
 export type Ruling = z.infer<typeof RulingSchema>;

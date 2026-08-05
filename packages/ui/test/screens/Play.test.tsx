@@ -8,12 +8,15 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, screen, fireEvent, waitFor, cleanup, act } from "@testing-library/react";
-import { Play } from "../../src/screens/Play";
+import { readFileSync } from "node:fs";
+import { Play, rulingToArtifact } from "../../src/screens/Play";
+import { RulingArtifact, type RulingArtifactVariant } from "../../src/components";
 import {
   setBridge,
   getBridge,
   type CoreBridge,
   type StoryEvent,
+  type Ruling,
 } from "../../src/bridge/core";
 import { usePlayStore } from "../../src/state/playStore";
 import { useUiStore } from "../../src/state/uiStore";
@@ -344,6 +347,22 @@ describe("Play — error states", () => {
     ).toBeInTheDocument();
   });
 
+  it("announces a provider timeout as a classifier-unavailable ruling, keeping retry", () => {
+    render(<Play storyId="s1" debugState="classifier-timeout" />);
+
+    const card = screen.getByRole("group", { name: /CLASSIFIER UNAVAILABLE/i });
+    expect(card).toHaveAttribute("data-variant", "classifier-unavailable");
+    expect(screen.queryByTestId("ruling-die")).toBeNull();
+    expect(screen.getByRole("button", { name: /Configure Classifier/i })).toBeInTheDocument();
+  });
+
+  it("announces an unresolved target as the unresolved ruling variant", () => {
+    render(<Play storyId="s1" debugState="classifier-target" />);
+
+    const card = screen.getByRole("group", { name: /NEEDS CLARIFICATION/i });
+    expect(card).toHaveAttribute("data-variant", "unresolved");
+  });
+
   it("does not show a provider warning when sealed mechanics were recovered", async () => {
     const bridge = emptyBridge();
     bridge.listMessages = vi.fn(async () => [
@@ -533,6 +552,110 @@ describe("Play — stream + composer", () => {
         feedback: "Make the moment more reflective.",
       })
     );
+  });
+
+  it("renders the budget-exceeded variant from the gate code, not the reason text", async () => {
+    const narrator = {
+      id: "narrator-budget",
+      storyId: "s1",
+      idx: 1,
+      role: "narrator" as const,
+      content: "You hesitate, spent.",
+      createdAt: 2,
+    };
+    const bridge = emptyBridge();
+    bridge.listMessages = vi.fn(async () => [narrator]);
+    bridge.listPresentCast = vi.fn(async () => [
+      { characterId: "hero", name: "Kestrel", isPlayer: true, alive: true },
+    ]);
+    bridge.listRulings = vi.fn(async () => [
+      {
+        turnId: "hero:sprint:budget",
+        messageId: narrator.id,
+        actorId: "hero",
+        actionId: "sprint",
+        actionLabel: "Sprint",
+        gate: { allowed: false, code: "action_budget_exceeded", reason: "Reworded entirely." },
+        effectsApplied: null,
+      } as Ruling,
+    ]);
+    setBridge(bridge);
+
+    render(<Play storyId="s1" />);
+    const card = await screen.findByRole("group", { name: /ACTION BUDGET/ });
+    expect(card).toHaveAttribute("data-variant", "budget-exceeded");
+  });
+
+  it("renders denied for a skill_required gate code whose reason mentions a target", async () => {
+    const narrator = {
+      id: "narrator-denied",
+      storyId: "s1",
+      idx: 1,
+      role: "narrator" as const,
+      content: "The lock does not budge.",
+      createdAt: 2,
+    };
+    const bridge = emptyBridge();
+    bridge.listMessages = vi.fn(async () => [narrator]);
+    bridge.listPresentCast = vi.fn(async () => [
+      { characterId: "hero", name: "Kestrel", isPlayer: true, alive: true },
+    ]);
+    bridge.listRulings = vi.fn(async () => [
+      {
+        turnId: "hero:pick_lock",
+        messageId: narrator.id,
+        actorId: "hero",
+        actionId: "pick_lock",
+        gate: {
+          allowed: false,
+          code: "skill_required",
+          reason: "Requires Lockpicking — not learned; choose another target.",
+        },
+        effectsApplied: null,
+      } as Ruling,
+    ]);
+    setBridge(bridge);
+
+    render(<Play storyId="s1" />);
+    const card = await screen.findByRole("group", { name: /DENIED/ });
+    expect(card).toHaveAttribute("data-variant", "denied");
+  });
+
+  it("renders the npc variant with its reason when the actor is not the player", async () => {
+    const narrator = {
+      id: "narrator-npc",
+      storyId: "s1",
+      idx: 1,
+      role: "narrator" as const,
+      content: "The Warden lashes out.",
+      createdAt: 2,
+    };
+    const bridge = emptyBridge();
+    bridge.listMessages = vi.fn(async () => [narrator]);
+    bridge.listPresentCast = vi.fn(async () => [
+      { characterId: "hero", name: "Kestrel", isPlayer: true, alive: true },
+      { characterId: "warden", name: "The Warden", isPlayer: false, alive: true },
+    ]);
+    bridge.listRulings = vi.fn(async () => [
+      {
+        turnId: "warden:strike",
+        messageId: narrator.id,
+        actorId: "warden",
+        actionId: "strike",
+        actionLabel: "Strike",
+        targetId: "hero",
+        gate: { allowed: true },
+        roll: { d20: 15, modifier: 2, total: 17, dc: 14, outcome: "success" },
+        effectsApplied: null,
+        npcReactionReason: "You struck them first.",
+      } as Ruling,
+    ]);
+    setBridge(bridge);
+
+    render(<Play storyId="s1" />);
+    const card = await screen.findByRole("group", { name: /NPC/ });
+    expect(card).toHaveAttribute("data-variant", "npc");
+    expect(screen.getByTestId("ruling-reason")).toHaveTextContent("You struck them first.");
   });
 
   it("renders rulings inline in the story stream (denied has no die)", () => {
@@ -735,5 +858,102 @@ describe("Play — drawer", () => {
       route: "dossier",
       params: { storyId: "s1", characterId: "kestrel" },
     });
+  });
+});
+
+describe("Phase 3 — register consistency", () => {
+  const REGISTER_FIXTURES: Array<{ ruling: Ruling; isPlayerActor?: (id: string) => boolean }> = [
+    {
+      ruling: {
+        turnId: "t-success", actorId: "hero", actionId: "strike", gate: { allowed: true },
+        effectsApplied: null,
+        roll: { d20: 14, modifier: 3, total: 17, dc: 15, outcome: "success" },
+      },
+    },
+    {
+      ruling: {
+        turnId: "t-failure", actorId: "hero", actionId: "strike", gate: { allowed: true },
+        effectsApplied: null,
+        roll: { d20: 6, modifier: 1, total: 7, dc: 13, outcome: "failure" },
+      },
+    },
+    {
+      ruling: {
+        turnId: "t-crit-success", actorId: "hero", actionId: "strike", gate: { allowed: true },
+        effectsApplied: null,
+        roll: { d20: 20, modifier: 3, total: 23, dc: 13, outcome: "crit_success" },
+      },
+    },
+    {
+      ruling: {
+        turnId: "t-crit-failure", actorId: "hero", actionId: "strike", gate: { allowed: true },
+        effectsApplied: null,
+        roll: { d20: 1, modifier: 1, total: 2, dc: 13, outcome: "crit_failure" },
+      },
+    },
+    {
+      ruling: {
+        turnId: "t-opposed", actorId: "hero", actionId: "menace", gate: { allowed: true },
+        effectsApplied: null,
+        targetId: "warden",
+        roll: { d20: 14, modifier: 2, total: 16, dc: 0, outcome: "success", opposedTotal: 12 },
+      },
+    },
+    {
+      ruling: {
+        turnId: "t-npc", actorId: "warden", actionId: "strike", gate: { allowed: true },
+        effectsApplied: null, targetId: "hero",
+        roll: { d20: 14, modifier: 2, total: 16, dc: 12, outcome: "success" },
+      },
+      isPlayerActor: (id: string) => id !== "warden",
+    },
+    {
+      ruling: {
+        turnId: "t-denied", actorId: "hero", actionId: "pick_lock",
+        gate: { allowed: false, reason: "Requires Lockpicking — not learned." },
+        effectsApplied: null,
+      },
+    },
+    {
+      ruling: {
+        turnId: "t-budget", actorId: "hero", actionId: "sprint",
+        gate: { allowed: false, code: "action_budget_exceeded", reason: "This turn allows 2 actions." },
+        effectsApplied: null,
+      },
+    },
+  ];
+
+  it("rulingToArtifact can emit every declared variant except stacked", () => {
+    // `stacked` is deliberately still unreachable — see Plan 13 step 3.8's note on pairing.
+    const emitted = new Set<string>();
+    for (const fixture of REGISTER_FIXTURES) {
+      const vm = rulingToArtifact(fixture.ruling, (id) => id, fixture.isPlayerActor);
+      if (vm) emitted.add(vm.variant);
+    }
+    expect(emitted).toEqual(
+      new Set([
+        "success", "failure", "crit-success", "crit-failure",
+        "opposed", "npc", "denied", "budget-exceeded",
+      ])
+    );
+  });
+
+  it("every refusal state renders in the SYSTEM ruling register, never as an app notice", () => {
+    for (const variant of ["denied", "budget-exceeded", "unresolved", "classifier-unavailable"]) {
+      const { container, unmount } = render(
+        <RulingArtifact variant={variant as RulingArtifactVariant} reason="r" animate={false} />
+      );
+      expect(container.querySelector(`[data-variant="${variant}"]`)).not.toBeNull();
+      expect(screen.getByTestId("ruling-denied-glyph")).toHaveTextContent("⊘");
+      unmount();
+    }
+  });
+
+  it("no player-facing screen emits serialiser output", () => {
+    const sources = [
+      readFileSync("src/screens/Play.tsx", "utf8"),
+      readFileSync("src/screens/Journal.tsx", "utf8"),
+    ];
+    for (const source of sources) expect(source).not.toMatch(/JSON\.stringify/);
   });
 });

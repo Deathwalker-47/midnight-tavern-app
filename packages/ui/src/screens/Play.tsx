@@ -41,7 +41,7 @@ import {
 } from "../components";
 import { usePlayStore, type TurnError, type TurnErrorKind } from "../state/playStore";
 import { useUiStore, useRoute } from "../state/uiStore";
-import { getBridge } from "../bridge/core";
+import { getBridge, formatEquipmentEffect } from "../bridge/core";
 import type {
   CastMember,
   ClassifierRecoveryMetadata,
@@ -150,18 +150,22 @@ interface RulingArtifactVM {
  * everything else takes its variant from the honest outcome. Returns undefined for an allowed-but-
  * rolless ruling (e.g. a bare skill unlock) — nothing to stamp.
  */
-function rulingToArtifact(r: Ruling, nameOf: (id: string) => string): RulingArtifactVM | undefined {
+export function rulingToArtifact(
+  r: Ruling,
+  nameOf: (id: string) => string,
+  isPlayerActor: (id: string) => boolean = () => true
+): RulingArtifactVM | undefined {
   if (!r.gate.allowed) {
     const reason = r.gate.reason ?? "The action was refused by the rules engine.";
     const actorName = nameOf(r.actorId);
-    const variant = /action budget|actions per turn|overflow/i.test(reason)
-      ? "budget-exceeded"
-      : /target|clarif/i.test(reason)
-        ? "unresolved"
-        : "denied";
+    // The gate's machine code is authoritative. Never parse the reason: it is player-facing
+    // prose and rewording it must not change which card the player sees (U-10). `unresolved` is
+    // not a gate code — it comes only from the classifier recovery path (Phase 3.4), never here.
+    const variant: RulingArtifactVariant =
+      r.gate.code === "action_budget_exceeded" ? "budget-exceeded" : "denied";
     return {
       variant,
-      label: `${variant === "denied" ? "RULING" : "DM RULING"} · ${actorName.toUpperCase()} · ${variant === "budget-exceeded" ? "ACTION BUDGET" : variant === "unresolved" ? "NEEDS CLARIFICATION" : "DENIED"}`,
+      label: `${variant === "denied" ? "RULING" : "DM RULING"} · ${actorName.toUpperCase()} · ${variant === "budget-exceeded" ? "ACTION BUDGET" : "DENIED"}`,
       reason,
       detailRows: [
         { label: "ACTOR", value: actorName },
@@ -176,7 +180,14 @@ function rulingToArtifact(r: Ruling, nameOf: (id: string) => string): RulingArti
 
   const outcome = fromCoreOutcome(roll.outcome);
   const opposed = roll.opposedTotal !== undefined && roll.opposedTotal !== null;
-  const variant: RulingArtifactVariant = opposed ? "opposed" : VARIANT_BY_OUTCOME[outcome];
+  // An NPC-actor ruling gets its own register (U-2/D-1): the player must never see an
+  // unexplained attack that looks identical to their own action.
+  const npcActed = !isPlayerActor(r.actorId);
+  const variant: RulingArtifactVariant = npcActed
+    ? "npc"
+    : opposed
+      ? "opposed"
+      : VARIANT_BY_OUTCOME[outcome];
 
   const rollVM: RulingRoll = {
     title: `${nameOf(r.actorId)} · ${r.actionLabel ?? humanize(r.actionId)}`,
@@ -240,6 +251,7 @@ function rulingToArtifact(r: Ruling, nameOf: (id: string) => string): RulingArti
     roll: rollVM,
     ...(resultLine ? { resultLine } : {}),
     ...(effectLine ? { effectLine } : {}),
+    ...(npcActed && r.npcReactionReason ? { reason: r.npcReactionReason } : {}),
     detailRows,
   };
 }
@@ -731,6 +743,12 @@ export function Play(props: PlayProps): JSX.Element {
     (id: string): string => cast.find((c) => c.characterId === id)?.name ?? humanize(id),
     [cast]
   );
+  // Default "is the player" when the id is unknown, so an unresolvable actor never mislabels a
+  // player ruling as an NPC one.
+  const isPlayerActor = useCallback(
+    (id: string): boolean => cast.find((c) => c.characterId === id)?.isPlayer !== false,
+    [cast]
+  );
   const player = cast.find((c) => c.isPlayer);
   const playerName = player?.name ?? "you";
   const operationBusy = !["idle", "error", "cancelled", "timed-out", "stale"].includes(operationPhase);
@@ -1062,6 +1080,7 @@ export function Play(props: PlayProps): JSX.Element {
                           animate={!reduced}
                           story={storyRecord}
                           onEditRetry={() => editBudgetTurn(item.ruling)}
+                          isPlayerActor={isPlayerActor}
                         />
                       );
                     }
@@ -1126,6 +1145,7 @@ export function Play(props: PlayProps): JSX.Element {
                           animate={!reduced}
                           story={storyRecord}
                           onEditRetry={() => editBudgetTurn(ruling)}
+                          isPlayerActor={isPlayerActor}
                         />
                       ))}
                       {proseBuffer && (operationPhase === "streaming" || operationPhase === "saving") ? (
@@ -1366,9 +1386,10 @@ function RulingBlock(props: {
   animate: boolean;
   story?: StoryRecord;
   onEditRetry?: () => void;
+  isPlayerActor?: (id: string) => boolean;
 }): JSX.Element | null {
   const { navigate } = useRoute();
-  const vm = rulingToArtifact(props.ruling, props.nameOf);
+  const vm = rulingToArtifact(props.ruling, props.nameOf, props.isPlayerActor);
   if (!vm) return null;
   const action = props.story?.schema.actions.find((candidate) => candidate.id === props.ruling.actionId);
   const skill = action?.requiresSkill ? props.story?.schema.skills.find((candidate) => candidate.id === action.requiresSkill) : undefined;
@@ -1382,7 +1403,7 @@ function RulingBlock(props: {
     tier: `${item.tier[0]?.toUpperCase() ?? ""}${item.tier.slice(1)}` as LootAwardItem["tier"],
     quantity: item.quantity,
     definition: item.description ?? item.provenanceSummary,
-    effects: (item.effects ?? []).map((effect) => JSON.stringify(effect)),
+    effects: (item.effects ?? []).map(formatEquipmentEffect),
     source: item.provenanceSummary,
     eligibleSlots: item.eligibleSlots,
   }));
@@ -1536,6 +1557,17 @@ function AttributeAdvancementBlock(props: {
   );
 }
 
+/** An unresolved actor/target is a clarification request; anything else is infrastructure. */
+function recoveryVariant(
+  recovery: ClassifierRecoveryMetadata
+): "unresolved" | "classifier-unavailable" {
+  return recovery.issues.some(
+    (issue) => issue.kind === "unresolved_target" || issue.kind === "unresolved_action"
+  )
+    ? "unresolved"
+    : "classifier-unavailable";
+}
+
 function shouldSurfaceClassifierRecovery(
   recovery: ClassifierRecoveryMetadata
 ): boolean {
@@ -1569,47 +1601,38 @@ function ClassifierRecovery(props: {
     unresolved_target: "Unresolved target",
     provider_error: "Provider error",
   };
-  const primary = props.recovery.issues[0];
-  const kind = primary ? labels[primary.kind] : "Classifier unavailable";
   const unresolvedTarget = props.recovery.issues.some(
     (issue) => issue.kind === "unresolved_target"
   );
+  const variant = recoveryVariant(props.recovery);
   return (
     <div style={S.errorWrap} data-testid="classifier-recovery">
-      <InlineNotice
-        severity="warn"
-        title={`${
-          props.recovery.policy === "partial_mechanics"
-            ? "Some mechanics were limited"
-            : "Mechanics safely paused"
-        } · ${kind}`}
-        detail={
-          <div style={{ display: "grid", gap: 9 }}>
-            <span>
-              The player turn stays visible, but no unresolved attempt is shown
-              as successful without a valid DM Ruling.
-            </span>
-            {props.recovery.issues.map((issue, index) => (
-              <span key={`${issue.kind}:${index}`}>
-                <strong>{labels[issue.kind]}:</strong> {issue.message}
-                {issue.count ? ` (${issue.count})` : ""}
-              </span>
-            ))}
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
-              {props.canRetry ? (
-                <>
-                  <Button variant="system" onClick={props.onRetry}>Retry saved turn</Button>
-                  <Button variant="secondary" onClick={props.onEdit}>
-                    {unresolvedTarget ? "Clarify target" : "Edit saved turn"}
-                  </Button>
-                </>
-              ) : null}
-              <Button variant="ghost" onClick={props.onDismiss}>Dismiss</Button>
-              <Button variant="ghost" onClick={props.onConfigure}>Configure Classifier</Button>
-            </div>
-          </div>
+      <RulingArtifact
+        variant={variant}
+        reason={
+          variant === "unresolved"
+            ? "The DM could not tell who or what you meant, so nothing was resolved."
+            : "The DM's classifier was unreachable this turn, so no mechanics were resolved."
         }
+        hint="The player turn stays visible, but no unresolved attempt is shown as successful without a valid DM Ruling."
+        detailRows={props.recovery.issues.map((issue, index) => ({
+          label: labels[issue.kind],
+          value: `${issue.message}${issue.count ? ` (${issue.count})` : ""}`,
+        }))}
+        animate={false}
       />
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 7, marginTop: 9 }}>
+        {props.canRetry ? (
+          <>
+            <Button variant="system" onClick={props.onRetry}>Retry saved turn</Button>
+            <Button variant="secondary" onClick={props.onEdit}>
+              {unresolvedTarget ? "Clarify target" : "Edit saved turn"}
+            </Button>
+          </>
+        ) : null}
+        <Button variant="ghost" onClick={props.onDismiss}>Dismiss</Button>
+        <Button variant="ghost" onClick={props.onConfigure}>Configure Classifier</Button>
+      </div>
     </div>
   );
 }

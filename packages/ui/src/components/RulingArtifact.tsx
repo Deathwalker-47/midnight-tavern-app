@@ -111,7 +111,7 @@ const LABEL_BY_VARIANT: Record<RulingArtifactVariant, string> = {
 /** Resolve the accent color that carries the left border + bg tint. */
 function accentFor(props: RulingArtifactProps): string {
   if (props.variant === "denied" || props.variant === "budget-exceeded" || props.variant === "unresolved" || props.variant === "classifier-unavailable") return "var(--dead)";
-  if (props.variant === "opposed" || props.variant === "npc") return "var(--teal)";
+  if (props.variant === "npc") return "var(--teal)";
   if (props.variant === "stacked") {
     // The exchange takes its color from the final (second) roll's outcome.
     const last = props.rolls?.[1] ?? props.rolls?.[0];
@@ -128,13 +128,14 @@ function anim(name: string, delay: string, duration: string, reduced: boolean): 
 }
 
 function DieBlock(props: {
-  roll: RulingRoll;
+  dice: number[];
+  usedIndex?: number;
   color: string;
   animate: boolean;
   reduced: boolean;
   crit: boolean;
 }): ReactNode {
-  const { roll, color, animate, reduced, crit } = props;
+  const { dice, color, animate, reduced, crit } = props;
   const play = animate && !reduced;
   const dieStyle: CSSProperties = {
     width: 44,
@@ -153,11 +154,10 @@ function DieBlock(props: {
     position: "relative",
     ...(play ? { ...anim("mt-die", "0s", "0.35s", reduced), animationTimingFunction: "var(--ease-settle)" } : {}),
   };
-  const dice = roll.dice?.length ? roll.dice : [roll.d20];
   return (
     <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
       {dice.map((die, index) => {
-        const used = dice.length === 1 || index === (roll.usedIndex ?? 0);
+        const used = dice.length === 1 || index === (props.usedIndex ?? 0);
         return (
         <div key={index} style={{ ...dieStyle, opacity: used ? 1 : 0.42, textDecoration: used ? "none" : "line-through", borderStyle: used ? "solid" : "dashed" }} data-testid={used ? "ruling-die" : "ruling-die-discarded"} aria-label={`${die}${used ? " used" : " discarded"}`}>
           {die}
@@ -221,6 +221,33 @@ function MathBlock(props: {
                 {roll.opposed.attackerFormula ?? "—"} · {roll.opposed.defenderFormula ?? "—"}
               </div>
             ) : null}
+            {roll.opposed.dice?.length ? (
+              <div style={{ marginTop: 5 }} data-testid="ruling-opposed-dice">
+                <DieBlock
+                  dice={roll.opposed.dice}
+                  {...(roll.opposed.usedIndex !== undefined
+                    ? { usedIndex: roll.opposed.usedIndex }
+                    : {})}
+                  color={color}
+                  animate={animate}
+                  reduced={reduced}
+                  crit={false}
+                />
+              </div>
+            ) : null}
+            {roll.opposed.rollMode && roll.opposed.rollMode !== "normal" ? (
+              <div style={{ color: "var(--teal)", fontFamily: FONT.mono, fontSize: 10.5, marginTop: 3 }}>
+                DEFENDER {roll.opposed.rollMode.toUpperCase()}
+              </div>
+            ) : null}
+            {roll.opposed.reasons?.length ? (
+              <div
+                style={{ color: "var(--muted)", fontSize: 11.5, marginTop: 3 }}
+                data-testid="ruling-opposed-reasons"
+              >
+                {roll.opposed.reasons.join(" · ")}
+              </div>
+            ) : null}
           </>
         ) : (
           <>
@@ -274,7 +301,14 @@ function RollRow(props: { roll: RulingRoll; color: string; animate: boolean; red
   const crit = roll.outcome === "crit-success" || roll.outcome === "crit-failure";
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-      <DieBlock roll={roll} color={color} animate={animate} reduced={reduced} crit={crit} />
+      <DieBlock
+        dice={roll.dice?.length ? roll.dice : [roll.d20]}
+        {...(roll.usedIndex !== undefined ? { usedIndex: roll.usedIndex } : {})}
+        color={color}
+        animate={animate}
+        reduced={reduced}
+        crit={crit}
+      />
       <MathBlock roll={roll} color={color} animate={animate} reduced={reduced} />
       <StampBlock roll={roll} color={color} animate={animate} reduced={reduced} />
     </div>
@@ -372,6 +406,14 @@ export function RulingArtifact(props: RulingArtifactProps): ReactNode {
     <div role="group" aria-label={label} className={className} style={cardStyle} data-variant={variant}>
       {head}
       {body}
+      {variant === "npc" && props.reason ? (
+        <div
+          style={{ fontSize: 12.5, color: "var(--secondary)", marginTop: 8 }}
+          data-testid="ruling-reason"
+        >
+          {props.reason}
+        </div>
+      ) : null}
       {props.resultLine ? (
         <div
           style={{ fontStyle: "italic", fontSize: 12.5, color: "var(--secondary)", marginTop: 10 }}

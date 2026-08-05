@@ -130,3 +130,58 @@ describe("RulingArtifact", () => {
     expect(onEditRetry).toHaveBeenCalledOnce();
   });
 });
+
+function opposedRoll(): RulingRoll {
+  return roll({
+    outcome: "failure",
+    d20: 9,
+    dice: [9, 14],
+    usedIndex: 0,
+    rollMode: "disadvantage",
+    disadvantageSources: ["Wounded"],
+    modifier: 2,
+    total: 11,
+    dc: 0,
+    opposed: {
+      attacker: "Kestrel 11",
+      defender: "The Warden 18",
+      attackerFormula: "d20 9 + 2",
+      defenderFormula: "d20 16 + 2",
+      dice: [16, 4],
+      usedIndex: 0,
+      rollMode: "advantage",
+      reasons: ["High ground", "Wounded"],
+    },
+  });
+}
+
+describe("RulingArtifact — opposed", () => {
+  it("renders the defender's dice, marking the discarded one", () => {
+    render(<RulingArtifact variant="opposed" roll={opposedRoll()} animate={false} />);
+    const dice = screen.getAllByTestId("ruling-die").map((n) => n.textContent);
+    expect(dice).toContain("16");
+    expect(screen.getAllByTestId("ruling-die-discarded").map((n) => n.textContent)).toContain("4");
+  });
+
+  it("lists the advantage and disadvantage reasons for the contest", () => {
+    render(<RulingArtifact variant="opposed" roll={opposedRoll()} animate={false} />);
+    const reasons = screen.getByTestId("ruling-opposed-reasons");
+    expect(reasons).toHaveTextContent("High ground");
+    expect(reasons).toHaveTextContent("Wounded");
+  });
+
+  it("colours a lost opposed contest with the failure accent, not teal", () => {
+    const { container } = render(
+      <RulingArtifact variant="opposed" roll={opposedRoll()} animate={false} />
+    );
+    const card = container.querySelector('[data-variant="opposed"]') as HTMLElement;
+    expect(card.style.borderLeft).toContain("var(--failure)");
+  });
+
+  it("colours a won opposed contest with the success accent", () => {
+    const won = { ...opposedRoll(), outcome: "success" as const };
+    const { container } = render(<RulingArtifact variant="opposed" roll={won} animate={false} />);
+    const card = container.querySelector('[data-variant="opposed"]') as HTMLElement;
+    expect(card.style.borderLeft).toContain("var(--success)");
+  });
+});

@@ -11,7 +11,7 @@
  * via the store. Two registers held apart: names/titles use display serif + brass; the CH label,
  * counts, and rail meta use mono + teal/muted.
  */
-import { Suspense, useEffect, type CSSProperties } from "react";
+import { Suspense, useEffect, useState, type CSSProperties } from "react";
 import {
   useRoute,
   bindHashHistory,
@@ -213,8 +213,34 @@ function Header(props: {
   const current = useStoriesStore((s) => s.current);
   const messageCount = usePlayMessageCount();
 
+  const [chapterCount, setChapterCount] = useState<number | undefined>(undefined);
+  const storyId = current?.id;
+  useEffect(() => {
+    if (!storyId) {
+      setChapterCount(undefined);
+      return;
+    }
+    let cancelled = false;
+    void getBridge()
+      .listChapters(storyId)
+      .then((chapters) => {
+        if (!cancelled) setChapterCount(chapters.length);
+      })
+      .catch(() => {
+        // A header label must never break the shell. Absent count → "Chapter in progress".
+        if (!cancelled) setChapterCount(undefined);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [storyId]);
+
   const title = storyOpen ? current?.title ?? "Opening story…" : screenTitle(route);
-  const chapterLabel = storyOpen ? chapterLabelFor(messageCount) : undefined;
+  const chapterLabel = storyOpen
+    ? chapterCount && chapterCount > 0
+      ? `CH ${chapterCount}`
+      : "Chapter in progress"
+    : undefined;
 
   return (
     <header style={styles.header}>
@@ -268,12 +294,6 @@ function usePlayMessageCount(): number {
 import { usePlayStore } from "../state/playStore.js";
 function requirePlayStore() {
   return { usePlayStore };
-}
-
-/** Fallback chapter label until real chapter data threads through (roughly ~20 msgs/chapter). */
-function chapterLabelFor(messageCount: number): string {
-  const chapter = Math.max(1, Math.floor(messageCount / 20) + 1);
-  return `CH ${chapter}`;
 }
 
 /** Human title for a non-story screen (header when no story is open). */

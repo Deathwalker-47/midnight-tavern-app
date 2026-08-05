@@ -135,6 +135,8 @@ describe("V7 ordered turn semantics", () => {
     expect(result.rulings[1]!.gate.reason).toMatch(/stamina|resource|cost/i);
     expect(result.rulings[2]!.gate.allowed).toBe(false);
     expect(result.rulings[2]!.gate.reason).toMatch(/turn allows 2/i);
+    // The UI must route on the machine code, never regex-match this reason text (Plan 13 3.2).
+    expect(result.rulings[2]!.gate.code).toBe("action_budget_exceeded");
     expect(result.rulings[3]).toMatchObject({ actorId: "wight", targetId: "kestrel" });
     expect(result.rulings[3]!.gate.allowed).toBe(true);
     expect((await store.characters.get("kestrel"))!.hard.resources.stamina!.current).toBe(1);

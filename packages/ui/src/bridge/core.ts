@@ -47,6 +47,7 @@ export type {
   CharacterInventoryView,
   EquipmentAssignment,
   EquipmentSlot,
+  EquipmentEffect,
   ItemDefinition,
   ItemInstance,
   DifficultyConfig,
@@ -66,6 +67,12 @@ export type {
 // Browser-safe shared data: importing the JSON avoids a hand-maintained catalogue copy without
 // evaluating core's native runtime graph.
 import universalActionsJson from "../../../core/src/config/universal-actions.json";
+
+// Browser-safe pure logic: a deep import straight at engine/equipment.js (not the
+// `@midnight-tavern/core` barrel) so evaluating this module never pulls in the store's native
+// better-sqlite3 dependency. equipment.ts's own import chain (config, types, conditions) is
+// value-import-clean — verified no `node:`/native import anywhere in it.
+export { formatEquipmentEffect } from "../../../core/src/engine/equipment.js";
 export type {
   CharacterRecord,
   LivingCardView,
@@ -133,6 +140,7 @@ import type {
   CharacterInventoryView,
   EquipmentAssignment,
   EquipmentSlot,
+  EquipmentEffect,
   ItemDefinition,
   ItemInstance,
   DifficultyConfig,

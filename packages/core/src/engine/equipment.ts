@@ -306,6 +306,39 @@ export function equippedEffects(
   return effects;
 }
 
+/** "pick_lock" → "Pick Lock". Ids are the only labels a ruling carries for these. */
+function label(id: string): string {
+  return id.replace(/[_-]+/g, " ").trim().replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function signedAmount(amount: number): string {
+  return amount >= 0 ? `+${amount}` : `−${Math.abs(amount)}`;
+}
+
+/**
+ * One equipment effect as a player-facing sentence fragment. Exhaustive over
+ * {@link EquipmentEffectSchema} — adding an arm to that union without adding a case here is a
+ * compile error, which is the point: it is what stops a raw object reaching a loot card.
+ */
+export function formatEquipmentEffect(effect: EquipmentEffect): string {
+  switch (effect.type) {
+    case "attribute_score":
+      return `${signedAmount(effect.amount)} ${label(effect.attributeId)}`;
+    case "skill_check":
+      return `${signedAmount(effect.amount)} ${label(effect.skillId)} checks`;
+    case "action_check":
+      return `${signedAmount(effect.amount)} ${label(effect.actionId)}`;
+    case "resource_capacity":
+      return `${signedAmount(effect.amount)} max ${label(effect.resourceId)}`;
+    case "action_enable":
+      return `Enables ${label(effect.actionId)}`;
+    case "skill_enable":
+      return `Grants ${label(effect.skillId)} at ${effect.rank}`;
+    case "lifestyle":
+      return effect.description;
+  }
+}
+
 export function equippedItemKind(
   actor: CharacterHardState,
   kind: string,

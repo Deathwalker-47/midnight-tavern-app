@@ -7,7 +7,7 @@ import {
   type StoryJournalQuery,
   type StoryRecord,
 } from "../../src/bridge/core";
-import { Journal } from "../../src/screens/Journal";
+import { Journal, FILTERS, type JournalKind } from "../../src/screens/Journal";
 
 function story(): StoryRecord {
   return {
@@ -138,5 +138,107 @@ describe("Mechanical Journal", () => {
       screen.getByText("Held the gate alone during the dragon assault.")
     ).toBeInTheDocument();
     expect(screen.getByText("ruling-dragon")).toBeInTheDocument();
+  });
+
+  it("files classifier_recovery as interrupted, never as denied", async () => {
+    const bridge = makeMemoryBridge();
+    bridge.getStory = async () => story();
+    bridge.listPresentCast = async () => [
+      { characterId: "hero", name: "Kestrel", isPlayer: true, alive: true },
+    ];
+    bridge.listStoryJournal = async () => ({
+      events: [
+        { ...event("recovery-1", 3, 0, 3), kind: "classifier_recovery" },
+        { ...event("denial-1", 4, 0, 4), kind: "denied" },
+      ],
+    });
+    setBridge(bridge);
+
+    render(<Journal storyId="story-1" />);
+    fireEvent.click(await screen.findByRole("button", { name: "Denied" }));
+    expect(screen.queryByText(/Classifier Recovery/i)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Interrupted" }));
+    expect(screen.getByText(/Classifier Recovery/i)).toBeInTheDocument();
+  });
+
+  it("every JournalKind has a FILTERS entry", () => {
+    const kinds: JournalKind[] = [
+      "roll",
+      "denied",
+      "progression",
+      "item-equipment",
+      "milestone",
+      "boundary",
+      "interrupted",
+    ];
+    const filterKeys = FILTERS.filter((f) => f.key !== "all").map((f) => f.key);
+    expect(filterKeys.sort()).toEqual([...kinds].sort());
+  });
+
+  it("keeps chapter and arc boundaries reachable from a filter chip", async () => {
+    const bridge = makeMemoryBridge();
+    bridge.getStory = async () => story();
+    bridge.listPresentCast = async () => [
+      { characterId: "hero", name: "Kestrel", isPlayer: true, alive: true },
+    ];
+    bridge.listStoryJournal = async () => ({
+      events: [
+        { ...event("boundary-1", 20, 1, 20), kind: "chapter_started", actorId: undefined },
+        { ...event("roll-1", 21, 1, 21), kind: "roll" },
+      ],
+    });
+    setBridge(bridge);
+
+    render(<Journal storyId="story-1" />);
+    fireEvent.click(await screen.findByRole("button", { name: "Boundaries" }));
+    expect(screen.getByText(/Chapter Started/i)).toBeInTheDocument();
+    expect(screen.queryByText(/No matching events/i)).not.toBeInTheDocument();
+  });
+
+  it("renders dice as readable numbers and never dumps the raw payload", async () => {
+    const bridge = makeMemoryBridge();
+    bridge.getStory = async () => story();
+    bridge.listPresentCast = async () => [
+      { characterId: "hero", name: "Kestrel", isPlayer: true, alive: true },
+    ];
+    bridge.listStoryJournal = async () => ({
+      events: [
+        {
+          ...event("roll-1", 5, 0, 5),
+          kind: "roll",
+          payload: {
+            ruling: {
+              turnId: "hero:strike",
+              actorId: "hero",
+              actionId: "strike",
+              gate: { allowed: true },
+              effectsApplied: null,
+              roll: {
+                d20: 14, dice: [14, 7], usedIndex: 0, rollMode: "advantage",
+                modifier: 2, total: 16, dc: 12, outcome: "success",
+              },
+              loot: [
+                {
+                  itemInstanceId: "i1", itemDefinitionId: "d1", ownerCharacterId: "hero",
+                  name: "Vale Saber", tier: "rare", quantity: 1,
+                  provenanceSummary: "Encounter cleared",
+                  effects: [{ type: "attribute_score", attributeId: "might", amount: 2 }],
+                },
+              ],
+            },
+          },
+        },
+      ],
+    });
+    setBridge(bridge);
+
+    render(<Journal storyId="story-1" />);
+    fireEvent.click(await screen.findByRole("button", { expanded: false }));
+    // usedIndex: 0 → the 14 was kept, the 7 discarded — mirrors DieBlock's discard styling.
+    expect(screen.getByText("14, 7 (discarded)")).toBeInTheDocument();
+    expect(screen.getByText(/\+2 Might/)).toBeInTheDocument();
+    expect(screen.queryByText("Record")).not.toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/\{"/);
   });
 });

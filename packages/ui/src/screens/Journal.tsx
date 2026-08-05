@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import type { ScreenProps } from "./registry.js";
-import { getBridge } from "../bridge/core.js";
+import { getBridge, formatEquipmentEffect } from "../bridge/core.js";
 import type {
   Ruling,
   StoryEvent as StoredStoryEvent,
@@ -8,7 +8,14 @@ import type {
 } from "../bridge/core.js";
 import { Button, EmptyState, InlineNotice } from "../components/index.js";
 
-type JournalKind = "roll" | "denied" | "progression" | "item-equipment" | "milestone" | "boundary";
+export type JournalKind =
+  | "roll"
+  | "denied"
+  | "progression"
+  | "item-equipment"
+  | "milestone"
+  | "boundary"
+  | "interrupted";
 interface JournalEvent {
   id: string;
   storyId: string;
@@ -21,13 +28,15 @@ interface JournalEvent {
   createdAt: number;
   details: Array<{ label: string; value: string }>;
 }
-const FILTERS: Array<{ key: "all" | JournalKind; label: string }> = [
+export const FILTERS: Array<{ key: "all" | JournalKind; label: string }> = [
   { key: "all", label: "All" },
   { key: "roll", label: "Rolls" },
   { key: "denied", label: "Denied" },
+  { key: "interrupted", label: "Interrupted" },
   { key: "progression", label: "Progression" },
   { key: "item-equipment", label: "Items · Equipment" },
   { key: "milestone", label: "Milestones" },
+  { key: "boundary", label: "Boundaries" },
 ];
 const JOURNAL_PAGE_SIZE = 50;
 
@@ -245,9 +254,9 @@ function toJournalEvent(
   const category: JournalKind =
     event.kind === "roll"
       ? "roll"
-      : event.kind === "denied" ||
-          event.kind === "action_budget_exceeded" ||
-          event.kind === "classifier_recovery"
+      : event.kind === "classifier_recovery"
+        ? "interrupted" // an infrastructure interruption, never a world refusal (U-11)
+        : event.kind === "denied" || event.kind === "action_budget_exceeded"
         ? "denied"
         : event.kind === "xp" ||
             event.kind === "rank_up" ||
@@ -301,7 +310,16 @@ function toJournalEvent(
   const details: Array<{ label: string; value: string }> = [];
   if (roll) {
     details.push(
-      { label: "Dice", value: JSON.stringify(roll.dice ?? [roll.d20]) },
+      {
+        label: "Dice",
+        value: (roll.dice ?? [roll.d20])
+          .map((die, index) =>
+            (roll.dice?.length ?? 1) > 1 && index !== (roll.usedIndex ?? 0)
+              ? `${die} (discarded)`
+              : String(die)
+          )
+          .join(", "),
+      },
       { label: "Roll mode", value: roll.rollMode ?? "normal" },
       { label: "Modifier", value: String(roll.modifier) },
       { label: "Total", value: String(roll.total) }
@@ -365,7 +383,20 @@ function toJournalEvent(
       });
     }
   }
-  details.push({ label: "Record", value: JSON.stringify(event.payload) });
+  if (ruling?.loot?.length) {
+    for (const item of ruling.loot) {
+      details.push({
+        label: "Loot",
+        value: `${item.name} · ${item.tier}${item.quantity > 1 ? ` ×${item.quantity}` : ""}`,
+      });
+      if (item.effects?.length) {
+        details.push({
+          label: "Effects",
+          value: item.effects.map(formatEquipmentEffect).join(" · "),
+        });
+      }
+    }
+  }
   return {
     id: event.id,
     storyId: event.storyId,

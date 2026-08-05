@@ -56,6 +56,8 @@ export interface NpcReactionContext {
    * entries read as neutral — no relationship data is a safe, non-hostile default.
    */
   softById?: ReadonlyMap<string, CharacterSoftState>;
+  /** Display names keyed by characterId, for the player-facing reaction reason (Plan 13 3.3). */
+  nameById?: ReadonlyMap<string, string>;
 }
 
 /** True when an action can reduce a target resource — i.e. it is genuinely offensive. */
@@ -189,15 +191,34 @@ function chooseCounterAction(
   return undefined; // Silence is correct here. A manufactured counter is not.
 }
 
+/** A planned NPC reaction alongside the disposition and reason that produced it (Plan 13 3.3). */
+export interface PlannedNpcReaction {
+  intent: MechanicalIntent;
+  disposition: NpcDisposition;
+  /** Player-facing justification, derived from sealed signals only — never from raw prose. */
+  reason: string;
+}
+
+/** Build the player-facing reaction reason from the same sealed facts the decision already used. */
+function reactionReason(
+  disposition: NpcDisposition,
+  wasHarmed: boolean,
+  actorName: string,
+  action: ActionDef
+): string {
+  if (wasHarmed) return `${actorName} harmed them with ${action.label}.`;
+  if (disposition === "hostile") return `They were already hostile to ${actorName}.`;
+  return `${actorName} opened a contest with ${action.label}.`;
+}
+
 /**
- * Plan deterministic same-turn NPC reactions. For every hostile player act that landed on a
- * present, living NPC, that NPC counter-attacks its attacker (if the attacker is itself still
- * a living, present character). Bounded by {@link DEFAULT_NPC_ENCOUNTER_BUDGET} per NPC and
- * computed once over `priorRulings`, so a reaction can never trigger further reactions.
+ * As {@link planNpcReactions}, but carrying the disposition and an honest player-facing reason
+ * behind each choice — so the UI can render an NPC ruling that explains itself instead of looking
+ * like an unexplained attack (Plan 13 3.3, closing the UI half of D-1).
  */
-export function planNpcReactions(ctx: NpcReactionContext): MechanicalIntent[] {
-  const { schema, priorRulings, workingById, present, stakesByTurnId, softById } = ctx;
-  const intents: MechanicalIntent[] = [];
+export function planNpcReactionsDetailed(ctx: NpcReactionContext): PlannedNpcReaction[] {
+  const { schema, priorRulings, workingById, present, stakesByTurnId, softById, nameById } = ctx;
+  const planned: PlannedNpcReaction[] = [];
   const spent = new Map<string, number>();
 
   for (const ruling of priorRulings) {
@@ -228,11 +249,26 @@ export function planNpcReactions(ctx: NpcReactionContext): MechanicalIntent[] {
     const reaction = chooseCounterAction(schema, npc, ruling.actorId, disposition, wasHarmed);
     if (!reaction) continue;
 
-    intents.push(reaction);
+    const actorName = nameById?.get(ruling.actorId) ?? ruling.actorId;
+    planned.push({
+      intent: reaction,
+      disposition,
+      reason: reactionReason(disposition, wasHarmed, actorName, action),
+    });
     spent.set(targetId, (spent.get(targetId) ?? 0) + 1);
   }
 
-  return intents;
+  return planned;
+}
+
+/**
+ * Plan deterministic same-turn NPC reactions. For every hostile player act that landed on a
+ * present, living NPC, that NPC counter-attacks its attacker (if the attacker is itself still
+ * a living, present character). Bounded by {@link DEFAULT_NPC_ENCOUNTER_BUDGET} per NPC and
+ * computed once over `priorRulings`, so a reaction can never trigger further reactions.
+ */
+export function planNpcReactions(ctx: NpcReactionContext): MechanicalIntent[] {
+  return planNpcReactionsDetailed(ctx).map((planned) => planned.intent);
 }
 
 // ── Goal-driven bounded NPC planning (plan Task 5) ─────────────────────────────

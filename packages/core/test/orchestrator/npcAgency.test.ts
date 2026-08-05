@@ -205,6 +205,8 @@ describe("same-turn NPC agency", () => {
       targetId: "wight",
       gate: { allowed: true },
     });
+    // Player rulings never carry this display-only NPC-reaction metadata.
+    expect(result.rulings[0]!.npcReactionReason).toBeUndefined();
     // ...and the wight answers this SAME turn with its own engine ruling targeting the player.
     const reaction = result.rulings.find(
       (ruling) => ruling.actorId === "wight" && ruling.targetId === "kestrel"
@@ -216,6 +218,8 @@ describe("same-turn NPC agency", () => {
     // wild-swings (success at d20 15 vs DC 15) for -3 to the player.
     expect(reaction!.actionId).toBe("attack_wild");
     expect((await store.characters.get("kestrel"))!.hard.resources.hp!.current).toBe(17);
+    // Plan 13 3.3: the NPC ruling carries an honest, player-facing justification.
+    expect(reaction!.npcReactionReason).toMatch(/harmed|struck/i);
   });
 
   it("promotes a consequential prose-only creature before it acts this turn", async () => {

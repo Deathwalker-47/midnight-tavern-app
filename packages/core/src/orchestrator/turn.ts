@@ -45,7 +45,7 @@ import { applyUniversalActionDefaults } from "../config/index.js";
 import { assembleContext } from "./context.js";
 import { capture } from "./checkpoint.js";
 import { generateGuardedNarration } from "./authorityGuard.js";
-import { planNpcReactions, planNpcActions, planHostileNpcFallback } from "./npcAgency.js";
+import { planNpcReactionsDetailed, planNpcActions, planHostileNpcFallback } from "./npcAgency.js";
 import {
   runStage,
   DEFAULT_STAGE_DEADLINES,
@@ -281,7 +281,7 @@ function budgetRefusalRuling(
     actionId: intent.actionId,
     ...(action ? { actionLabel: action.label } : {}),
     ...(intent.targetId ? { targetId: intent.targetId } : {}),
-    gate: { allowed: false, reason },
+    gate: { allowed: false, reason, code: "action_budget_exceeded" },
     effectsApplied: null,
     difficulty,
   };
@@ -728,7 +728,7 @@ async function runTurnOperation(
       // its own engine ruling BEFORE narration. Deterministic reactions are planned once
       // over the player's rulings, then resolved with the same gate/dice authority against
       // the same working ledger. Their own encounter budget never touches the player's.
-      const npcReactionIntents = planNpcReactions({
+      const plannedNpcReactions = planNpcReactionsDetailed({
         schema,
         priorRulings: rulings.slice(0, playerRulingCount),
         workingById,
@@ -739,8 +739,11 @@ async function runTurnOperation(
             .filter((character) => character.soft !== undefined)
             .map((character) => [character.id, character.soft!])
         ),
+        nameById,
       });
-      for (const intent of npcReactionIntents) {
+      const npcReactionIntents = plannedNpcReactions.map((planned) => planned.intent);
+      for (const planned of plannedNpcReactions) {
+        const intent = planned.intent;
         const actorHard = await workingState(intent.actorId);
         const targetHard = intent.targetId ? await workingState(intent.targetId) : undefined;
         const result = resolve(schema, actorHard, targetHard, intent, rng, {
@@ -756,6 +759,7 @@ async function runTurnOperation(
         });
         const died = commit(schema, result.mutations, workingById);
         if (died.length) result.ruling.causedDeathOf = died;
+        result.ruling.npcReactionReason = planned.reason;
         rulings.push(result.ruling);
         staged.push(result);
       }

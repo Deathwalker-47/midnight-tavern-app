@@ -11,9 +11,12 @@ import {
   equippedItemDefinition,
   equippedItemKind,
   finalizeLootProposal,
+  formatEquipmentEffect,
   validateLoadout,
   validateLootProposal,
+  LootRulingSchema,
   type EquipmentAssignment,
+  type EquipmentEffect,
   type EquipmentSlot,
   type EquipmentRuntimeCatalog,
   type ItemDefinition,
@@ -536,5 +539,46 @@ describe("V7 loot validation", () => {
         context
       ).errors.join(" ")
     ).toContain("Primary and Secondary");
+  });
+});
+
+describe("formatEquipmentEffect", () => {
+  it("formats an attribute_score effect as signed prose", () => {
+    expect(formatEquipmentEffect({ type: "attribute_score", attributeId: "might", amount: 2 }))
+      .toBe("+2 Might");
+  });
+
+  it("formats a negative amount with a minus sign", () => {
+    expect(formatEquipmentEffect({ type: "skill_check", skillId: "stealth", amount: -1 }))
+      .toBe("−1 Stealth checks");
+  });
+
+  it("formats every arm of the union without emitting JSON punctuation", () => {
+    const all: EquipmentEffect[] = [
+      { type: "attribute_score", attributeId: "might", amount: 2 },
+      { type: "skill_check", skillId: "lockpicking", amount: 1 },
+      { type: "action_check", actionId: "pick_lock", amount: 1 },
+      { type: "resource_capacity", resourceId: "hp", amount: 4 },
+      { type: "action_enable", actionId: "parry" },
+      { type: "skill_enable", skillId: "blade", rank: "adept" },
+      { type: "lifestyle", capabilityId: "warm", description: "You never sleep cold." },
+    ];
+    for (const effect of all) {
+      const text = formatEquipmentEffect(effect);
+      expect(text).not.toMatch(/[{}"[\]]/);
+      expect(text.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("LootRulingSchema rejects an effect that is not a valid EquipmentEffect", () => {
+    const base = {
+      itemInstanceId: "i1", itemDefinitionId: "d1", ownerCharacterId: "c1",
+      name: "Vale Saber", tier: "rare" as const, quantity: 1, provenanceSummary: "Encounter cleared",
+    };
+    expect(() => LootRulingSchema.parse({ ...base, effects: [{ type: "not_a_real_effect" }] }))
+      .toThrow();
+    expect(LootRulingSchema.parse({
+      ...base, effects: [{ type: "attribute_score", attributeId: "might", amount: 2 }],
+    }).effects).toHaveLength(1);
   });
 });
