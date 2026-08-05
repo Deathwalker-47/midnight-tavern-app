@@ -17,18 +17,27 @@ export const TurnOperationStateSchema = z.enum([
 ]);
 export type TurnOperationState = z.infer<typeof TurnOperationStateSchema>;
 
-const StageMetricSchema = z.object({
-  stage: z.enum([
-    "classifier",
-    "npc_introduction",
-    "npc_planner",
-    "narrator",
-    "authority_audit",
-  ]),
-  startedAt: z.number().int().nonnegative(),
-  durationMs: z.number().nonnegative(),
-  outcome: z.enum(["ok", "fallback", "timeout", "cancelled", "error"]),
-});
+const StageMetricSchema = z
+  .object({
+    stage: z.enum([
+      "classifier",
+      "npc_introduction",
+      "npc_planner",
+      "narrator",
+      "authority_audit",
+    ]),
+    startedAt: z.number().int().nonnegative(),
+    durationMs: z.number().nonnegative(),
+    // "timeout" is accepted on READ only: rows written before the outcome/cause split used it as
+    // an outcome. Normalised below. Nothing new ever writes it.
+    outcome: z.enum(["ok", "fallback", "timeout", "cancelled", "error"]),
+    cause: z.enum(["timeout", "error"]).optional(),
+  })
+  .transform((metric) =>
+    metric.outcome === "timeout"
+      ? { ...metric, outcome: "fallback" as const, cause: "timeout" as const }
+      : metric
+  );
 
 export const TurnOperationSchema = z.object({
   id: z.string().min(1),

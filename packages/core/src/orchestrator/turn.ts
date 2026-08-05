@@ -583,10 +583,8 @@ async function runTurnOperation(
           classifyWithRecovery(router, schema, classifierInput, { signal }),
         {
           deadlineMs: stageDeadline("classifier"),
-          fallback: () => {
-            const timedOut =
-              stageMetrics.at(-1)?.stage === "classifier" &&
-              stageMetrics.at(-1)?.outcome === "timeout";
+          fallback: (cause) => {
+            const timedOut = cause === "timeout";
             return recoverClassifierFailure(
               schema,
               classifierInput,

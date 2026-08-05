@@ -903,7 +903,7 @@ describe("submitTurn — pipeline order & transaction", () => {
     const operation = await store.turnOperations.getByPlayerMessage(messages[0]!.id);
     expect(operation?.stageMetrics).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ stage: "classifier", outcome: "timeout" }),
+        expect.objectContaining({ stage: "classifier", outcome: "fallback", cause: "timeout" }),
         expect.objectContaining({ stage: "narrator", outcome: "ok" }),
         expect.objectContaining({ stage: "authority_audit", outcome: "ok" }),
       ])
@@ -973,7 +973,8 @@ describe("submitTurn — pipeline order & transaction", () => {
       expect.arrayContaining([
         expect.objectContaining({
           stage: "npc_introduction",
-          outcome: "timeout",
+          outcome: "fallback",
+          cause: "timeout",
         }),
         expect.objectContaining({ stage: "classifier", outcome: "ok" }),
         expect.objectContaining({ stage: "narrator", outcome: "ok" }),

@@ -392,7 +392,7 @@ describe("generateGuardedNarration", () => {
     expect(result.usedSafeFallback).toBe(true);
     expect(result.prose).toContain("Twin shots land");
     expect(metrics).toEqual([
-      expect.objectContaining({ stage: "narrator", outcome: "timeout" }),
+      expect.objectContaining({ stage: "narrator", outcome: "fallback", cause: "timeout" }),
     ]);
   });
 
@@ -442,7 +442,7 @@ describe("generateGuardedNarration", () => {
     expect(result.prose).toContain("Twin shots land");
     expect(metrics).toEqual([
       expect.objectContaining({ stage: "narrator", outcome: "ok" }),
-      expect.objectContaining({ stage: "authority_audit", outcome: "timeout" }),
+      expect.objectContaining({ stage: "authority_audit", outcome: "fallback", cause: "timeout" }),
     ]);
   });
 
@@ -481,7 +481,7 @@ describe("generateGuardedNarration", () => {
     expect(result.prose).toMatch(/succeeds/i);
     expect(result.prose).toContain("Twin shots land");
     expect(metrics).toEqual([
-      expect.objectContaining({ stage: "narrator", outcome: "error" }),
+      expect.objectContaining({ stage: "narrator", outcome: "fallback", cause: "error" }),
     ]);
   });
 
@@ -587,7 +587,7 @@ describe("generateGuardedNarration", () => {
     expect(counts).toEqual({ narrator: 1, auditor: 1 });
     expect(metrics).toEqual([
       expect.objectContaining({ stage: "narrator", outcome: "ok" }),
-      expect.objectContaining({ stage: "authority_audit", outcome: "error" }),
+      expect.objectContaining({ stage: "authority_audit", outcome: "fallback", cause: "error" }),
     ]);
   });
 

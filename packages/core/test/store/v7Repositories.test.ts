@@ -319,7 +319,9 @@ describe("V7 persistence repositories", () => {
         stage: "narrator",
         startedAt: 350,
         durationMs: 60_000,
-        outcome: "timeout",
+        // A legacy "timeout" outcome normalizes forward to fallback/cause on read.
+        outcome: "fallback",
+        cause: "timeout",
       },
     ]);
     expect((await store.turnOperations.latestRecoverable(schema.storyId))?.id).toBe("op1");
@@ -335,6 +337,41 @@ describe("V7 persistence repositories", () => {
     expect(csv).toContain('"turn_index","chapter","kind"');
     expect(csv).toContain('"item_gained"');
     expect(await exportStoryJournalCsv(store, schema.storyId)).toBe(csv);
+  });
+
+  it("reads a legacy timeout stage metric forward to fallback/timeout", async () => {
+    const store = await openStore(":memory:");
+    const schema = makeStory();
+    await store.stories.insert({
+      id: schema.storyId,
+      title: schema.title,
+      createdAt: 0,
+      schema,
+      locked: true,
+      rulebookVersion: 1,
+    });
+    await store.messages.insert({
+      id: "pm-1",
+      storyId: schema.storyId,
+      idx: 0,
+      role: "player",
+      content: "Search the chamber.",
+      createdAt: 1,
+    });
+    await store.turnOperations.upsert({
+      id: "op-legacy",
+      storyId: schema.storyId,
+      playerMessageId: "pm-1",
+      state: "error",
+      stageMetrics: [
+        { stage: "narrator", startedAt: 350, durationMs: 60_000, outcome: "timeout" },
+      ],
+      createdAt: 1,
+      updatedAt: 2,
+    });
+    expect((await store.turnOperations.get("op-legacy"))?.stageMetrics).toEqual([
+      { stage: "narrator", startedAt: 350, durationMs: 60_000, outcome: "fallback", cause: "timeout" },
+    ]);
   });
 
   it("regenerates only after confirmation and clears mechanical derivatives atomically", async () => {

@@ -60,10 +60,33 @@ describe("runStage — deadlines, fallbacks, telemetry", () => {
 
     expect(value).toEqual([]); // deterministic fallback, turn not blocked
     expect(aborted).toBe(true); // the hung stage was signalled to stop
-    expect(metrics[0]).toMatchObject({ stage: "npc_planner", outcome: "timeout" });
+    expect(metrics[0]).toMatchObject({ stage: "npc_planner", outcome: "fallback", cause: "timeout" });
   });
 
-  it("returns the fallback and records an error metric when the stage throws", async () => {
+  it("records outcome fallback with cause timeout when a hung stage degrades gracefully", async () => {
+    const { schedule, trigger } = controllableSchedule();
+    const metrics: StageMetric[] = [];
+    const pending = runStage<string[]>(
+      "npc_planner",
+      () => new Promise<string[]>(() => {}),
+      {
+        deadlineMs: 20_000,
+        fallback: () => [],
+        onMetric: (m) => metrics.push(m),
+        schedule,
+      }
+    );
+    await Promise.resolve();
+    trigger();
+    await expect(pending).resolves.toEqual([]);
+    expect(metrics[0]).toMatchObject({
+      stage: "npc_planner",
+      outcome: "fallback",
+      cause: "timeout",
+    });
+  });
+
+  it("records outcome fallback with cause error when the stage throws", async () => {
     const metrics: StageMetric[] = [];
     const value = await runStage(
       "narrator",
@@ -73,7 +96,66 @@ describe("runStage — deadlines, fallbacks, telemetry", () => {
       { deadlineMs: 1_000, fallback: () => "safe", onMetric: (m) => metrics.push(m) }
     );
     expect(value).toBe("safe");
-    expect(metrics[0]).toMatchObject({ outcome: "error" });
+    expect(metrics[0]).toMatchObject({ outcome: "fallback", cause: "error" });
+  });
+
+  it("passes the failure cause to the fallback factory", async () => {
+    const seen: string[] = [];
+    await runStage(
+      "classifier",
+      async () => {
+        throw new Error("boom");
+      },
+      {
+        deadlineMs: 1_000,
+        fallback: (cause) => {
+          seen.push(cause);
+          return 0;
+        },
+      }
+    );
+    expect(seen).toEqual(["error"]);
+  });
+
+  it("records outcome error and rethrows when the fallback itself throws", async () => {
+    const metrics: StageMetric[] = [];
+    await expect(
+      runStage(
+        "authority_audit",
+        async () => {
+          throw new Error("stage down");
+        },
+        {
+          deadlineMs: 1_000,
+          fallback: () => {
+            throw new Error("fallback down");
+          },
+          onMetric: (m) => metrics.push(m),
+        }
+      )
+    ).rejects.toThrow("fallback down");
+    expect(metrics[0]).toMatchObject({ outcome: "error", cause: "error" });
+  });
+
+  it("excludes fallback execution time from durationMs", async () => {
+    const metrics: StageMetric[] = [];
+    let clock = 0;
+    await runStage(
+      "narrator",
+      async () => {
+        throw new Error("boom");
+      },
+      {
+        deadlineMs: 1_000,
+        now: () => (clock += 10),
+        fallback: () => {
+          clock += 1_000; // an expensive deterministic fallback
+          return "safe";
+        },
+        onMetric: (m) => metrics.push(m),
+      }
+    );
+    expect(metrics[0]!.durationMs).toBeLessThan(1_000);
   });
 
   it("propagates a genuine caller cancel instead of falling back", async () => {

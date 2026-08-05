@@ -3,10 +3,12 @@
  * turn (classifier, NPC introduction, NPC planner, narrator, authority audit).
  *
  * `runStage` races a stage against a configured deadline. On success it returns the value and reports
- * an `ok` metric; on timeout it aborts the stage and returns a DETERMINISTIC fallback (never blocking
- * the turn) with a `timeout` metric; on error it returns the fallback with an `error` metric; and if
- * the caller's own signal aborts, the abort propagates (a real cancel, not a fallback) with a
- * `cancelled` metric. Provider internals never leak — only the stage name, timing, and outcome.
+ * an `ok` metric. On timeout OR error it aborts the stage (if applicable) and returns a DETERMINISTIC
+ * fallback (never blocking the turn), reporting outcome `fallback` with `cause` set to `timeout` or
+ * `error` — a timeout is a reason the stage didn't return its own value, not a disposition of its
+ * own. If the fallback itself throws, outcome is `error` and the error propagates. If the caller's
+ * own signal aborts, the abort propagates (a real cancel, not a fallback) with a `cancelled` metric.
+ * Provider internals never leak — only the stage name, timing, and outcome/cause.
  *
  * Timing and the deadline timer are injectable so tests are deterministic without a global fake clock.
  */
@@ -18,11 +20,21 @@ export type TurnStage =
   | "narrator"
   | "authority_audit";
 
+/** Why a stage did not return its own value. A timeout is a cause, never a disposition. */
+export type StageFailureCause = "timeout" | "error";
+
 export interface StageMetric {
   stage: TurnStage;
   startedAt: number;
   durationMs: number;
-  outcome: "ok" | "fallback" | "timeout" | "cancelled" | "error";
+  /**
+   * What the CALLER got. `ok` = the stage's own value; `fallback` = the deterministic fallback
+   * stood in and the turn continued; `cancelled` = the caller aborted; `error` = the fallback
+   * itself threw and nothing usable was produced.
+   */
+  outcome: "ok" | "fallback" | "cancelled" | "error";
+  /** Present whenever `outcome` is `fallback` or `error`. */
+  cause?: StageFailureCause;
 }
 
 /** Default per-stage deadlines (ms). Generous — a real timeout means the provider genuinely hung. */
@@ -39,8 +51,8 @@ export type CancelTimer = () => void;
 
 export interface RunStageOptions<T> {
   deadlineMs: number;
-  /** Deterministic fallback produced on timeout/error. Must not throw. */
-  fallback: () => T;
+  /** Deterministic fallback produced on timeout/error. Should not throw; if it does, `runStage` rethrows. */
+  fallback: (cause: StageFailureCause) => T;
   /** Injectable clock (defaults to Date.now). */
   now?: () => number;
   /** Caller cancellation. A genuine abort propagates instead of falling back. */
@@ -77,17 +89,28 @@ export async function runStage<T>(
   const now = options.now ?? Date.now;
   const schedule = options.schedule ?? defaultSchedule;
   const startedAt = now();
-  const emit = (outcome: StageMetric["outcome"]): void => {
+  const emit = (
+    outcome: StageMetric["outcome"],
+    durationMs: number,
+    cause?: StageFailureCause
+  ): void => {
     try {
-      options.onMetric?.({ stage, startedAt, durationMs: Math.max(0, now() - startedAt), outcome });
+      options.onMetric?.({
+        stage,
+        startedAt,
+        durationMs,
+        outcome,
+        ...(cause ? { cause } : {}),
+      });
     } catch {
       /* telemetry must never break a turn */
     }
   };
+  const elapsed = (): number => Math.max(0, now() - startedAt);
 
   // Already-cancelled: surface the cancel without starting the stage.
   if (options.signal?.aborted) {
-    emit("cancelled");
+    emit("cancelled", elapsed());
     throw options.signal.reason ?? new DOMException("Cancelled", "AbortError");
   }
 
@@ -132,16 +155,26 @@ export async function runStage<T>(
       ...(options.signal ? [callerCancellation] : []),
     ]);
     finish();
-    emit("ok");
+    emit("ok", elapsed());
     return value;
   } catch (error) {
     finish();
     // A genuine caller cancel (not our deadline) propagates as a real cancellation.
     if (options.signal?.aborted && !timedOut) {
-      emit("cancelled");
+      emit("cancelled", elapsed());
       throw options.signal.reason ?? error;
     }
-    emit(timedOut ? "timeout" : "error");
-    return options.fallback();
+    const cause: StageFailureCause = timedOut ? "timeout" : "error";
+    const durationMs = elapsed(); // measured before the fallback runs
+    try {
+      const value = options.fallback(cause);
+      emit("fallback", durationMs, cause);
+      return value;
+    } catch (fallbackError) {
+      // The contract says a fallback must not throw. If one does, the turn genuinely has no
+      // usable value — report it as `error` and propagate rather than inventing one.
+      emit("error", durationMs, cause);
+      throw fallbackError;
+    }
   }
 }
