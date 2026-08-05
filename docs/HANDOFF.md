@@ -1,11 +1,12 @@
 # HANDOFF - current live state
 
-**Updated:** 2026-08-02 (Plan 13 Phases 0-2 executed)
-**Branch / source baseline:** local `main` @ `3566c25` + uncommitted Phase 0-2 source changes; not
-pushed, not yet committed
-**App version:** `0.2.8`, unsigned; no new installer was built for this diagnostic batch
+**Updated:** 2026-08-05 (Plan 13 complete — all phases 0 through 6.1 executed and pushed)
+**Branch / source baseline:** local `main` @ `9288a5a` (Phase 6.1), pushed to origin
+**App version:** `0.2.8`, unsigned; no new installer was built for this batch
 **User-owned/untracked:** `.agents/`, `.codex/`, `opencode.json` - preserve
-**Active plan:** `Audit/2026-08-02-PRODUCT-AUDIT/13-implementation-plan-final.md`
+**Active plan:** none — `Audit/2026-08-02-PRODUCT-AUDIT/13-implementation-plan-final.md` is fully
+executed. Its own "Deferred queue" (Plans 21/19/20/18/23/10B) remains explicitly out of scope and is
+not an active plan; pick one deliberately with the user before starting any of it.
 **Superseded/obsolete:** `docs/superpowers/plans/2026-08-02-npc-scene-system-redesign.md` (Task
 15G) — do not implement; see the OBSOLETE notice at the top of that file for why. Its diagnosis
 sections below remain accurate reference material.
@@ -136,23 +137,22 @@ completion claim, run the focused suites plus full typecheck/tests, direct build
 - Preserve browser/native bridge parity and user-owned untracked paths. Do not push.
 - Do not build intermediate installers. Build once after all Task 15G source slices are complete.
 
-## Progress on the active plan (Plan 13)
+## Plan 13 — complete
 
-Phases 0, 1, and 2 are complete and verified — see `docs/WORKLOG.md`'s 2026-08-02 "Execute Plan 13
-Phases 0-2" entry for the full account, including two corrections made against source where the
-plan's own premise was stale (step 1.2's real gap was `condenseSoftSlice` dropping
-`soft.observations`, not `assembleContext` never using `softSlices` at all — that wiring already
-existed) and one deliberate deviation (friendly-disposition NPCs get a harmed-fallback to the
-harmful tier that the plan's exact preference table omitted). Full suite green after every single
-step: core **651 / 45 files**, UI **160 / 25 files**, **811 total**, typecheck clean throughout.
-Nothing has been committed yet.
+All phases (0 through 6.1) are implemented, tested, and committed. See `docs/WORKLOG.md` for the
+full account: the 2026-08-02 entry covers Phases 0-2 (truth & safety, memory reaches the model,
+disposition-aware NPCs); the 2026-08-05 entry covers Phases 3-6.1 (UI visibility, rewind
+immutability proof, typed suggestion anchors, honest stage-fallback outcomes, and local opt-in
+diagnostic counters + a Diagnostics screen). Both entries record the corrections made against
+source where the plan's own premise was stale, and the deliberate deviations taken.
+
+Final verified state: core **670 tests / 47 files**, UI **183 tests / 27 files**, **853 total**,
+`npm run typecheck` clean in both workspaces. Commits `50cd0c2` (Phase 6.0) and `9288a5a` (Phase
+6.1) are pushed to `main`; all earlier phases were committed and pushed in prior sessions.
 
 ## Single next action
 
-Implement `Audit/2026-08-02-PRODUCT-AUDIT/13-implementation-plan-final.md` Phase 3 (UI visibility:
-loot-effect typing/formatting, Journal filter-chip fix, ruling presentation), then Phase 4
-(immutability proof), Phase 5 (suggestions), Phase 6 (observability), in the plan's stated
-dependency order. **Verify each step's premise against current source before writing its RED
-test** — the plan was written by a separate review pass and two of its Phase 1 steps did not match
-current source exactly; treat it as a strong guide, not infallible ground truth. Each step has its
-own RED test, exact production edit, and acceptance criteria in that file.
+No active plan. Before starting new work, decide with the user whether to pick an item from Plan
+13's own "Deferred queue" (Plans 21/19/20/18/23/10B in
+`Audit/2026-08-02-PRODUCT-AUDIT/13-implementation-plan-final.md`) or something else entirely — do
+not assume the deferred queue is next just because it's listed.

@@ -1694,3 +1694,76 @@ core **651 / 45 files**, UI **160 / 25 files**, **811 total** — matching Plan 
 **Next:** Plan 13 Phase 3 (UI visibility — loot-effect typing, Journal filter fix, ruling
 presentation), then Phase 4 (immutability proof), Phase 5 (suggestions), Phase 6 (observability), in
 that order per the plan's dependency graph.
+
+## 2026-08-05 — Execute Plan 13 Phases 3–6.1 (visibility, immutability, suggestions, observability) — Plan 13 complete
+
+Continuation of the 2026-08-02 session, working every remaining phase in order with the same
+TDD discipline (RED test observed failing, then implementation, then GREEN, full suite + typecheck
+after every step).
+
+**Phase 3 — make mechanics visible in the UI.** `Ruling.loot[].effects` retyped from
+`z.array(z.unknown())` to a real `EquipmentEffectSchema` array; added `formatEquipmentEffect` in
+`engine/equipment.ts` (exhaustive switch over the discriminated union) and re-exported it into
+`bridge/core.ts` via a deep import straight at `engine/equipment.js` (not the barrel), so the
+webview bundle never pulls in `better-sqlite3`. `Play.tsx`'s denied-branch check moved from
+regex-matching a reason string to `gate.code === "action_budget_exceeded"`. `classifier_recovery`
+events now categorize as a new `"interrupted"` Journal kind instead of `"denied"` — an infrastructure
+hiccup is not a world refusal. Added the `"boundary"` filter chip that had been silently missing.
+Journal's dice rendering and loot/effects rows now use `formatEquipmentEffect`/readable numbers
+instead of `JSON.stringify`. Header's chapter label now reads `listChapters(storyId).length` instead
+of estimating from `messageCount / 20`.
+
+**Phase 4 — prove rewind immutability, don't just assert it.** Added `"turn_rewound"` as a
+`StoryEventKindSchema` member and a `journalTruncation(...)` helper called last inside
+`deleteLastTurn`/`rewindTo`/`deleteFromExchange`, so a rewind leaves an explicit audit record instead
+of silently vanishing. First inversion-check attempt (breaking `history.ts`'s `narrator.id` lookup)
+did NOT make the existing characterization test fail — proof it wasn't a real tripwire, since the
+test read the stored-rulings table directly and never exercised the broken lookup. Fixed by
+injecting a genuine fake re-resolve call, confirmed that failed as expected, then reverted cleanly.
+Two pre-existing tests' `events.listByStory(...).toHaveLength(0)` assertions after `deleteLastTurn`
+were now legitimately wrong (a `turn_rewound` record survives) — updated to expect length 1.
+
+**Phase 5 — typed scene anchors for suggestions.** Replaced narrator-text-derived
+`sceneAnchors`/`UNSAFE_FALLBACK_ANCHORS` string matching with a typed `SceneAnchor`/`SceneAnchorKind`
+built directly from characters/location/world state. Deleted `suggestionWords`/
+`SUGGESTION_STOP_WORDS` as genuinely dead code (zero remaining call sites, verified by grep) — the
+plan's claim that they were "still used elsewhere" was checked against source and found false.
+
+**Phase 6.0 — make the "fallback" stage outcome real.** `StageMetric.outcome` had conflated a
+deadline timeout and a thrown error into a single `"timeout"` value with no way to distinguish them
+downstream; `turn.ts`'s classifier fallback worked around this by re-peeking `stageMetrics.at(-1)`,
+which only worked by accident. Split `outcome` (`"ok"|"fallback"|"cancelled"|"error"`) from a new
+`cause` (`"timeout"|"error"`) passed directly into `fallback(cause)`; wrapped the fallback call in its
+own try/catch so a fallback that itself throws is honestly reported as `"error"`, not silently
+counted as a successful recovery. `StageMetricSchema` gained a `.transform()` to normalize legacy
+persisted `outcome: "timeout"` rows to `{outcome: "fallback", cause: "timeout"}` on read — no SQL
+migration, no schema version bump.
+
+**Phase 6.1 — local, opt-in diagnostic counters + a Diagnostics screen.** New
+`packages/core/src/observability/` module: `countersForTurn(input)` is a pure fold from one turn's
+already-computed outputs (gate verdicts, stage metrics, classifier/authority-guard signals) to a flat
+dotted-key integer delta map — no I/O, no store import, safe on the webview path. Persistence reuses
+the existing settings-table-as-typed-KV-store pattern (two new setting keys, no migration).
+`sqliteBridge.ts`'s `submitTurn`/`retryTurnOperation` now tee stage metrics into a local array and
+fold them into the persisted counter set after each turn completes, gated by the opt-in flag and
+never throwing into the turn itself; the router's logger is wrapped to also count provider
+retries/failures without a new call site in core. Added 4 `CoreBridge` methods
+(`getDiagnosticsEnabled`/`setDiagnosticsEnabled`/`readDiagnosticCounters`/`clearDiagnosticCounters`)
+implemented over both the real bridge and the in-memory dev bridge, plus a test-only
+`__seedDiagnosticCounters` seam on the memory bridge (not on `CoreBridge` itself) for screen tests.
+New `Diagnostics.tsx` screen (routed at `#diagnostics`, reachable from Settings' existing Diagnostics
+section): opt-in toggle, a table of raw counters plus derived mean-stage-latency rows, JSON export
+reusing Journal's Blob-download pattern, two-click reset.
+
+**Verification.** Full suite green after every step. Final state: core **670 tests / 47 files**, UI
+**183 tests / 27 files**, **853 total**. `npm run typecheck` clean in both workspaces throughout.
+Acceptance greps confirmed: `db.ts` has no diff (no migration), zero `"version: 17"` hits, `gate.ts`'s
+`checkGate` signature unchanged, zero `fetch`/`http` references in `Diagnostics.tsx` or
+`observability/`, `countersForTurn`'s file has zero real `store` references (only a comment
+mentioning it), exported diagnostics JSON contains only `exportedAt` + integer counters. Committed as
+two phase-scoped commits (Phase 6.0 had been implemented but not yet committed at the end of the
+2026-08-02 session): `50cd0c2` (Phase 6.0) and `9288a5a` (Phase 6.1), both pushed to `main`.
+
+**Plan 13 is now complete in its entirety.** The "Deferred queue" listed in the plan document
+(Plans 21/19/20/18/23/10B) remains explicitly out of scope — it was never part of "the rest of the
+phases."
