@@ -21,6 +21,7 @@ import type {
   Outcome,
   NarratorStyleInputs,
   AttributeAdvancementDecision,
+  WorldSoftState,
 } from "../types/index.js";
 import { renderStyleSettings } from "../types/index.js";
 import { buildMemoryBlock } from "../summarizer/index.js";
@@ -211,6 +212,14 @@ export function renderHardSnapshot(record: CharacterRecord, schema: StorySchema)
   return bits.join(" | ");
 }
 
+export type SceneAnchorKind = "character" | "item" | "location" | "thread";
+
+export interface SceneAnchor {
+  kind: SceneAnchorKind;
+  /** The display name or label — never a raw id, never a word-bag token. */
+  name: string;
+}
+
 export interface PlayerSuggestionContext {
   latestNarrator?: string;
   recentScene: string[];
@@ -230,18 +239,9 @@ export interface PlayerSuggestionContext {
     description?: string;
     aliases?: string[];
   }>;
-  sceneAnchors: string[];
+  sceneAnchors: SceneAnchor[];
   worldContext?: string;
 }
-
-const SUGGESTION_STOP_WORDS = new Set([
-  "about", "after", "again", "against", "before", "being", "could", "does",
-  "every", "from", "have", "into", "itself", "might", "other", "should",
-  "their", "there", "these", "they", "this", "through", "under", "what",
-  "when", "where", "which", "while", "with", "would", "your", "around",
-  "carefully", "character", "immediate", "nearest", "observe", "pause",
-  "situation", "surroundings",
-]);
 
 const LATEST_NARRATOR_LIMIT = 3_600;
 const RECENT_MESSAGE_LIMIT = 1_400;
@@ -259,39 +259,43 @@ function normalizedSuggestionText(text: string): string {
   return text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 }
 
-function suggestionWords(text: string, excluded = new Set<string>()): string[] {
-  return text
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}_'-]+/gu, " ")
-    .split(/\s+/)
-    .map((word) => word.replace(/^['-]+|['-]+$/g, ""))
-    .filter(
-      (word) =>
-        word.length >= 4 &&
-        !SUGGESTION_STOP_WORDS.has(word) &&
-        !excluded.has(word)
-    );
-}
-
 function buildSceneAnchors(
-  latestNarrator: string,
   visible: CharacterRecord[],
-  player: CharacterRecord | undefined
-): string[] {
-  const playerWords = new Set(
-    normalizedSuggestionText(player?.name ?? "").split(/\s+/).filter(Boolean)
-  );
-  const npcNames = visible
-    .filter((character) => !character.isPlayer)
-    .map((character) => normalizedSuggestionText(character.name))
-    .filter(Boolean);
-  const location = normalizedSuggestionText(player?.soft?.current.location ?? "");
-  const latestWords = suggestionWords(latestNarrator, playerWords);
+  player: CharacterRecord | undefined,
+  world: WorldSoftState | null | undefined
+): SceneAnchor[] {
+  const anchors: SceneAnchor[] = [];
+  const seen = new Set<string>();
 
-  // Reverse word order so a long opening favors the live scene at its end.
-  const newestFirst = [...latestWords].reverse();
-  return [...new Set([...npcNames, ...(location ? [location] : []), ...newestFirst])]
-    .slice(0, 40);
+  function add(anchor: SceneAnchor): void {
+    const key = `${anchor.kind}:${anchor.name.toLowerCase()}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      anchors.push(anchor);
+    }
+  }
+
+  // Present non-player characters (most useful for dialogue suggestions).
+  for (const c of visible) {
+    if (!c.isPlayer) add({ kind: "character", name: c.name });
+  }
+
+  // Player's current location.
+  const loc = player?.soft?.current.location?.trim();
+  if (loc) add({ kind: "location", name: loc });
+
+  // World locations that match the player's location or are listed in world state.
+  if (world) {
+    for (const wl of world.locations.slice(0, 6)) {
+      add({ kind: "location", name: wl.name });
+    }
+    // Open narrative threads — give the fallback something to reference.
+    for (const t of world.unresolvedThreads.filter((t) => !t.resolved).slice(0, 4)) {
+      add({ kind: "thread", name: t.title });
+    }
+  }
+
+  return anchors.slice(0, 20);
 }
 
 /**
@@ -392,7 +396,7 @@ export async function assemblePlayerSuggestionContext(
     })),
     hardState: visible.map((character) => renderHardSnapshot(character, story.schema)),
     availableActions,
-    sceneAnchors: buildSceneAnchors(narratorText, visible, player),
+    sceneAnchors: buildSceneAnchors(visible, player, world),
     ...(worldContext ? { worldContext } : {}),
   };
 }

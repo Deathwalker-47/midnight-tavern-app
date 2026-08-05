@@ -53,34 +53,22 @@ function actionTextMatches(
     .some((phrase) => includesWholePhrase(candidate, phrase));
 }
 
-const UNSAFE_FALLBACK_ANCHORS = new Set([
-  "absent",
-  "dead",
-  "dies",
-  "elsewhere",
-  "killed",
-]);
-
 function deterministicFallbackSuggestions(
-  context: PlayerSuggestionContext,
-  unavailableCharacterNames: string[]
+  context: PlayerSuggestionContext
 ): SuggestedAction[] {
   if (!context.latestNarrator?.trim()) return [];
   const player = context.visibleCharacters.find((character) => character.isPlayer);
   if (!player) return [];
 
-  const allCharacterNameWords = new Set(
-    [...context.visibleCharacters.map((character) => character.name), ...unavailableCharacterNames]
-      .flatMap((name) => normalized(name).split(/\s+/))
-      .filter(Boolean)
-  );
-  const anchors = [...new Set(context.sceneAnchors.map(normalized))]
-    .filter(Boolean)
-    .filter((anchor) => !allCharacterNameWords.has(anchor))
-    .filter((anchor) => !UNSAFE_FALLBACK_ANCHORS.has(anchor));
-  if (anchors.length < 2) return [];
+  const characterAnchors = context.sceneAnchors
+    .filter((a) => a.kind === "character")
+    .map((a) => a.name);
+  const locationAnchors = context.sceneAnchors
+    .filter((a) => a.kind === "location" || a.kind === "thread")
+    .map((a) => a.name);
 
-  const [primaryAnchor, secondaryAnchor] = anchors;
+  const primaryAnchor = locationAnchors[0] ?? characterAnchors[1];
+  const secondaryAnchor = locationAnchors[1] ?? locationAnchors[0];
   if (!primaryAnchor || !secondaryAnchor) return [];
   const npc = context.visibleCharacters.find((character) => !character.isPlayer);
   const safeAction = context.availableActions.find((action) =>
@@ -239,8 +227,10 @@ export async function suggestPlayerActions(
           "CURRENT-LOCATION BACKGROUND (context only; the live transcript wins):",
           context.worldContext ?? "(none)",
           "",
-          "EXACT LIVE-SCENE ANCHORS:",
-          context.sceneAnchors.join(", "),
+          "SCENE ANCHORS (typed):",
+          context.sceneAnchors
+            .map((a) => `${a.kind}: ${a.name}`)
+            .join(", ") || "(none)",
           "",
           "CURRENTLY GATE-ALLOWED ACTIONS:",
           context.availableActions.length
@@ -274,6 +264,6 @@ export async function suggestPlayerActions(
     });
   } catch (error) {
     if (signal?.aborted) throw error;
-    return deterministicFallbackSuggestions(context, unavailableCharacterNames);
+    return deterministicFallbackSuggestions(context);
   }
 }

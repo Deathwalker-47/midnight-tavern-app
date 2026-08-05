@@ -165,11 +165,33 @@ describe("context-grounded possible moves", () => {
 
     expect(context.latestNarrator).toContain("Sorel braces against the mill door");
     expect(context.latestNarrator).not.toContain("ANCIENT_CARAVAN_PROLOGUE");
-    expect(context.sceneAnchors).toContain("sorel");
-    expect(context.sceneAnchors).toContain("burden");
+    // Typed anchors preserve display casing (SceneAnchor.name is never lowercase-normalized).
+    expect(context.sceneAnchors.some((a) => a.name === "Sorel")).toBe(true);
+    expect(
+      context.sceneAnchors.some((a) => a.kind === "character" || a.kind === "location")
+    ).toBe(true);
     expect(context.availableActions.map((action) => action.id)).toContain("search_room");
     expect(context.availableActions.map((action) => action.id)).not.toContain("master_strike");
     expect(context.availableActions.map((action) => action.id)).not.toContain("phantom_rite");
+  });
+
+  it("assemblePlayerSuggestionContext returns typed anchors, not a word bag", async () => {
+    const { store, story } = await seedStory();
+    stores.push(store);
+
+    const context = await assemblePlayerSuggestionContext(store, story);
+
+    // Typed anchors must be present
+    expect(context.sceneAnchors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: "character", name: expect.any(String) }),
+      ])
+    );
+    // No raw word-bag strings — every anchor must be an object with a `kind` field
+    for (const anchor of context.sceneAnchors) {
+      expect(typeof anchor).toBe("object");
+      expect((anchor as { kind: string }).kind).toMatch(/^(character|item|location|thread)$/);
+    }
   });
 
   it("does not load equipment or offer mechanical actions in No Stats stories", async () => {
