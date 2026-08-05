@@ -63,6 +63,17 @@ function summarizeRuling(ruling: Ruling): string {
 export function summarizeStoryEvent(event: StoryEvent): string {
   const ruling = rulingFrom(event);
   if (ruling) return summarizeRuling(ruling);
+  if (event.kind === "turn_rewound") {
+    const operation = event.payload["operation"];
+    const fromIdx = event.payload["fromIdx"];
+    const label =
+      operation === "rewind"
+        ? "Rewound"
+        : operation === "delete_last"
+          ? "Deleted last exchange"
+          : "Deleted from exchange";
+    return `${label} - discarded turns from index ${typeof fromIdx === "number" ? fromIdx : "?"}`;
+  }
   if (
     event.kind === "attribute_advanced" ||
     event.kind === "attribute_advancement_denied"

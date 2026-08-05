@@ -180,6 +180,44 @@ describe("history ops — swipe / delete / rewind (§6)", () => {
     expect(narrator.activeVariant).toBe(1);
   });
 
+  it("swipe never re-resolves: ruling id, dice and DC are identical across variants", async () => {
+    await strike(router, store, storyId, "I strike");
+    const narratorIdx = (await store.messages.nextIdx(storyId)) - 1;
+    const narrator = await store.messages.getByIndex(storyId, narratorIdx);
+    const before = await store.rulings.listByMessage(narrator!.id);
+
+    router.script.narratorProse = "A completely different telling.";
+    const result = await swipeLastTurn(router, store, storyId);
+    expect(result.variants).toHaveLength(2);
+
+    const after = await store.rulings.listByMessage(narrator!.id);
+    // The ruling rows are the SAME rows: not re-inserted, not re-rolled, not re-ordered.
+    expect(after.map((r) => r.ruling.turnId)).toEqual(before.map((r) => r.ruling.turnId));
+    expect(after.map((r) => r.ruling.roll)).toEqual(before.map((r) => r.ruling.roll));
+    expect(after.map((r) => r.ruling.gate)).toEqual(before.map((r) => r.ruling.gate));
+    expect(after.map((r) => r.ruling.effectsApplied)).toEqual(
+      before.map((r) => r.ruling.effectsApplied)
+    );
+    expect(after).toHaveLength(before.length); // no second commit appended rulings
+  });
+
+  it("rewindTo journals a turn_rewound event that survives truncation", async () => {
+    await strike(router, store, storyId, "strike one");
+    router.script.narratorProse = "Turn two.";
+    await strike(router, store, storyId, "strike two");
+
+    const msgs = await store.messages.listByStory(storyId);
+    const firstPlayerIdx = msgs[0]!.idx;
+
+    await rewindTo(store, storyId, firstPlayerIdx);
+
+    const events = await store.events.listByStory(storyId, { kinds: ["turn_rewound"] });
+    expect(events).toHaveLength(1);
+    expect(events[0]!.payload["fromIdx"]).toBe(2);
+    expect(events[0]!.payload["operation"]).toBe("rewind");
+    expect(events[0]!.turnIndex).toBeLessThan(2); // else deleteFromTurn would erase it
+  });
+
   it("selectVariant switches the active variant with no model call", async () => {
     await strike(router, store, storyId, "I strike");
     router.script.narratorProse = "Second telling.";
@@ -226,7 +264,11 @@ describe("history ops — swipe / delete / rewind (§6)", () => {
     expect(await store.messages.listByStory(storyId)).toHaveLength(0);
     expect(await store.checkpoints.listByStory(storyId)).toHaveLength(0);
     expect(await store.rulings.listByStory(storyId)).toHaveLength(0);
-    expect(await store.events.listByStory(storyId)).toHaveLength(0);
+    // The turn's own gameplay events (roll, etc.) are gone; only the truncation's own honest
+    // journal record survives (Plan 9 step 5 — a deletion must not read as "never happened").
+    const events = await store.events.listByStory(storyId);
+    expect(events).toHaveLength(1);
+    expect(events[0]!.kind).toBe("turn_rewound");
   });
 
   it("rewindTo keeps the selected exchange and truncates later exchanges", async () => {

@@ -231,7 +231,11 @@ describe("V7 ordered turn semantics", () => {
     await deleteLastTurn(store, storyId);
     expect(await store.runtimeItems.listDefinitions(storyId)).toHaveLength(0);
     expect(await store.runtimeItems.listInventory("kestrel")).toHaveLength(0);
-    expect(await store.events.listByStory(storyId)).toHaveLength(0);
+    // The turn's own gameplay events are gone; only the truncation's own honest journal record
+    // survives (Plan 9 step 5 — a deletion must not read as "never happened").
+    const events = await store.events.listByStory(storyId);
+    expect(events).toHaveLength(1);
+    expect(events[0]!.kind).toBe("turn_rewound");
   });
 
   it("retries a cancelled operation with its persisted player message and creates no duplicate", async () => {

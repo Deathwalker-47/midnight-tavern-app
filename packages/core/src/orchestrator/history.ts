@@ -31,6 +31,7 @@ import { applyRestore, restoreSoftWorld } from "./checkpoint.js";
 import { requireStory } from "./turn.js";
 import { runAnalyzer } from "../memory/analyzer.js";
 import { generateGuardedNarration } from "./authorityGuard.js";
+import { randomUUID } from "../util/uuid.js";
 
 /** Per-variant soft/world snapshot: the post-analyzer state that matches one narrator variant (§6). */
 interface VariantState {
@@ -307,6 +308,30 @@ async function restoreDifficultyBeforeIdx(
 }
 
 /**
+ * Journal a truncation so the mechanical record stays honest (Plan 9 step 5). The event is written
+ * at `fromIdx - 1` — one turn BEFORE the truncation point — because `events.deleteFromTurn` in the
+ * same transaction deletes every event at `turnIndex >= fromIdx`. Recorded at `fromIdx` it would
+ * delete itself.
+ */
+async function journalTruncation(
+  store: Store,
+  storyId: string,
+  fromIdx: number,
+  operation: "rewind" | "delete_last" | "delete_from_exchange"
+): Promise<void> {
+  const story = await requireStory(store, storyId);
+  await store.events.insert({
+    id: randomUUID(),
+    storyId,
+    turnIndex: Math.max(0, fromIdx - 1),
+    kind: "turn_rewound",
+    payload: { operation, fromIdx },
+    rulebookVersion: story.rulebookVersion ?? 1,
+    createdAt: Date.now(),
+  });
+}
+
+/**
  * Delete the last narrator turn and its player message, rolling state back to the turn's checkpoint
  * (§6). After this the story is exactly as it was before the deleted turn was submitted.
  */
@@ -334,6 +359,7 @@ export async function deleteLastTurn(store: Store, storyId: string): Promise<voi
     await store.messages.deleteFrom(storyId, fromIdx);
     await store.checkpoints.deleteFrom(storyId, fromIdx);
     await invalidateSummariesFrom(store, storyId, fromIdx);
+    await journalTruncation(store, storyId, fromIdx, "delete_last");
   });
 }
 
@@ -364,6 +390,7 @@ export async function rewindTo(store: Store, storyId: string, selectedIdx: numbe
     await store.messages.deleteFrom(storyId, fromIdx);
     await store.checkpoints.deleteFrom(storyId, fromIdx);
     await invalidateSummariesFrom(store, storyId, fromIdx);
+    await journalTruncation(store, storyId, fromIdx, "rewind");
   });
 }
 
@@ -392,6 +419,7 @@ export async function deleteFromExchange(store: Store, storyId: string, selected
     await store.messages.deleteFrom(storyId, fromIdx);
     await store.checkpoints.deleteFrom(storyId, fromIdx);
     await invalidateSummariesFrom(store, storyId, fromIdx);
+    await journalTruncation(store, storyId, fromIdx, "delete_from_exchange");
   });
 }
 
