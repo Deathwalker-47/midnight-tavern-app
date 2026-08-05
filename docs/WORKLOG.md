@@ -1570,3 +1570,127 @@ No native or package gate was run because this batch changes documentation only.
 
 **Next:** implement Task 15G Task 1 only: add the provider-scripted lifecycle fixture, observe each
 intended RED failure, and record it before touching the Scene State production implementation.
+
+---
+
+## 2026-08-02 — Decision: adopt Audit Plan 13, mark Task 15G's Scene State redesign obsolete
+
+A separate, independently-authored product audit (`Audit/2026-08-02-PRODUCT-AUDIT/`, 13 files,
+grounded at the same `3566c25` HEAD as Task 15G's diagnosis) was reviewed alongside the just-opened
+Task 15G plan. Both target the same root defect in `npcAgency.ts` — `isProvocation` treats every
+opposed check as an attack, and `chooseCounterAction` picks the first catalog match regardless of
+relationship — but propose incompatible fixes at incompatible scope. Task 15G's fix requires a
+10-task Scene State rearchitecture (new persistence domain, alias tables, a migration, a
+reconciler, a pre-narration Narrative Beat Plan, event-driven agency, then a `turn.ts`
+decomposition) as a prerequisite. The audit's `13-implementation-plan-final.md` fixes the same
+defect directly against existing data — deriving a hostile/wary/neutral/friendly disposition from
+the already-persisted `NPC_HOSTILE_TO_PLAYER_FLAG` plus relationship trust — in one ~2-day phase,
+fully spec'd with RED tests already written.
+
+**Decision: Plan 13 is adopted; the Task 15G Scene State redesign is obsolete.** Reasoning:
+
+1. **Broader product coverage per unit effort.** Plan 13 also fixes what the audit ranks as the
+   single most damaging gap in the product — up to 200 recorded character observations per story,
+   displayed in the dossier, never once placed in the narrator's prompt (`buildMemoryBlock`'s
+   `softSlices` is computed and then silently dropped by `assembleContext`). Task 15G's plan does
+   not touch memory injection at all; it is scoped entirely to NPC scene/actor identity.
+2. **This is the seventh consecutive narrow-then-wider patch round for the same problem class**
+   (Tasks 15A, 15B.1-15B.6, 15C, 15D, 15E, 15F, 15G all address NPC identity/prose-parsing
+   variants of one issue). Betting the next multi-week block on an eighth, much larger attempt was
+   judged worse for the product than shipping Plan 13's broader, cheaper, already-specified value
+   first — DM disposition, memory wiring, UI visibility (loot effects, Journal filters), suggestion
+   grounding, and stage-outcome observability, each independently shippable and dependency-ordered.
+3. **Lower execution risk.** Plan 13 is ready to run now (exact files, line numbers, RED tests,
+   acceptance criteria per step). Task 15G's own "Next" action was still only Task 1 — a fixture,
+   no production code — after a full diagnosis pass.
+
+**What is not lost.** Task 15G's diagnosis (the exact Cyraeth failure chain, the
+`runTurnOperation` complexity-103 root cause) remains accurate and is preserved as reference
+material at the top of its plan file and in `docs/HANDOFF.md`. If the disposition/UI/suggestions
+fixes in Plan 13 prove insufficient for the specific actor-identity failures logged there (Kellan
+not recognized, older-woman/dog not reactivating, phantom pronoun rows), a **scoped-down** version
+of just the Scene Reconciler idea (not the full 10-task chain) may be revisited then.
+
+**Action taken this session:** marked the plan file obsolete with a header notice, rewrote
+`docs/HANDOFF.md`'s active-plan pointer and non-negotiable-rules framing to match, and added a
+"plan superseded" note above the Task 15G invariants in `CONTEXT.md` (invariant 8 is being fixed by
+Plan 13 Phase 2; invariants 6, 7, 9, 10 have no replacement scheduled and remain honest
+unsatisfied-property statements, not active work). Beginning Plan 13 execution at Phase 0 next, in
+this same session.
+
+**Verification before this decision:** fresh `npm run typecheck` and `npm test` confirmed the
+baseline is genuinely green — core **632 / 45 files**, UI **160 / 25 files**, **792 total** — before
+any source was touched, per `AGENTS.md`'s start-here checklist.
+
+---
+
+## 2026-08-02 — Execute Plan 13 Phases 0–2 (truth & safety, memory reaches the model, disposition)
+
+Following the decision above, implemented `Audit/2026-08-02-PRODUCT-AUDIT/13-implementation-plan-final.md`
+Phases 0 through 2 test-first, verifying each step's premise against source before writing its RED
+test (the plan itself was wrong about two of its own steps — see below, in the same spirit as the
+plan's own corrections to Plan 11).
+
+**Phase 0 — truth & safety.**
+- 0.1: `README.md:250` and `Plan/next-phase-internal-beta.md:6` corrected from the stale 393/579
+  test counts to the measured 792 (632/160), preserving the old line as an explicit historical
+  marker.
+- 0.2: Appended the Journal-filter-chip and `StageMetric` "fallback" gaps to `CONTEXT.md` as
+  known, scheduled defects.
+- 0.3: Deleted dead `submitTurnLegacy` (`turn.ts:399`, verified zero other references first), lifted
+  its 8-phase comment verbatim above `runTurnOperation`. `turn.ts` ~150 lines shorter.
+
+**Phase 1 — memory reaches the model.** Two of six steps needed correction against source first:
+- **1.2 was stale.** The plan claimed `assembleContext` never uses `buildMemoryBlock`'s
+  `softSlices`; `context.ts:546` has pushed it since the file's creation (`1db8216`, 2026-07-18).
+  The real, narrower gap: `condenseSoftSlice` (`injector.ts`) never rendered `soft.observations` —
+  the capped-200 FIFO narrative log the audit actually means by "up to 200 observations." Fixed by
+  surfacing the 3 most recent observations, newest first, in the character-notes line.
+- 1.1: `condenseSoftSlice`/`buildMemoryBlock` gained a `nameOf` resolver; `context.ts`'s `nameFor`
+  widened from the present-only set to the full registry (present wins on conflict), so a
+  relationship pointing at an absent character renders a name, not a raw id.
+- 1.3: World soft state (`overview`, `unresolvedThreads`) now reaches the prompt via a new
+  `WORLD STATE:` block — previously computed nowhere near `assembleContext` at all (this one's
+  premise held up).
+- 1.4: Relationship trust/power now accumulate with an asymptotic attenuation near ±1
+  (`asymptoticDelta`) instead of linear-then-clamp, so repeated large deltas approach the boundary
+  instead of pinning to it in one step.
+- 1.5: `StoryThreadSchema.id` is now a Zod-transformed field (optional in, backfilled via
+  `crypto.randomUUID()` in output) — no migration, since threads live in `world_soft.soft_json` as
+  JSON. This exposed a real gap in the shared `codec.ts` JSON helper: its `encodeJson`/`decodeJson`
+  generics assumed schema input and output were always identical, which broke once a schema had an
+  asymmetric transform. Fixed `codec.ts` to use Zod's actual 3-param `ZodType<Output, Def, Input>`
+  shape; no call site needed an explicit type param afterward.
+- 1.6: Removed all three `statMode === "full"` gates around the analyzer (`context.ts`'s
+  `buildMemoryBlock` call, `turn.ts`'s `runBackground`, `history.ts`'s swipe `runAnalyzer`) — No-Stats
+  stories now accumulate soft memory too. Updated the existing "No Stats calls only the narrator"
+  test's `router.calls` expectation to include `"analyzer"`, since that's now correct behavior, not a
+  regression.
+
+**Phase 2 — DM behaves in character.** Closes Task 15G's D-1/D-2 defects directly, the reason 15G
+was marked obsolete:
+- Replaced `isProvocation` with `isHostileAct` (combat/target-harm/committed-harm/`danger` stakes
+  only) and `isOpposedContest` (`opposed && !dealsTargetHarm`) — a losing contest of nerve no longer
+  reads as violence, per `CONTEXT.md` invariant 8.
+- Added `deriveDisposition(npc, npcSoft, towardId): "hostile" | "wary" | "neutral" | "friendly"` —
+  the validated `NPC_HOSTILE_TO_PLAYER_FLAG` always wins; otherwise derived from the analyzer's
+  relationship trust (`WARY_TRUST_THRESHOLD = -0.4`, `FRIENDLY_TRUST_THRESHOLD = 0.4`).
+- Rewrote `chooseCounterAction` to select by disposition-gated preference tiers (harmful /
+  non-harmful-opposed / social) instead of first-catalog-match, with a `wasHarmed` fallback for
+  wary/neutral/friendly so a genuinely wounded NPC can still defend itself. (One deliberate
+  divergence from the plan's exact table: friendly also falls back to the harmful tier if actually
+  harmed and no peaceful option exists — the plan's version left a friendly NPC permanently
+  defenseless even under real, repeated damage, which felt like an oversight rather than an
+  intentional design choice.)
+- Threaded an optional `softById` map through `NpcReactionContext`/`planNpcReactions`, populated
+  from `turn.ts`'s already-fetched `presentRoster`.
+- `planHostileNpcFallback` passes `"hostile"`/`wasHarmed: true` explicitly — it already gates on the
+  validated flag before calling `chooseCounterAction`.
+
+**Verification.** Full suite green throughout, after every single step, no exceptions: final state
+core **651 / 45 files**, UI **160 / 25 files**, **811 total** — matching Plan 13's own ledger
+("After Phase 2: 811") exactly. `npm run typecheck` clean at every step. Nothing committed yet.
+
+**Next:** Plan 13 Phase 3 (UI visibility — loot-effect typing, Journal filter fix, ruling
+presentation), then Phase 4 (immutability proof), Phase 5 (suggestions), Phase 6 (observability), in
+that order per the plan's dependency graph.

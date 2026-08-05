@@ -1,5 +1,29 @@
 # NPC Scene System Redesign Plan
 
+> **OBSOLETE — superseded 2026-08-02.** Do not implement this plan. It is retained for its
+> diagnosis (the failure chain and system-cause sections below are accurate and still worth
+> reading) but the target architecture is **not** the accepted direction.
+>
+> **Superseded by:** `Audit/2026-08-02-PRODUCT-AUDIT/13-implementation-plan-final.md`, Phase 2
+> (`deriveDisposition` / `isHostileAct` / `isOpposedContest` in `npcAgency.ts`).
+>
+> **Why.** This plan's core defect — `isProvocation` treats every opposed check as an attack, and
+> `chooseCounterAction` picks the first catalog match regardless of relationship — is real and is
+> being fixed. But this plan proposed fixing it by first building an entire Scene State
+> rearchitecture (10 tasks: a new persistence domain, alias tables, a migration, a Scene
+> Reconciler, a pre-narration Narrative Beat Plan, event-driven agency with trigger consumption,
+> then decomposing `turn.ts`) as a prerequisite. That is weeks of high-risk work gating a fix that
+> Plan 13 delivers directly against the existing data (derive disposition from the
+> already-persisted hostility flag + relationship trust) in about two days, fully spec'd with RED
+> tests. This is also the seventh consecutive round of narrowing-then-widening patches to the same
+> NPC-identity/prose-parsing problem (Tasks 15A through 15G); betting the next multi-week block on
+> an eighth, much larger attempt was judged worse for the product than shipping Plan 13's broader
+> coverage (memory reaching the narrator at all, DM disposition, UI visibility, suggestions,
+> observability) first. If the disposition fix alone proves insufficient for the actor-identity
+> edge cases below (Kellan/older-woman/dog reactivation, phantom pronoun rows), a **scoped-down**
+> version of the Scene Reconciler idea (Task 3 only, without the full 10-task chain) may be
+> revisited then — not before.
+>
 > Execute sequentially with test-driven-development, systematic-debugging, and
 > verification-before-completion. This repository forbids parallel coding agents. Every behavior
 > change must be observed RED before its production implementation is edited.

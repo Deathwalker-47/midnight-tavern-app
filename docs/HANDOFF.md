@@ -1,14 +1,27 @@
 # HANDOFF - current live state
 
-**Updated:** 2026-08-02
-**Branch / source baseline:** local `main`; Task 15G docs commit is based on parent `a56fe49`; not
-pushed
+**Updated:** 2026-08-02 (Plan 13 Phases 0-2 executed)
+**Branch / source baseline:** local `main` @ `3566c25` + uncommitted Phase 0-2 source changes; not
+pushed, not yet committed
 **App version:** `0.2.8`, unsigned; no new installer was built for this diagnostic batch
 **User-owned/untracked:** `.agents/`, `.codex/`, `opencode.json` - preserve
-**Active plan:** `Plan/next-phase-internal-beta.md`; Task 15G is open
-**Detailed plan:** `docs/superpowers/plans/2026-08-02-npc-scene-system-redesign.md`
+**Active plan:** `Audit/2026-08-02-PRODUCT-AUDIT/13-implementation-plan-final.md`
+**Superseded/obsolete:** `docs/superpowers/plans/2026-08-02-npc-scene-system-redesign.md` (Task
+15G) — do not implement; see the OBSOLETE notice at the top of that file for why. Its diagnosis
+sections below remain accurate reference material.
 
-## Current outcome
+## Why the plan changed
+
+Task 15G's own diagnosis (below) is correct, but its proposed fix required a 10-task Scene State
+rearchitecture as a prerequisite. `Audit/2026-08-02-PRODUCT-AUDIT/13-implementation-plan-final.md`
+fixes the same root defect (`isProvocation`/`chooseCounterAction` in `npcAgency.ts`) directly
+against existing data in its Phase 2, at a fraction of the cost, and additionally fixes a broader
+and more damaging gap the audit found: character/world soft-memory observations are recorded and
+displayed but never reach the narrator's prompt at all (Plan 13 Phase 1). Plan 13 is fully
+spec'd, sequenced by dependency, and ready to execute; Task 15G had only a RED fixture as its next
+action. See `docs/WORKLOG.md` (2026-08-02, "Adopt Plan 13...") for the full decision record.
+
+## Historical context (Task 15G diagnosis — accurate, but the fix direction below is obsolete)
 
 The latest packaged NPC failure was analyzed as a system-boundary problem. No gameplay source was
 changed and the installed save was inspected read-only only. Do not apply another isolated regex,
@@ -65,7 +78,9 @@ Current installed character state at inspection included the player at 80/100 He
 and multiple other actors absent. There was no `Kellan` character row. Do not treat that state as the
 target or mutate it; it is evidence for the RED fixture.
 
-## Target architecture accepted for Task 15G
+## Target architecture proposed for Task 15G — OBSOLETE, not being built
+
+This section is kept only as a record of what was considered and rejected. **Do not build this.**
 
 - One engine-owned, active-variant **Scene State** is the shared input for classification, NPC
   agency, narration, soft memory, UI presence, and suggestions.
@@ -76,17 +91,24 @@ target or mutate it; it is evidence for the RED fixture.
 - Committed prose may contain an individual actor only when the contract resolves that actor to one
   registry id. Scenery and background collectives remain non-characters.
 - NPC mechanics consume a current hostile trigger event or a persisted validated agenda. Prior prose
-  is context, not a fresh trigger. `opposed` is not equivalent to hostile.
+  is context, not a fresh trigger. `opposed` is not equivalent to hostile. **This one bullet is
+  still being fixed — via Plan 13 Phase 2's `deriveDisposition`, not via this Scene State design.**
 - Rulings render before prose and own mechanical detail. Prose covers each current ruling causally
   once. Provider timeout/fallback status remains separate UI metadata; no engine recap is appended
-  to story prose.
-- Possible Moves compose from typed scene affordances, never arbitrary nearby words.
+  to story prose. **Also still being fixed — Plan 13 Phase 3 (Ruling presentation) and the narrower
+  Task 7 idea of separating `safeSummary` from prose, without the rest of this architecture.**
+- Possible Moves compose from typed scene affordances, never arbitrary nearby words. **Also still
+  being fixed — Plan 13 Phase 5, using typed anchors instead of `sceneAnchors` reversal.**
 - Identity, aliases, presence, trigger consumption, rulings, prose, and active narrator-variant
-  scene snapshots remain atomic and rewind/retry/restart safe.
+  scene snapshots remain atomic and rewind/retry/restart safe. **Not being pursued now** — no
+  replacement scheduled; revisit only if the disposition/UI/suggestions fixes above prove
+  insufficient for the specific actor-identity failures logged below (Kellan, older woman, dog).
 
-The detailed plan is dependency ordered: RED lifecycle fixture; domain/persistence; reconciler;
-pre-narration contract; actor-local capabilities; event-driven agency; ruling/presentation split;
-affordance suggestions; turn-coordinator decomposition; then one combined package.
+The 10-task dependency order this plan specified (RED lifecycle fixture → domain/persistence →
+reconciler → pre-narration contract → actor-local capabilities → event-driven agency →
+ruling/presentation split → affordance suggestions → turn-coordinator decomposition → one combined
+package) is **not being executed**. Several of its individual *goals* are being achieved more
+cheaply through Plan 13; only the full-rearchitecture *path* to them was rejected.
 
 ## Verification state
 
@@ -114,9 +136,23 @@ completion claim, run the focused suites plus full typecheck/tests, direct build
 - Preserve browser/native bridge parity and user-owned untracked paths. Do not push.
 - Do not build intermediate installers. Build once after all Task 15G source slices are complete.
 
+## Progress on the active plan (Plan 13)
+
+Phases 0, 1, and 2 are complete and verified — see `docs/WORKLOG.md`'s 2026-08-02 "Execute Plan 13
+Phases 0-2" entry for the full account, including two corrections made against source where the
+plan's own premise was stale (step 1.2's real gap was `condenseSoftSlice` dropping
+`soft.observations`, not `assembleContext` never using `softSlices` at all — that wiring already
+existed) and one deliberate deviation (friendly-disposition NPCs get a harmed-fallback to the
+harmful tier that the plan's exact preference table omitted). Full suite green after every single
+step: core **651 / 45 files**, UI **160 / 25 files**, **811 total**, typecheck clean throughout.
+Nothing has been committed yet.
+
 ## Single next action
 
-Implement only Task 15G Task 1 from the detailed plan: add the provider-scripted Cyraeth NPC scene
-lifecycle fixture and observe the intended RED failures for registry/presence, supportive opposed
-actions, stale NPC intent replay, causal narration coverage, fallback prose separation, suggestions,
-and history operations. Record the RED evidence before editing any Scene State production code.
+Implement `Audit/2026-08-02-PRODUCT-AUDIT/13-implementation-plan-final.md` Phase 3 (UI visibility:
+loot-effect typing/formatting, Journal filter-chip fix, ruling presentation), then Phase 4
+(immutability proof), Phase 5 (suggestions), Phase 6 (observability), in the plan's stated
+dependency order. **Verify each step's premise against current source before writing its RED
+test** — the plan was written by a separate review pass and two of its Phase 1 steps did not match
+current source exactly; treat it as a strong guide, not infallible ground truth. Each step has its
+own RED test, exact production edit, and acceptance criteria in that file.

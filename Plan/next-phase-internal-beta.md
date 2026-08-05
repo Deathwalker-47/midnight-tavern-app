@@ -4,6 +4,7 @@
 (signing, updater, CSP, live-model acceptance) is explicitly a **later** phase.
 
 Baseline when the phase started (HEAD `f6e9622`): **579 tests** (core 453 / ui 126). Tauri `0.2.5`.
+Current baseline (HEAD `3566c25`, measured 2026-08-02): **792 tests** (core 632 / ui 160).
 
 Source of the gap list: `Audit/PROJECT_STATUS_AUDIT.md` and `Audit/V5_IMPLEMENTATION_STATUS_2026-07-23.md`,
 re-grounded against current HEAD (most audit gaps had already been closed by later commits).

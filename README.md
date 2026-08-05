@@ -247,7 +247,7 @@ The engine is the product's credibility, so it is tested accordingly:
 - **Structural validity is guaranteed by construction**: because every model-facing boundary is Zod-validated, a misbehaving model produces a caught error and a repair attempt, never corrupt state.
 - **History integrity has dedicated tests**: swipe leaves hard state byte-identical, the authority clause is asserted to be last on every narrator call, and delete/rewind restore state and summaries exactly.
 
-As of the July 2026 audit the suite was green at **393 tests** (311 core, 82 UI) with the root type-check passing.
+As of 2 August 2026 (HEAD `3566c25`) the suite was green at **792 tests** (632 core, 160 UI) with the root type-check passing.
 
 ## Project status
 

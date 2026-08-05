@@ -54,11 +54,18 @@ It complements `ARCHITECTURE.md`; it does not replace the detailed implementatio
 5. Only present living registry actors participate in mechanics, and every mechanical action is
    resolved by the engine before narration may describe its outcome.
 
-## Task 15G target invariants
+## Task 15G target invariants — plan superseded, invariants deferred
 
-The current runtime does not yet satisfy the following invariants. They are the accepted target for
-`docs/superpowers/plans/2026-08-02-npc-scene-system-redesign.md` and must not be claimed as landed
-until the plan's tests are green.
+**2026-08-02:** `docs/superpowers/plans/2026-08-02-npc-scene-system-redesign.md` is marked
+obsolete in favor of `Audit/2026-08-02-PRODUCT-AUDIT/13-implementation-plan-final.md` (see that
+plan's header and `docs/HANDOFF.md` for the reasoning). Invariant 8 below is being fixed directly
+by Plan 13 Phase 2 (`deriveDisposition`). Invariants 6, 7, 9, and 10 have no replacement scheduled;
+they remain honest statements of unsatisfied properties, not active work items, until/unless the
+narrower fixes in Plan 13 prove insufficient for the actor-identity failures that motivated them.
+
+The current runtime does not yet satisfy the following invariants. They were the accepted target for
+the now-obsolete plan above and must not be claimed as landed unless a specific future plan's tests
+are green.
 
 6. Every individual actor in committed narration resolves to one registry identity in the same
    active timeline. Background collectives and scenery are explicitly non-character observations.
@@ -70,3 +77,19 @@ until the plan's tests are green.
    action. Every reactive intent references one unconsumed trigger event.
 10. Ruling artifacts own mechanical detail and render before prose. Provider fallback status remains
     separate UI metadata and never becomes an appended story paragraph.
+
+## Known defects with scheduled fixes
+
+These are confirmed in source and scheduled in
+`Audit/2026-08-02-PRODUCT-AUDIT/13-implementation-plan-final.md`. They are recorded here so an
+agent reading this file does not rediscover them.
+
+- **Journal filter chips are incomplete.** `packages/ui/src/screens/Journal.tsx` assigns six
+  `JournalKind` values but `FILTERS` (`:24-31`) exposes five. `boundary` events — `chapter_started`,
+  `arc_completed`, `rulebook_regenerated` — are reachable only under "All"; any chip selection hides
+  them. Fixed in plan step 3.6.
+- **`StageMetric` declares an outcome it never emits.** `orchestrator/stagePolicy.ts` types
+  `outcome` to include `"fallback"`, and the persisted Zod enum in
+  `store/repositories/turnOperations.ts` mirrors it, but `runStage` only ever emits `ok`,
+  `cancelled`, `timeout`, or `error`. A stage that degraded gracefully to its fallback is recorded
+  as an outright failure, so stage telemetry cannot distinguish the two. Fixed in plan step 6.0.
