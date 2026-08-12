@@ -9,6 +9,82 @@ still says 579 and `README.md:250` still says 393. Both are wrong. Step 0.1 fixe
 
 ---
 
+## Status: ✅ COMPLETE (executable scope)
+
+**All 22 steps across Phases 0–6.1 are implemented, tested, and committed.** The Deferred queue
+(§ end of file — Plans 21/19/20/18/23/10B) was never part of this pass and remains open.
+
+| | |
+| --- | --- |
+| **Completed** | 2026-08-05 (Phases 0–2 on 2026-08-02; Phases 3–6.1 on 2026-08-05) |
+| **Independently re-verified** | 2026-08-12 against `main` @ `ba49114`, clean tree |
+| **Final counts** | **853 tests** — core **670 / 46 files**, UI **183 / 26 files** |
+| **Typecheck** | clean in both workspaces |
+| **Verification method** | every step's code change confirmed present in source, not inferred from the worklog |
+
+**Verification notes — read before trusting an acceptance grep below.** Two acceptance criteria in
+this document are self-superseding and will "fail" if re-run literally. Both were checked; neither
+is a defect, and both are annotated in place at their step:
+
+- **Step 0.3** demands zero `submitTurnLegacy` hits *and* that the eight-phase comment survive — but
+  that comment names the function. See the amended criterion at Step 0.3.
+- **Step 3.8** demands zero `JSON.stringify` in `packages/ui/src/screens/` — Step 6.1, which lands
+  later, deliberately adds one for the Diagnostics JSON export. See the amended criterion at Step 3.8.
+
+**Ledger note.** Phase 3 landed **833** (core 655 / UI 178) against a projected 835 (core 658 /
+UI 177). Every Phase 3 step's behaviour change is present in source; the difference is which files
+the tests landed in, which this plan explicitly anticipated ("treat the split as the check, not the
+exact total", Step 3.8). The final total of 853 clears every ledger checkpoint.
+
+### Completion checklist
+
+**Phase 0 — Truth and safety**
+- [x] 0.1 — Correct the stale test counts
+- [x] 0.2 — Record the two undocumented defects in `CONTEXT.md`
+- [x] 0.3 — Delete `submitTurnLegacy`
+
+**Phase 1 — Memory reaches the model**
+- [x] 1.1 — Name map wider than the present set
+- [x] 1.2 — Inject character observations into the narrator prompt
+- [x] 1.3 — Inject world soft state into the narrator prompt
+- [x] 1.4 — Asymptotic delta scale for relationship saturation (M-7)
+- [x] 1.5 — Optional thread id in Zod + lazy backfill on read
+- [x] 1.6 — Enable the analyzer for No-Stats stories (all three statMode gates)
+
+**Phase 2 — The DM behaves in character**
+- [x] 2.1 — Graded disposition, derived and threaded into the counter-action chooser
+
+**Phase 3 — Make it visible**
+- [x] 3.1 — Type `Ruling.loot[].effects` in core, then format it in the UI
+- [x] 3.2 — Select the ruling variant from the structured gate `code`, not a regex over prose
+- [x] 3.3 — Emit the `npc` variant, and give it an honest reason
+- [x] 3.4 — Route classifier failures to the `classifier-unavailable` ruling register
+- [x] 3.5 — Render the opposed detail the engine already computed
+- [x] 3.6 — The missing sixth Journal filter, and the last two JSON leaks
+- [x] 3.7 — Stop fabricating the chapter number in the persistent header
+- [x] 3.8 — Phase integration: prove the register is consistent, and record the count
+
+**Phase 4 — Prove immutability**
+- [x] 4.1 — Swipe immutability regression test + rewind logging
+
+**Phase 5 — Suggestions**
+- [x] 5.1 — Replace `sceneAnchors` with typed anchors
+
+**Phase 6 — Observability**
+- [x] 6.0 — Make the `"fallback"` stage outcome real
+- [x] 6.1 — Local, opt-in counters and a Diagnostics screen
+
+**Deferred queue — open, not scheduled.** Pick deliberately with the owner; see the full section at
+the end of this file for each item's scope, blockers, and start condition.
+- [ ] Plan 21 — Decompose `validateStorySchema` (**M**; blocked by nothing, unblocks nothing)
+- [ ] Plan 19 — Land the NPC scene/actor model (**XL**, 1–3 months; owns the unbounded-rulings-read fix)
+- [ ] Plan 20 — Port the v2 memory system (**XL**; needs Plan 19 landed first)
+- [ ] Plan 18 — First-run onboarding (**L**; unblocked now that Phases 3 and 5 have shipped)
+- [ ] Plan 23 — Art direction and a portrait pipeline (**XL**; Step 1 separable and cheap)
+- [ ] Plan 10B — User-selectable image generation (**FUTURE / roadmap**; owner-classified, not scheduled)
+
+---
+
 ## 0. How this differs from Plan 11, and why
 
 I re-read every source file Plan 11 cites. Nine of its claims needed correcting before the work
@@ -251,7 +327,19 @@ introduced with:
 
 **Acceptance criteria**
 
-- `grep -rn "submitTurnLegacy" packages/` returns zero hits.
+- ~~`grep -rn "submitTurnLegacy" packages/` returns zero hits.~~ **Amended 2026-08-12.** As written
+  this contradicts the criterion three lines below it ("the eight-phase comment survives"), because
+  that comment names the retired function: `turn.ts:396` reads *"preserved verbatim from the retired
+  `submitTurnLegacy`"*. A deliberate historical reference in a comment is not dead code. The correct
+  check — verified passing on 2026-08-12 — tests for a *definition, call, or export* rather than any
+  mention of the string:
+
+  ```bash
+  grep -rnE "submitTurnLegacy[[:space:]]*\(|function submitTurnLegacy|submitTurnLegacy[,;}]|export.*submitTurnLegacy" packages/*/src/
+  ```
+
+  This returns zero hits. Ignore `packages/core/dist/` entirely; it is a gitignored build artifact
+  (`.gitignore:7`) and may hold stale symbols indefinitely.
 - `npm run typecheck` passes.
 - `npm test --workspaces --if-present` passes with **no change in test count** (792). A dropped test
   means something did reference it; revert and investigate.
@@ -2329,7 +2417,12 @@ npm test --workspaces --if-present
   exact total — if a step's tests
   landed in a different file than specified the total holds but the split will not, and that is
   worth knowing before Phase 4.
-- `grep -rn "JSON.stringify" packages/ui/src/screens/` returns zero hits.
+- ~~`grep -rn "JSON.stringify" packages/ui/src/screens/` returns zero hits.~~ **Amended 2026-08-12.**
+  This was correct when Phase 3 closed, but Step 6.1 — a later phase in this same plan — deliberately
+  adds one at `Diagnostics.tsx:56` to serialise the diagnostics export payload. That is a file
+  download, not a player-facing JSON leak, which is what this criterion exists to catch. The correct
+  check, which passes today: **`grep -rn "JSON.stringify" packages/ui/src/screens/ | grep -v
+  Diagnostics.tsx` returns zero hits.**
 - Manual pass, five minutes, on a Full Stats story: an NPC action shows `RULING · NPC` with a
   reason; an opposed contest shows both sides' dice; a denial, a budget refusal and a forced
   classifier failure all render as `⊘` cards; the Journal's "Boundaries" chip shows chapter starts;
