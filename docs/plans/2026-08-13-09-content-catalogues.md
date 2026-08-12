@@ -6,7 +6,7 @@ enablement, which replaces the previous "generate a much bigger catalogue per st
 skill set; catalogue UI), 31 (weapon special skills)
 **Size:** XL
 **Depends on:** plan 08 (costs, cooldowns, resource roles). Relieves plan 02 (see §1).
-**Blocked on owner decisions D7, D8, D9 (§9).**
+**Blocked on owner decision D7 only.** D8 and D9 were answered 2026-08-13 (§9).
 **Status:** Planned. Not authorized.
 
 ---
