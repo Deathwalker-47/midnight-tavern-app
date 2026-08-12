@@ -171,40 +171,43 @@ every invariant the engine defends, for saves that are currently test data.
 
 ## Status
 
-| Plan | Plan written? | Implemented |
+**All twelve plans and the design brief are written.** Nothing is authorized for implementation.
+
+| Plan | File | Written | Implemented |
+| --- | --- | --- | --- |
+| 01 Entitlement lockdown | `…-01-entitlement-lockdown.md` | ✅ | — |
+| 02 Classifier fidelity | `…-02-classifier-fidelity.md` | ✅ | — |
+| 03 Entity registry integrity | `…-03-entity-registry-integrity.md` | ✅ | — |
+| 04 Character taxonomy | `…-04-character-taxonomy.md` | ✅ | — |
+| 05 Generation variety | `…-05-generation-variety.md` | ✅ | — |
+| 06 Narration integrity | `…-06-narration-integrity.md` | ✅ | — |
+| 07 Live UI reactivity | `…-07-live-ui-reactivity.md` | ✅ | — |
+| 08 Resource economy | `…-08-resource-economy.md` | ✅ | — |
+| 09 Content catalogues | `…-09-content-catalogues.md` | ✅ | — |
+| 10 Quests | `…-10-quests.md` | ✅ | — |
+| 11 Suggestion taxonomy | `…-11-suggestion-taxonomy.md` | ✅ | — |
+| 12 Overview and copy | `…-12-overview-and-copy.md` | ✅ | — |
+| Design brief | `…-DESIGN-BRIEF.md` | ✅ | n/a |
+| (adopted) Narration drop | `…-Narration-drop-bug-fix-plan.md` | owner-supplied | — |
+
+### Findings that turned out NOT to be bugs
+
+| Finding | Verdict | Evidence |
 | --- | --- | --- |
-| 01 Entitlement lockdown | ✅ written | — |
-| 02 Classifier fidelity | ✅ written | — |
-| 03 Entity registry integrity | ✅ written | — |
-| 04 Character taxonomy and panels | ⬜ **not yet written** | — |
-| 05 Generation variety | ⬜ **not yet written** | — |
-| 06 Narration integrity | ⬜ **not yet written** (owner's own draft exists — see below) | — |
-| 07 Live UI reactivity | ✅ written | — |
-| 08 Resource economy | ⬜ **not yet written** | — |
-| 09 Content catalogues | ⬜ **not yet written** | — |
-| 10 Quests | ⬜ **not yet written** | — |
-| 11 Suggestion taxonomy | ⬜ **not yet written** | — |
-| 12 Overview and settings UI | ⬜ **not yet written** | — |
-| Design brief | ✅ written | n/a |
+| 17 — natural attack ungated | **Working as designed.** The gate correctly DENIED `utility_command_shadow` (needs the epic `shadow_extraction`) with `skill_required`. Only the engine-owned universal natural attack is ungated, which the owner confirmed is acceptable. Residual: it is *labelled* like a learned skill. | Plan 02 §0 |
+| 16 (half) — repeat penalty ignores target | **Already implemented.** `turn.ts:673` already filters on `targetId`. The real defects are the punishing curve (4th use earns zero XP) and a window that counts the last five rulings *globally* rather than per-actor. | Plan 08 §1 |
+| 12 — a DM one-liner is appended to every prose | **Misdiagnosed symptom.** That text is the deterministic recap that *replaces* prose when the authority audit fails — not an appendix. Deleting it would leave failed turns with no prose at all. The fix is to stop the audit failing, and to stop rendering the recap in the STORY register. | Plan 06 §1 |
+| 26 — Overview lacks arc/chapter concepts | **Data already exists** (`ArcRecord`, `ChapterRecord`, both bridges). It is a layout and hierarchy problem, not a data problem. | Plan 12 §1 |
 
-### Notes for whoever writes the remaining plans
+### Cross-plan dependencies worth knowing before scheduling
 
-- **Plan 06** must not be written from scratch. The owner supplied
-  `docs/plans/2026-08-13-Narration-drop-bug-fix-plan.md`, which is a strong, evidence-backed plan
-  (narrator succeeded at ~5,375 chars; the *authority audit* then failed with `fallback/error`;
-  `maxRepairs: 0` on the audit call means one formatting slip suppresses the whole narration; and
-  `review()` accepts on `contradictions.length === 0` while ignoring `obeysRulings`). Plan 06's job
-  is to **adopt** it, add the two findings it does not cover — owner finding 11 (degenerate prose
-  from `deepseek/deepseek-v4-pro` at temp 0.8 with 0.3/0.3 penalties) and finding 12 (the one-line
-  DM recap in prose) — and settle definitively whether that recap is *only* the fallback substitute
-  or is also appended to successful prose. The owner believes it happens every turn; the screenshots
-  show it alongside the fallback notice every time, which suggests it **is** the substitute. Confirm
-  in `authorityGuard.ts` before writing a line of the plan.
-- **Plan 09** should treat `C:\Users\anuji\Desktop\uni-items.txt` (17 item categories) as the seed
-  for the universal item catalogue, and the D&D 5e port the owner asked for as a separate, explicitly
-  scoped sub-task.
-- **Plan 11** should treat `RPG-Move-Taxonomy.txt` (~700 move archetypes across ~30 categories) as
-  the seed. It is far too large to show six at a time without curation — the plan's real work is the
-  **selection policy**, not the list.
-- Every remaining plan must follow the shape of 01/02/03/07: evidence → root cause with file:line →
-  design → RED tests first → implementation steps → acceptance criteria → risks → authority-wall note.
+- **02 and 09 are two halves of one defect.** 02 makes the engine honest about poor action fits; 09
+  makes poor fits rare by growing the catalogue. Shipping 02 alone will make the game feel *more*
+  inert, because honest declining exposes how little the rulebook covers. Warn the owner when 02
+  lands.
+- **08 blocks 09 and 10.** Costs, cooldowns and resource roles must exist before universal skills,
+  weapon specials, or quest rewards can be defined.
+- **04 wants 08.** The rich User panel displays mana and stamina, which 08 introduces. Either
+  sequence 08 first or ship the panel with health only.
+- **05 before 08.** 05 proves the deterministic seeded-variation approach on a small surface before
+  08 applies the same discipline to the whole economy.

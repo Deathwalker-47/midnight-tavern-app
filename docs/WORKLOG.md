@@ -1932,3 +1932,61 @@ this session, so the suite is unchanged.
 
 **Next:** finish plans 04, 05, 06, 08, 09, 10, 11, 12, then wait for owner authorization. No
 implementation until the owner approves and returns with design decisions.
+
+---
+
+## 2026-08-13 - Complete the play-test remediation plan set (all 12 plans + design brief)
+
+**Owner instruction.** Write every remaining plan in one pass, then regenerate the design brief last
+so it captures anything the plans surfaced. Review comes before any development.
+
+**What landed.** Plans 04, 05, 06, 08, 09, 10, 11 and 12 were written, joining 00/01/02/03/07 from
+earlier in the day, and the design brief was rewritten. All 31 owner findings now have an
+implementable plan with evidence, file:line root causes, RED-tests-first steps, acceptance criteria,
+risks, and an authority-wall note.
+
+**Four findings were verified NOT to be bugs**, which materially changes the work:
+
+- **17 (natural attack ungated).** Every player ruling in the live save was checked against the
+  actor's learned skills. `utility_command_shadow`, which requires the epic `shadow_extraction`, was
+  correctly DENIED with `skill_required`; `combat_basic_strike` passed only because a Dagger is
+  equipped in `secondary`. Only the engine-owned universal natural attack is ungated, which the owner
+  confirmed is acceptable. Residual issue is presentational: it is labelled like a learned skill.
+- **16, half of it.** `turn.ts:673` already filters the repetition window on `targetId`, so attacking
+  a different character already resets it. The real defects are the curve - `repetitionMultipliers`
+  is `[1, 0.5, 0.25, 0]`, so a fourth consecutive use earns literally zero XP - and a window that
+  takes the last five rulings globally rather than per-actor, so an NPC reaction consumes the
+  player's slots.
+- **12 (a DM one-liner appended to every prose).** That text is the deterministic recap that
+  REPLACES prose when the authority audit fails, not an appendix. Removing it would leave failed
+  turns with no prose at all. The real fix is to stop the audit failing and to stop rendering the
+  recap in the STORY register, where it currently wears serif and reads as bad writing.
+- **26 (Overview lacks arc/chapter concepts).** `ArcRecord` and `ChapterRecord` both exist with
+  bridge methods. It is a layout and hierarchy problem: the primary document currently switches
+  depending on what exists, which is what reads as "all over the place".
+
+**Two confirmations of the owner's own narration plan**, checked directly in source:
+`authorityGuard.ts:122` passes `maxRepairs: 0` to the audit call, so one formatting slip suppresses
+the whole narration; and `authorityGuard.ts:125` returns `ok: result.contradictions.length === 0`,
+ignoring the parsed `obeysRulings` - so `{"obeysRulings": false, "contradictions": []}` is currently
+accepted as approval. That is an authority-integrity defect, not merely a reliability one. Plan 06
+adopts the owner's plan wholesale and adds prose-degeneration handling, the recap register fix, and
+the notice copy.
+
+**Cross-plan dependency worth carrying forward:** plans 02 and 09 are two halves of one defect. 02
+makes the engine honest about poor action fits; 09 makes poor fits rare by growing the catalogue from
+~20-30 actions to 60-90. Shipping 02 alone will make the game feel more inert, because honest
+declining exposes how little the rulebook covers. The owner must be warned when 02 lands.
+
+**Design brief** was trimmed once on owner instruction - it had accumulated items needing no designer
+- and then revised after the plans were written. The revision surfaced one genuinely new item:
+rendering the fallback recap in the SYSTEM register rather than the STORY register, which is the
+actual fix for the "every prose ends with a DM one-liner" complaint.
+
+**Verification.** Documentation only; no source touched, so the suite is unchanged from the measured
+baseline (typecheck clean; core 670/46 and UI 183/26 = 853 passing per-workspace; root `npm test`
+still fails on the known tinypool worker crash, fixed by plan 07 task P0-0).
+
+**Next:** owner reviews the plan set. Six decisions remain open (D1, D3-D7); D7 - new stories only
+versus migrating existing saves - is the largest cost driver. No implementation until the owner
+authorizes a wave.

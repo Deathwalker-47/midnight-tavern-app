@@ -85,23 +85,30 @@ These are verified facts, not inferences. Do not re-derive them.
 
 ## Single next action
 
-**Finish writing the remaining eight plan files, then wait for the owner to authorize a wave.**
+**Wait for the owner to review the plan set and authorize a wave. Do not implement anything.**
 
-Written: 00 (index), 01, 02, 03, 07, and the design brief.
-**Still to write: 04, 05, 06, 08, 09, 10, 11, 12.** The master index §"Notes for whoever writes the
-remaining plans" carries specific guidance for 06, 09, and 11, including the two things plan 06 must
-add to the owner's own draft and the one fact it must confirm in `authorityGuard.ts` first.
+All twelve plans plus the design brief are written and committed under `docs/plans/2026-08-13-*`.
+`docs/plans/2026-08-13-00-MASTER-INDEX.md` is the entry point: it maps all 31 findings, records the
+four findings that turned out **not** to be bugs, lists the cross-plan dependencies, and carries the
+open owner decisions.
 
-Each remaining plan must follow the shape already established by 01/02/03/07: evidence → root cause
-with file:line → design → RED tests first → numbered implementation steps → acceptance criteria →
-risks → authority-wall note.
+The owner's stated sequence is explicit and must be respected:
 
-**Do not start implementing anything.** The owner's sequence is explicit: finalize the plans → they
-return with design decisions → then development starts. Seven owner decisions (D1, D3–D7) are still
-open and are listed in the master index; **D7** (whether Wave 2/3 schema changes require a new story
-or must migrate existing saves) is the largest cost driver and should be answered before plan 08 is
-written in detail.
+> finalize the plans → owner reviews → owner returns with design decisions → **then** development
+> starts.
 
-The owner has been given `docs/plans/2026-08-13-DESIGN-BRIEF.md` to hand to Claude for design. Items
-1, 4 and 5 of that brief (character sections + rich User panel, quests, categorised suggestions) are
-the ones blocking engineering.
+**Six owner decisions are open** (D1, D3–D7; D2 is answered and closed). **D7 is the largest cost
+driver** — whether Wave 2/3 schema changes require a new story or must migrate existing saves. The
+recommendation on record is *new stories only*, with the existing rulebook-regeneration path offered
+as an opt-in upgrade, because migrating a frozen rulebook would mean inventing hard state for
+existing characters — exactly what the ledger-only rule exists to prevent.
+
+`docs/plans/2026-08-13-DESIGN-BRIEF.md` is ready to hand to Claude. It was trimmed once on owner
+instruction (only what a designer actually needs) and then revised after the plans were written,
+which surfaced one genuinely new item: **§3, rendering the narration fallback recap in the SYSTEM
+register instead of the STORY register.** That is a small change with a large perceived-quality
+payoff — it is the actual fix for the owner's "every prose ends with a DM one-liner" complaint, since
+that text is a mechanical recap currently wearing the story's serif clothes.
+
+When implementation is eventually authorized, the recommended first pass is **plan 07's P0-0** (pin
+the UI vitest workers) so the root test suite stops failing, then **plan 02** (the owner's P0).
