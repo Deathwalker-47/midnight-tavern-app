@@ -149,12 +149,42 @@ it reads as "all over the place". Replace it with three fixed sections, always p
 Each needs an honest empty state (a new story has a premise and nothing else) so the player learns
 the structure rather than seeing sections vanish. Must stack sensibly below 760px.
 
-## 5. Story Settings — catalogue browser
+## 5. Story Settings — the catalogue, and the pool it's drawn from
 
-The action and skill catalogues are about to grow from ~20–30 entries to 60–90 actions and 20–30
-skills. The current flat read-only list will not cope. Design a browser: filter by category / skill
-type / tier, search, and a detail view for one action or skill showing gate requirements, resource
-costs, cooldown, duration, targeting, and the outcome table.
+This is bigger than a list redesign, and it's the surface I'm least sure about.
+
+The app is moving to a **universal pool** of roughly 3,000 pre-authored skills and actions —
+everything the product knows how to do, across combat, magic, crafting, survival, and a large
+non-combat body (conversation, empathy, diplomacy, governance, law, family, reputation). A story does
+not use all of it. At story creation, an AI **selects** a fitting subset — call it 40–70 actions and
+20–40 skills — and that subset is what the game actually runs on. The player can then **enable or
+disable** entries by hand, and during play the app may occasionally enable something new from the
+pool when the story calls for it.
+
+So there are two related surfaces, and I need both:
+
+**5a. The enabled catalogue** — what this story currently runs on. A few dozen entries. Filter by
+category / type / tier, search, and a detail view for one entry showing its gate requirements,
+resource costs, cooldown, duration, targeting, and outcome table. This replaces today's flat
+read-only list, which does not cope.
+
+**5b. The pool browser** — all ~3,000, grouped by the taxonomy's ~166 named sections, with
+enable/disable toggles. This is the hard one:
+
+- How does a player navigate 3,000 items grouped into 166 sections without drowning? Section-first
+  drill-down, search-first, or something else?
+- How does *enabled* read against *available* at a glance, at both section level ("12 of 47 enabled")
+  and entry level?
+- Entries the story enabled automatically, entries the player enabled, and entries the app enabled
+  mid-play are three different provenances. Should the player see the difference? I think yes, but
+  tell me if that's clutter.
+- Some entries are **locked by tier** — a legendary skill can't be enabled in chapter one. How does a
+  locked-but-visible entry read without feeling like a paywall?
+- Disabling something a character has already learned is a conflict state. It needs a visible,
+  non-alarming treatment.
+
+Assume the browser is opened rarely and deliberately — it is a settings surface, not a play surface.
+It can afford to be dense and screen-filling in a way the Play screen cannot.
 
 ## 6. Two small questions
 

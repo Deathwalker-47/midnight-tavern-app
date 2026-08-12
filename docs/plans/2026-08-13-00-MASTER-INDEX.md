@@ -199,6 +199,36 @@ every invariant the engine defends, for saves that are currently test data.
 | 12 — a DM one-liner is appended to every prose | **Misdiagnosed symptom.** That text is the deterministic recap that *replaces* prose when the authority audit fails — not an appendix. Deleting it would leave failed turns with no prose at all. The fix is to stop the audit failing, and to stop rendering the recap in the STORY register. | Plan 06 §1 |
 | 26 — Overview lacks arc/chapter concepts | **Data already exists** (`ArcRecord`, `ChapterRecord`, both bridges). It is a layout and hierarchy problem, not a data problem. | Plan 12 §1 |
 
+### Architecture change adopted 2026-08-13 — selection-based enablement
+
+The owner proposed, and plan 09 now follows, a **universal pool + per-story enablement** model
+instead of generating a bigger catalogue per story:
+
+- A **universal pool** (~3,000 pre-authored actions/skills, drawn from the owner-supplied taxonomy)
+  ships as versioned config and is **never sent to a model at runtime**.
+- The forge **selects** 40–70 actions and 20–40 skills that fit the premise.
+- The player can enable/disable entries by hand.
+- Mid-story, a model may propose enabling something from the pool — never invent one.
+
+**Why this is better than what was planned before**, and worth understanding before scheduling:
+
+1. **Per-turn cost is decoupled from pool size.** The classifier prompt carries the catalogue every
+   turn forever; under enablement it carries only the enabled subset, so the pool can grow without
+   any runtime cost. This was the owner's own concern and it was correct.
+2. **It removes the largest risk in the plan set.** The previous plan required the forge to *author*
+   90 full `ActionDef`s in structured output; it already needed budget increases for 30. Selecting
+   ids is a far smaller, more reliable call.
+3. **Frozen rulebooks can now grow** in a controlled way, so a story that goes somewhere unanticipated
+   is no longer stuck with a catalogue that does not fit.
+
+**The two rules that keep it safe:** *enable ≠ learn* (enabling makes a skill exist in the world; the
+character must still learn it through the existing unlock paths and gate), and the enablement set is
+**hard state that must be checkpointed**, or rewind will leave mid-story unlocks stranded.
+
+The owner also granted engineering authority to author the mechanical attributes (DC, costs,
+cooldowns, outcome tables) for pool entries, bounded by the machine-checkable balance rules in
+plan 09 §4.5.
+
 ### Cross-plan dependencies worth knowing before scheduling
 
 - **02 and 09 are two halves of one defect.** 02 makes the engine honest about poor action fits; 09
