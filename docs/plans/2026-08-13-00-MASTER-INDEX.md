@@ -54,7 +54,7 @@ Measured on a clean tree at `b19d4b8`:
 | 14 | NPC failure renders blue; failure should be red | 07 | Low |
 | 15 | Quest system | 10 | Feature |
 | 16 | Reduce repeat-action XP penalty; scope it per-target | 08 | Medium |
-| 17 | Natural attack should be denied or learnable | 02 | Medium |
+| 17 | Natural attack should be denied or learnable | 02 §0 — **CLOSED, not a bug** | — |
 | 18 | Living cards from old story persist after switching | 07 | High |
 | 19 | Player messages misclassified constantly | 02 | **P0** |
 | 20 | Universal items catalogue | 09 | Feature |
@@ -157,7 +157,7 @@ calls, not engineering calls.
 | # | Decision | Plan | Why it blocks |
 | --: | --- | --- | --- |
 | D1 | Should an expired trial block **play** as well as creation, or only creation? Reading existing stories stays open either way. | 01 | Determines whether the whole Play surface locks. |
-| D2 | Natural/unarmed attack: keep it as a free universal fallback, make it a learnable skill, or gate it behind "you have no weapon"? | 02 | Changes whether a statless character can fight at all. |
+| ~~D2~~ | ~~Natural/unarmed attack~~ — **ANSWERED 2026-08-13.** Owner: "If only natural attack is exempt like that and anyone can use it then its fine. Its a problem if he can use other skills as well like this." Verified: the gate correctly DENIED the epic `shadow_extraction` skill; natural attack is the only ungated action. **Closed as working-as-designed.** | 02 §0 | — |
 | D3 | Character types: confirm the final list. Proposed: **User, Party, Ally, Neutral, Rival, Enemy, Creature, Background**. | 04 | The whole taxonomy and its migration hang off it. |
 | D4 | Attribute variety: how wide a spread? Proposed default ±3 around the story baseline, wider for named templates. | 05 | Affects perceived difficulty everywhere. |
 | D5 | Recovery model: rest-based, per-scene regen, consumable-based, or a blend? Owner asked for "a tad bit easier than normal". | 08 | Defines the whole economy's feel. |
@@ -171,17 +171,40 @@ every invariant the engine defends, for saves that are currently test data.
 
 ## Status
 
-| Plan | Status | Landed |
+| Plan | Plan written? | Implemented |
 | --- | --- | --- |
-| 01 Entitlement lockdown | Planned | — |
-| 02 Classifier fidelity | Planned | — |
-| 03 Entity registry integrity | Planned | — |
-| 04 Character taxonomy and panels | Planned | — |
-| 05 Generation variety | Planned | — |
-| 06 Narration integrity | Planned | — |
-| 07 Live UI reactivity | Planned | — |
-| 08 Resource economy | Planned | — |
-| 09 Content catalogues | Planned | — |
-| 10 Quests | Planned | — |
-| 11 Suggestion taxonomy | Planned | — |
-| 12 Overview and settings UI | Planned | — |
+| 01 Entitlement lockdown | ✅ written | — |
+| 02 Classifier fidelity | ✅ written | — |
+| 03 Entity registry integrity | ✅ written | — |
+| 04 Character taxonomy and panels | ⬜ **not yet written** | — |
+| 05 Generation variety | ⬜ **not yet written** | — |
+| 06 Narration integrity | ⬜ **not yet written** (owner's own draft exists — see below) | — |
+| 07 Live UI reactivity | ✅ written | — |
+| 08 Resource economy | ⬜ **not yet written** | — |
+| 09 Content catalogues | ⬜ **not yet written** | — |
+| 10 Quests | ⬜ **not yet written** | — |
+| 11 Suggestion taxonomy | ⬜ **not yet written** | — |
+| 12 Overview and settings UI | ⬜ **not yet written** | — |
+| Design brief | ✅ written | n/a |
+
+### Notes for whoever writes the remaining plans
+
+- **Plan 06** must not be written from scratch. The owner supplied
+  `docs/plans/2026-08-13-Narration-drop-bug-fix-plan.md`, which is a strong, evidence-backed plan
+  (narrator succeeded at ~5,375 chars; the *authority audit* then failed with `fallback/error`;
+  `maxRepairs: 0` on the audit call means one formatting slip suppresses the whole narration; and
+  `review()` accepts on `contradictions.length === 0` while ignoring `obeysRulings`). Plan 06's job
+  is to **adopt** it, add the two findings it does not cover — owner finding 11 (degenerate prose
+  from `deepseek/deepseek-v4-pro` at temp 0.8 with 0.3/0.3 penalties) and finding 12 (the one-line
+  DM recap in prose) — and settle definitively whether that recap is *only* the fallback substitute
+  or is also appended to successful prose. The owner believes it happens every turn; the screenshots
+  show it alongside the fallback notice every time, which suggests it **is** the substitute. Confirm
+  in `authorityGuard.ts` before writing a line of the plan.
+- **Plan 09** should treat `C:\Users\anuji\Desktop\uni-items.txt` (17 item categories) as the seed
+  for the universal item catalogue, and the D&D 5e port the owner asked for as a separate, explicitly
+  scoped sub-task.
+- **Plan 11** should treat `RPG-Move-Taxonomy.txt` (~700 move archetypes across ~30 categories) as
+  the seed. It is far too large to show six at a time without curation — the plan's real work is the
+  **selection policy**, not the list.
+- Every remaining plan must follow the shape of 01/02/03/07: evidence → root cause with file:line →
+  design → RED tests first → implementation steps → acceptance criteria → risks → authority-wall note.

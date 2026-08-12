@@ -1,107 +1,107 @@
 # HANDOFF - current live state
 
-**Updated:** 2026-08-12 (Plan 13 re-verified against source; **v0.2.9 built — first installer to
-contain Plan 13**; owner is play-testing)
-**Branch / source baseline:** local `main` @ `fe9d014` + a docs commit. `ba49114` was the last
-**pushed** commit — four commits ahead of origin. **Not pushed** — the human has not asked.
-**App version:** `0.2.9`, unsigned. MSI + NSIS built 2026-08-12 15:56 and copied to
-`~/Desktop/MidnightTavern-0.2.9/`. Bundles also at
-`packages/shell/src-tauri/target/release/bundle/{msi,nsis}/`.
-**User-owned/untracked:** `.agents/`, `.codex/`, `opencode.json` - preserve
-**Active plan:** none. `Audit/2026-08-02-PRODUCT-AUDIT/13-implementation-plan-final.md` is complete
-and now says so at the top of the file. Its Deferred queue (Plans 21/19/20/18/23/10B) is open,
-unscheduled, and **the owner has not picked one** — do not assume it is next.
+**Updated:** 2026-08-13 (v0.2.9 play-tested by the owner; 31 findings returned; plan set started)
+**Branch / source baseline:** local `main`. `ba49114` remains the last **pushed** commit — several
+commits ahead of origin. **Not pushed** — the human has not asked.
+**App version:** `0.2.9`, unsigned, installed at `%LOCALAPPDATA%\Midnight Tavern`, actively
+play-tested. Installers on the owner's Desktop at `~/Desktop/MidnightTavern-0.2.9/`.
+**User-owned/untracked:** `.agents/`, `.codex/`, `opencode.json` — preserve.
+
+**Active plan:** none yet. The plan **set** at `docs/plans/2026-08-13-*` is written but **not
+authorized**. `docs/plans/2026-08-13-00-MASTER-INDEX.md` is the entry point.
+
+## ⛔ Planning rules changed on 2026-08-12
+
+Every plan document written before 2026-08-12 is **decommissioned** by owner decision — see
+[`docs/PLAN-POLICY.md`](PLAN-POLICY.md). Anything in `Plan/`, `Audit/`, or `docs/superpowers/plans/`
+that had not shipped is **cancelled, not deferred**, including Audit Plan 13's entire deferred queue
+(Plans 21/19/20/18/23/10B). Only plans in `docs/plans/` dated after 2026-08-12 may be worked on.
+Shipped *behaviour* is unaffected and stays defended by the test suite.
 
 ## Verification state
 
-Measured this session on a clean tree at `ba49114`:
+Measured this session on a clean tree at `b19d4b8`:
 
 - `npm run typecheck`: **clean** in both workspaces.
-- `npm test`: core **670 / 46 files**, UI **183 / 26 files**, **853 total**, all passing.
+- Core **670 tests / 46 files**; UI **183 tests / 26 files**; **853 total**, all passing.
+- ⚠️ Root `npm test` **fails** — but not on an assertion. Every UI file passes, then a tinypool
+  worker dies (`Worker exited unexpectedly`). Core pins `maxWorkers: 1` for this known Windows/Node
+  24 instability (`packages/core/vitest.config.ts:10`); `packages/ui/vite.config.ts:31` does not.
+  **Run the workspaces separately to get a truthful result.** Fix is task P0-0 in plan 07.
+- Bridge parity verified mechanically: **85/85** `CoreBridge` methods present in both backends.
 
-> Note: prior HANDOFF revisions said 47/27 *files*. That was a miscount — the real figures are
-> **46/26**. Test counts (670/183) were always right, so no test was ever lost.
-
-No native/package build was run. Before any packaged or provider-acceptance claim, run the focused
-suites plus full typecheck/tests, direct builds, and `cargo check` in `packages/shell/src-tauri`.
+No build, no `cargo check`, no installer this session. Docs and plans only — no source touched, so
+the suite is unchanged.
 
 ## What landed this session
 
-**`d8dc46f` — docs: record Plan 13 completion in the plan itself + amend two stale acceptance
-criteria.** Docs only, one file, +95/−2. No source touched, so the suite is unchanged.
+- `b19d4b8` — decommissioned every pre-2026-08-12 plan; added `docs/PLAN-POLICY.md`, banners on all
+  17 retired plan/audit docs, retargeted `ARCHITECTURE.md`'s stale "Plan/ is authoritative" claims,
+  and recorded in `CONTEXT.md` that **invariant 9 is actively violated** (see below).
+- `4fd1af7` — master index mapping all 31 owner findings to 13 workstream plans.
+- `9630b86` — plans 01 (entitlement lockdown) and 02 (classifier fidelity, the owner's P0).
+- (this commit) — plans 03, 07, and the design brief.
 
-Plan 13 had **no checkboxes at all**, so its completion existed only as a claim in WORKLOG/HANDOFF.
-All 22 steps were re-verified individually against source (see the 2026-08-12 WORKLOG entry for the
-per-step evidence), and the document now carries a `Status: ✅ COMPLETE` header, a 22-item checklist,
-and the six deferred plans as **open** checkboxes.
+## Findings established from the live save (read-only, via a copy)
 
-Two acceptance criteria in the plan were stale and are struck through + amended in place:
+These are verified facts, not inferences. Do not re-derive them.
 
-- **Step 0.3** demanded zero `submitTurnLegacy` hits while also requiring the eight-phase comment —
-  which names that function — to survive. Now tests for a definition/call/export; returns zero.
-- **Step 3.8** demanded zero `JSON.stringify` under `packages/ui/src/screens/`, which **Step 6.1 of
-  the same plan** deliberately violates for the Diagnostics export. Now excludes that file; returns
-  zero.
-
-Neither was a code defect. Also recorded: Phase 3 landed 833 tests vs a projected 835 (the split
-differs, the coverage does not).
-
-## Things a stale briefing may get wrong
-
-- `AGENTS.md:21` was already fixed in `ba49114`. It correctly says there is no active plan. Do not
-  "fix" it again.
-- `docs/WORKLOG.md` says "Newest first" in its header but the protocol is **append**, so the newest
-  entry is at the **bottom**. Read the tail, not the head.
-- Plan 13's `turn.ts:651` reference for the unbounded `store.rulings.listByStory(storyId)` read has
-  drifted — it is now at **`turn.ts:502`**. The read itself is still there and still unbounded; it
-  belongs to Plan 19.
+1. **The NPC "unprovoked punch" is TWO defects, not one.**
+   - Turn 12 (the reported one): stored classifier output was
+     `social_reassure_survivor … stakes=opposed`. The old `isProvocation` fired on
+     `stakes === "opposed"`; Plan 13 Phase 2's `isHostileAct` removed that clause. **Fixed.**
+   - Turn 14: **no player ruling existed at all**, so the deterministic path could not have fired.
+     The attack came from `classified.npcIntents` — the *classifier* proposed it from prose, and
+     `orchestrator/turn.ts:666` merges those straight into the resolve loop with **no** disposition,
+     hostility, or trigger check. **This is the live violation of `CONTEXT.md` invariant 9.** Plan 02
+     step 5.8 closes it cheaply. It does **not** require the (now cancelled) Plan 19.
+2. **The gate is intact — owner finding 17 is NOT a bug.** `utility_command_shadow` (requires the
+   epic `shadow_extraction`) was correctly **DENIED `skill_required`**. `combat_basic_strike` passed
+   because a Dagger is equipped in `secondary`. Only `universal_natural_attack` is ungated, by
+   design, and the owner has confirmed that is acceptable.
+3. **Finding 19 (P0, misclassification) cannot be fixed by a confidence threshold.** The reported
+   misclassification carried `confidence: 1`. See plan 02 for the grounding/fit design.
+4. **Generic NPCs have no attributes at all.** `instantiateGeneric`
+   (`packages/core/src/bootstrap/instantiate.ts:109`) returns `attributes: {}`, so living cards fall
+   back to the schema default — that is why every NPC shows STR/AGI/END/INT/AFF/RES all 10. Their
+   health is likewise identical (24/24) because `GENERIC_ENCOUNTER_HITS = 6` is a constant.
+5. **"And Daen" is a real registry row** (`…:scene:and-daen`) created by a sentence-initial
+   conjunction being absorbed into a proper name. `shadow_entity` has a raw snake_case id **and**
+   display name, from a different creation path.
+6. **The owner's narrator is `deepseek/deepseek-v4-pro` via nanogpt** at temperature 0.8, topP 0.95,
+   frequency/presence penalty 0.3 — directly relevant to findings 11/12/13.
 
 ## Non-negotiable rules
 
 - Models may propose actors, intents, soft state, and prose. The engine owns mechanics, ids, gates,
   budgets, effects, damage, death, persistence, rollback, and active scene membership.
-- Every actual individual NPC/creature in committed prose must be registry-backed. Do not create
-  characters for scenery, depictions, crowds, pronouns, ordinals, or prose-transition words.
-- Only present living actors participate. Player and NPC action budgets remain separate.
-- A later name reveal enriches one actor; active-branch/variant evidence controls current aliases and
-  presence.
-- Do not weaken threshold-backed death or ruling-before-prose behavior.
-- Preserve browser/native bridge parity and user-owned untracked paths. Do not push.
+- Hard state is written only by `engine/ledger.ts`; soft state only by the analyzer.
+- Bridge parity: every `CoreBridge` method exists and behaves identically in both backends;
+  `bridge/core.ts` imports core as TYPES ONLY and never touches `node:`/native.
+- A story's schema is frozen at forge time. Never mutate it in place during play.
+- Do not weaken threshold-backed death or ruling-before-prose behaviour.
 - Release/signing/updater/CSP work is a later phase — do not start it unless this file says so.
+- Do not push. Preserve user-owned untracked paths.
 
 ## Single next action
 
-**Wait for the owner's v0.2.9 play-test result, then let it decide the fork.** Until 2026-08-12 no
-packaged build had ever contained Plan 13 (newest installer was v0.2.8 from 08-02 03:44; earliest
-Plan 13 commit was `e990cb6` on 08-05 14:33), so none of it has been exercised in the shell.
+**Finish writing the remaining eight plan files, then wait for the owner to authorize a wave.**
 
-**The fork this resolves.** Plan 19 is XL (1–3 months) and is justified almost entirely by NPC
-misbehaviour observed in v0.2.8 — a build predating Phase 2's disposition fix aimed at exactly that.
-If NPCs still misbehave in 0.2.9, Plan 19 is urgent and worth its cost. If Phase 2 fixed the felt
-problem, Plan 19 drops to "eventual" and Plan 18 (onboarding, L) is a better use of the same months.
-**Do not start an XL before this evidence exists.**
+Written: 00 (index), 01, 02, 03, 07, and the design brief.
+**Still to write: 04, 05, 06, 08, 09, 10, 11, 12.** The master index §"Notes for whoever writes the
+remaining plans" carries specific guidance for 06, 09, and 11, including the two things plan 06 must
+add to the owner's own draft and the one fact it must confirm in `authorityGuard.ts` first.
 
-Highest-value test is the original failure on the existing *Cyraeth Adventure* save: does a **failed**
-`Reassure Survivor` still trigger a Daen punch? (It should not — a losing contest of nerve is no
-longer read as violence.) Secondary: NPC ruling cards carrying a reason, opposed contests showing
-both sides' dice, the Journal's new "Boundaries" and "Interrupted" chips, a real chapter number in
-the header, and the Diagnostics screen (opt-in — enable it in Settings first).
+Each remaining plan must follow the shape already established by 01/02/03/07: evidence → root cause
+with file:line → design → RED tests first → numbered implementation steps → acceptance criteria →
+risks → authority-wall note.
 
-While that testing happens, **Plan 21 is the safe parallel task**: it touches bootstrap schema
-validation only, no gameplay or UI surface, so it cannot collide with whatever the play-test surfaces.
+**Do not start implementing anything.** The owner's sequence is explicit: finalize the plans → they
+return with design decisions → then development starts. Seven owner decisions (D1, D3–D7) are still
+open and are listed in the master index; **D7** (whether Wave 2/3 schema changes require a new story
+or must migrate existing saves) is the largest cost driver and should be answered before plan 08 is
+written in detail.
 
-The deferred queue below is a 10-day-old audit's sense of priority, formed before Plan 13 shipped —
-a menu, not an instruction. In dependency order (explicitly *not* priority order):
-
-| Plan | Scope | Size | State |
-| --- | --- | --- | --- |
-| 21 | Decompose `validateStorySchema` (`bootstrap/validate.ts:130`, 224 lines, returns prose `string[]`) into one validator per concern with typed codes | M | Unblocked; blocks nothing. Verified premise still holds. |
-| 19 | One shared actor/scene/event model; `turn/` phase split; migration 17 | XL, 1–3 mo | Preconditions hold (ladder still at 16). Root cause of the NPC-behaviour issues. |
-| 20 | Port the v2 memory system (facts/embeddings/consolidator/retrieval/drift) | XL | Needs Plan 19 landed first. |
-| 18 | First-run onboarding + a premise engineered to hit a denial in <5 min | L | Unblocked now that Phases 3 and 5 shipped. |
-| 23 | Art direction + portrait pipeline | XL | Step 1 (CSS/token rules) separable and cheap. Needs an owner call on portrait source. |
-| 10B | User-selectable image generation | FUTURE | Owner-classified as future; recorded, not scheduled. |
-
-A play-test of the packaged app would be worth more than any of these right now: Plan 13 Phase 2
-shipped the disposition fix for the NPC misbehaviour, and **whether that actually worked in play
-determines whether Plan 19 is urgent or merely eventual.** That evidence does not exist yet.
+The owner has been given `docs/plans/2026-08-13-DESIGN-BRIEF.md` to hand to Claude for design. Items
+1, 4 and 5 of that brief (character sections + rich User panel, quests, categorised suggestions) are
+the ones blocking engineering.

@@ -1874,3 +1874,61 @@ Settings before it records anything.
 
 **Still not pushed.** Four local commits ahead of origin (`d8dc46f`, `cd89bec`, `fe9d014`, and this
 entry's docs commit). The human has not asked.
+
+---
+
+## 2026-08-13 - v0.2.9 play-test triage: plan decommission + new plan set
+
+**Owner evidence.** The owner play-tested the packaged v0.2.9 build (the first installer ever to
+contain Plan 13) and returned 31 numbered findings with screenshots. Two instructions reframed the
+project: every pre-2026-08-12 plan is decommissioned, and the owner wants a detailed, implementable
+plan set produced and approved BEFORE any development starts.
+
+**Plan decommission (`b19d4b8`).** Added `docs/PLAN-POLICY.md` as the authoritative rule: plans
+written before 2026-08-12 are retired, and anything in `Plan/`, `Audit/`, or
+`docs/superpowers/plans/` not already shipped is cancelled rather than deferred - explicitly
+including Audit Plan 13's deferred queue (Plans 21/19/20/18/23/10B). Banners were added to all 17
+retired documents, `AGENTS.md` got an unmissable header, and `ARCHITECTURE.md`'s stale claims that
+`Plan/` holds the authoritative behavioural specification were retargeted to code + tests. A first
+banner pass was reverted and redone byte-exactly after it added a UTF-8 BOM and rewrote line
+endings, turning 5-line additions into 900-line diffs.
+
+**Live-save diagnosis (read-only, on a copy).** Established as fact:
+
+- The NPC "unprovoked punch" is **two** defects. Turn 12 carried `stakes=opposed`, the exact clause
+  Plan 13 Phase 2 removed - fixed. Turn 14 had **no player ruling at all**, so the deterministic
+  reaction path could not have fired; that attack came from `classified.npcIntents`, which
+  `orchestrator/turn.ts:666` merges into the resolve loop with no disposition, hostility or trigger
+  check. That is the live violation of `CONTEXT.md` invariant 9, now recorded there. It is closable
+  cheaply in plan 02 and does **not** need the cancelled Plan 19.
+- Owner finding 17 is **not a bug**. Every player ruling was checked against the actor's learned
+  skills: `utility_command_shadow` (needs the epic `shadow_extraction`) was correctly DENIED with
+  `skill_required`; `combat_basic_strike` passed because a Dagger is equipped in `secondary`. Only
+  the engine-owned `universal_natural_attack` is ungated, which the owner confirmed is acceptable.
+- Owner finding 19 (P0 misclassification) cannot be fixed by a confidence threshold - the reported
+  case carried `confidence: 1`.
+- Generic NPCs carry `attributes: {}` (`bootstrap/instantiate.ts:109`) and a constant
+  `GENERIC_ENCOUNTER_HITS = 6`, which is why every NPC shows all-10 attributes and 24/24 health.
+- "And Daen" is a real registry row created by a sentence-initial conjunction being absorbed into a
+  proper name; `shadow_entity` carries a raw snake_case id and display name from a different path.
+
+**Testing unlock (no source change, as requested).** The owner's trial expired 2026-08-05 yet play
+continued. A scratchpad script writes a cached-valid `licenseCache` row plus a reset `trialStartedAt`
+into the app's own settings table; `evaluateLicense()` reads cache only and never the network, so it
+is stable. It backs up the database first and supports `--revert`. This is local test tooling and is
+deliberately not part of the product.
+
+**Plan set (`4fd1af7`, `9630b86`, this commit).** `docs/plans/2026-08-13-00-MASTER-INDEX.md` maps all
+31 findings to 13 workstream plans in three waves, with cross-cutting rules and seven owner
+decisions. Written so far: 01 entitlement lockdown, 02 classifier fidelity (the P0), 03 entity
+registry integrity, 07 live UI reactivity, plus a self-contained design brief for the owner to hand
+to Claude. Still to write: 04, 05, 06, 08, 09, 10, 11, 12.
+
+**Verification.** Typecheck clean in both workspaces; core 670/46 and UI 183/26 = 853 passing when
+run per-workspace. Root `npm test` fails on a tinypool worker crash *after* all UI tests pass - a
+known Windows/Node 24 issue that core pins `maxWorkers: 1` for and the UI config does not; fix is
+task P0-0 in plan 07. Bridge parity verified mechanically at 85/85 methods. No source was touched
+this session, so the suite is unchanged.
+
+**Next:** finish plans 04, 05, 06, 08, 09, 10, 11, 12, then wait for owner authorization. No
+implementation until the owner approves and returns with design decisions.
