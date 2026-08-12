@@ -6,6 +6,12 @@
 Baseline when the phase started (HEAD `f6e9622`): **579 tests** (core 453 / ui 126). Tauri `0.2.5`.
 Current baseline (HEAD `3566c25`, measured 2026-08-02): **792 tests** (core 632 / ui 160).
 Post-Phase-3 of Audit Plan 13 (measured 2026-08-05): **833 tests** (core 655 / ui 178).
+Audit Plan 13 complete (HEAD `0b7805b`, measured 2026-08-05): **853 tests** (core 670 / ui 183).
+
+> **Status note (2026-08-05):** this "Internal Beta exit" plan was superseded as the active plan by
+> `Audit/2026-08-02-PRODUCT-AUDIT/13-implementation-plan-final.md`, which is now itself complete.
+> There is currently **no active plan** — see `docs/HANDOFF.md`. This file is retained as the record
+> of the Internal-Beta-exit work; do not treat its checklist as the live to-do list.
 
 Source of the gap list: `Audit/PROJECT_STATUS_AUDIT.md` and `Audit/V5_IMPLEMENTATION_STATUS_2026-07-23.md`,
 re-grounded against current HEAD (most audit gaps had already been closed by later commits).

@@ -1,275 +1,153 @@
 # Copy-paste prompt for the next coding agent
 
-Continue Midnight Tavern in `C:\Users\anuji\Documents\midnight-tavern-app`.
-
-Act as engineering manager and hands-on implementation agent. Work autonomously and sequentially;
-this repository forbids parallel coding agents. Do not ask the human to choose TypeScript
-architecture. Do not push. Preserve the user-owned/untracked `.agents/`, `.codex/`, and
-`opencode.json` paths. Never mutate an installed story database unless the human explicitly asks for
-that exact data operation; packaged diagnosis is read-only by default.
-
-Read in full before editing:
-
-1. `AGENTS.md`
-2. `CONTEXT.md`
-3. `ARCHITECTURE.md`
-4. `docs/HANDOFF.md`
-5. the newest `docs/WORKLOG.md` entries
-6. Task 15G in `Plan/next-phase-internal-beta.md`
-7. `docs/superpowers/plans/2026-08-02-npc-scene-system-redesign.md`
-
-Use codebase-memory-mcp before text search and re-index if symbols are stale. Use systematic
-debugging and strict RED -> observe failure -> minimal coherent implementation -> GREEN. Begin every
-PowerShell command with:
-
-`Set-Location -LiteralPath 'C:\Users\anuji\Documents\midnight-tavern-app'`
-
-because the shell sometimes ignores its supplied working directory.
-
-Before stopping, run fresh typecheck and complete tests, run the relevant native/build gates, append
-WORKLOG, overwrite HANDOFF, update this prompt and the active plan, and commit coherent green changes
-with the required co-author trailer. Build one installer only after all current Task 15G source
-slices are complete; do not package each intermediate refactor.
-
-## Current repository state
-
-- Local `main` has Task 15G documentation based on parent `a56fe49`; not pushed.
-- App version `0.2.8`, unsigned.
-- No Task 15G gameplay implementation has started. The previous turn deliberately analyzed before
-  coding because the observed defects share one broken NPC lifecycle boundary.
-- Baseline before the docs-only diagnosis: root typecheck passed; core **632 / 45 files**, UI
-  **160 / 25 files**, **792 tests total**, passed.
-- Run the baseline again before source edits. If it is red on the current tree, fix/log that first.
-- The most recently built installer belongs to Task 15F and is stale for Task 15G acceptance. Do not
-  hand it off as a fix for this work.
-
-## User goal
-
-The user wants a coherent role-playing scene, not a collection of heuristics:
-
-- every actual individual NPC or creature that appears in committed narration is part of the
-  character registry;
-- a later name reveal enriches the same actor rather than creating a duplicate;
-- only genuinely current/present/living actors can act or be targeted;
-- NPCs can act autonomously when their current goal/disposition and legal sealed capabilities justify
-  it, but a prior narrated action cannot replay as a new action;
-- supportive or social failure does not automatically become violence;
-- the engine owns mechanics and the narrator depicts them naturally without overriding them;
-- ruling details remain visible before prose, but no mechanical `X succeeds. Hint.` recap is appended
-  under every story response;
-- Possible Moves are meaningful and scene-specific, not templates around arbitrary words;
-- rewind, swipe, retry, cancellation, restart, and provider degradation preserve the same story
-  truth.
-
-Do not solve this by hiding characters/rulings in UI, adding another proper-name regex, broadening
-the planner prompt, or weakening authority checks.
-
-## Installed evidence: inspect read-only only
-
-Story: `Cyraeth Adventure`
-
-Story id: `ab1c6258-e244-4e7d-9147-1b0d3396a2c7`
-
-- SQLite database:
-  `C:\Users\anuji\AppData\Roaming\com.midnighttavern.app\midnight-tavern.db`
-- Native log:
-  `C:\Users\anuji\AppData\Local\com.midnighttavern.app\logs\midnight-tavern.log`
-- WAL/SHM may be live. Use SQLite URI `mode=ro` and `PRAGMA query_only=ON`.
-- The user will rewind and replay. Do not repair this save in place.
-
-The exact latest sequence was:
-
-1. Narration introduced/described Daen, an archer, an older woman, and a large dog.
-2. The player tried `Reassure Survivor` against Daen. It failed.
-3. Daen automatically punched the player because the reaction heuristic treats every opposed action
-   as provocation.
-4. The next player message was `Describe what you now`. The classifier found no player mechanic.
-5. The NPC planner nevertheless proposed another Daen Unarmed Strike by reading the earlier punch in
-   recent prose as if it were a new current intent.
-6. The engine applied another 10 Health damage. The narrator timed out at 60 seconds after producing
-   prose that did not depict a fresh strike.
-7. Fallback appended `Daen's Unarmed Strike succeeds. A solid blow lands against the target.` below
-   the prose even though the UI already had the ruling card.
-8. That prose revealed `The archer - Kellan -`, mentioned the older woman at her doorway, and her dog,
-   but Present still contained only the player and Daen. There was no Kellan character row.
-9. Possible Moves later offered phrases such as asking about `describe` and `slowly`.
-
-At inspection the player was 80/100 Health. Daen was present; the other previously registered actors
-were absent. Do not bake this corrupted state into expected behavior; use the transcript/log as a
-fixture source.
-
-## Confirmed source causes
-
-### Identity and presence
-
-`packages/core/src/orchestrator/turn.ts`
-
-- `runTurnOperation` is 676 lines, cyclomatic complexity 39, cognitive complexity 103.
-- It owns registrar, deterministic entity discovery, classifier, reaction, NPC planner, resolver,
-  narrator, post-prose discovery, transaction, and analyzer sequencing.
-- `mergeNarratedEntityTransitions` merges incompatible transition sources without one evidence model.
-
-`packages/core/src/orchestrator/npcIntroduction.ts`
-
-- `ApprovedNpcTransition` contains a full `CharacterRecord` plus only
-  `introduce|enter|leave|update`; it has no evidence span, actor kind, provenance, confidence, or
-  identity-link decision.
-- Existing enter/leave validation proves quoted text occurs but does not own scene semantics.
-
-`packages/core/src/orchestrator/sceneEntityPromotion.ts`
-
-- Free-form regex grammar is a second identity authority.
-- `archer` and `hound` are not consistently recognized actor heads.
-- `The archer - Kellan -` is outside the supported name-reveal patterns.
-- `Kellan finally lowered...` is missed because an adverb separates the name and actor verb.
-- `discoverNarratedSceneEntities` skips a candidate whose name is already known unless it enriches a
-  generic identity. Therefore a clear current mention cannot reactivate an existing absent older
-  woman or dog.
-- `inferredSkillIds` scans the whole narrator response and gives the same global keyword-derived
-  skills to unrelated promoted actors.
-
-### NPC intent and mechanics
-
-`packages/core/src/orchestrator/npcAgency.ts`
-
-- `isProvocation` returns true for combat, any opposed action, harmful effects, committed harm, or
-  danger/opposed stakes. The existing test explicitly requires retaliation after an opposed contest.
-- `planNpcReactions` chooses the first gate-legal damaging action. That turned failed reassurance
-  into a punch.
-- `NpcPlanInput` contains raw player text, recent narration, hard-state candidates/names/presence, and
-  hard state. It does not contain character soft disposition/goals/relationships, current trigger
-  ids, event consumption, last acted turn, or a structured scene.
-- `NpcActionProposal.reason` is model prose and not linked to a current event. The planner repeated a
-  prior punch on a narration-only player turn.
-
-`packages/core/src/types/actions.ts`
-
-- `ActionDef` has category, universal family, opposed, gates, costs, and effects but no explicit
-  hostile/supportive/neutral interaction semantic.
-- `EffectSpec.setFlag` applies to the actor only. The observed exposure flag landed on Daen although
-  the fiction framed the player as exposed; actor/target flag effects need distinct fields.
-
-### Narration and ruling presentation
-
-`packages/core/src/orchestrator/authorityGuard.ts`
-
-- `safeSummary` deliberately creates actor/action/outcome/hint prose.
-- `generateGuardedNarration` appends it when the narrator is unavailable or a safe prefix exists.
-- Existing tests require this fallback wording. Replace the contract through RED tests; do not merely
-  delete the function.
-- Current auditing catches mechanical contradictions but does not require exact causal coverage of
-  every current ruling before commit when generation times out.
-
-`packages/ui/src/screens/Play.tsx` and `packages/ui/src/state/playStore.ts`
-
-- The UI already renders ruling artifacts and a narration-degradation notice. Mechanical fallback
-  prose therefore duplicates presentation and reads as part of the story.
-
-### Possible Moves
-
-`packages/core/src/orchestrator/context.ts`
-
-- `buildSceneAnchors` uses character names, location, then reversed words from the latest narrator
-  message.
-
-`packages/core/src/orchestrator/suggestions.ts`
-
-- `deterministicFallbackSuggestions` templates around the first surviving anchors. This produced
-  `describe` and `slowly` as fake scene subjects.
-- Tests currently prove only lexical overlap, not semantic affordance grounding.
-
-### Persistence/history
-
-`packages/core/src/store/db.ts`
-
-- Migration 11 added `characters.present`; migration 12 checkpointed presence; migration 15
-  checkpointed display identity; migration 16 removed exact unused pronoun/ordinal phantoms.
-- There is no alias/provenance table, actor kind, active-variant Scene State snapshot, or event
-  consumption ledger.
-
-`packages/core/src/store/repositories/turnOperations.ts`
-
-- Durable `staged` JSON can carry a typed Narrative Contract/Scene State without rerunning model
-  decisions on retry, but it is currently untyped at the repository boundary.
-
-`packages/core/src/store/repositories/storyEvents.ts`
-
-- The event enum has mechanical/journal events but no actor-observation, presence-transition,
-  NPC-intent, or trigger-consumption events.
-
-## Accepted target architecture
-
-Implement the detailed plan, not a narrower substitute:
-
-1. Add one typed, engine-owned **Scene State** with actor identities/aliases/kinds, active presence,
-   disposition/goals, current triggers, and scene affordances.
-2. Make registrar and deterministic grammar emit evidence-backed `SceneObservation` candidates. One
-   Scene Reconciler decides id/alias/presence and records rejected reasons.
-3. Add a pre-narration **Narrative Beat Plan**. The storyteller can still introduce organic actors,
-   but the engine registers/stages them and actor-local sealed capabilities before prose.
-4. Give the narrator an immutable Narrative Contract. Post-audit requires every individual actor to
-   resolve to the approved cast and every current ruling to have one causal fictional consequence.
-5. Make NPC intent event-driven. A response references one unconsumed current hostile trigger or a
-   validated persisted agenda. `opposed` alone is neutral. Prior prose cannot authorize a new action.
-6. Keep rulings before prose but separate presentation: concise routine ruling line plus expandable
-   details. Narration status/retry is UI metadata; no `safeSummary` paragraph enters story prose.
-7. Generate Possible Moves from typed actors/interactables/hazards/exits/open questions/goals.
-8. Snapshot Scene State by active narrator variant and restore it through swipe/rewind/delete/retry.
-9. Decompose the oversized turn coordinator only after the new contracts have tests and callers.
-
-The plan proposes a legacy-safe migration 17 with actor kind/aliases/provenance and active timeline
-state. Follow the detailed tasks and adjust exact schema only if RED fixtures prove a safer shape;
-preserve atomicity and old-save compatibility.
-
-## Exact next action: Task 15G Task 1 only
-
-Do not edit production Scene State code first.
-
-Create:
-
-- `packages/core/test/fixtures/cyraethNpcScene.ts`
-- `packages/core/test/orchestrator/npcSceneLifecycle.test.ts`
-
-Update focused tests only as needed to freeze the current broken contracts:
-
-- `packages/core/test/orchestrator/npcAgency.test.ts`
-- `packages/core/test/orchestrator/sceneEntityPromotion.test.ts`
-- `packages/core/test/orchestrator/authorityGuard.test.ts`
-- `packages/core/test/orchestrator/suggestions.test.ts`
-
-Script the exact provider outputs and assert:
-
-1. Daen, Kellan, older woman, and dog each resolve to one registry identity; current mentions make
-   known absent actors present; aliases do not duplicate people.
-2. Failed supportive/opposed reassurance causes no automatic damaging response.
-3. The narration-only next player turn cannot replay the prior Daen strike; player Health stays at
-   the pre-turn value.
-4. Every valid current ruling is covered once; narrator timeout never appends mechanical recap prose.
-5. Suggestions use real scene actors/facts and never use `describe`, `slowly`, `alone`, or pronouns as
-   subjects.
-6. Retry/restart/swipe/rewind/delete/cancellation restore one coherent active Scene State.
-
-Observe and record the expected RED failures before production edits. Then implement Task 2 onward
-one coherent slice at a time, updating the checklist and WORKLOG after each green slice.
-
-## Required verification and closeout
-
-For each source slice:
-
-- focused RED/GREEN tests;
-- `npm run typecheck`;
-- `npm test` before commit;
-- `git diff --check`;
-- preserve bridge parity and no user-owned changes.
-
-Before Task 15G completion/package:
-
-- full root typecheck/tests;
-- direct core/UI production builds;
-- `cargo check` in `packages/shell/src-tauri`;
-- one root `npm run build` only after all source slices are complete;
-- installer sizes, hashes, and unsigned status in HANDOFF/WORKLOG;
-- update active plan, CONTEXT, ARCHITECTURE, HANDOFF, and this prompt with what actually landed.
-
-Do not claim packaged/provider acceptance until the human installs, rewinds, replays, and the new log
-and database are inspected read-only.
+_Last refreshed: 2026-08-05, at HEAD `0b7805b` (Audit Plan 13 complete)._
+
+Continue Midnight Tavern in `C:\Users\anuji\Documents\midnight-tavern-app`. You are the
+**engineering manager** and hands-on implementation agent. Work autonomously and sequentially — this
+repository forbids parallel coding agents. Do not ask the human to make TypeScript/architecture
+decisions (surface **product/UX** decisions to them instead). Do not push unless the human asks.
+Preserve the user-owned/untracked `.agents/`, `.codex/`, and `opencode.json` paths. Never mutate an
+installed story database unless the human explicitly asks for that exact data operation; packaged
+diagnosis is read-only by default.
+
+## 1. What the project is
+
+An AI-driven solo tabletop-RPG desktop app. The human plays a solo campaign driven by LLMs, but the
+single most important design rule is the **authority wall: program-owned mechanics are
+authoritative — models only supply prose, classification, and soft memory.** Dice, gates, budgets,
+damage, death, persistence, rollback, and scene membership are all deterministic engine code; the
+models never decide outcomes.
+
+- **Repo:** `git@github.com:Deathwalker-47/midnight-tavern-app.git`, branch `main`, at `0b7805b`.
+- **Platform:** Windows, PowerShell primary shell (a Bash tool is also available for POSIX syntax).
+- **App version:** `0.2.8`, unsigned. Release/signing/updater/CSP work is a deliberately later
+  phase — do not start it unless HANDOFF says so.
+
+## 2. Architecture
+
+TypeScript monorepo, npm workspaces under `packages/*`:
+
+- **`packages/core`** — deterministic engine + LLM services: bootstrap, mechanical-intent
+  classifier, analyzer/soft-memory, summarizer, model router, typed SQLite repositories, and the
+  turn orchestrator (`orchestrator/turn.ts`). Native `better-sqlite3` lives here.
+- **`packages/ui`** — React 18 + Zustand screens. They reach core **only** through a `CoreBridge`
+  with two backends:
+  - `src/bridge/core.ts` — in-memory, browser/test-safe. **Imports core as TYPES ONLY.** Never put
+    `node:`/native deps on this path.
+  - `src/bridge/sqliteBridge.ts` — the real native backend, dynamically imported so it evaluates
+    only inside the Tauri shell.
+  - **Bridge parity is a hard rule:** both bridges must expose the same surface. They have silently
+    drifted before — prefer extracting browser-safe shared modules over hand-mirroring.
+- **`packages/shell`** — the Tauri/Rust host. Check with `cd packages/shell/src-tauri && cargo check`.
+
+Canonical references: `ARCHITECTURE.md`, `CONTEXT.md` (invariants + defect record), `AGENTS.md`.
+
+## 3. Working method (non-negotiable)
+
+- **The human is the product owner/tester, not a TypeScript reviewer.** They test the running app
+  and make product/UX calls. **Because they can't review TS, the automated test suite is your only
+  real safety net — protect it.**
+- **Strict TDD.** For every behavior change: write the failing RED test first, run it, *observe it
+  fail for the right reason*, then implement, then confirm GREEN. For already-correct behavior,
+  write a characterization test and prove it's a genuine tripwire via an **inversion check** (break
+  the code, confirm the test fails, revert, confirm `git diff` is clean).
+- **Never build on red.** Verify a green baseline before changing anything.
+- **The plan documents are strong guides, not infallible.** The last several sessions repeatedly
+  found stale premises in their plan and corrected them against actual source before implementing.
+  Do the same.
+- **GateGuard hook** fact-gates the first edit of each file. If blocked, briefly state
+  importers/affected API/schema + the user's instruction, then retry the identical edit.
+
+## 4. Commands
+
+```bash
+npm run typecheck   # all workspaces
+npm test            # all workspaces
+```
+
+- Core only: `cd packages/core && npm test`
+- UI only: `cd packages/ui && npm test`
+- One UI test file: `cd packages/ui && npx vitest run test/screens/<File>.test.tsx`
+- Rust shell: `cd packages/shell/src-tauri && cargo check`
+
+Tip: if the shell ignores its supplied working directory, prefix PowerShell commands with
+`Set-Location -LiteralPath 'C:\Users\anuji\Documents\midnight-tavern-app'`.
+
+**Current green baseline:** core **670 / 47 files**, UI **183 / 27 files** = **853 total**,
+typecheck clean in both workspaces.
+
+## 5. The document baton (per `AGENTS.md`)
+
+**Start:** ① read `docs/HANDOFF.md` (live state + single next action) → ② skim the top of
+`docs/WORKLOG.md` → ③ read the active plan named in HANDOFF (currently **none**) → ④ verify green
+baseline.
+
+**Finish:** ① keep the suite green → ② commit coherent changesets → ③ **append** a dated entry to
+`docs/WORKLOG.md` (never edit past entries) → ④ **overwrite** `docs/HANDOFF.md` with new state +
+next action → ⑤ tick boxes in the active plan → ⑥ refresh this prompt.
+
+**Commit protocol:** small coherent commits, imperative subject, scope prefix
+(`core:`/`ui:`/`shell:`/`docs:`), never commit red, do not push unless asked, and end every commit
+message with:
+
+```
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+```
+
+## 6. Memory systems
+
+- **Auto-memory** (always loaded): `C:\Users\anuji\.claude\projects\C--Users-anuji-Documents-midnight-tavern-app\memory\`
+  with a `MEMORY.md` index. One durable, non-obvious fact per file.
+- **Perseus Vault** (MCP `perseus_vault_*`): cross-session memory. Call `perseus_vault_context`/
+  `perseus_vault_recall` at start, `perseus_vault_remember` for durable decisions. _Note: this
+  server disconnects intermittently; if unavailable, fall back to the auto-memory dir and doc files._
+- **codebase-memory-mcp** (graph code-nav): prefer `search_graph`/`trace_path`/`get_code_snippet`/
+  `query_graph`/`search_code` over grep for code-structure questions. The index may lag `HEAD` — run
+  `detect_changes` / `index_repository` if results look stale.
+
+## 7. Where things stand
+
+**Audit Plan 13** (`Audit/2026-08-02-PRODUCT-AUDIT/13-implementation-plan-final.md`) is **fully
+executed** — all phases 0 through 6.1 — and pushed. It replaced the obsolete Task 15G "Scene State
+redesign" (`docs/superpowers/plans/2026-08-02-npc-scene-system-redesign.md`, which carries an
+OBSOLETE header; its *diagnosis* is still accurate reference, its *fix direction* is dead). Last
+commits: `50cd0c2` (Phase 6.0), `9288a5a` (Phase 6.1), `0b7805b` (docs closeout).
+
+**There is no active plan.** Do not assume the next item — choose deliberately with the owner.
+
+## 8. What's available next — the deferred queue
+
+Plan 13 lists six deferred plans. **This is dependency order, NOT a priority ranking** — confirm the
+choice with the owner before starting:
+
+- **Plan 21 — Decompose `validateStorySchema`** (`bootstrap/validate.ts:130`, cyclomatic 65). Pure
+  refactor into one validator-per-concern with typed violation codes. **Size M. Its precondition
+  (Step 6.1 landed) is now satisfied** and it's blocked by nothing — the natural low-risk next step.
+  Step 1 is characterization-tests-first.
+- **Plan 19 — Land the NPC scene/actor model** (closes D-3/W-6). **XL, 1–3 months.** One shared
+  actor/scene/event model + a `turn/` phase split + migration 17 (reserved for this). Highest
+  product impact (root cause of the NPC-behavior issues), but do not start an XL without an explicit
+  owner decision.
+- **Plan 20 — Port the v2 memory system** (facts/embeddings/consolidator/retrieval/drift). **XL.**
+  Requires Phase 1 shipped (done) + Plan 19 landed + the webview `node:`-free constraint held. All
+  ported content is soft state — must never write/imply/reconstruct hard state.
+- **Plan 18 — First-run onboarding** (`FirstRun.tsx`, coach marks, a premise engineered to hit a
+  denial in <5 min). **L.** More viable now that the Phase 3/5 churn it points at has settled.
+- **Plan 23 — Art direction + portrait pipeline.** **XL** labour budget. Step 1 (CSS/token visual
+  rules) is separable and cheap. Needs an owner decision on portrait source.
+- **Plan 10B — User-selectable image generation.** **FUTURE/roadmap** — owner classified it as
+  future; recorded, not scheduled.
+
+**Suggested opener:** ask the owner whether they want a bounded low-risk quality win (**Plan 21**,
+now unblocked) or to commit toward a big product bet (**Plan 19** is highest-impact but XL).
+
+## 9. Rules of the road (recap)
+
+- Models may propose actors/intents/soft-state/prose. The engine owns mechanics, ids, gates,
+  budgets, effects, damage, death, persistence, rollback, and active scene membership.
+- Every actual individual NPC/creature in committed prose must be registry-backed; do not create
+  characters for scenery, crowds, pronouns, ordinals, or transition words.
+- Only present living actors participate; player and NPC action budgets are separate.
+- Do not weaken threshold-backed death or ruling-before-prose behavior.
+- Preserve bridge parity and user-owned untracked paths.
+- Do not build intermediate installers; build once when a shippable milestone is actually complete.

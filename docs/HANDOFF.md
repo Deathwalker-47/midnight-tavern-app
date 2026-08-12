@@ -113,16 +113,19 @@ cheaply through Plan 13; only the full-rearchitecture *path* to them was rejecte
 
 ## Verification state
 
-Fresh verification after this docs-only diagnosis:
+Current, after Plan 13 completion (HEAD `0b7805b`):
 
-- `npm run typecheck`: passed.
-- `npm test`: core **632 / 45 files**, UI **160 / 25 files**, **792 total**, passed.
-- `git diff --check`: passed.
-- Git retained only user-owned `.agents/`, `.codex/`, and `opencode.json` alongside these Task 15G
-  documentation changes.
+- `npm run typecheck`: passed in both workspaces.
+- `npm test`: core **670 / 47 files**, UI **183 / 27 files**, **853 total**, passed.
+- Only user-owned `.agents/`, `.codex/`, and `opencode.json` remain untracked; nothing else pending.
 
-No native/package gate is needed for a documentation-only diagnosis. Before any later source
-completion claim, run the focused suites plus full typecheck/tests, direct builds, and `cargo check`.
+No native/package build was run this batch (no installer needed for these source + docs changes).
+Before any later packaged/provider-acceptance claim, run the focused suites plus full
+typecheck/tests, direct builds, and `cargo check` in `packages/shell/src-tauri`.
+
+_(The Task 15G sections below this point are retained as historical reference — the diagnosis is
+accurate, but its proposed fix direction is obsolete; do not act on it. See the OBSOLETE notice in
+`docs/superpowers/plans/2026-08-02-npc-scene-system-redesign.md`.)_
 
 ## Non-negotiable rules
 

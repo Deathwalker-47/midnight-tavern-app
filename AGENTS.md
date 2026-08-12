@@ -17,8 +17,10 @@ agent-to-agent baton.
 
 1. Read [`docs/HANDOFF.md`](docs/HANDOFF.md) — the current live state and the *next action*.
 2. Skim the top (most recent) entries of [`docs/WORKLOG.md`](docs/WORKLOG.md) — what recently landed and why.
-3. Read the active plan named in HANDOFF (currently
-   [`Plan/next-phase-internal-beta.md`](Plan/next-phase-internal-beta.md)).
+3. Read the active plan named in HANDOFF. As of 2026-08-05 **there is no active plan** — Audit
+   Plan 13 (`Audit/2026-08-02-PRODUCT-AUDIT/13-implementation-plan-final.md`) is fully executed;
+   pick the next plan deliberately with the human before starting. HANDOFF is the source of truth
+   for what (if anything) is active.
 4. Verify the baseline is green before you change anything:
    ```bash
    npm run typecheck
