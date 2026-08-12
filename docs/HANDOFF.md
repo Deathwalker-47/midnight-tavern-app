@@ -1,9 +1,12 @@
 # HANDOFF - current live state
 
-**Updated:** 2026-08-12 (Plan 13 independently re-verified against source; plan doc made self-describing)
-**Branch / source baseline:** local `main` @ `d8dc46f` + a pending docs commit; `ba49114` was the
-last pushed commit. **Not pushed** — the human has not asked.
-**App version:** `0.2.8`, unsigned; no installer built this session (docs-only changes)
+**Updated:** 2026-08-12 (Plan 13 re-verified against source; **v0.2.9 built — first installer to
+contain Plan 13**; owner is play-testing)
+**Branch / source baseline:** local `main` @ `fe9d014` + a docs commit. `ba49114` was the last
+**pushed** commit — four commits ahead of origin. **Not pushed** — the human has not asked.
+**App version:** `0.2.9`, unsigned. MSI + NSIS built 2026-08-12 15:56 and copied to
+`~/Desktop/MidnightTavern-0.2.9/`. Bundles also at
+`packages/shell/src-tauri/target/release/bundle/{msi,nsis}/`.
 **User-owned/untracked:** `.agents/`, `.codex/`, `opencode.json` - preserve
 **Active plan:** none. `Audit/2026-08-02-PRODUCT-AUDIT/13-implementation-plan-final.md` is complete
 and now says so at the top of the file. Its Deferred queue (Plans 21/19/20/18/23/10B) is open,
@@ -68,10 +71,27 @@ differs, the coverage does not).
 
 ## Single next action
 
-**Await the owner's decision on what to work on next, then write it here.** Nothing is scheduled.
+**Wait for the owner's v0.2.9 play-test result, then let it decide the fork.** Until 2026-08-12 no
+packaged build had ever contained Plan 13 (newest installer was v0.2.8 from 08-02 03:44; earliest
+Plan 13 commit was `e990cb6` on 08-05 14:33), so none of it has been exercised in the shell.
 
-The deferred queue is real but is a 10-day-old audit's sense of priority, formed before Plan 13
-shipped — it is a menu, not an instruction. In dependency order (explicitly *not* priority order):
+**The fork this resolves.** Plan 19 is XL (1–3 months) and is justified almost entirely by NPC
+misbehaviour observed in v0.2.8 — a build predating Phase 2's disposition fix aimed at exactly that.
+If NPCs still misbehave in 0.2.9, Plan 19 is urgent and worth its cost. If Phase 2 fixed the felt
+problem, Plan 19 drops to "eventual" and Plan 18 (onboarding, L) is a better use of the same months.
+**Do not start an XL before this evidence exists.**
+
+Highest-value test is the original failure on the existing *Cyraeth Adventure* save: does a **failed**
+`Reassure Survivor` still trigger a Daen punch? (It should not — a losing contest of nerve is no
+longer read as violence.) Secondary: NPC ruling cards carrying a reason, opposed contests showing
+both sides' dice, the Journal's new "Boundaries" and "Interrupted" chips, a real chapter number in
+the header, and the Diagnostics screen (opt-in — enable it in Settings first).
+
+While that testing happens, **Plan 21 is the safe parallel task**: it touches bootstrap schema
+validation only, no gameplay or UI surface, so it cannot collide with whatever the play-test surfaces.
+
+The deferred queue below is a 10-day-old audit's sense of priority, formed before Plan 13 shipped —
+a menu, not an instruction. In dependency order (explicitly *not* priority order):
 
 | Plan | Scope | Size | State |
 | --- | --- | --- | --- |

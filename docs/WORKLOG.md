@@ -1830,3 +1830,47 @@ renumbering history; just know which end to read.
 
 **No active plan.** The deferred queue (Plans 21/19/20/18/23/10B) is open and unscheduled; the
 choice is the owner's and has not been made.
+
+---
+
+## 2026-08-12 — Ship v0.2.9: the first installer that actually contains Plan 13
+
+Same session as the verification entry above. Building was not on anyone's list; it surfaced from
+checking the premise behind "which plan next?".
+
+**The finding.** Every installer on disk was **v0.2.8, built 2026-08-02 03:44**. The earliest Plan 13
+code commit is **`e990cb6`, 2026-08-05 14:33**. So no packaged build had ever contained a single line
+of Plan 13 — not the memory wiring, not the disposition fix, not the UI visibility work, not typed
+suggestions, not diagnostics. All of it existed only in source. The old Task 15G rule ("do not build
+intermediate installers; build once after all slices are complete") had been satisfied when Plan 13
+closed on 2026-08-05, and nobody acted on it.
+
+**Why this mattered more than picking a plan.** The deferred queue's biggest item, Plan 19 (XL,
+1–3 months), is justified almost entirely by NPC misbehaviour the owner observed *in v0.2.8* — a
+build that predates Phase 2's disposition fix aimed squarely at that behaviour. Committing months to
+Plan 19 before testing the fix would have been deciding blind.
+
+**Landed (`fe9d014`).** Version bumped 0.2.8 → 0.2.9 across all five files that carry it
+(`tauri.conf.json`, `Cargo.toml`, shell `package.json`, `package-lock.json`, `Cargo.lock`), and MSI +
+NSIS bundles built. No source logic changed.
+
+**Verification.** `cargo check` clean (note: PowerShell 5.1 wraps cargo's stderr progress into a
+`NativeCommandError` even on success — read the exit code, not the stream). Core `tsc` and UI `vite
+build` both clean. Suite green at **853** (core 670/46, UI 183/26) before and after the bump. The
+built UI bundle contains a `counters-*.js` chunk — Phase 6.1 code that does not exist in 0.2.8 —
+which is positive confirmation the installer carries the work rather than just a new version string.
+
+**One thing checked and cleared.** The UI build emits a 237 kB `counters-*.js` chunk, which looked
+like Phase 6.1 having dragged something heavy onto the webview path. It has not:
+`observability/counters.ts` imports only `zod` plus two **type-only** imports, so Vite simply named
+the shared zod vendor chunk after it. The webview constraint still holds.
+
+**Testing notes for the owner.** Plan 13 added **no migration** (ladder still tops at 16, with 17
+reserved for Plan 19), so 0.2.9 and 0.2.8 read the same database — the existing *Cyraeth Adventure*
+save opens in either and rolling back does not damage it. Testing on that save is more informative
+than a fresh story, since it already carries the NPC history that produced the original failure.
+Diagnostics ships **opt-in** (`getDiagnosticsEnabled` defaults to `false`) and must be turned on in
+Settings before it records anything.
+
+**Still not pushed.** Four local commits ahead of origin (`d8dc46f`, `cd89bec`, `fe9d014`, and this
+entry's docs commit). The human has not asked.
