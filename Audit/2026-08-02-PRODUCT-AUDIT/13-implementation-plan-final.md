@@ -1,3 +1,9 @@
+> **DECOMMISSIONED 2026-08-12 - reference only, not a task list.**
+> Every plan written before 2026-08-12 is retired by owner decision. Plan 13 was **executed** and
+> shipped in v0.2.9; its **deferred queue (Plans 21 / 19 / 20 / 18 / 23 / 10B) is cancelled**, not
+> deferred. The diagnosis chapters in this folder remain useful reference; their priority ordering
+> and work items do not. See [`docs/PLAN-POLICY.md`](../../docs/PLAN-POLICY.md).
+
 # 13 — Final Implementation Plan (executable, zero-ambiguity)
 
 **Written:** 2026-08-02. **Grounded at:** `main` @ `3566c25`.

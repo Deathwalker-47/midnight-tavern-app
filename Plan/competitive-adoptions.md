@@ -1,3 +1,9 @@
+> **DECOMMISSIONED 2026-08-12 - reference only, not a task list.**
+> Every plan written before 2026-08-12 is retired by owner decision; anything here that had not
+> already shipped by that date is **cancelled**, not deferred. Do not resume or cite this document
+> as a reason to do work. See [`docs/PLAN-POLICY.md`](../docs/PLAN-POLICY.md).
+> Behaviour this plan already produced is unaffected and stays defended by the test suite.
+
 # Implementation Spec — Batch 3: Competitive Adoptions (v1)
 
 **For: Claude Code / Codex. Standalone — §1 gives you every piece of context needed to implement this without reading the other planning documents.**

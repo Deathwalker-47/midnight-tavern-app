@@ -2,7 +2,11 @@
 
 This document explains how Midnight Tavern is built and, more importantly, *why*. It is the reference a new engineer should read after the [README](README.md) to understand the data model, the per-turn pipeline, the prompt contracts, and the invariants that everything else protects.
 
-The authoritative behavioral specifications live in [`Plan/`](Plan/); this document is the navigable summary of them as realized in code.
+> **Plan documents are no longer authoritative.** As of 2026-08-12 every plan written before that
+> date is decommissioned — see [`docs/PLAN-POLICY.md`](docs/PLAN-POLICY.md). The authoritative
+> description of current behaviour is **the code plus the test suite**, with the invariants in §12
+> below and in [`CONTEXT.md`](CONTEXT.md) as the contract. `Plan/` is retained as historical
+> reference for *why* things are shaped as they are, never as a specification of what to build.
 
 ---
 
@@ -120,7 +124,7 @@ The current, intentionally minimal system:
 - **`cardView.ts` / `dossier.ts`** — read-only projections joining hard + soft into the living card and the full character dossier (including reverse-resolved relationships — who points at this character).
 - **`summarizer/`** — `chapter.ts` compresses message blocks into `{title, summary}`; `arc.ts` compresses chapters into a structured, multi-section arc document; `injector.ts` condenses the latest arc + recent chapters + present-character soft slices into the memory block the context assembler places under budget.
 
-This "remembers, does not yet police or retrieve semantically" design is deliberate for v1. The v2 upgrade — local embeddings and semantic recall, a consolidated narrative-fact store, and drift detection, all strictly soft-state — is specified in [`Plan/v2-memory-system.md`](Plan/v2-memory-system.md).
+This "remembers, does not yet police or retrieve semantically" design is deliberate for v1. A v2 upgrade — local embeddings and semantic recall, a consolidated narrative-fact store, and drift detection, all strictly soft-state — was sketched in `Plan/v2-memory-system.md`, but that plan is **decommissioned** (see [`docs/PLAN-POLICY.md`](docs/PLAN-POLICY.md)) and no such work is scheduled. Any future memory upgrade must be re-proposed on its own merits.
 
 ## 9. Persistence (`packages/core/src/store/`)
 
@@ -159,7 +163,9 @@ If you change the code, do not break these. Each is backed by tests.
 
 ## 13. Where to look next
 
-- Behavioral source of record: [`Plan/high-level-plan.md`](Plan/high-level-plan.md), [`Plan/low-level-plan.md`](Plan/low-level-plan.md), [`Plan/low-level-plan-v2.md`](Plan/low-level-plan-v2.md), [`Plan/attribute-integration.md`](Plan/attribute-integration.md), [`Plan/competitive-adoptions.md`](Plan/competitive-adoptions.md)
-- Current state: [`Audit/PROJECT_STATUS_AUDIT.md`](Audit/PROJECT_STATUS_AUDIT.md)
+- **Planning rules (read first):** [`docs/PLAN-POLICY.md`](docs/PLAN-POLICY.md)
+- **Current live state and the single next action:** [`docs/HANDOFF.md`](docs/HANDOFF.md)
+- **What recently landed and why:** [`docs/WORKLOG.md`](docs/WORKLOG.md) — append-only, newest entry at the **bottom**
+- Domain glossary + invariants: [`CONTEXT.md`](CONTEXT.md)
 - Per-package detail: [`packages/core/README.md`](packages/core/README.md), [`packages/ui/README.md`](packages/ui/README.md), [`packages/shell/README.md`](packages/shell/README.md)
-- The v2 memory port: [`Plan/v2-memory-system.md`](Plan/v2-memory-system.md)
+- Historical reference only (decommissioned as plans): `Plan/`, `Audit/`, `docs/superpowers/plans/`

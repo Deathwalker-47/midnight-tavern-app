@@ -54,7 +54,21 @@ It complements `ARCHITECTURE.md`; it does not replace the detailed implementatio
 5. Only present living registry actors participate in mechanics, and every mechanical action is
    resolved by the engine before narration may describe its outcome.
 
-## Task 15G target invariants — plan superseded, invariants deferred
+## Unsatisfied target invariants — no plan owns these any more
+
+**2026-08-12 (owner decision):** every pre-2026-08-12 plan is decommissioned, including the Plan 19
+that invariants 6, 7, 9, and 10 below were deferred to. See [`docs/PLAN-POLICY.md`](docs/PLAN-POLICY.md).
+Those invariants are therefore **unowned**: they remain honest statements of properties the runtime
+does *not* have, and they must never be claimed as landed, but no scheduled work is committed to
+them. Re-propose in a new `docs/plans/` document if they become worth building.
+
+**Invariant 9 is known to be actively violated**, confirmed against the owner's live save on
+2026-08-12: `orchestrator/turn.ts` merges the classifier's `classified.npcIntents` straight into the
+resolve loop with no disposition, hostility, or trigger-event check, so recent prose alone can
+authorize a new NPC mechanical action. Plan 13 Phase 2's `isHostileAct`/`deriveDisposition` work
+guards only the *deterministic* reaction path (`planNpcReactionsDetailed`), not this one.
+
+## Task 15G target invariants — historical framing
 
 **2026-08-02:** `docs/superpowers/plans/2026-08-02-npc-scene-system-redesign.md` is marked
 obsolete in favor of `Audit/2026-08-02-PRODUCT-AUDIT/13-implementation-plan-final.md` (see that

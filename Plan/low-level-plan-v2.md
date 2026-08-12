@@ -1,3 +1,9 @@
+> **DECOMMISSIONED 2026-08-12 - reference only, not a task list.**
+> Every plan written before 2026-08-12 is retired by owner decision; anything here that had not
+> already shipped by that date is **cancelled**, not deferred. Do not resume or cite this document
+> as a reason to do work. See [`docs/PLAN-POLICY.md`](../docs/PLAN-POLICY.md).
+> Behaviour this plan already produced is unaffected and stays defended by the test suite.
+
 # Implementation Spec — Batch 2 (for Claude Code)
 
 Addendum to `low-level-plan.md`. Same architecture, decisions (D1–D11), repo layout, and the hard/soft wall all still hold. This spec adds eight feature areas. Where a point touches the locked engine or the per-turn pipeline, the guardrail notes are **non-negotiable** — they exist to preserve the determinism USP. Build these after Milestone C (stories exist); points 1/5/8 can land alongside M3; point 6 depends on M6; points 2/3/4/7 depend on M7.

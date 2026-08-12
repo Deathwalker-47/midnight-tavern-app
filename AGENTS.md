@@ -1,5 +1,14 @@
 # AGENTS.md — operating protocol for coding agents
 
+> ## ⛔ Read [`docs/PLAN-POLICY.md`](docs/PLAN-POLICY.md) before you plan anything
+>
+> **Every plan document written before 2026-08-12 is DECOMMISSIONED**, by owner decision. Anything
+> in `Plan/`, `Audit/`, or `docs/superpowers/plans/` that had not shipped by 2026-08-12 is
+> **cancelled** — not deferred. That includes Audit Plan 13's deferred queue (Plans 21/19/20/18/23/10B).
+> Only plans created **after 2026-08-12**, living in `docs/plans/`, may be worked on. Do not resume
+> or cite an old plan as a reason to do anything. Shipped *behaviour* is unaffected — it is defended
+> by the test suite and the invariants in `CONTEXT.md` and `ARCHITECTURE.md` §12.
+
 This repo is worked on by AI coding agents **sequentially** (not in parallel). This file is the
 contract that lets any agent pick up where the last one stopped without losing context. Human
 CONTRIBUTING guidance lives in [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md); this file is the
@@ -17,10 +26,10 @@ agent-to-agent baton.
 
 1. Read [`docs/HANDOFF.md`](docs/HANDOFF.md) — the current live state and the *next action*.
 2. Skim the top (most recent) entries of [`docs/WORKLOG.md`](docs/WORKLOG.md) — what recently landed and why.
-3. Read the active plan named in HANDOFF. As of 2026-08-05 **there is no active plan** — Audit
-   Plan 13 (`Audit/2026-08-02-PRODUCT-AUDIT/13-implementation-plan-final.md`) is fully executed;
-   pick the next plan deliberately with the human before starting. HANDOFF is the source of truth
-   for what (if anything) is active.
+3. Read the active plan named in HANDOFF — it will be a file under `docs/plans/` dated after
+   2026-08-12. If HANDOFF names none, there is none: pick the next plan deliberately with the
+   human before starting. **Never** adopt a pre-2026-08-12 plan, however unfinished it looks; see
+   [`docs/PLAN-POLICY.md`](docs/PLAN-POLICY.md).
 4. Verify the baseline is green before you change anything:
    ```bash
    npm run typecheck

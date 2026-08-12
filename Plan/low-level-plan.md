@@ -1,3 +1,9 @@
+> **DECOMMISSIONED 2026-08-12 - reference only, not a task list.**
+> Every plan written before 2026-08-12 is retired by owner decision; anything here that had not
+> already shipped by that date is **cancelled**, not deferred. Do not resume or cite this document
+> as a reason to do work. See [`docs/PLAN-POLICY.md`](../docs/PLAN-POLICY.md).
+> Behaviour this plan already produced is unaffected and stays defended by the test suite.
+
 # Low-Level Implementation Plan — v1
 
 This document is the step-by-step engineering plan for building v1 of the application described in the High-Level Plan. It locks all design decisions, defines the full data model and database schema, specifies every core module with its contracts and build order, details the per-turn pipeline, and sets milestones with acceptance criteria. It is written to be executed top-to-bottom.

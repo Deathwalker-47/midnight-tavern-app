@@ -1,3 +1,9 @@
+> **DECOMMISSIONED 2026-08-12 - reference only, not a task list.**
+> Every plan written before 2026-08-12 is retired by owner decision; anything here that had not
+> already shipped by that date is **cancelled**, not deferred. Do not resume or cite this document
+> as a reason to do work. See [`docs/PLAN-POLICY.md`](../docs/PLAN-POLICY.md).
+> Behaviour this plan already produced is unaffected and stays defended by the test suite.
+
 # Attribute Integration — Design Specification
 
 A fully scoped spec for adding character **attributes** (STR/DEX/etc.-style raw capability stats) to the application. Attributes were missing from the original design, which modeled only skills (trained capability) and actions. This document defines how attributes slot into the already-locked architecture without disturbing the hard/soft wall, the per-turn pipeline, the classifier, the analyzer, or the summarizer.
