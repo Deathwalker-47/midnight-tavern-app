@@ -1,131 +1,57 @@
 # HANDOFF - current live state
 
-**Updated:** 2026-08-05 (Plan 13 complete — all phases 0 through 6.1 executed and pushed)
-**Branch / source baseline:** local `main` @ `9288a5a` (Phase 6.1), pushed to origin
-**App version:** `0.2.8`, unsigned; no new installer was built for this batch
+**Updated:** 2026-08-12 (Plan 13 independently re-verified against source; plan doc made self-describing)
+**Branch / source baseline:** local `main` @ `d8dc46f` + a pending docs commit; `ba49114` was the
+last pushed commit. **Not pushed** — the human has not asked.
+**App version:** `0.2.8`, unsigned; no installer built this session (docs-only changes)
 **User-owned/untracked:** `.agents/`, `.codex/`, `opencode.json` - preserve
-**Active plan:** none — `Audit/2026-08-02-PRODUCT-AUDIT/13-implementation-plan-final.md` is fully
-executed. Its own "Deferred queue" (Plans 21/19/20/18/23/10B) remains explicitly out of scope and is
-not an active plan; pick one deliberately with the user before starting any of it.
-**Superseded/obsolete:** `docs/superpowers/plans/2026-08-02-npc-scene-system-redesign.md` (Task
-15G) — do not implement; see the OBSOLETE notice at the top of that file for why. Its diagnosis
-sections below remain accurate reference material.
-
-## Why the plan changed
-
-Task 15G's own diagnosis (below) is correct, but its proposed fix required a 10-task Scene State
-rearchitecture as a prerequisite. `Audit/2026-08-02-PRODUCT-AUDIT/13-implementation-plan-final.md`
-fixes the same root defect (`isProvocation`/`chooseCounterAction` in `npcAgency.ts`) directly
-against existing data in its Phase 2, at a fraction of the cost, and additionally fixes a broader
-and more damaging gap the audit found: character/world soft-memory observations are recorded and
-displayed but never reach the narrator's prompt at all (Plan 13 Phase 1). Plan 13 is fully
-spec'd, sequenced by dependency, and ready to execute; Task 15G had only a RED fixture as its next
-action. See `docs/WORKLOG.md` (2026-08-02, "Adopt Plan 13...") for the full decision record.
-
-## Historical context (Task 15G diagnosis — accurate, but the fix direction below is obsolete)
-
-The latest packaged NPC failure was analyzed as a system-boundary problem. No gameplay source was
-changed and the installed save was inspected read-only only. Do not apply another isolated regex,
-planner-prompt, or UI filter patch before the Task 15G lifecycle fixture exists.
-
-The current implementation has multiple independent authorities interpreting raw prose:
-
-- the model registrar proposes identity/presence transitions;
-- deterministic narration grammar promotes/reconciles actors;
-- the classifier decides player mechanics;
-- `planNpcReactions` treats provocation mechanically;
-- `planNpcActions` invents current NPC intent from recent prose;
-- the narrator attempts to cover rulings;
-- the analyzer updates soft memory;
-- suggestion fallback tokenizes the latest prose.
-
-All can satisfy their local schema while disagreeing about who exists, who is present, what happened
-this turn, and what the player can do. `runTurnOperation` currently coordinates these paths in 676
-lines with cyclomatic complexity 39 and cognitive complexity 103.
-
-## Exact packaged evidence
-
-Installed story: `Cyraeth Adventure`, id `ab1c6258-e244-4e7d-9147-1b0d3396a2c7`.
-
-- Database: `C:\Users\anuji\AppData\Roaming\com.midnighttavern.app\midnight-tavern.db`
-- Native log: `C:\Users\anuji\AppData\Local\com.midnighttavern.app\logs\midnight-tavern.log`
-- Inspect SQLite with URI `mode=ro` and `PRAGMA query_only=ON`; WAL/SHM may be active.
-- The human will rewind and replay. Do not repair the current save in place.
-
-The relevant exchange proved:
-
-1. Failed `Reassure Survivor` triggered a Daen punch because `isProvocation` treats every opposed
-   action as hostile. Reassurance is supportive even when opposed.
-2. On the next player text, `Describe what you now`, player classification contained no mechanics,
-   but the NPC planner repeated Daen's prior punch as a fresh Unarmed Strike because it reads recent
-   prose without current trigger ids, disposition/goal state, or event consumption.
-3. Each strike removed 10 Health. The latest action's `stagnation_exposure` flag landed on Daen
-   because `setFlag` is actor-only even though the fiction framed exposure on the target.
-4. The latest narrator call timed out at roughly 60 seconds after writing prose that did not depict a
-   fresh strike. The turn still committed the ruling/damage and appended the deterministic sentence
-   `Daen's Unarmed Strike succeeds. A solid blow lands against the target.`
-5. Prose established the archer as `Kellan` and physically included the older woman and dog, but the
-   Present strip retained only the player and Daen.
-6. `The archer - Kellan -` is outside current reveal grammar; `Kellan finally lowered...` is missed
-   because an adverb separates the name and actor verb. Existing absent actors are skipped by
-   deterministic discovery unless they enrich a generic identity, so known older-woman/dog rows do
-   not re-enter from clear current prose.
-7. Possible Moves used `describe` and `slowly` as scene subjects because the deterministic fallback
-   takes reversed surviving words from narration rather than typed actors/facts/affordances.
-8. Emergent actor skill selection scans the whole narrator message, so unrelated actors can receive
-   the same keyword-derived loadout.
-
-Current installed character state at inspection included the player at 80/100 Health, Daen present,
-and multiple other actors absent. There was no `Kellan` character row. Do not treat that state as the
-target or mutate it; it is evidence for the RED fixture.
-
-## Target architecture proposed for Task 15G — OBSOLETE, not being built
-
-This section is kept only as a record of what was considered and rejected. **Do not build this.**
-
-- One engine-owned, active-variant **Scene State** is the shared input for classification, NPC
-  agency, narration, soft memory, UI presence, and suggestions.
-- Model registrar/prose grammar become candidate generators of evidence-backed `SceneObservation`s;
-  one deterministic Scene Reconciler owns id, alias, actor-kind, and presence decisions.
-- A bounded **Narrative Beat Plan** proposes organic actors before prose. The engine reconciles and
-  stages them, grants actor-local sealed capabilities, and gives the narrator an immutable contract.
-- Committed prose may contain an individual actor only when the contract resolves that actor to one
-  registry id. Scenery and background collectives remain non-characters.
-- NPC mechanics consume a current hostile trigger event or a persisted validated agenda. Prior prose
-  is context, not a fresh trigger. `opposed` is not equivalent to hostile. **This one bullet is
-  still being fixed — via Plan 13 Phase 2's `deriveDisposition`, not via this Scene State design.**
-- Rulings render before prose and own mechanical detail. Prose covers each current ruling causally
-  once. Provider timeout/fallback status remains separate UI metadata; no engine recap is appended
-  to story prose. **Also still being fixed — Plan 13 Phase 3 (Ruling presentation) and the narrower
-  Task 7 idea of separating `safeSummary` from prose, without the rest of this architecture.**
-- Possible Moves compose from typed scene affordances, never arbitrary nearby words. **Also still
-  being fixed — Plan 13 Phase 5, using typed anchors instead of `sceneAnchors` reversal.**
-- Identity, aliases, presence, trigger consumption, rulings, prose, and active narrator-variant
-  scene snapshots remain atomic and rewind/retry/restart safe. **Not being pursued now** — no
-  replacement scheduled; revisit only if the disposition/UI/suggestions fixes above prove
-  insufficient for the specific actor-identity failures logged below (Kellan, older woman, dog).
-
-The 10-task dependency order this plan specified (RED lifecycle fixture → domain/persistence →
-reconciler → pre-narration contract → actor-local capabilities → event-driven agency →
-ruling/presentation split → affordance suggestions → turn-coordinator decomposition → one combined
-package) is **not being executed**. Several of its individual *goals* are being achieved more
-cheaply through Plan 13; only the full-rearchitecture *path* to them was rejected.
+**Active plan:** none. `Audit/2026-08-02-PRODUCT-AUDIT/13-implementation-plan-final.md` is complete
+and now says so at the top of the file. Its Deferred queue (Plans 21/19/20/18/23/10B) is open,
+unscheduled, and **the owner has not picked one** — do not assume it is next.
 
 ## Verification state
 
-Current, after Plan 13 completion (HEAD `0b7805b`):
+Measured this session on a clean tree at `ba49114`:
 
-- `npm run typecheck`: passed in both workspaces.
-- `npm test`: core **670 / 47 files**, UI **183 / 27 files**, **853 total**, passed.
-- Only user-owned `.agents/`, `.codex/`, and `opencode.json` remain untracked; nothing else pending.
+- `npm run typecheck`: **clean** in both workspaces.
+- `npm test`: core **670 / 46 files**, UI **183 / 26 files**, **853 total**, all passing.
 
-No native/package build was run this batch (no installer needed for these source + docs changes).
-Before any later packaged/provider-acceptance claim, run the focused suites plus full
-typecheck/tests, direct builds, and `cargo check` in `packages/shell/src-tauri`.
+> Note: prior HANDOFF revisions said 47/27 *files*. That was a miscount — the real figures are
+> **46/26**. Test counts (670/183) were always right, so no test was ever lost.
 
-_(The Task 15G sections below this point are retained as historical reference — the diagnosis is
-accurate, but its proposed fix direction is obsolete; do not act on it. See the OBSOLETE notice in
-`docs/superpowers/plans/2026-08-02-npc-scene-system-redesign.md`.)_
+No native/package build was run. Before any packaged or provider-acceptance claim, run the focused
+suites plus full typecheck/tests, direct builds, and `cargo check` in `packages/shell/src-tauri`.
+
+## What landed this session
+
+**`d8dc46f` — docs: record Plan 13 completion in the plan itself + amend two stale acceptance
+criteria.** Docs only, one file, +95/−2. No source touched, so the suite is unchanged.
+
+Plan 13 had **no checkboxes at all**, so its completion existed only as a claim in WORKLOG/HANDOFF.
+All 22 steps were re-verified individually against source (see the 2026-08-12 WORKLOG entry for the
+per-step evidence), and the document now carries a `Status: ✅ COMPLETE` header, a 22-item checklist,
+and the six deferred plans as **open** checkboxes.
+
+Two acceptance criteria in the plan were stale and are struck through + amended in place:
+
+- **Step 0.3** demanded zero `submitTurnLegacy` hits while also requiring the eight-phase comment —
+  which names that function — to survive. Now tests for a definition/call/export; returns zero.
+- **Step 3.8** demanded zero `JSON.stringify` under `packages/ui/src/screens/`, which **Step 6.1 of
+  the same plan** deliberately violates for the Diagnostics export. Now excludes that file; returns
+  zero.
+
+Neither was a code defect. Also recorded: Phase 3 landed 833 tests vs a projected 835 (the split
+differs, the coverage does not).
+
+## Things a stale briefing may get wrong
+
+- `AGENTS.md:21` was already fixed in `ba49114`. It correctly says there is no active plan. Do not
+  "fix" it again.
+- `docs/WORKLOG.md` says "Newest first" in its header but the protocol is **append**, so the newest
+  entry is at the **bottom**. Read the tail, not the head.
+- Plan 13's `turn.ts:651` reference for the unbounded `store.rulings.listByStory(storyId)` read has
+  drifted — it is now at **`turn.ts:502`**. The read itself is still there and still unbounded; it
+  belongs to Plan 19.
 
 ## Non-negotiable rules
 
@@ -138,24 +64,24 @@ accurate, but its proposed fix direction is obsolete; do not act on it. See the 
   presence.
 - Do not weaken threshold-backed death or ruling-before-prose behavior.
 - Preserve browser/native bridge parity and user-owned untracked paths. Do not push.
-- Do not build intermediate installers. Build once after all Task 15G source slices are complete.
-
-## Plan 13 — complete
-
-All phases (0 through 6.1) are implemented, tested, and committed. See `docs/WORKLOG.md` for the
-full account: the 2026-08-02 entry covers Phases 0-2 (truth & safety, memory reaches the model,
-disposition-aware NPCs); the 2026-08-05 entry covers Phases 3-6.1 (UI visibility, rewind
-immutability proof, typed suggestion anchors, honest stage-fallback outcomes, and local opt-in
-diagnostic counters + a Diagnostics screen). Both entries record the corrections made against
-source where the plan's own premise was stale, and the deliberate deviations taken.
-
-Final verified state: core **670 tests / 47 files**, UI **183 tests / 27 files**, **853 total**,
-`npm run typecheck` clean in both workspaces. Commits `50cd0c2` (Phase 6.0) and `9288a5a` (Phase
-6.1) are pushed to `main`; all earlier phases were committed and pushed in prior sessions.
+- Release/signing/updater/CSP work is a later phase — do not start it unless this file says so.
 
 ## Single next action
 
-No active plan. Before starting new work, decide with the user whether to pick an item from Plan
-13's own "Deferred queue" (Plans 21/19/20/18/23/10B in
-`Audit/2026-08-02-PRODUCT-AUDIT/13-implementation-plan-final.md`) or something else entirely — do
-not assume the deferred queue is next just because it's listed.
+**Await the owner's decision on what to work on next, then write it here.** Nothing is scheduled.
+
+The deferred queue is real but is a 10-day-old audit's sense of priority, formed before Plan 13
+shipped — it is a menu, not an instruction. In dependency order (explicitly *not* priority order):
+
+| Plan | Scope | Size | State |
+| --- | --- | --- | --- |
+| 21 | Decompose `validateStorySchema` (`bootstrap/validate.ts:130`, 224 lines, returns prose `string[]`) into one validator per concern with typed codes | M | Unblocked; blocks nothing. Verified premise still holds. |
+| 19 | One shared actor/scene/event model; `turn/` phase split; migration 17 | XL, 1–3 mo | Preconditions hold (ladder still at 16). Root cause of the NPC-behaviour issues. |
+| 20 | Port the v2 memory system (facts/embeddings/consolidator/retrieval/drift) | XL | Needs Plan 19 landed first. |
+| 18 | First-run onboarding + a premise engineered to hit a denial in <5 min | L | Unblocked now that Phases 3 and 5 shipped. |
+| 23 | Art direction + portrait pipeline | XL | Step 1 (CSS/token rules) separable and cheap. Needs an owner call on portrait source. |
+| 10B | User-selectable image generation | FUTURE | Owner-classified as future; recorded, not scheduled. |
+
+A play-test of the packaged app would be worth more than any of these right now: Plan 13 Phase 2
+shipped the disposition fix for the NPC misbehaviour, and **whether that actually worked in play
+determines whether Plan 19 is urgent or merely eventual.** That evidence does not exist yet.

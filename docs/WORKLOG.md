@@ -1767,3 +1767,66 @@ two phase-scoped commits (Phase 6.0 had been implemented but not yet committed a
 **Plan 13 is now complete in its entirety.** The "Deferred queue" listed in the plan document
 (Plans 21/19/20/18/23/10B) remains explicitly out of scope — it was never part of "the rest of the
 phases."
+
+---
+
+## 2026-08-12 — Verify Plan 13 completion against source; make the plan document self-describing
+
+No behaviour change. This session opened with the start-here checklist and the owner's question:
+*have we actually completed everything in Plan 13?* The honest answer required checking, because
+**the plan document contained zero checkboxes** — `grep "\[ \]"` and `grep "\[x\]"` both returned
+nothing — so the only record of completion lived in this worklog and HANDOFF, i.e. in the claims of
+the sessions that did the work rather than in the tree.
+
+**Baseline re-verified on a clean tree at `ba49114`:** `npm run typecheck` clean in both workspaces;
+`npm test` green at **853** — core **670 / 46 files**, UI **183 / 26 files**.
+
+**All 22 steps confirmed present in source**, individually, not inferred: 0.1–0.3 (README clean,
+`CONTEXT.md` defect section present, `submitTurnLegacy` gone); 1.1–1.6 (`condenseSoftSlice` name map,
+observations at `injector.ts:60`, `WORLD STATE:` at `context.ts:558`, `asymptoticDelta`, the Zod
+thread-id transform, and all three analyzer `statMode` gates removed — the four remaining
+`statMode === "full"` hits gate runtime items, ruling facts, NPC introduction and narrated-entity
+promotion, none of which are the analyzer); 2.1 (`isHostileAct` / `isOpposedContest` /
+`deriveDisposition` present, `isProvocation` gone); 3.1–3.8 (`formatEquipmentEffect` plus its
+browser-safe deep re-export, the `gate.code` branch, the `npc` and `classifier-unavailable` variants,
+opposed dice, the `boundary` and `interrupted` chips, `listChapters` in `App.tsx`); 4.1
+(`turn_rewound` in schema, history and journal); 5.1 (typed `SceneAnchorKind`, with
+`UNSAFE_FALLBACK_ANCHORS` / `suggestionWords` / `SUGGESTION_STOP_WORDS` all at zero hits); 6.0–6.1
+(`outcome`/`cause` split, `observability/`, `Diagnostics.tsx`, zero migration-17 refs, zero network
+calls, zero `store.` refs in `counters.ts`).
+
+**Three discrepancies found, all documentation-side; none is a code defect.**
+
+1. **Step 0.3's acceptance was self-contradicting.** It demanded `grep -rn "submitTurnLegacy"
+   packages/` return zero hits *and*, three lines later, that the eight-phase comment survive — but
+   that comment names the retired function (`turn.ts:396`). Amended in place to test for a
+   definition, call or export instead; verified returning zero. The only other hit is in
+   `packages/core/dist/`, a gitignored build artifact.
+2. **Step 3.8's acceptance was superseded by a later step in the same plan.** It demanded zero
+   `JSON.stringify` under `packages/ui/src/screens/`; Step 6.1 deliberately adds one at
+   `Diagnostics.tsx:56` for the diagnostics export — a file download, not the player-facing JSON leak
+   the criterion exists to catch. Amended to exclude that file; verified returning zero.
+3. **Phase 3 landed 833 tests against a projected 835** (core 655 / UI 178 vs core 658 / UI 177).
+   Every Phase 3 step's change is present in source, so this is where the tests landed, not whether
+   the behaviour is covered — which the plan itself anticipated ("treat the split as the check, not
+   the exact total"). The final 853 clears every ledger checkpoint.
+
+**Landed (`d8dc46f`, docs only, +95/−2 in one file).** `13-implementation-plan-final.md` now opens
+with a `Status: ✅ COMPLETE` header (completion dates, verifying commit, final counts, method, and
+the ledger note), a 22-item completion checklist, and the six deferred plans as **open** checkboxes
+so remaining scope is visible without reading to line 3673. Both stale criteria are struck through
+and amended in place rather than deleted, per the audit's own auditability convention.
+
+**Two smaller corrections for the next agent.** `AGENTS.md:21`'s stale pointer to
+`Plan/next-phase-internal-beta.md` was already fixed in `ba49114` — no action needed, contrary to
+what a stale briefing may say. And HANDOFF was quoting **47/27 test files**; the real numbers are
+**46/26**. Test counts (670/183) always matched, so nothing was ever lost — it was a miscount, now
+corrected in HANDOFF.
+
+**Gotcha worth carrying forward.** `docs/WORKLOG.md`'s own header says *"Newest first"* while the
+protocol in `AGENTS.md` says *append* — so entries are in fact oldest-first and the newest is at the
+bottom. Reading the top of this file gives you 2026-08-01, not current state. Left as-is rather than
+renumbering history; just know which end to read.
+
+**No active plan.** The deferred queue (Plans 21/19/20/18/23/10B) is open and unscheduled; the
+choice is the owner's and has not been made.
