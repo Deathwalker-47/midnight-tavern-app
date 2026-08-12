@@ -147,10 +147,29 @@ different elements, and sections 27–29 (healing / buff / debuff) likewise.
 - [ ] **4.1** Derive the archetype set from the taxonomy by collapsing shape-identical entries.
       Target: **80–150 archetypes** covering the whole 3,000-entry pool. Record the mapping in config
       so it is auditable.
-- [ ] **4.2** Entries that genuinely have no archetype (section 67 "Unique / Legendary" —
-      "Reverse Cause and Effect", "Swap Bodies") are **excluded from the pool for now**. They need
-      bespoke mechanics the engine cannot express. Record the exclusion list with reasons; do not
-      quietly drop them.
+- [ ] **4.2** **Exclusion is engineering's call** (owner, 2026-08-13: *"remove whatever you feel not
+      plausible"*). An entry is excluded when the engine cannot express it without new capabilities.
+      Record every exclusion with a reason (§4b.2 keeps it in the file with `"excluded": true`), so
+      the decision is reviewable and reversible rather than an unexplained absence.
+
+      The exclusion test: **can this be expressed as a gated d20 check producing deterministic
+      effects on tracked state?** If not, it is out.
+
+      Excluded by that test, with the reason:
+
+      | Group | Reason |
+      | --- | --- |
+      | §67 Unique/Legendary — "Reverse Cause and Effect", "Swap Bodies", "Return From Death Under Specific Condition", "Turn Lies Into Reality" | Require rewriting committed history or engine identity. Directly violate the immutability of past rulings. |
+      | §22 Time Magic — "Stop Time", "Rewind Time", "Undo Injury", "Reset Position" | Same: they mean un-committing a ruling. The engine's rollback is a *player* affordance, not an in-fiction power. |
+      | §30 Summoning, §31 Transformation (whole sections) | Need a creature-instantiation and body-swap model that does not exist. Genuinely good features — hold for a future plan rather than fake them. |
+      | §54 Soul, §55 Dream (whole sections) | Need a parallel state space (souls, dream layers) with no engine representation. |
+      | §61 Sacrifice — "Sacrifice Lifespan", "Sacrifice Memory", "Sacrifice Skill" | Trade against state the engine does not track. **Keep** the ones that trade tracked resources (Sacrifice Health/Mana/Stamina/Item). |
+      | §59 Luck — "Reroll", "Force Reroll", "Probability Shift" | Re-rolling breaks the "swipe never re-rolls" invariant and the determinism guarantee. **Keep** the passive ones (Increased Luck) as flat modifiers. |
+      | §46 Languages (whole section) | Better modelled as story flags/lore than as skills with DCs. |
+
+      Everything else in the 166 sections is expressible. Note that the exclusions are concentrated
+      in Part I; **the non-combat expansion (§68–166) is almost entirely expressible** as social,
+      knowledge, craft, and care checks — which is why §4.3 does it first.
 - [ ] **4.3** Non-combat sections (68–166) are largely **social/knowledge checks** against an
       attribute with no target harm — a very small number of archetypes covers hundreds of entries
       (`social_check`, `knowledge_check`, `craft_check`, `care_check`). Do these first; they are the
@@ -368,11 +387,21 @@ A model may propose enabling a pool entry when the story demands it. Guards, all
       invariant 7** and is the most likely silent bug in this plan.
 - [ ] **6.6** **Visible and reversible.** Every enablement is a journal event and the player can
       disable it again from the UI (§7).
-- [ ] **6.7** **Which model proposes?** Recommendation: **not** the narrator (it would enable things
-      to justify prose it already wrote) and **not** the classifier (it would bias toward enabling
-      whatever it failed to classify — a feedback loop that would defeat plan 02). Prefer a bounded
-      call on the **analyzer** or a dedicated post-turn stage, running off the critical path, so a
-      failure never blocks a turn. **Owner decision D9.**
+- [ ] **6.7** **The analyzer proposes** (owner decision D9, answered 2026-08-13). Explicitly **not**
+      the narrator (it would enable things to justify prose it already wrote) and **not** the
+      classifier (it would enable whatever it just failed to classify — a feedback loop that defeats
+      plan 02). The analyzer already runs post-turn, off the critical path
+      (`orchestrator/turn.ts` → `runBackground`), and already swallows its own errors, so a failed
+      enablement proposal can never block or fail a turn.
+
+      Two consequences of choosing the analyzer, both good:
+      - It sees the **committed** narration, so it proposes against what actually happened rather
+        than against a draft.
+      - It is already the sole writer of soft state, so it is the one model the architecture already
+        trusts with a post-turn write path. Enablement is a *catalogue* write, not hard state on a
+        character (§3.1), so this does not widen its authority over mechanics.
+      - [ ] Enablement must be committed in its own transaction, not folded into the analyzer's
+            soft-state patch, so a soft-state failure cannot half-apply a catalogue change.
 
 ## 7. The enablement UI (owner's point 2, and finding 25.5)
 
@@ -385,9 +414,23 @@ Two surfaces, both in Story Settings:
 
 - [ ] **7.1** The pool browser must stay usable at ~3,000 entries. Virtualize, and lazy-load section
       contents. Measure; do not guess.
-- [ ] **7.2** Disabling an action that a character has already **learned** is a conflict. Proposed:
-      allow it, mark the learned skill dormant, keep the hard state intact so re-enabling restores
-      it. Never delete learned hard state because a catalogue toggle changed. **Owner decision D8.**
+- [ ] **7.2** **Disabling an entry any character has learned is FORBIDDEN** (owner decision D8,
+      answered 2026-08-13: *"Lets not allow to disable any skill thats been assigned to a
+      character."*). This supersedes the earlier "mark it dormant" proposal, and is better: dormancy
+      would have created a third state (enabled / disabled / learned-but-disabled) that every
+      consumer — gate, classifier catalogue, living card, dossier — would have had to reason about.
+      Refusing outright keeps two states.
+
+      Implementation:
+      - The check lives in **core**, not the UI: `mayDisableEntry(storyId, entryId)` returns false if
+        any character in the story has it in `hard.skills`, or has an equipped item granting it
+        (§8.2's weapon specials). Both bridges refuse identically; add a parity test.
+      - The UI shows the toggle as disabled with an honest reason naming **who** learned it
+        ("Jinwoo has learned this"), so the player knows what to do about it.
+      - Applies to the player's manual toggles **and** to any programmatic disable.
+      - It follows that **the pool can only grow within a story's lifetime** once anything is
+        learned. That is the correct trade: a catalogue that shrinks under a character's feet would
+        strand hard state the ledger legitimately wrote.
 - [ ] **7.3** Design deliverable — see the design brief.
 
 ## 8. Findings 20 and 31 (unchanged from the previous version)
@@ -416,11 +459,14 @@ Two surfaces, both in Story Settings:
 
 ## 9. Owner decisions
 
-| # | Decision |
-| --- | --- |
-| D7 | New stories only, or migrate existing saves? (unchanged; still the biggest cost driver) |
-| **D8** | Disabling an action a character has already learned — dormant (recommended) or forbidden? |
-| **D9** | Which model may propose mid-story enablement, and should it require player confirmation the first time? |
+| # | Decision | Status |
+| --- | --- | --- |
+| D7 | New stories only, or migrate existing saves? | **OPEN** — still the biggest cost driver |
+| D8 | Disabling an entry a character has learned | **ANSWERED 2026-08-13: forbidden.** See §7.2 |
+| D9 | Which model proposes mid-story enablement | **ANSWERED 2026-08-13: the analyzer.** See §6.7 |
+| — | Which taxonomy entries to exclude | **DELEGATED to engineering 2026-08-13.** See §4.2 |
+
+**D7 is now the only open decision in this plan**, and it is the same one that gates plans 05 and 08.
 
 ## 10. Implementation order
 

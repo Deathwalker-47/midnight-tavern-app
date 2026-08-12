@@ -180,8 +180,9 @@ enable/disable toggles. This is the hard one:
   tell me if that's clutter.
 - Some entries are **locked by tier** — a legendary skill can't be enabled in chapter one. How does a
   locked-but-visible entry read without feeling like a paywall?
-- Disabling something a character has already learned is a conflict state. It needs a visible,
-  non-alarming treatment.
+- An entry a character has already learned **cannot be disabled** — the toggle is refused, and the
+  UI should say who learned it ("Jinwoo has learned this"). How does a permanently-locked-on toggle
+  read without looking broken?
 
 Assume the browser is opened rarely and deliberately — it is a settings surface, not a play surface.
 It can afford to be dense and screen-filling in a way the Play screen cannot.
