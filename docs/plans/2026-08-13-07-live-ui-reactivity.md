@@ -162,25 +162,32 @@ success/failure colour, so an NPC failure is teal exactly like an NPC success.
 
 ### Design
 
-Keep the NPC *register* (the `RULING · NPC` label, the reason line) but let **outcome** own the
-colour, which is what the owner asked for: failure red for everyone, success may stay blue/teal.
+Keep the NPC *register* (the `RULING · NPC` label, the reason line) but let **failure** own the
+colour. The owner's instruction (finding 14) is exact and needs no design round-trip:
+
+> "NPC success and failure both are blue which is odd. Make it so that failure is red for everyone,
+> success can remain blue."
+
+So: NPC **failure** and **crit-failure** take the failure accent; NPC **success** and
+**crit-success** keep teal, preserving the NPC register for the non-alarming case.
 
 ```ts
 if (props.variant === "npc") {
-  return props.roll ? outcomeVar(props.roll.outcome) : "var(--teal)";
+  const outcome = props.roll?.outcome;
+  return outcome === "failure" || outcome === "crit-failure"
+    ? outcomeVar(outcome)
+    : "var(--teal)";
 }
 ```
 
-`outcomeVar` already maps `failure`/`crit-failure` to the red token and success to its own. Confirm
-the exact tokens with the design brief before changing — the owner explicitly wants NPC *success*
-to remain blue, which may mean NPC success should keep teal while only failure switches to red. That
-is a two-line conditional, but it is a **design decision**, so it is in the design brief.
-
-- [ ] **3.1** Confirm with design: NPC success teal, NPC failure red? Or full outcome colouring?
-- [ ] **3.2** RED test in `packages/ui/test/components/RulingArtifact.test.tsx`: an `npc` variant
-      with a `failure` roll renders the failure accent; with `crit-failure`, the crit-failure accent.
-- [ ] **3.3** Implement; verify the `stacked` variant (which takes colour from the final roll) is
-      unaffected.
+- [ ] **3.1** RED test in `packages/ui/test/components/RulingArtifact.test.tsx`: an `npc` variant
+      with a `failure` roll renders the failure accent; with `crit-failure`, the crit-failure
+      accent; with `success` **and** `crit-success`, still teal.
+- [ ] **3.2** Implement; verify the `stacked` variant (which takes its colour from the final roll)
+      is unaffected, and that the left border, background tint and stamp all follow the same accent
+      — `accentFor` feeds all three, so one change covers them.
+- [ ] **3.3** Check the `--dead` token has enough contrast against `--bg2-card` for the stamp border
+      at 2px. If it does not, that is the one thing here worth raising with design; otherwise ship it.
 
 ---
 
