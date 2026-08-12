@@ -67,13 +67,49 @@ table, cost, or gate. §4 is how that gets solved affordably.
 | **Story enablement set** | The subset of pool ids active for one story. Chosen at forge time, editable by the player, extendable mid-story under rules. | No — grows under §6 rules | **Yes** — this is the classifier's catalogue |
 | **Character learned set** | What a character has actually learned. | No | Yes, as part of hard state |
 
-**Enable ≠ learn.** This is the most important rule in this plan.
+### 3.1 The absolute rule (owner, 2026-08-13)
 
-- *Enabling* a skill puts it in the story's catalogue: it becomes a thing that exists in this world.
-- *Learning* it still requires the existing `unlockPaths` (trainer / manual / trial) and the gate.
+> *"No one can make user or any characters learn a skill. You can only unlock or lock it in the
+> global pool of available skills/actions."*
 
-Without that separation, "the story demands it" becomes a route for a model to grant itself
-Resurrection to escape a death. **A model may enable; only the engine may grant.**
+**Enablement operates on catalogue availability ONLY. It never touches character hard state.**
+
+| Operation | Who may do it | What it changes |
+| --- | --- | --- |
+| Enable / disable a pool entry | forge at creation; the player by hand; a model's validated mid-story proposal | the **story's catalogue** — what exists in this world |
+| A character learns a skill | **the ledger only**, via the deterministic paths in §3.2 | that character's **hard state** |
+
+A model may never cause a character to learn anything, directly or indirectly. Enabling
+`Resurrection` into a story's catalogue does not put it in anyone's hands — it only means the world
+now contains such a thing.
+
+### 3.2 How characters actually learn, unchanged by this plan
+
+All of these are engine-owned, deterministic, and ledger-written:
+
+- `startingState.skills` at forge time.
+- The existing `unlockPaths` — `trainer` / `manual` / `trial` — routed through
+  `LEARN_SKILL_ACTION_ID` → `tryUnlock` (`packages/core/src/engine/unlock.ts`).
+- Mastery rank advancement from accumulated successes (`masteryAdvance`).
+- A quest reward the **player explicitly chooses** from a fixed engine-derived set (plan 10 §7).
+
+None of these is a model decision. The classifier may recognise "I ask the smith to teach me", but
+the engine decides whether the prerequisites, cost, and gate permit it.
+
+### 3.3 Terminology — fix this now or it will cause a bug
+
+The word "unlock" is currently overloaded across the codebase and these plans, and the two meanings
+have opposite authority rules. **Every plan, test name, type, and UI string must use:**
+
+| Term | Meaning | Authority |
+| --- | --- | --- |
+| **enable / disable** | a pool entry is or is not in this story's catalogue | model may propose; player may set |
+| **learn / grant** | a character acquires a skill into hard state | **ledger only** |
+
+`SkillDef.unlockPaths` is pre-existing and means *learn*. Do **not** rename the field (it is
+persisted in frozen schemas), but never describe enablement as "unlocking" in new code or copy.
+Plan 10's quest reward `skill_unlock` **must be renamed `skill_grant`** for the same reason —
+see plan 10 §3.
 
 ## 4. Authoring the pool affordably — archetype + flavour
 
@@ -145,6 +181,161 @@ validator tests rather than opinions.
 - [ ] **4.7** Where an entry cannot satisfy the rules without inventing a new engine capability
       (summoning, transformation, time manipulation), it goes on §4.2's exclusion list rather than
       being forced into an ill-fitting archetype. **Record it; do not silently drop it.**
+
+## 4b. Pool structure (engineering's call, per owner grant)
+
+> **Owner, 2026-08-13:** *"You structure whatever the way you feel best for all the actions and
+> skills."*
+
+Two files, both versioned config shipped with the app, both snapshotted into a frozen rulebook via
+`mechanicsConfigVersions` so an old story keeps the semantics it was forged against.
+
+### `universal-archetypes.json` — the mechanics (80–150 entries)
+
+An archetype owns everything mechanical. It is story-agnostic: it refers to attributes and resources
+by **role**, never by a story's specific ids, and expresses damage as a multiple of the story's
+baseline rather than an absolute number.
+
+```jsonc
+{
+  "id": "arch.magic.elemental_bolt",
+  "kind": "action",
+  "category": "combat",
+  "governingRole": "magic",              // resolved to a real attribute at enablement
+  "dc": 12,
+  "costs": { "mana": 4 },
+  "cooldownTurns": 0,
+  "targeting": { "scope": "single" },
+  "damageMultiple": 1.5,                 // × the story's baseline natural-attack delta
+  "params": [{ "name": "element", "type": "string" }],
+  "effects": { "crit_success": {...}, "success": {...}, "failure": {...}, "crit_failure": {...} }
+}
+```
+
+### `universal-pool.json` — the named entries (~3,000)
+
+An entry is flavour plus a pointer at an archetype. It carries **no** mechanics of its own; that is
+what makes bulk authoring safe and what guarantees §4.5's symmetry rule by construction.
+
+```jsonc
+{
+  "id": "uni.magic.fire.fire_bolt",
+  "name": "Fire Bolt",
+  "kind": "action",
+  "archetypeId": "arch.magic.elemental_bolt",
+  "params": { "element": "fire" },
+  "section": "10-fire-magic",            // the taxonomy's own section, preserved
+  "tier": "common",
+  "tags": ["magic", "fire", "ranged", "damage"],
+  "settingFit": ["fantasy", "any"],      // drives forge selection; see §5
+  "description": "A darting bolt of flame."
+}
+```
+
+**Id scheme:** `uni.<domain>.<group>.<snake_name>` for entries, `arch.<domain>.<shape>` for
+archetypes. Stable forever — ids are persisted in enablement sets and frozen rulebooks, so **an id
+may never be reused or repurposed**. Renaming a display name is fine; changing an id is a migration.
+
+**Why `section` is preserved verbatim:** the owner's taxonomy is already a good human organisation
+(166 named sections), it is what the pool browser groups by, and keeping it means the file can be
+re-imported and diffed against future revisions of the taxonomy.
+
+**Why `settingFit` exists:** a modern-day thriller should not be offered Necromancy, and a medieval
+story should not be offered Drone Control. This tag is the cheapest possible relevance filter and it
+runs deterministically *before* any model sees the index — which keeps §5.3's selection prompt small
+and stops the forge wasting tokens rejecting obviously wrong entries.
+
+**Why `tags` exists separately from `section`:** sections are taxonomic (where a human would file
+it), tags are functional (what it does). Selection and the plan 11 suggestion funnel both key off
+tags; the browser keys off sections.
+
+- [ ] **4b.1** `kind: "action" | "skill"` distinguishes the two, but they share one file, one id
+      scheme, and one browser. They differ only in whether they gate (skill) or are performed
+      (action). Keeping them in one structure avoids two parallel systems that would inevitably
+      drift, which is the same mistake §8.1 warns about for items.
+- [ ] **4b.2** Entries excluded per §4.2 stay in the file with `"excluded": true` and a reason, so
+      the exclusion is visible and reviewable rather than an absence.
+
+## 4c. External configuration and user overrides
+
+> **Owner, 2026-08-13:** *"All the universal items should be configurable from outside, even their
+> attribute changes."*
+
+Everything in the universal layer — archetypes, pool entries, and items — must be editable by the
+human outside the app, including the mechanical numbers (DC, costs, cooldowns, damage multiples,
+effect tables, tiers), not merely enable/disable.
+
+### 4c.1 This does not weaken the authority wall — say so explicitly
+
+The authority wall forbids **models** writing mechanics. It has never forbidden the **human**. In a
+solo game the player is their own game master, and editing a rulebook is what game masters do. A
+future agent must not "fix" this as a violation.
+
+The wall is preserved because the edit path is: human → file on disk → validated on load → frozen
+into a story. No model is anywhere on that path.
+
+### 4c.2 Where overrides live
+
+Shipped defaults stay in the app bundle and are never written to. Overrides live beside the
+database, in a directory the user can open, edit, and version-control themselves:
+
+```
+%APPDATA%\com.midnighttavern.app\
+  config\
+    universal-archetypes.json     # optional override
+    universal-pool.json           # optional override
+    universal-items.json          # optional override
+    README.md                     # written on first run: what these are, how merging works
+```
+
+- [ ] **4c.3** Resolution is **deep-merge by id over the shipped defaults**, not wholesale
+      replacement. A user who wants to change one DC edits one entry; they do not have to maintain a
+      copy of 3,000 entries. An override entry may set any subset of fields.
+- [ ] **4c.4** A `"remove": true` marker on an id removes a shipped entry from the pool, so the user
+      can delete as well as edit.
+- [ ] **4c.5** New ids may be added. **A user-authored entry is as legitimate as a shipped one** —
+      this is the natural way for someone to add their own content, and it costs nothing extra since
+      the merge already handles it. It must still reference a real archetype and pass validation.
+- [ ] **4c.6** Expose the folder from the UI ("Open config folder") and offer "restore defaults" per
+      file. Non-technical users must be able to get back to a working state.
+
+### 4c.7 Validation — the part that keeps this safe
+
+User-edited config is untrusted input in the ordinary engineering sense. On load:
+
+- Validate every merged entry against the Zod schema **and** the §4.5 balance rules.
+- An entry that fails is **skipped with a clear, surfaced error naming the file, id, and field** —
+  the app must not crash, silently drop it, or start a story with a half-loaded pool.
+- Balance-rule violations are **warnings, not errors**: the human is allowed to make an unbalanced
+  game deliberately. Schema violations are errors, because they would break the engine.
+- Surface the results in Story Settings, not just a log — a user who broke their config needs to see
+  why without opening a terminal.
+
+- [ ] **4c.8** Clamp adversarial-looking values the way `MAX_ITEM_DAMAGE_BONUS` already clamps item
+      damage, so a typo of `50000` degrades gracefully rather than producing an unplayable turn.
+
+### 4c.9 The frozen-schema collision — the real design problem here
+
+`mechanicsConfigVersions` exists specifically so config drift cannot change a story that was already
+forged. If a user edits an archetype's DC, does a story mid-play change?
+
+**Default: no.** A story stays locked to the config it was forged against. This preserves the
+product's core promise — the rules do not move under you — and it keeps rewind and replay
+deterministic, which matters because a rewound turn re-derives from the current config.
+
+**But the human is the GM**, and refusing to let them tune their own live game would be
+paternalistic. So:
+
+- [ ] **4c.10** Add a per-story setting: **"Rulebook config: locked to creation (default) / follow
+      my edits"**. Locked stories snapshot a config hash; following stories re-resolve on load.
+- [ ] **4c.11** When a story is set to follow, show a clear one-time warning that mechanics may
+      change between sessions and that rewound turns may resolve differently.
+- [ ] **4c.12** Committed rulings are **never** recomputed under either setting. History is immutable;
+      only future resolution changes. Confirm swipe still reuses committed rulings verbatim (it does
+      today — invariant 6) and add a test that a config edit cannot alter a past ruling.
+
+**4c.12 is the load-bearing guarantee.** As long as it holds, config editing can never rewrite
+history, only the future — which is exactly what a GM changing a house rule mid-campaign means.
 
 ## 5. Forge-time selection (owner's point 1)
 
