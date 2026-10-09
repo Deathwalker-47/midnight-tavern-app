@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   computeXpAward,
+  countRecentSimilarUses,
   enforceActionBudget,
   minimumXpForRank,
   modifierForRank,
   rankForXp,
   type MechanicalIntent,
   type ProgressionConfig,
+  type Ruling,
 } from "../src/index.js";
 
 describe("V7 XP progression", () => {
@@ -22,7 +24,17 @@ describe("V7 XP progression", () => {
     expect(computeXpAward("success", 15, 0).amount).toBe(13);
     expect(computeXpAward("failure", 8, 0).amount).toBe(5);
     expect(computeXpAward("crit_success", 25, 0).amount).toBe(20);
-    expect(computeXpAward("success", 15, 3).amount).toBe(0);
+    expect(computeXpAward("success", 15, 3).amount).toBe(6);
+  });
+
+  it("softens repetition to a 40% floor and never reaches zero (finding 16)", () => {
+    // success at DC 15 = 10 base × 1.25 challenge = 12.5 before repetition.
+    const amounts = [0, 1, 2, 3, 4, 5, 10].map(
+      (uses) => computeXpAward("success", 15, uses).amount
+    );
+    expect(amounts).toEqual([13, 10, 8, 6, 5, 5, 5]);
+    expect(computeXpAward("success", 15, 99).repetitionMultiplier).toBe(0.4);
+    expect(computeXpAward("success", 15, 99).reason).not.toMatch(/No XP/);
   });
 
   it("uses safe fallbacks for sparse versioned progression configuration", () => {
@@ -51,6 +63,61 @@ describe("V7 XP progression", () => {
 
   it("uses the final configured challenge band above its declared ceiling", () => {
     expect(computeXpAward("success", 99, 0).challengeMultiplier).toBe(1.5);
+  });
+});
+
+describe("repetition window (finding 16)", () => {
+  type Prior = { actorId: string; actionId: string; targetId?: string; messageId: string };
+  const ruling = (prior: Prior) =>
+    ({
+      turnId: `${prior.actorId}:${prior.actionId}`,
+      actorId: prior.actorId,
+      actionId: prior.actionId,
+      ...(prior.targetId ? { targetId: prior.targetId } : {}),
+      messageId: prior.messageId,
+      gate: { allowed: true },
+      effectsApplied: null,
+    }) as unknown as Ruling;
+  const strike = { actorId: "player", actionId: "attack_melee", targetId: "wight" };
+  const intent: MechanicalIntent = { ...strike, confidence: 1 };
+
+  it("counts only the acting character's own rulings, so NPC rulings never consume the window", () => {
+    // Three player strikes followed by six NPC rulings. A global "last five rulings" window
+    // would see only NPC rulings; a per-actor window still sees the three strikes.
+    const priors: Prior[] = [
+      { ...strike, messageId: "m1" },
+      { ...strike, messageId: "m3" },
+      { ...strike, messageId: "m5" },
+      ...[7, 9, 11, 13, 15, 17].map((index) => ({
+        actorId: "wight",
+        actionId: "attack_melee",
+        targetId: "player",
+        messageId: `m${index}`,
+      })),
+    ];
+    expect(countRecentSimilarUses(priors.map(ruling), intent, 5)).toBe(3);
+  });
+
+  it("resets when the target changes", () => {
+    const priors = [1, 3, 5].map((index) => ruling({ ...strike, messageId: `m${index}` }));
+    expect(countRecentSimilarUses(priors, { ...intent, targetId: "bandit" }, 5)).toBe(0);
+  });
+
+  it("looks back over the configured number of the actor's turns, not raw rulings", () => {
+    // Two strikes per turn across four turns; a window of two turns sees four strikes.
+    const priors = [1, 1, 3, 3, 5, 5, 7, 7].map((index) =>
+      ruling({ ...strike, messageId: `m${index}` })
+    );
+    expect(countRecentSimilarUses(priors, intent, 2)).toBe(4);
+    expect(countRecentSimilarUses(priors, intent, 5)).toBe(8);
+  });
+
+  it("only counts the same action", () => {
+    const priors = [
+      ruling({ ...strike, messageId: "m1" }),
+      ruling({ ...strike, actionId: "intimidate", messageId: "m3" }),
+    ];
+    expect(countRecentSimilarUses(priors, intent, 5)).toBe(1);
   });
 });
 

@@ -1,5 +1,30 @@
 import { PROGRESSION_CONFIG, type ProgressionConfig } from "../config/index.js";
-import type { MasteryRank, Outcome } from "../types/index.js";
+import type { MasteryRank, MechanicalIntent, Outcome, Ruling } from "../types/index.js";
+
+/**
+ * How many times this actor already used this action on this target within its own most recent
+ * `windowTurns` turns (finding 16). Only the acting character's rulings are considered, so another
+ * character's rulings — an NPC reaction between two player strikes — never consume the window.
+ * A "turn" is one committed narrator message; rulings without a message id count as their own turn.
+ */
+export function countRecentSimilarUses(
+  priorRulings: readonly Ruling[],
+  intent: Pick<MechanicalIntent, "actorId" | "actionId" | "targetId">,
+  windowTurns: number = PROGRESSION_CONFIG.repetitionWindowTurns
+): number {
+  const own = priorRulings.filter((ruling) => ruling.actorId === intent.actorId);
+  const turnOf = (index: number): string => own[index]!.messageId ?? `ruling:${index}`;
+  const inWindow = new Set<string>();
+  for (let index = own.length - 1; index >= 0 && inWindow.size < windowTurns; index--) {
+    inWindow.add(turnOf(index));
+  }
+  return own.filter(
+    (ruling, index) =>
+      inWindow.has(turnOf(index)) &&
+      ruling.actionId === intent.actionId &&
+      ruling.targetId === intent.targetId
+  ).length;
+}
 
 export interface XpComputation {
   amount: number;

@@ -17,7 +17,7 @@ describe("V7 mechanics configuration registry", () => {
   it("loads versioned action, progression, and equipment assets", () => {
     expect(MECHANICS_CONFIG_VERSIONS).toEqual({
       universalActions: 4,
-      progression: 1,
+      progression: 2,
       equipmentLoot: 1,
       attributeAdvancement: 1,
     });

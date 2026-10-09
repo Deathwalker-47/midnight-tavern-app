@@ -64,7 +64,7 @@ push to `main`.
 
 ### Plan 08 — resource economy and skill mechanics
 
-- [ ] **S1. XP repeat penalty** (finding 16). Curve to `[1,0.8,0.6,0.5,0.4]`; count only the same
+- [x] **S1. XP repeat penalty** (finding 16). Curve to `[1,0.8,0.6,0.5,0.4]`; count only the same
       actor's prior rulings; read `repetitionWindowTurns` instead of a hard-coded 5; NPC rulings never
       consume the player's window.
 - [ ] **S2. Resource roles** (finding 22). `ResourceDef.role`; deterministic legacy role inference

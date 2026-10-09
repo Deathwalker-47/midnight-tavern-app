@@ -21,13 +21,14 @@ Plans 01-07 and 10-12 of the 2026-08-13 set remain written but **not authorized*
 | Step | What | State |
 | --- | --- | --- |
 | S0 | Action plan written and activated | done |
-| S1–S8 | Plan 08 (XP curve, resource roles, stamina cost, cooldowns, timed effects, skill types/targeting, recovery, v3 forge + UI) | not started |
+| S1 | XP repeat penalty: curve `[1,.8,.6,.5,.4]`, per-actor window over the actor's last 5 turns (`countRecentSimilarUses`) | done |
+| S2–S8 | Plan 08 (resource roles, stamina cost, cooldowns, timed effects, skill types/targeting, recovery, v3 forge + UI) | not started |
 | S9–S18 | Plan 09 (pool, enablement, selection, archetypes, mid-story enablement, UI, items, weapon specials, external config, close-out) | not started |
 
 ## Verification state
 
-Measured 2026-10-09 on Linux/Node 22 at `0e500d9`: `npm run typecheck` clean; core **670 / 46 files**,
-UI **183 / 26 files** = **853** passing; root `npm test` passes here (the tinypool worker crash is
+After S1 (Linux/Node 22): `npm run typecheck` clean; core **676 / 46 files**,
+UI **183 / 26 files** = **859** passing; root `npm test` passes here (the tinypool worker crash is
 Windows/Node 24 only — plan 07 P0-0, not authorized).
 
 ## Facts established earlier (still true — do not re-derive)
@@ -54,4 +55,4 @@ Windows/Node 24 only — plan 07 P0-0, not authorized).
 
 ## Single next action
 
-Execute **S1** of the action plan (XP repeat penalty), then continue in order.
+Execute **S2** of the action plan (resource roles), then continue in order.

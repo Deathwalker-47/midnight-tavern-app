@@ -149,6 +149,64 @@ describe("V7 ordered turn semantics", () => {
     expect(events.some((event) => event.kind === "action_budget_exceeded")).toBe(true);
   });
 
+  it("scopes the XP repetition window to the acting character (finding 16)", async () => {
+    // Three earlier player strikes on the wight, then five NPC rulings. The old global
+    // "last five rulings" window saw only NPC rulings and paid full XP; the per-actor window
+    // sees the three strikes and pays the gentler 0.5 multiplier — never zero.
+    const priors = [
+      ...[0, 1, 2].map(() => ({ actorId: "kestrel", targetId: "wight" })),
+      ...[3, 4, 5, 6, 7].map(() => ({ actorId: "wight", targetId: "kestrel" })),
+    ];
+    for (const [index, prior] of priors.entries()) {
+      const messageId = `seed-${index}`;
+      await store.messages.insert({
+        id: messageId,
+        storyId,
+        idx: index,
+        role: "narrator",
+        content: "An earlier exchange.",
+        createdAt: index,
+      });
+      await store.rulings.insert({
+        id: `seed-ruling-${index}`,
+        storyId,
+        messageId,
+        ruling: {
+          turnId: `${prior.actorId}:attack_melee`,
+          messageId,
+          actorId: prior.actorId,
+          actionId: "attack_melee",
+          targetId: prior.targetId,
+          gate: { allowed: true },
+          effectsApplied: null,
+        },
+      });
+    }
+
+    const result = await submitTurn(
+      new V7Router({
+        playerIntents: [{
+          actorId: "kestrel",
+          actionId: "attack_melee",
+          targetId: "wight",
+          itemId: "sword",
+          confidence: 1,
+        }],
+        npcIntents: [],
+        freeText: "",
+      }),
+      store,
+      storyId,
+      "I strike the wight again.",
+      { rng: d20Sequence([15]) }
+    );
+    await result.background;
+
+    expect(result.rulings[0]!.roll?.outcome).toBe("success");
+    expect(result.rulings[0]!.xpAward).toMatchObject({ amount: 5 });
+    expect(result.rulings[0]!.xpAward!.reason).toMatch(/repetition ×0\.5/);
+  });
+
   it("sends a clear knife attack through DM ruling when the classifier returns no intents", async () => {
     const result = await submitTurn(
       new V7Router({

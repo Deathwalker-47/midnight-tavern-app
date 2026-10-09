@@ -31,7 +31,12 @@ import {
   recoverClassifierFailure,
   type ClassifierRecoveryMetadata,
 } from "../classifier/index.js";
-import { resolve, commit, enforceActionBudget } from "../engine/index.js";
+import {
+  resolve,
+  commit,
+  countRecentSimilarUses,
+  enforceActionBudget,
+} from "../engine/index.js";
 import { cryptoRng, type Rng } from "../engine/dice.js";
 import { runAnalyzer } from "../memory/index.js";
 import { maybeSummarizeChapter, maybeSummarizeArc } from "../summarizer/index.js";
@@ -499,7 +504,10 @@ async function runTurnOperation(
     const equipmentInstances: Awaited<
       ReturnType<typeof store.runtimeItems.listInventory>
     > = [];
-    const priorRulings = await store.rulings.listByStory(storyId);
+    const priorRulings = (await store.rulings.listByStory(storyId)).map((record) => ({
+      ...record.ruling,
+      messageId: record.ruling.messageId ?? record.messageId,
+    }));
     let classified: ClassifiedTurn = { playerIntents: [], npcIntents: [], freeText: "" };
     let classifierRecovered = false;
     let classifierRecovery: ClassifierRecoveryMetadata | undefined;
@@ -670,14 +678,7 @@ async function runTurnOperation(
       for (const intent of intents) {
         const actorHard = await workingState(intent.actorId);
         const targetHard = intent.targetId ? await workingState(intent.targetId) : undefined;
-        const recentSimilarUses = priorRulings
-          .slice(-5)
-          .filter(
-            (record) =>
-              record.ruling.actorId === intent.actorId &&
-              record.ruling.actionId === intent.actionId &&
-              record.ruling.targetId === intent.targetId
-          ).length;
+        const recentSimilarUses = countRecentSimilarUses(priorRulings, intent);
         const result = resolve(
           schema,
           actorHard,

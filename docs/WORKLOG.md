@@ -2012,3 +2012,26 @@ absent, so the pool ships with a starter set and the forge stays hybrid until th
 183/26 = 853 passing; root `npm test` also passes on this platform.
 
 **Next:** S1 (XP repeat penalty).
+
+---
+
+## 2026-10-09 - S1: soften the XP repeat penalty and scope it to the actor (plan 08 §1)
+
+**What landed.** `progression.json` v2: `repetitionMultipliers` `[1, 0.5, 0.25, 0]` → `[1, 0.8, 0.6, 0.5,
+0.4]`, so grinding pays less but never zero. New pure `countRecentSimilarUses` (`engine/progression.ts`)
+replaces the inline `priorRulings.slice(-5)` in `turn.ts`: it looks only at the acting character's own
+rulings, over that actor's last `repetitionWindowTurns` turns (a turn = one narrator message), so NPC
+rulings no longer consume the player's window and the config value is finally read. Target scoping is
+unchanged (it was already correct).
+
+**Tests.** Curve and floor (`v7ProgressionBudget`); four window cases (NPC interleaving, target reset,
+turn-based window, same action only); a turn-level test seeding three player strikes plus five NPC
+rulings now yields 5 XP (×0.5) — verified RED against the old `turn.ts` (it paid 10). Two tests that pin
+`MECHANICS_CONFIG_VERSIONS.progression` updated 1 → 2, because the config genuinely changed.
+
+**Verification.** Typecheck clean; core 676/46, UI 183/26 = 859 passing.
+
+**Note.** This is a global change (applies to existing saves too), deliberately: it answers finding 16
+from live play. The version bump invalidates resume fingerprints of any half-finished forge.
+
+**Next:** S2 (resource roles).

@@ -47,16 +47,16 @@ attacking a *different* character does reset the counter. Two real defects remai
 
 ### Fix
 
-- [ ] **1.1** Soften the curve. Proposed `repetitionMultipliers: [1, 0.8, 0.6, 0.5, 0.4]` with a
+- [x] **1.1** Soften the curve. Proposed `repetitionMultipliers: [1, 0.8, 0.6, 0.5, 0.4]` with a
       floor of 0.4 rather than 0 — grinding is discouraged, never pointless. **Owner decision.**
-- [ ] **1.2** Scope the window to the actor and to the current scene/fight rather than to the last
+- [x] **1.2** Scope the window to the actor and to the current scene/fight rather than to the last
       five global rulings. Minimum viable: filter `priorRulings` by `actorId` **first**, then take the
       last `repetitionWindowTurns`. Better: bound by the current chapter or by an engine-owned
       encounter id if plan 04/09 introduces one.
-- [ ] **1.3** Make the code actually read `repetitionWindowTurns` instead of the hard-coded `-5`.
-- [ ] **1.4** Confirm whether NPC-actor rulings should count toward the player's window at all —
+- [x] **1.3** Make the code actually read `repetitionWindowTurns` instead of the hard-coded `-5`.
+- [x] **1.4** Confirm whether NPC-actor rulings should count toward the player's window at all —
       they should not. Filtering by `actorId` (1.2) fixes this as a side effect; assert it in a test.
-- [ ] **1.5** Read `packages/core/src/engine/progression.ts` `computeXpAward` before changing the
+- [x] **1.5** Read `packages/core/src/engine/progression.ts` `computeXpAward` before changing the
       config: the multiplier is clamped by `Math.min(Math.max(0, recentSimilarUses), length-1)`, so
       lengthening the array changes the plateau index. Verify the clamp still behaves.
 

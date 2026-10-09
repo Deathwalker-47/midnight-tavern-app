@@ -1281,7 +1281,7 @@ describe("generateStorySchema — repair loop", () => {
     expect(out.actionBudget).toBe(2);
     expect(out.mechanicsConfigVersions).toEqual({
       universalActions: 4,
-      progression: 1,
+      progression: 2,
       equipmentLoot: 1,
       attributeAdvancement: 1,
     });

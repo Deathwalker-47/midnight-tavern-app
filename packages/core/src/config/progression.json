@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "ranks": [
     { "rank": "novice", "minimumXp": 0, "modifier": 1 },
     { "rank": "adept", "minimumXp": 100, "modifier": 3 },
@@ -19,6 +19,6 @@
     { "maximumDc": 25, "multiplier": 1.5 }
   ],
   "repetitionWindowTurns": 5,
-  "repetitionMultipliers": [1, 0.5, 0.25, 0],
+  "repetitionMultipliers": [1, 0.8, 0.6, 0.5, 0.4],
   "maximumAward": 20
 }
