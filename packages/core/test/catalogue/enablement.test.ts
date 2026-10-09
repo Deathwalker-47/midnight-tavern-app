@@ -294,6 +294,7 @@ describe("enabling and disabling in a story", () => {
   });
 
   it("enable an entry with the skill it needs, journal both, and are idempotent", async () => {
+    await store.chapters.insert({ id: "c1", storyId, idx: 0, msgFrom: 0, msgTo: 5, title: "One", summary: "x" });
     const result = await enablePoolEntry(store, storyId, "uni.social.leadership.rally_the_group", { source: "player", now: () => 50 });
     expect(result).toEqual({
       ok: true,
@@ -322,6 +323,18 @@ describe("enabling and disabling in a story", () => {
     });
     expect(await store.poolEnablements.list(storyId)).toEqual([]);
     expect(await events("pool_enabled")).toEqual([]);
+  });
+
+  it("hold back tiers the story has not reached, except from the forge", async () => {
+    const rally = "uni.social.leadership.rally_the_group";
+    const refusal = {
+      ok: false,
+      reason: "Rally the Group is uncommon; uncommon entries unlock once the story completes its first chapter.",
+    };
+    expect(await enablePoolEntry(store, storyId, rally, { source: "player" })).toEqual(refusal);
+    expect(await enablePoolEntry(store, storyId, rally, { source: "analyzer", turnIndex: 2 })).toEqual(refusal);
+    expect(await store.poolEnablements.list(storyId)).toEqual([]);
+    expect(await enablePoolEntry(store, storyId, rally, { source: "forge" })).toMatchObject({ ok: true });
   });
 
   it("refuse to disable what someone has learned or an enabled action still needs (D8)", async () => {
@@ -409,7 +422,7 @@ describe("combat and magic entries (S12)", () => {
   it("enable a reaction pair into a rulebook the validator accepts", async () => {
     const store = await openStore(":memory:");
     await store.stories.insert({ id: "duel", title: "Duel", createdAt: 0, schema: { ...story, storyId: "duel" }, locked: true });
-    expect(await enablePoolEntry(store, "duel", "uni.combat.reflexes.riposte", { source: "player" })).toEqual({
+    expect(await enablePoolEntry(store, "duel", "uni.combat.reflexes.riposte", { source: "forge" })).toEqual({
       ok: true,
       enabled: ["uni.combat.reflexes.riposte", "uni.combat.reflexes.riposte_strike"],
     });

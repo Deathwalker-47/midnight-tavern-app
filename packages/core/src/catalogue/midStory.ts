@@ -7,8 +7,9 @@
  *   - Skill-gated only (action-plan decision): skills, and actions that need a skill. Enabling such an
  *     entry gives nobody any power — a character must still learn the skill through the ledger — so a
  *     model can never hand out an at-will ability.
- *   - Tier gate: an entry's tier unlocks only after enough completed chapters (`TIER_UNLOCK_CHAPTERS`);
- *     a legendary skill cannot appear in chapter one, and mythical ones never arrive this way.
+ *   - Tier gate: an entry's tier — and that of anything it brings — unlocks only after enough
+ *     completed chapters (`TIER_UNLOCK_CHAPTERS`, shared with the player's own toggles); a legendary
+ *     skill cannot appear in chapter one, and mythical ones never arrive this way.
  *   - Rate limit: at most `ANALYZER_ENABLEMENTS_PER_CHAPTER` entries per chapter, counting every entry
  *     a proposal brings with it (an action's skill, a reaction's pair).
  *   - Cost: the model is only asked when the turn shows a learning cue (someone teaches, trains, a new
@@ -19,23 +20,14 @@
 import { z } from "zod";
 import { callStructured, type Router } from "../router/index.js";
 import type { Store } from "../store/index.js";
-import type { ItemTier, StorySchema } from "../types/index.js";
+import type { StorySchema } from "../types/index.js";
 import type { PoolEntry } from "../config/index.js";
 import { enablePoolEntry, loadEffectiveSchema } from "./enablement.js";
-import { materializeEntry, SHIPPED_CATALOGUE, type PoolCatalogue } from "./materialize.js";
-import { planEnablement } from "./plan.js";
+import { SHIPPED_CATALOGUE, type PoolCatalogue } from "./materialize.js";
+import { planEnablement, tierLock } from "./plan.js";
 import { inferSettingFits } from "./select.js";
 
 export const ANALYZER_ENABLEMENTS_PER_CHAPTER = 2;
-
-/** Completed chapters before a pool tier may appear mid-story. */
-export const TIER_UNLOCK_CHAPTERS: Readonly<Record<ItemTier, number>> = {
-  common: 0,
-  uncommon: 1,
-  rare: 3,
-  legendary: 6,
-  mythical: Number.POSITIVE_INFINITY,
-};
 
 /**
  * Words that suggest the story is reaching for a new discipline. Deliberately narrow: "study" and
@@ -52,14 +44,12 @@ export function midStoryCandidates(
 ): PoolEntry[] {
   const fits = new Set(inferSettingFits(schema.premise));
   const present = new Set([...schema.actions.map((action) => action.id), ...schema.skills.map((skill) => skill.id)]);
-  const tierOf = new Map(catalogue.archetypes.archetypes.map((archetype) => [archetype.id, archetype.tier]));
   return catalogue.pool.entries.filter((entry) => {
     if (entry.excluded || present.has(entry.id)) return false;
     if (entry.kind === "action" && !entry.requiresSkill) return false;
     if (!entry.settingFit.some((fit) => fits.has(fit))) return false;
-    const tier = tierOf.get(entry.archetypeId);
-    if (!tier || TIER_UNLOCK_CHAPTERS[tier] > completedChapters) return false;
-    return materializeEntry(schema, entry.id, catalogue).ok;
+    const plan = planEnablement(schema, present, entry.id, catalogue);
+    return plan.ok && !tierLock(plan.additions, completedChapters, catalogue);
   });
 }
 

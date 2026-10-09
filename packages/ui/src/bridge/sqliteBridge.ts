@@ -429,6 +429,14 @@ export function buildSqliteBridge(
       return core.disablePoolEntry(store, storyId, entryId);
     },
 
+    async listPoolSections(storyId) {
+      return core.poolSections(await core.loadPoolBrowseContext(store, storyId));
+    },
+
+    async browsePool(storyId, query) {
+      return core.browsePool(await core.loadPoolBrowseContext(store, storyId), query);
+    },
+
     async getBlueprint(id) {
       return (await requireStory(id)).blueprint;
     },

@@ -65,13 +65,19 @@ export type {
   DiagnosticCounters,
   ActionDef,
   SkillDef,
+  PoolSectionView,
+  PoolBrowseQuery,
+  PoolBrowsePage,
+  PoolBrowseEntry,
+  PoolEntryState,
 } from "@midnight-tavern/core";
 
 // Browser-safe shared data: importing the JSON avoids a hand-maintained catalogue copy without
 // evaluating core's native runtime graph.
 import universalActionsJson from "../../../core/src/config/universal-actions.json";
 // Vetted browser-safe deep import: pure pool materialization (config JSON + zod), no store or native.
-import { disableRefusal, planEnablement } from "../../../core/src/catalogue/plan.js";
+import { disableRefusal, planEnablement, tierLock } from "../../../core/src/catalogue/plan.js";
+import { browsePool, learnersBySkill, poolSections, type PoolBrowseContext } from "../../../core/src/catalogue/browse.js";
 
 // Browser-safe pure logic: a deep import straight at engine/equipment.js (not the
 // `@midnight-tavern/core` barrel) so evaluating this module never pulls in the store's native
@@ -162,6 +168,9 @@ import type {
   DiagnosticCounters,
   ActionDef,
   SkillDef,
+  PoolSectionView,
+  PoolBrowseQuery,
+  PoolBrowsePage,
 } from "@midnight-tavern/core";
 
 // Value import: the Tauri storage driver. Browser-safe — it only pulls `@tauri-apps/api/core`
@@ -507,6 +516,13 @@ export interface CoreBridge {
   mayDisablePoolEntry(storyId: string, entryId: string): Promise<PoolDisableResult>;
   /** Disable an enabled entry when {@link mayDisablePoolEntry} allows it. */
   disablePoolEntry(storyId: string, entryId: string): Promise<PoolDisableResult>;
+  /** The universal pool's sections, each with how much of it this story has enabled (plan 09 §7). */
+  listPoolSections(storyId: string): Promise<PoolSectionView[]>;
+  /**
+   * One page of pool entries — a section's, a search's, or both — with what this story may do with
+   * each (enabled · available · locked by tier · unavailable · excluded) and why.
+   */
+  browsePool(storyId: string, query?: PoolBrowseQuery): Promise<PoolBrowsePage>;
   /** Read a story's author-facing Story Blueprint (§3), or undefined if it has none. */
   getBlueprint(id: string): Promise<Blueprint | undefined>;
   /** Save (or clear, with `undefined`) a story's Story Blueprint. Style/identity only — the frozen mechanical schema is untouched. */
@@ -1091,6 +1107,21 @@ export function makeMemoryBridge(): MemoryBridge {
     return s;
   }
 
+  /** What core's pool browser needs about one in-memory story (no summarizer → no chapters). */
+  function poolBrowseContext(story: MemStory): PoolBrowseContext {
+    return {
+      frozen: story.record.schema,
+      enablements: story.poolEnablements ?? [],
+      learners: learnersBySkill(
+        [...story.cards.values()].map((card) => ({
+          name: card.name,
+          skillIds: card.skills.map((skill) => skill.skillId),
+        }))
+      ),
+      completedChapters: 0,
+    };
+  }
+
   return {
     async listStories() {
       return [...stories.values()]
@@ -1400,6 +1431,9 @@ export function makeMemoryBridge(): MemoryBridge {
       ]);
       const plan = planEnablement(frozen, present, entryId);
       if (!plan.ok) return plan;
+      // This backend runs no summarizer, so its stories never complete a chapter.
+      const locked = tierLock(plan.additions, 0);
+      if (locked) return { ok: false, reason: locked };
       const enabledAt = Date.now();
       story.poolEnablements = [
         ...enabled,
@@ -1431,6 +1465,14 @@ export function makeMemoryBridge(): MemoryBridge {
         );
       }
       return check;
+    },
+
+    async listPoolSections(storyId) {
+      return poolSections(poolBrowseContext(requireStory(storyId)));
+    },
+
+    async browsePool(storyId, query) {
+      return structuredCloneSafe(browsePool(poolBrowseContext(requireStory(storyId)), query));
     },
 
     async getBlueprint(id) {

@@ -19,7 +19,8 @@ import type { PoolEnablement, PoolEnablementSource, Store } from "../store/index
 import type { StoryRecord, StorySchema } from "../types/index.js";
 import { applyUniversalActionDefaults } from "../config/index.js";
 import { SHIPPED_CATALOGUE, type PoolCatalogue } from "./materialize.js";
-import { disableRefusal, planEnablement } from "./plan.js";
+import { disableRefusal, planEnablement, tierLock } from "./plan.js";
+import { learnersBySkill, type PoolBrowseContext } from "./browse.js";
 
 /** The frozen rulebook plus every enabled entry. Frozen definitions win any id collision. */
 export function effectiveSchema(
@@ -62,6 +63,7 @@ export type EnableResult =
 /**
  * Enable a pool entry, plus any skill entry it needs that the story does not already have. Already
  * enabled (or forged into the rulebook) is a no-op success. All-or-nothing, journalled per entry.
+ * Outside the forge, every part must have unlocked by tier (`tierLock`).
  */
 export async function enablePoolEntry(
   store: Store,
@@ -79,8 +81,13 @@ export async function enablePoolEntry(
     ...frozen.skills.map((skill) => skill.id),
   ]);
   const now = options.now ?? Date.now;
-  const plan = planEnablement(frozen, present, entryId, options.catalogue ?? SHIPPED_CATALOGUE);
+  const catalogue = options.catalogue ?? SHIPPED_CATALOGUE;
+  const plan = planEnablement(frozen, present, entryId, catalogue);
   if (!plan.ok) return plan;
+  if (options.source !== "forge") {
+    const locked = tierLock(plan.additions, (await store.chapters.listByStory(storyId)).length, catalogue);
+    if (locked) return { ok: false, reason: locked };
+  }
   const additions = plan.additions.map(
     (planned): PoolEnablement => ({
       ...planned,
@@ -156,4 +163,22 @@ export async function disablePoolEntry(
     });
   });
   return check;
+}
+
+/** Gather what the pool browser needs about one stored story (`browse.ts`). */
+export async function loadPoolBrowseContext(store: Store, storyId: string): Promise<PoolBrowseContext> {
+  const story = await store.stories.get(storyId);
+  if (!story) throw new Error(`Unknown story "${storyId}".`);
+  const characters = await store.characters.listByStory(storyId);
+  return {
+    frozen: applyUniversalActionDefaults(story.schema),
+    enablements: await store.poolEnablements.list(storyId),
+    learners: learnersBySkill(
+      characters.map((character) => ({
+        name: character.name,
+        skillIds: character.hard.skills.map((skill) => skill.skillId),
+      }))
+    ),
+    completedChapters: (await store.chapters.listByStory(storyId)).length,
+  };
 }

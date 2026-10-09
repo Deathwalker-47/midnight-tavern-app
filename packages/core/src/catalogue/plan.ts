@@ -2,8 +2,22 @@
  * The pure decisions behind enabling and disabling pool entries (plan 09 §3, §7.2), shared by core's
  * store-backed enablement and the UI's in-memory bridge so the two backends cannot disagree.
  */
-import type { ActionDef, SkillDef, StorySchema } from "../types/index.js";
+import type { ActionDef, ItemTier, SkillDef, StorySchema } from "../types/index.js";
 import { materializeEntry, SHIPPED_CATALOGUE, type PoolCatalogue } from "./materialize.js";
+
+/**
+ * Completed chapters before a pool tier may be enabled during a story (plan 09 §6.2, design brief
+ * §5b) — by the player's hand or the analyzer's. Only the forge, which sets the world's starting
+ * catalogue, is exempt. Enabling never teaches anyone, so the lock paces how fast the world grows
+ * rather than guarding power.
+ */
+export const TIER_UNLOCK_CHAPTERS: Readonly<Record<ItemTier, number>> = {
+  common: 0,
+  uncommon: 1,
+  rare: 3,
+  legendary: 6,
+  mythical: Number.POSITIVE_INFINITY,
+};
 
 export type PlannedEnablement =
   | { entryId: string; kind: "action"; definition: ActionDef }
@@ -40,6 +54,34 @@ export function planEnablement(
     queue.push(...materialized.requires);
   }
   return { ok: true, additions };
+}
+
+/** A pool entry's tier: its archetype's (entries carry none of their own). */
+export function poolTier(entryId: string, catalogue: PoolCatalogue = SHIPPED_CATALOGUE): ItemTier | undefined {
+  const entry = catalogue.pool.entries.find((candidate) => candidate.id === entryId);
+  return catalogue.archetypes.archetypes.find((archetype) => archetype.id === entry?.archetypeId)?.tier;
+}
+
+/**
+ * Why a planned enablement is still locked by tier after `completedChapters`, or undefined when every
+ * part of it has unlocked. Checks everything the plan brings along, so a common action cannot carry
+ * an uncommon skill in early.
+ */
+export function tierLock(
+  additions: readonly PlannedEnablement[],
+  completedChapters: number,
+  catalogue: PoolCatalogue = SHIPPED_CATALOGUE
+): string | undefined {
+  for (const addition of additions) {
+    const tier = poolTier(addition.entryId, catalogue);
+    if (!tier || TIER_UNLOCK_CHAPTERS[tier] <= completedChapters) continue;
+    const name = addition.kind === "action" ? addition.definition.label : addition.definition.name;
+    const chapters = TIER_UNLOCK_CHAPTERS[tier];
+    if (!Number.isFinite(chapters)) return `${name} is ${tier}; ${tier} entries never arrive during a story.`;
+    const when = chapters === 1 ? "its first chapter" : `${chapters} chapters`;
+    return `${name} is ${tier}; ${tier} entries unlock once the story completes ${when}.`;
+  }
+  return undefined;
 }
 
 /**

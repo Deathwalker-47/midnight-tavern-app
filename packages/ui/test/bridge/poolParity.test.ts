@@ -60,9 +60,14 @@ describe("pool enablement parity across bridges", () => {
       ok: true,
       enabled: ["uni.social.persuasion.persuade"],
     });
+    // Neither backend has completed a chapter, so an uncommon entry stays locked in both.
     expect(await both((bridge) => bridge.enablePoolEntry(storyId, "uni.social.leadership.rally_the_group"))).toEqual({
+      ok: false,
+      reason: "Rally the Group is uncommon; uncommon entries unlock once the story completes its first chapter.",
+    });
+    expect(await both((bridge) => bridge.enablePoolEntry(storyId, "uni.magic.fire_magic.fire_bolt"))).toEqual({
       ok: true,
-      enabled: ["uni.social.leadership.rally_the_group", "uni.social.leadership.command"],
+      enabled: ["uni.magic.fire_magic.fire_bolt", "uni.magic.fire_magic.fire_magic"],
     });
     await both((bridge) => bridge.enablePoolEntry(storyId, "uni.social.insight.read_minds"));
     const [memoryRows, sqliteRows] = await Promise.all([
@@ -82,15 +87,15 @@ describe("pool enablement parity across bridges", () => {
       definition: { governingAttribute: "resolve" },
     });
 
-    expect(await both((bridge) => bridge.mayDisablePoolEntry(storyId, "uni.social.leadership.command"))).toEqual({
+    expect(await both((bridge) => bridge.mayDisablePoolEntry(storyId, "uni.magic.fire_magic.fire_magic"))).toEqual({
       allowed: false,
-      reason: "Rally the Group still needs it; disable that first.",
+      reason: "Fire Bolt still needs it; disable that first.",
     });
-    expect(await both((bridge) => bridge.disablePoolEntry(storyId, "uni.social.leadership.rally_the_group"))).toEqual({
+    expect(await both((bridge) => bridge.disablePoolEntry(storyId, "uni.magic.fire_magic.fire_bolt"))).toEqual({
       allowed: true,
     });
-    await teach("uni.social.leadership.command");
-    expect(await both((bridge) => bridge.disablePoolEntry(storyId, "uni.social.leadership.command"))).toEqual({
+    await teach("uni.magic.fire_magic.fire_magic");
+    expect(await both((bridge) => bridge.disablePoolEntry(storyId, "uni.magic.fire_magic.fire_magic"))).toEqual({
       allowed: false,
       reason: "Ari has learned this, so it stays.",
     });
@@ -98,5 +103,30 @@ describe("pool enablement parity across bridges", () => {
       allowed: false,
       reason: "That entry is not enabled in this story.",
     });
+  });
+
+  it("browse the pool identically: sections, states, reasons, search and paging", async () => {
+    const { memory, sqlite, storyId, teach } = await twinBridges();
+    const both = async <T>(call: (bridge: CoreBridge) => Promise<T>): Promise<T> => {
+      const [fromMemory, fromSqlite] = await Promise.all([call(memory), call(sqlite)]);
+      expect(fromMemory).toEqual(fromSqlite);
+      return fromMemory;
+    };
+    await both((bridge) => bridge.enablePoolEntry(storyId, "uni.magic.fire_magic.fire_bolt"));
+    await teach("uni.magic.fire_magic.fire_magic");
+
+    const sections = await both((bridge) => bridge.listPoolSections(storyId));
+    expect(sections.find((section) => section.id === "fire_magic")).toMatchObject({ enabled: 2 });
+    const fire = await both((bridge) => bridge.browsePool(storyId, { sectionId: "fire_magic" }));
+    const state = (id: string) => fire.entries.find((entry) => entry.entryId === id);
+    expect(state("uni.magic.fire_magic.fire_magic")).toMatchObject({
+      state: "enabled",
+      source: "player",
+      reason: "Ari has learned this, so it stays.",
+    });
+    expect(state("uni.magic.fire_magic.fire_mastery")).toMatchObject({ state: "locked" });
+    await both((bridge) => bridge.browsePool(storyId, { search: "persuade" }));
+    await both((bridge) => bridge.browsePool(storyId, { offset: 40, limit: 25 }));
+    await both((bridge) => bridge.browsePool(storyId));
   });
 });
