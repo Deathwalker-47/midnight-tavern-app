@@ -1,6 +1,7 @@
 # HANDOFF - current live state
 
-**Updated:** 2026-10-09 (plans 08 + 09 **complete** — every step S0–S18 shipped to `main`)
+**Updated:** 2026-10-09 (plans 08 + 09 **complete** — every step S0–S18 shipped to `main`; later the same
+day plan 10 was rewritten in depth — written, **not authorized**, gated on 08 + 09 having zero gaps)
 **Branch / source baseline:** `main`. The owner authorized pushing every completed step straight to
 `origin/main` without waiting (2026-10-09). Push after each step.
 **App version:** `0.2.9` (no installer built for this work yet — build once a shippable milestone is done).
@@ -17,10 +18,21 @@ produced from source on a fresh Windows toolchain.
 plans 08 and 09 — is complete; its "Outcome" section lists what shipped, what did not, and why. Per
 AGENTS.md, the next plan is picked deliberately with the owner (see the single next action).
 
+**Plan 10 (quests) was rewritten in depth on 2026-10-09** at the owner's request:
+[`docs/plans/2026-10-09-10-quests-and-story-director.md`](plans/2026-10-09-10-quests-and-story-director.md)
+— quests built on an engine-owned Story Director, plus a context inspector and @-mentions, with a
+four-product competitive appendix (Friends & Fables, Craft, Infinite Worlds, Voyage). **Owner's rule:
+it may only be taken up once plans 08 and 09 are fully complete with zero gaps.** Its §0 lists the gaps
+(G1–G10: build, Rust/capability validation, play-test, plan 09 §5.4 and §7.3, plan 09 acceptance 1/3,
+selection quality, `resource_capacity`, coverage gate, Windows suite). Until every row is closed or
+waived in writing by the owner, plan 10 is not a candidate for "next plan".
+
 ## Planning rules
 
 Every plan written before 2026-08-12 is decommissioned ([`docs/PLAN-POLICY.md`](PLAN-POLICY.md)).
-Plans 01-07 and 10-12 of the 2026-08-13 set remain written but **not authorized**.
+Plans 01-07 and 11-12 of the 2026-08-13 set, and plan 10's 2026-10-09 rewrite (which supersedes
+`2026-08-13-10-quests.md`), remain written but **not authorized**. Plan 10 additionally carries the
+owner's zero-gap gate on plans 08 and 09 (its §0).
 
 ## Progress on the last plan (complete)
 
@@ -90,6 +102,20 @@ the Rust shell and the S17b capability file have not been build-validated since 
 - The engine's 100% coverage gate (`npx vitest run --coverage` in `packages/core`) was silently failing
   at `0e500d9` (`resolver.ts:173`); fixed in S2. It is **not** part of `npm test` — run it yourself
   after any `src/engine` change.
+- **Live authority gap A1 (found 2026-10-09, plan 10 §1.2):** the loot model may set
+  `sourceType: "quest"` (`orchestrator/loot.ts:40`); with any successful ruling that makes the award
+  milestone-authorized with a `legendary` ceiling (`loot.ts:223-225`, `routineMaximumTier.quest`). A model
+  label alone unlocks legendary loot. Not fixed — the minimal fix (drop `"quest"` from the model-facing
+  enum, plus a RED test) is small and is recommended as a standalone change, independent of plan 10's gate.
+- **A2:** committing any `quest`/`milestone`-labelled award journals a `milestone` event
+  (`turn.ts:1271-1286`), after which `milestoneEvents.length > 0` (`loot.ts:197-200`) milestone-authorizes
+  every later such award in the story. Fix is in plan 10 §5.6 (D14).
+- `mythicalAuthorized` is read from `story.configSnapshot.mythicalLootAuthorized`, which **no code
+  writes** — mythical loot is unreachable today (fail-closed, correct). Never set that story-wide flag to
+  authorize one reward.
+- Flags are per-character hard state (`types/hardState.ts:56`); there is no story-level flag. Locations
+  are soft state written by the analyzer (`WorldSoftState.locations`), so nothing location-based can be a
+  deterministic condition yet.
 
 ## Non-negotiable rules
 
@@ -104,7 +130,7 @@ the Rust shell and the S17b capability file have not been build-validated since 
 
 ## Single next action
 
-**An owner decision, in two parts — do not start new work without it.**
+**An owner decision, in two parts (plus one optional) — do not start new work without it.**
 
 1. **Build and play-test** plans 08 + 09 on Windows (the owner's machine was formatted, so the toolchain
    is fresh). The build also validates the S17b fs capability names against the real `tauri-build`, and
@@ -115,4 +141,7 @@ the Rust shell and the S17b capability file have not been build-validated since 
 2. **Choose the next plan.** The master index's recommended order puts plan **02 (classifier fidelity)**
    first: item 19 is the owner's own P0, and misclassification undermines judging everything else,
    including the new catalogue. Recommendation: 02 next, then 06 (narration integrity). Plan 04
-   (character panels) is now unblocked by 08 if the owner prefers visible UI work.
+   (character panels) is now unblocked by 08 if the owner prefers visible UI work. **Plan 10 is not
+   eligible** until its §0 gate (08 + 09 with zero gaps) is closed.
+3. **Optional, small:** approve the standalone fix for authority gap A1 (plan 10 §1.2.1) — a few lines
+   plus a RED test, closing a live path by which a model label unlocks legendary loot.
