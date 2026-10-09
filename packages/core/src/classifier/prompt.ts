@@ -12,8 +12,10 @@
  */
 import { z, type ZodType } from "zod";
 import {
+  CONSUME_ITEM_ACTION_ID,
   DEFAULT_MULTIPLE_TARGETS,
   LEARN_SKILL_ACTION_ID,
+  REST_ACTION_ID,
   MAX_ACTION_TARGETS,
   TOGGLE_SKILL_ACTION_ID,
   type StorySchema,
@@ -54,6 +56,8 @@ export function buildClassifierSchema(
     ...schema.actions.map((a) => a.id),
     LEARN_SKILL_ACTION_ID,
     ...(hasToggleSkills(schema) ? [TOGGLE_SKILL_ACTION_ID] : []),
+    ...(canRest(schema) ? [REST_ACTION_ID] : []),
+    ...(hasRestoringItems(schema) ? [CONSUME_ITEM_ACTION_ID] : []),
   ];
   const skillIds = schema.skills.map((s) => s.id);
   const targetRequiredActionIds = new Set(
@@ -143,6 +147,16 @@ export function buildClassifierSchema(
   }) as unknown as ZodType<ClassifiedTurn>;
 }
 
+/** Whether the rulebook runs the recovery economy, so the engine's rest action exists (plan 08 §5). */
+function canRest(schema: StorySchema): boolean {
+  return schema.schemaVersion >= 3;
+}
+
+/** Whether any rulebook item declares what it restores when consumed. */
+function hasRestoringItems(schema: StorySchema): boolean {
+  return schema.items.some((item) => item.restores !== undefined);
+}
+
 /** Whether the rulebook has any toggle skill the player could switch on or off. */
 function hasToggleSkills(schema: StorySchema): boolean {
   return schema.skills.some((skill) => skill.skillType === "toggle");
@@ -179,6 +193,17 @@ function renderCatalog(schema: StorySchema): string {
   if (hasToggleSkills(schema)) {
     lines.push(
       `- ${TOGGLE_SKILL_ACTION_ID} [utility] Switch a learned toggle skill on or off (set skillId)`
+    );
+  }
+  if (canRest(schema)) {
+    lines.push(
+      `- ${REST_ACTION_ID} [utility] Take a proper rest, out of danger, to recover health, stamina and mana`
+    );
+  }
+  if (hasRestoringItems(schema)) {
+    const restoring = schema.items.filter((item) => item.restores).map((item) => item.id);
+    lines.push(
+      `- ${CONSUME_ITEM_ACTION_ID} [utility] Drink, eat or use up a restoring item (set itemId: ${restoring.join(", ")})`
     );
   }
   return lines.join("\n");

@@ -208,6 +208,17 @@ export const ItemDefSchema = z.object({
   props: z.record(z.string(), z.number()), // e.g. { damage: 6, defense: 2, heal: 10 }
   /** Stamina a weapon adds to every attempt that swings it (plan 08 §3). Clamped at use. */
   staminaCost: z.number().int().min(0).optional(),
+  /**
+   * What consuming one of this item restores, by core resource role (plan 08 §5). Only items with
+   * this field can be used by the engine's `consume_item` action. Clamped at use.
+   */
+  restores: z
+    .object({
+      health: z.number().int().min(1).optional(),
+      stamina: z.number().int().min(1).optional(),
+      mana: z.number().int().min(1).optional(),
+    })
+    .optional(),
 });
 export type ItemDef = z.infer<typeof ItemDefSchema>;
 
@@ -266,6 +277,8 @@ const StorySchemaObjectSchema = z.object({
       equipmentLoot: z.number().int().positive(),
       /** Optional so rulebooks sealed before attribute advancement remain loadable. */
       attributeAdvancement: z.number().int().positive().optional(),
+      /** Optional so rulebooks sealed before the recovery economy remain loadable. */
+      economy: z.number().int().positive().optional(),
     })
     .optional(),
   /** Set only while a pre-v5 `light` story awaits the one-time destination choice. */

@@ -37,13 +37,15 @@ Plans 01-07 and 10-12 of the 2026-08-13 set remain written but **not authorized*
 | S6c | Toggle skills: `SkillDef.toggle` (upkeep + bonus), engine action `toggle_skill` (offered to the classifier only when the rulebook has toggles), optional `hard.toggledOn`, upkeep paid at the end of every turn on (incl. the first), lapse reported as a ruling | done |
 | S6d | Reaction skills: `SkillDef.reaction` (`attacked`/`damaged` → action vs the attacker), `planSkillReactions` after all NPC actions, one per character per turn, never chained, through the normal gate (`asReaction`); reaction-gated actions are reaction-only; rulings carry `reaction` | done |
 | S6e | Targeting scopes: `ActionDef.targeting` (`self/single/multiple/all_allies/all_enemies/area`), `expandTargets` (sides = validated hostility flag), `resolveAgainstEach` (one cost/cooldown/roll/XP, one ruling per target, target-side effects only after the first), gate code `no_target`, `MechanicalIntent.targetIds`; all turn resolutions go through one `resolveIntent` | done |
-| S7–S8 | Plan 08 (recovery, v3 forge + UI) | not started |
+| S7 | Recovery: `config/economy.json` (versioned into rulebooks); end-of-turn regen as shares of max (stamina 25% / mana 10%, 5% in combat / health 5%, min 1; in combat = acted in or hit by a combat or wounding ruling), journalled as `recovery` events, not rulings; engine actions `take_rest` (50% health, full stamina, 50% mana, 3-turn cooldown, refused with enemies present — gate code `in_combat`) and `consume_item` (`ItemDef.restores`); v3 only for regen/rest; never revives; engine action ids reserved in the validator | done |
+| — | **Pre-existing defect fixed (found in S7):** the narrator was told every no-roll ruling was DENIED (routine automatic successes, status ticks, toggles, learning) | done |
+| S8 | Plan 08 v3 forge + UI surfacing | not started |
 | S9–S18 | Plan 09 (pool, enablement, selection, archetypes, mid-story enablement, UI, items, weapon specials, external config, close-out) | not started |
 
 ## Verification state
 
-After S6e (Linux/Node 22): `npm run typecheck` clean; core **774 / 55 files** (engine coverage 100%),
-UI **183 / 26 files** = **957** passing; root `npm test` passes here (the tinypool worker crash is
+After S7 (Linux/Node 22): `npm run typecheck` clean; core **789 / 57 files** (engine coverage 100%),
+UI **183 / 26 files** = **972** passing; root `npm test` passes here (the tinypool worker crash is
 Windows/Node 24 only — plan 07 P0-0, not authorized).
 
 ## Facts established earlier (still true — do not re-derive)
@@ -52,10 +54,15 @@ Windows/Node 24 only — plan 07 P0-0, not authorized).
   disposition check (live violation of `CONTEXT.md` invariant 9; plan 02, not authorized).
 - Generic NPCs get `attributes: {}` and only lethal resources (`bootstrap/instantiate.ts`); S2 adds mana
   and stamina, plan 05 (not authorized) adds attribute variety.
-- `ResourceDef.regenPerScene` exists in rulebooks but nothing applies it; S7 replaces it with `economy.json`.
+- `ResourceDef.regenPerScene` exists in rulebooks but nothing applies it; S7's `economy.json` is the
+  recovery model now, and `regenPerScene` stays ignored (forge should stop emitting it in S8).
+- `consume_item` only consumes **rulebook** items that declare `restores`. Runtime loot items (the
+  equipment system, stored outside hard state) cannot be consumed yet, and the forge does not yet emit
+  `restores` — S8 (forge) and S15 (universal items) must close both.
 - The owner's taxonomy files are **permanently lost** (never committed; laptop formatted; not in Google
   Drive). Engineering authors the pool itself under the owner's existing grants — see the action plan.
-- New gate codes from S3–S6 (`insufficient_resource`, `on_cooldown`, `not_invocable`, `no_target`) and
+- New gate codes from S3–S7 (`insufficient_resource`, `on_cooldown`, `not_invocable`, `no_target`,
+  `in_combat`) and
   the new ruling fields (`reaction`, `targeting`, `cooldownApplied`, roll `statusModifier` /
   `passiveModifier`) are not yet explained in the UI ruling card — that is S8.
 - Equipment's `resource_capacity` effect is display-only: nothing in the engine applies it (found during
@@ -77,6 +84,7 @@ Windows/Node 24 only — plan 07 P0-0, not authorized).
 
 ## Single next action
 
-Start **S7** of the action plan: the recovery model (`economy.json` — out-of-combat stamina and health
-regen, mana trickle, engine-owned Rest action, restoring consumables; v3 rulebooks only; never revives;
-journalled and rewind-exact).
+Start **S8** of the action plan: the v3 forge (prompts + validation emit `schemaVersion: 3`, resource
+roles, costs, cooldowns, skill types, targeting, item `restores`/`staminaCost`) and UI surfacing (living
+card shows all resources, cooldowns, statuses, toggles; ruling card explains the new gate codes and
+`reaction` / `targeting` rulings).

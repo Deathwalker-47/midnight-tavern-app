@@ -2281,3 +2281,37 @@ rulings use their own `actionLabel` (they are not catalogue actions). Effects no
 ("Grave-wight is Cursed for 3 turns").
 
 **Tests.** 3 in `test/orchestrator/renderRuling.test.ts`. Core 777/56; typecheck clean.
+
+---
+
+## 2026-10-09 - S7: recovery model (plan 08 §5, D5)
+
+**What landed.** `config/economy.json` (Zod-validated, `ECONOMY_CONFIG`, version recorded in each
+rulebook's `mechanicsConfigVersions.economy`). New pure `engine/recovery.ts`:
+- `planRecovery`: end-of-turn regeneration as a share of each core pool's maximum — stamina 25%, mana 10%
+  (5% in combat), health 5% (0 in combat); a non-zero share is at least 1; never past the maximum; the
+  dead get nothing. "In combat" (`combatParticipants`) = acted in or was the target of an allowed
+  combat or wounding ruling this turn (the engine has no scenes, so per-scene became per-quiet-turn).
+  Runs last, after costs, ticks and toggle upkeep. Journalled as a `recovery` story event per character,
+  not as a ruling, so a quiet turn does not fill the transcript.
+- `resolveRest` (engine action `take_rest`): 50% health, full stamina, 50% mana, then a 3-turn cooldown;
+  refused with new gate code `in_combat` while anyone on the other side of the hostility line is present.
+- `resolveConsumeItem` (engine action `consume_item`): uses up one held rulebook item that declares the
+  new `ItemDef.restores` ({health, stamina, mana}), clamped by `maximumConsumableRestore` and headroom;
+  allowed in combat; journalled as `item_lost` through `costsPaid`.
+Regeneration and rest apply to schema-version-3 rulebooks only (D7); legacy stories are unchanged.
+Consuming works wherever an item declares `restores`. The classifier is offered `take_rest` only on v3
+and `consume_item` only when restoring items exist. Engine action ids (`learn_skill`, `toggle_skill`,
+`take_rest`, `consume_item`) are reserved — the validator rejects a rulebook action using one (the rest
+action is `take_rest`, not `rest`, because a forged story may well have its own "rest").
+
+**Separately committed** (see the entry above): the narrator-DENIED defect found while wiring this.
+
+**Not done / recorded.** Runtime loot items cannot be consumed yet; the forge does not emit `restores`
+yet (S8 / S15). `regenPerScene` stays dormant.
+
+**Tests.** 12 in `test/recovery.test.ts` (incl. real turns: quiet-turn regen journalled and rewound,
+rest → cooldown, tonic used up, combat stops regen, rest refused beside an enemy); 2 pinned version
+manifests updated. Typecheck clean; core 789/57, UI 183/26 = 972; engine coverage 100%.
+
+**Next:** S8 (v3 forge + UI surfacing).

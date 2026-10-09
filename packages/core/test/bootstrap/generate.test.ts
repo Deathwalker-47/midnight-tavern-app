@@ -1284,6 +1284,7 @@ describe("generateStorySchema — repair loop", () => {
       progression: 2,
       equipmentLoot: 1,
       attributeAdvancement: 1,
+      economy: 1,
     });
   });
 

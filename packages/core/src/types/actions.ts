@@ -142,6 +142,24 @@ export const LEARN_SKILL_ACTION_ID = "learn_skill";
  */
 export const TOGGLE_SKILL_ACTION_ID = "toggle_skill";
 
+/**
+ * Engine-owned recovery actions (plan 08 §5). `rest` (schema-version-3 rulebooks) recovers a share of
+ * every core pool out of danger; `consume_item` (rulebooks with restoring items) uses up one held item
+ * that declares `restores`. Neither rolls; both are routed by the orchestrator, not the resolver.
+ * Ids are chosen so a forged story action (which may well be called "rest") cannot collide; the
+ * validator reserves every engine-owned id.
+ */
+export const REST_ACTION_ID = "take_rest";
+export const CONSUME_ITEM_ACTION_ID = "consume_item";
+
+/** Every action id the engine owns; no rulebook action may use one. */
+export const ENGINE_ACTION_IDS: readonly string[] = [
+  LEARN_SKILL_ACTION_ID,
+  TOGGLE_SKILL_ACTION_ID,
+  REST_ACTION_ID,
+  CONSUME_ITEM_ACTION_ID,
+];
+
 /** Catalog-shape invariants the bootstrapper must satisfy (§2.2). */
 export const CATALOG_MIN_ACTIONS = 30;
 export const CATALOG_MIN_PER_CATEGORY = 6;

@@ -35,8 +35,13 @@ import {
   resolve,
   commit,
   countRecentSimilarUses,
+  combatParticipants,
   enforceActionBudget,
   expandTargets,
+  hasRecoveryEconomy,
+  planRecovery,
+  resolveConsumeItem,
+  resolveRest,
   planSkillReactions,
   planStatusTick,
   planToggleUpkeep,
@@ -53,8 +58,10 @@ import { maybeSummarizeChapter, maybeSummarizeArc } from "../summarizer/index.js
 import { instantiateFromTemplate, instantiateGeneric } from "../bootstrap/instantiate.js";
 import {
   blueprintToStyleInputs,
+  CONSUME_ITEM_ACTION_ID,
   createCharacterSoftState,
   LEARN_SKILL_ACTION_ID,
+  REST_ACTION_ID,
   STANDARD_DIFFICULTY,
   TOGGLE_SKILL_ACTION_ID,
 } from "../types/index.js";
@@ -527,6 +534,8 @@ async function runTurnOperation(
     let refusedActionCount = 0;
     let lootAwards: PendingLootAward[] = [];
     let attributeAdvancements: AttributeAdvancementDecision[] = [];
+    // End-of-turn regeneration per character (plan 08 §5), journalled once the turn commits.
+    const recoveries: Array<{ characterId: string; gains: Record<string, number> }> = [];
     let npcTransitions: ApprovedNpcTransition[] = [];
 
     if (schema.statMode === "full") {
@@ -708,6 +717,20 @@ async function runTurnOperation(
           : {}),
         ...extra,
       });
+      // The present roster as the engine's targeting sees it: alive or not, and which side of the
+      // validated hostility line each character stands on.
+      const presentCandidates = async (): Promise<TargetCandidate[]> => {
+        const candidates: TargetCandidate[] = [];
+        for (const character of presentRoster) {
+          const hard = await workingState(character.id);
+          candidates.push({
+            characterId: character.id,
+            alive: hard.alive,
+            hostile: hard.flags[NPC_HOSTILE_TO_PLAYER_FLAG] === true,
+          });
+        }
+        return candidates;
+      };
       // Resolve one intent through the gate and dice. A scoped action (plan 08 §4) reaches every
       // present character its scope names, with one cost and one roll, and yields one ruling each.
       const resolveIntent = async (
@@ -716,18 +739,9 @@ async function runTurnOperation(
       ): Promise<ResolveResult[]> => {
         const actorHard = await workingState(intent.actorId);
         const action = schema.actions.find((candidate) => candidate.id === intent.actionId);
-        const candidates: TargetCandidate[] = [];
-        if (action?.targeting) {
-          for (const character of presentRoster) {
-            const hard = await workingState(character.id);
-            candidates.push({
-              characterId: character.id,
-              alive: hard.alive,
-              hostile: hard.flags[NPC_HOSTILE_TO_PLAYER_FLAG] === true,
-            });
-          }
-        }
-        const reached = action ? expandTargets(action, intent, candidates) : undefined;
+        const reached = action?.targeting
+          ? expandTargets(action, intent, await presentCandidates())
+          : undefined;
         if (!reached) {
           const targetHard = intent.targetId ? await workingState(intent.targetId) : undefined;
           return [resolve(schema, actorHard, targetHard, intent, rng, resolutionOptions(extra))];
@@ -749,6 +763,26 @@ async function runTurnOperation(
           rulings.push(toggled.ruling);
           staged.push(toggled);
           stakesByTurnId.set(toggled.ruling.turnId, intent.stakes);
+          continue;
+        }
+        if (intent.actionId === REST_ACTION_ID) {
+          // Resting needs no dice, only safety: nobody hostile to the actor's side may be present.
+          const threatened =
+            expandTargets({ targeting: { scope: "all_enemies" } }, intent, await presentCandidates())!
+              .length > 0;
+          const rested = resolveRest(schema, actorHard, intent, { threatened });
+          commit(schema, rested.mutations, workingById);
+          rulings.push(rested.ruling);
+          staged.push(rested);
+          stakesByTurnId.set(rested.ruling.turnId, intent.stakes);
+          continue;
+        }
+        if (intent.actionId === CONSUME_ITEM_ACTION_ID) {
+          const consumed = resolveConsumeItem(schema, actorHard, intent);
+          commit(schema, consumed.mutations, workingById);
+          rulings.push(consumed.ruling);
+          staged.push(consumed);
+          stakesByTurnId.set(consumed.ruling.turnId, intent.stakes);
           continue;
         }
         if (intent.actionId === LEARN_SKILL_ACTION_ID) {
@@ -945,6 +979,21 @@ async function runTurnOperation(
           staged.push({ ruling, mutations: [] });
         }
       }
+      // Regeneration (plan 08 §5) comes last, after every cost and upkeep of the turn. It is quiet:
+      // journalled as a recovery event, not a ruling, so the transcript is not spammed every turn.
+      if (hasRecoveryEconomy(schema)) {
+        const fighting = combatParticipants(schema, rulings);
+        for (const character of presentRoster) {
+          const recovery = planRecovery(
+            schema,
+            await workingState(character.id),
+            fighting.has(character.id)
+          );
+          if (recovery.mutations.length === 0) continue;
+          commit(schema, recovery.mutations, workingById);
+          recoveries.push({ characterId: character.id, gains: recovery.gains });
+        }
+      }
 
       await setPhase("generating_loot", { rulings, staged });
       const playerRulings = rulings.slice(0, playerRulingCount);
@@ -1132,6 +1181,19 @@ async function runTurnOperation(
           narratorIdx,
           decision
         );
+      }
+      for (const recovery of recoveries) {
+        await store.events.insert({
+          id: randomUUID(),
+          storyId,
+          messageId: narratorMessageId,
+          turnIndex: narratorIdx,
+          actorId: recovery.characterId,
+          kind: "recovery",
+          payload: { characterId: recovery.characterId, gains: recovery.gains },
+          rulebookVersion: story.rulebookVersion ?? 1,
+          createdAt: Date.now(),
+        });
       }
       let milestoneLogged = false;
       for (const award of lootAwards) {

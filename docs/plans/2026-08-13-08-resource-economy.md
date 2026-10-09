@@ -187,10 +187,10 @@ Proposed blended model:
 | Rest action | health — an engine-owned universal `recover` action already exists in the family registry | deliberate, costs narrative time |
 | Consumables | all three | the interesting, scarce option |
 
-- [ ] **5.1** Owner confirms. This is a feel decision and should be tuned in play, so make every
+- [x] **5.1** Owner confirms. *(2026-10-09: taken as the blend under the owner's "do not wait" instruction — action plan D5; every number lives in `config/economy.json`.)* This is a feel decision and should be tuned in play, so make every
       number config-driven in `progression.json` (or a new `economy.json`) rather than hard-coded.
-- [ ] **5.2** Regen ticks in the ledger, is checkpointed, and is deterministic.
-- [ ] **5.3** Never let regen resurrect a dead character — clamp only for `alive` actors and never
+- [x] **5.2** Regen ticks in the ledger, is checkpointed, and is deterministic.
+- [x] **5.3** Never let regen resurrect a dead character — clamp only for `alive` actors and never
       cross the death threshold upward without an explicit revive effect.
 
 ## 6. Migration and owner decision D7
@@ -203,8 +203,8 @@ This plan changes the **frozen schema**. D7 decides the cost:
   for content that was never authored with them — inventing hard state for existing characters,
   which is precisely what the ledger-only rule exists to prevent.
 
-- [ ] **6.1** Owner answers D7 before implementation begins.
-- [ ] **6.2** Whatever the answer, add `schemaVersion: 3` and keep v1/v2 fully loadable. The existing
+- [x] **6.1** Owner answers D7 before implementation begins. *(2026-10-09: "new stories only" taken under the owner's "do not wait" instruction — action plan D7; moot once the owner's machine and saves were wiped.)*
+- [x] **6.2** Whatever the answer, add `schemaVersion: 3` and keep v1/v2 fully loadable. The existing
       `normalizeLegacyStorySchema` preprocessor is the pattern to follow.
 
 ## 7. Implementation order (one commit per numbered group)

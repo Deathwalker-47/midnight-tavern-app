@@ -15,6 +15,7 @@ import {
   CATALOG_MIN_PER_CATEGORY,
   DC_MIN,
   DC_MAX,
+  ENGINE_ACTION_IDS,
   ActionCategorySchema,
   type StorySchema,
   type ActionDef,
@@ -220,6 +221,9 @@ export function validateStorySchema(schema: StorySchema): string[] {
           `Action "${a.id}" uses ${family.category} universal family "${family.id}" in category "${a.category}".`
         );
       }
+    }
+    if (ENGINE_ACTION_IDS.includes(a.id)) {
+      errors.push(`Action id "${a.id}" is reserved for an engine-owned action.`);
     }
     const scope = a.targeting?.scope;
     if (a.opposed && scope && scope !== "single") {

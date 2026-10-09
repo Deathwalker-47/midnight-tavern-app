@@ -113,6 +113,7 @@ export const GateVerdictSchema = z.object({
       "on_cooldown",
       "not_invocable",
       "no_target",
+      "in_combat",
       "prerequisite_failed",
       "action_budget_exceeded",
     ])

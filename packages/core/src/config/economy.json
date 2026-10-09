@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "minimumGain": 1,
+  "regenPerTurn": {
+    "stamina": { "outOfCombat": 0.25, "inCombat": 0 },
+    "mana": { "outOfCombat": 0.1, "inCombat": 0.05 },
+    "health": { "outOfCombat": 0.05, "inCombat": 0 }
+  },
+  "rest": {
+    "restore": { "health": 0.5, "stamina": 1, "mana": 0.5 },
+    "cooldownTurns": 3
+  },
+  "maximumConsumableRestore": 50
+}

@@ -25,6 +25,7 @@ export const StoryEventKindSchema = z.enum([
   "stat_mode_changed",
   "classifier_recovery",
   "turn_rewound",
+  "recovery",
 ]);
 export type StoryEventKind = z.infer<typeof StoryEventKindSchema>;
 

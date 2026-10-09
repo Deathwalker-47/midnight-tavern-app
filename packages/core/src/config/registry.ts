@@ -3,6 +3,7 @@ import universalActionsJson from "./universal-actions.json";
 import progressionJson from "./progression.json";
 import equipmentLootJson from "./equipment-loot.json";
 import attributeAdvancementJson from "./attribute-advancement.json";
+import economyJson from "./economy.json";
 import {
   ActionCategorySchema,
   AttributeAdvancementBandSchema,
@@ -213,6 +214,40 @@ export type AttributeAdvancementConfig = z.infer<
   typeof AttributeAdvancementConfigSchema
 >;
 
+const RegenRateSchema = z.object({
+  /** Fraction of the pool's maximum regained at the end of a turn spent out of combat. */
+  outOfCombat: z.number().min(0).max(1),
+  /** Fraction regained at the end of a turn the character spent in combat. */
+  inCombat: z.number().min(0).max(1),
+});
+
+/**
+ * The recovery economy (plan 08 §5, owner decision D5): "a genuine currency, but don't
+ * inconvenience the user all the time — a tad easier than normal". Every number is a feel decision,
+ * tuned in play here rather than in code. Applies to schema-version-3 rulebooks only.
+ */
+const EconomyConfigSchema = z.object({
+  version: z.number().int().positive(),
+  /** A non-zero rate never yields less than this, so small pools still recover. */
+  minimumGain: z.number().int().min(0).max(5),
+  regenPerTurn: z.object({
+    stamina: RegenRateSchema,
+    mana: RegenRateSchema,
+    health: RegenRateSchema,
+  }),
+  rest: z.object({
+    restore: z.object({
+      health: z.number().min(0).max(1),
+      stamina: z.number().min(0).max(1),
+      mana: z.number().min(0).max(1),
+    }),
+    cooldownTurns: z.number().int().min(0).max(20),
+  }),
+  /** Ceiling on what one consumable restores to one pool, whatever an item claims. */
+  maximumConsumableRestore: z.number().int().positive(),
+});
+export type EconomyConfig = z.infer<typeof EconomyConfigSchema>;
+
 export const UNIVERSAL_ACTIONS_CONFIG = Object.freeze(
   UniversalActionConfigSchema.parse(universalActionsJson)
 );
@@ -223,6 +258,9 @@ export const EQUIPMENT_LOOT_CONFIG = Object.freeze(
 export const ATTRIBUTE_ADVANCEMENT_CONFIG = Object.freeze(
   AttributeAdvancementConfigSchema.parse(attributeAdvancementJson)
 );
+export const ECONOMY_CONFIG: Readonly<EconomyConfig> = Object.freeze(
+  EconomyConfigSchema.parse(economyJson)
+);
 
 // Versions snapshotted into a story rulebook for reproducible mechanics.
 export const MECHANICS_CONFIG_VERSIONS = Object.freeze({
@@ -230,6 +268,7 @@ export const MECHANICS_CONFIG_VERSIONS = Object.freeze({
   progression: PROGRESSION_CONFIG.version,
   equipmentLoot: EQUIPMENT_LOOT_CONFIG.version,
   attributeAdvancement: ATTRIBUTE_ADVANCEMENT_CONFIG.version,
+  economy: ECONOMY_CONFIG.version,
 });
 
 function normalizePhrase(value: string): string {

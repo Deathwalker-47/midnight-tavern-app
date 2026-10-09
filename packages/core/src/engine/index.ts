@@ -11,6 +11,7 @@ export * from "./statuses.js";
 export * from "./skills.js";
 export * from "./reactions.js";
 export * from "./targeting.js";
+export * from "./recovery.js";
 export * from "./equipment.js";
 export * from "./actionBudget.js";
 export * from "./gate.js";

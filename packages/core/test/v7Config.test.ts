@@ -20,6 +20,7 @@ describe("V7 mechanics configuration registry", () => {
       progression: 2,
       equipmentLoot: 1,
       attributeAdvancement: 1,
+      economy: 1,
     });
     expect(UNIVERSAL_ACTIONS_CONFIG.actions.length).toBeGreaterThanOrEqual(30);
     for (const category of ["combat", "social", "exploration", "crafting", "utility"] as const) {
