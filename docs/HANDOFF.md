@@ -42,12 +42,13 @@ Plans 01-07 and 10-12 of the 2026-08-13 set remain written but **not authorized*
 | S8a | Forge emits v3 for Full Stats: deterministic core pools + roles (`withCorePools`), passive/toggle skills kept, reactions → active (pool supplies them), role-keyed costs survive stabilization, prompts teach roles/costs/cooldowns/targeting | done |
 | S8b | UI: living card CONDITIONS (statuses in words, recovering actions) + skill tags (PASSIVE / TOGGLE ON-OFF / REACTION); ruling card `automatic` variant (no-roll rulings that changed something were previously invisible), gate-code titles, reaction / target-spread / cooldown / status facts, Conditions + Passive modifier terms | done |
 | — | **Plan 08 complete** | done |
-| S9–S18 | Plan 09 (pool, enablement, selection, archetypes, mid-story enablement, UI, items, weapon specials, external config, close-out) | not started |
+| S9 | Universal pool format (`config/pool.ts`: story-agnostic archetypes by attribute/pool **role**, health as multiples of the baseline hit; entries = flavour only, tier inherited) + balance rules (`config/poolRules.ts`, plan 09 §4.5 as code) + non-combat starter pool: 25 sections, 28 action + 8 skill archetypes, 153 entries (5 recorded exclusions); id lock test | done |
+| S10–S18 | Plan 09 (enablement set, selection, combat archetypes, mid-story enablement, UI, items, weapon specials, external config, close-out) | not started |
 
 ## Verification state
 
-After S8b (Linux/Node 22): `npm run typecheck` clean; core **798 / 57 files** (engine coverage 100%),
-UI **192 / 28 files** = **990** passing; root `npm test` passes here (the tinypool worker crash is
+After S9 (Linux/Node 22): `npm run typecheck` clean; core **814 / 58 files** (engine coverage 100%),
+UI **192 / 28 files** = **1006** passing; root `npm test` passes here (the tinypool worker crash is
 Windows/Node 24 only — plan 07 P0-0, not authorized).
 
 ## Facts established earlier (still true — do not re-derive)
@@ -82,8 +83,10 @@ Windows/Node 24 only — plan 07 P0-0, not authorized).
 
 ## Single next action
 
-Start **S9** (plan 09): the universal pool format and the non-combat starter pool —
-`universal-archetypes.json` + `universal-pool.json` under `packages/core/src/config/`, Zod schemas, the
-seven balance rules from plan 09 as tests over the whole pool, and exclusion records. Read plan 09
-(`docs/plans/2026-08-13-09-content-catalogues.md`) and the action plan's corrections first; engineering
-authors the pool (the owner's taxonomy files are gone).
+Start **S10**: the story enablement set. Persist a per-story set of enabled pool ids (migration),
+capture it in the turn checkpoint (rewind must restore it — plan 09 §6.5), and materialize enabled
+entries into the effective rulebook: resolve archetype attribute roles to the story's attributes
+(needs attribute-role inference, like `engine/resources.ts` does for pools), pool roles to pool ids,
+health multiples to numbers via the story's baseline natural attack. The classifier must see only
+enabled entries. Add `mayDisableEntry` (D8: refuse if anyone learned it) in core and the bridge methods
+in both backends with a parity test.

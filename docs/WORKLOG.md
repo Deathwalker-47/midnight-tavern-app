@@ -2377,3 +2377,45 @@ Typecheck clean; core 798/57, UI 192/28 = 990; engine coverage 100%.
 
 **Plan 08 is complete** (every box ticked; §8 acceptance holds — legacy stories differ only by the
 deliberate S1 XP curve and the narrator-DENIED fix). **Next:** S9, the start of plan 09.
+
+---
+
+## 2026-10-09 - S9: universal pool format + non-combat starter pool (plan 09 §4–§4b)
+
+**Format** (`packages/core/src/config/pool.ts`, loaded as `UNIVERSAL_ARCHETYPES` / `UNIVERSAL_POOL`):
+- `universal-archetypes.json` owns mechanics and is story-agnostic: `governingRoles` (attribute **roles**
+  — might, agility, endurance, intellect, insight, presence, magic — tried in order), `difficulty` + `dc`,
+  `tier`, `targetStance` (foe / ally / none), role-keyed `costs`, `cooldownTurns`, `targeting`,
+  `universalFamily`, and four outcomes whose health changes are **multiples of the story's baseline
+  hit** (other pools small flat amounts; statuses keyed by attribute/pool role). Skill archetypes:
+  active (gates), passive (bounded bonus), toggle (upkeep + bonus). Reaction skills wait for S12,
+  because they pair with combat actions.
+- `universal-pool.json` owns flavour only: `uni.<domain>.<group>.<name>` id, name, kind, archetype,
+  section, tags, settingFit, description, aliases, optional same-domain `requiresSkill`, and
+  `excluded` + reason. Entries are `.strict()` and carry **no mechanics, not even a tier**, so
+  symmetry holds by construction (deviation from the plan's sketch, which put a tier on entries).
+**Balance rules** (`config/poolRules.ts`, plan 09 §4.5 as code): DC within its difficulty word's band;
+a costed archetype costs within its tier band (free is allowed at any tier — recorded interpretation);
+cooldown > 5 only legendary/mythical; health multiples capped per tier; skill bonuses capped per tier;
+crit_success strictly better / crit_failure strictly worse (by `outcomeValue`, where one baseline hit =
+4 points and target effects count in the archetype's stance), success never worse than failure, at
+least one outcome changes state; gates stay in-domain and never point at an excluded or non-skill
+entry; no two archetypes mechanically identical; entry params match the archetype. Plus structure
+(duplicates, unknown sections/archetypes/families, kind mismatch, actions need aliases, no unused
+archetypes or empty sections).
+**Content** (engineering-authored; the owner's taxonomy is gone): 25 non-combat sections, 28 action +
+8 skill archetypes, 153 entries — 133 actions, 15 skills, 5 recorded exclusions (Compel Obedience, Read
+Minds, Speak a Foreign Language, Predict the Future, Raise the Dead). Social outcomes are mostly
+narrative with short statuses (Confident / Flustered / Steadied / Hesitant / Shaken …) so every
+archetype changes tracked state on at least one outcome. "Show my empty hands" now maps to
+*Show Peaceful Intent* (a `defuse` archetype) — finding 19's example.
+
+**Not yet used by anything** — S10 enables and materializes entries into a story; S11 selects them at
+forge time. The pool is never sent to a model.
+
+**Tests.** 16 in `test/config/pool.test.ts`: the shipped pool is clean; each rule fires on a crafted
+violation (so "clean" is not vacuous); schemas reject mechanics on entries; a committed id lock
+(`test/config/universal-pool.ids.json`) fails if a shipped id ever disappears. Typecheck clean; core
+814/58, UI 192/28 = 1006; engine coverage 100%.
+
+**Next:** S10 (enablement set: persistence, checkpoint, materialization, `mayDisableEntry`, bridges).

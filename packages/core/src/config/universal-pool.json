@@ -1,0 +1,3092 @@
+{
+  "version": 1,
+  "sections": [
+    {
+      "id": "conversation",
+      "title": "Conversation & Rapport",
+      "description": "Everyday talk: drawing people out, building trust, steering a conversation."
+    },
+    {
+      "id": "empathy",
+      "title": "Empathy & Comfort",
+      "description": "Comforting, encouraging and calming people — and taking the fight out of a hostile one."
+    },
+    {
+      "id": "persuasion",
+      "title": "Persuasion & Negotiation",
+      "description": "Changing minds and striking deals."
+    },
+    {
+      "id": "deception",
+      "title": "Deception & Guile",
+      "description": "Lies, bluffs, cover stories and disguises."
+    },
+    {
+      "id": "pressure",
+      "title": "Pressure & Intimidation",
+      "description": "Threats, stares and ultimatums."
+    },
+    {
+      "id": "insight",
+      "title": "Reading People",
+      "description": "Tells, motives and lies."
+    },
+    {
+      "id": "etiquette",
+      "title": "Etiquette & Courtesy",
+      "description": "Manners, protocol and hospitality."
+    },
+    {
+      "id": "leadership",
+      "title": "Leadership & Command",
+      "description": "Leading, ordering and inspiring a group."
+    },
+    {
+      "id": "diplomacy",
+      "title": "Diplomacy & Politics",
+      "description": "Treaties, alliances, mediation and influence."
+    },
+    {
+      "id": "law",
+      "title": "Law & Courts",
+      "description": "Pleading, precedent, contracts and loopholes."
+    },
+    {
+      "id": "commerce",
+      "title": "Commerce & Trade",
+      "description": "Buying, selling and judging value."
+    },
+    {
+      "id": "performance",
+      "title": "Performance & Art",
+      "description": "Music, recitation, dance and showmanship."
+    },
+    {
+      "id": "reputation",
+      "title": "Reputation & Standing",
+      "description": "Rumours, favours and names."
+    },
+    {
+      "id": "household",
+      "title": "Home & Family",
+      "description": "Children, quarrels, meals and the household."
+    },
+    {
+      "id": "lore",
+      "title": "Lore & Knowledge",
+      "description": "What you know and how you find out more."
+    },
+    {
+      "id": "investigation",
+      "title": "Investigation",
+      "description": "Clues, scenes and leads."
+    },
+    {
+      "id": "awareness",
+      "title": "Awareness",
+      "description": "Watching, listening and noticing danger."
+    },
+    {
+      "id": "stealth",
+      "title": "Stealth & Subtlety",
+      "description": "Moving unseen and sleight of hand."
+    },
+    {
+      "id": "athletics",
+      "title": "Movement & Athletics",
+      "description": "Climbing, swimming, running, lifting and enduring."
+    },
+    {
+      "id": "survival",
+      "title": "Wilderness & Survival",
+      "description": "Food, shelter, fire, tracking and finding the way."
+    },
+    {
+      "id": "medicine",
+      "title": "Care & Medicine",
+      "description": "Wounds, poisons and illness."
+    },
+    {
+      "id": "making",
+      "title": "Crafts & Making",
+      "description": "Making, mending and brewing."
+    },
+    {
+      "id": "animals",
+      "title": "Animal Handling",
+      "description": "Calming, befriending, riding and training animals."
+    },
+    {
+      "id": "technology",
+      "title": "Technology",
+      "description": "Machines, vehicles, computers and systems."
+    },
+    {
+      "id": "civic",
+      "title": "Governance & Administration",
+      "description": "Accounts, supplies, labour and petitions."
+    }
+  ],
+  "entries": [
+    {
+      "id": "uni.social.conversation.silver_tongue",
+      "name": "Silver Tongue",
+      "kind": "skill",
+      "archetypeId": "arch.skill.social_knack",
+      "section": "conversation",
+      "tags": [
+        "social",
+        "passive"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Words come easily; a small edge in every social exchange."
+    },
+    {
+      "id": "uni.social.conversation.strike_up_a_conversation",
+      "name": "Strike Up a Conversation",
+      "kind": "action",
+      "archetypeId": "arch.social.sway",
+      "section": "conversation",
+      "tags": [
+        "social",
+        "rapport"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Open a friendly exchange with someone.",
+      "aliases": [
+        "chat with",
+        "make small talk",
+        "talk to"
+      ]
+    },
+    {
+      "id": "uni.social.conversation.draw_someone_out",
+      "name": "Draw Someone Out",
+      "kind": "action",
+      "archetypeId": "arch.social.sway",
+      "section": "conversation",
+      "tags": [
+        "social",
+        "information"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Get someone talking about themselves.",
+      "aliases": [
+        "get them talking",
+        "ask about themselves"
+      ]
+    },
+    {
+      "id": "uni.social.conversation.build_rapport",
+      "name": "Build Rapport",
+      "kind": "action",
+      "archetypeId": "arch.social.sway",
+      "section": "conversation",
+      "tags": [
+        "social",
+        "rapport"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Earn someone's goodwill over time.",
+      "aliases": [
+        "build trust",
+        "warm up to",
+        "befriend"
+      ]
+    },
+    {
+      "id": "uni.social.conversation.change_the_subject",
+      "name": "Change the Subject",
+      "kind": "action",
+      "archetypeId": "arch.social.sway",
+      "section": "conversation",
+      "tags": [
+        "social",
+        "redirect"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Steer a conversation away from where it was heading.",
+      "aliases": [
+        "steer the conversation",
+        "deflect",
+        "change the topic"
+      ]
+    },
+    {
+      "id": "uni.social.conversation.ask_for_information",
+      "name": "Ask for Information",
+      "kind": "action",
+      "archetypeId": "arch.social.sway",
+      "section": "conversation",
+      "tags": [
+        "social",
+        "information"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Ask someone what they know.",
+      "aliases": [
+        "ask around",
+        "ask about",
+        "inquire"
+      ]
+    },
+    {
+      "id": "uni.social.empathy.reassure",
+      "name": "Reassure",
+      "kind": "action",
+      "archetypeId": "arch.social.reassure",
+      "section": "empathy",
+      "tags": [
+        "social",
+        "support",
+        "calm"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Put someone at ease.",
+      "aliases": [
+        "reassure",
+        "comfort",
+        "put at ease"
+      ]
+    },
+    {
+      "id": "uni.social.empathy.console_the_grieving",
+      "name": "Console the Grieving",
+      "kind": "action",
+      "archetypeId": "arch.social.reassure",
+      "section": "empathy",
+      "tags": [
+        "social",
+        "support"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Comfort someone through loss.",
+      "aliases": [
+        "console",
+        "comfort the grieving"
+      ]
+    },
+    {
+      "id": "uni.social.empathy.calm_a_panic",
+      "name": "Calm a Panic",
+      "kind": "action",
+      "archetypeId": "arch.social.reassure",
+      "section": "empathy",
+      "tags": [
+        "social",
+        "support",
+        "calm"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Bring someone back from fear.",
+      "aliases": [
+        "calm down",
+        "soothe",
+        "stop panicking"
+      ]
+    },
+    {
+      "id": "uni.social.empathy.offer_encouragement",
+      "name": "Offer Encouragement",
+      "kind": "action",
+      "archetypeId": "arch.social.reassure",
+      "section": "empathy",
+      "tags": [
+        "social",
+        "support"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Give someone the heart to try.",
+      "aliases": [
+        "encourage",
+        "cheer on"
+      ]
+    },
+    {
+      "id": "uni.social.empathy.show_peaceful_intent",
+      "name": "Show Peaceful Intent",
+      "kind": "action",
+      "archetypeId": "arch.social.defuse",
+      "section": "empathy",
+      "tags": [
+        "social",
+        "calm",
+        "de_escalation"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Make it plain you mean no harm.",
+      "aliases": [
+        "show my empty hands",
+        "raise my hands",
+        "show I mean no harm",
+        "lower my weapon"
+      ]
+    },
+    {
+      "id": "uni.social.empathy.de_escalate",
+      "name": "De-escalate",
+      "kind": "action",
+      "archetypeId": "arch.social.defuse",
+      "section": "empathy",
+      "tags": [
+        "social",
+        "calm",
+        "de_escalation"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Talk a hostile person down before it turns violent.",
+      "aliases": [
+        "talk them down",
+        "de-escalate",
+        "defuse the situation"
+      ]
+    },
+    {
+      "id": "uni.social.empathy.plead_for_mercy",
+      "name": "Plead for Mercy",
+      "kind": "action",
+      "archetypeId": "arch.social.defuse",
+      "section": "empathy",
+      "tags": [
+        "social",
+        "de_escalation"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Beg someone hostile to stay their hand.",
+      "aliases": [
+        "beg for mercy",
+        "plead",
+        "surrender"
+      ]
+    },
+    {
+      "id": "uni.social.persuasion.charm_offensive",
+      "name": "Charm Offensive",
+      "kind": "skill",
+      "archetypeId": "arch.skill.charm_toggle",
+      "section": "persuasion",
+      "tags": [
+        "social",
+        "toggle"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Turn the charm all the way up while it lasts."
+    },
+    {
+      "id": "uni.social.persuasion.persuade",
+      "name": "Persuade",
+      "kind": "action",
+      "archetypeId": "arch.social.sway",
+      "section": "persuasion",
+      "tags": [
+        "social",
+        "persuasion"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Bring someone round to your view.",
+      "aliases": [
+        "persuade",
+        "convince",
+        "talk into"
+      ]
+    },
+    {
+      "id": "uni.social.persuasion.make_an_appeal",
+      "name": "Make an Appeal",
+      "kind": "action",
+      "archetypeId": "arch.social.sway",
+      "section": "persuasion",
+      "tags": [
+        "social",
+        "persuasion"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Appeal to someone's values or feelings.",
+      "aliases": [
+        "appeal to",
+        "implore"
+      ]
+    },
+    {
+      "id": "uni.social.persuasion.argue_a_point",
+      "name": "Argue a Point",
+      "kind": "action",
+      "archetypeId": "arch.social.sway",
+      "section": "persuasion",
+      "tags": [
+        "social",
+        "persuasion"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Win an argument on its merits.",
+      "aliases": [
+        "argue",
+        "make the case",
+        "debate"
+      ]
+    },
+    {
+      "id": "uni.social.persuasion.negotiate_terms",
+      "name": "Negotiate Terms",
+      "kind": "action",
+      "archetypeId": "arch.social.bargain",
+      "section": "persuasion",
+      "tags": [
+        "social",
+        "negotiation"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Agree the terms of an arrangement.",
+      "aliases": [
+        "negotiate",
+        "set terms"
+      ]
+    },
+    {
+      "id": "uni.social.persuasion.haggle",
+      "name": "Haggle",
+      "kind": "action",
+      "archetypeId": "arch.social.bargain",
+      "section": "persuasion",
+      "tags": [
+        "social",
+        "negotiation",
+        "trade"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Drive a price down or up.",
+      "aliases": [
+        "haggle",
+        "bargain",
+        "drive a price down"
+      ]
+    },
+    {
+      "id": "uni.social.persuasion.strike_a_deal",
+      "name": "Strike a Deal",
+      "kind": "action",
+      "archetypeId": "arch.social.bargain",
+      "section": "persuasion",
+      "tags": [
+        "social",
+        "negotiation"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Close an agreement both sides accept.",
+      "aliases": [
+        "strike a deal",
+        "make a deal",
+        "shake on it"
+      ]
+    },
+    {
+      "id": "uni.social.deception.bluff",
+      "name": "Bluff",
+      "kind": "action",
+      "archetypeId": "arch.social.deceive",
+      "section": "deception",
+      "tags": [
+        "social",
+        "deception"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Pretend to more than you have.",
+      "aliases": [
+        "bluff",
+        "lie"
+      ]
+    },
+    {
+      "id": "uni.social.deception.feign_ignorance",
+      "name": "Feign Ignorance",
+      "kind": "action",
+      "archetypeId": "arch.social.deceive",
+      "section": "deception",
+      "tags": [
+        "social",
+        "deception"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Play dumb convincingly.",
+      "aliases": [
+        "play dumb",
+        "feign ignorance"
+      ]
+    },
+    {
+      "id": "uni.social.deception.spin_a_cover_story",
+      "name": "Spin a Cover Story",
+      "kind": "action",
+      "archetypeId": "arch.social.deceive",
+      "section": "deception",
+      "tags": [
+        "social",
+        "deception"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Explain away your presence or actions.",
+      "aliases": [
+        "make up a story",
+        "cover story",
+        "make an excuse"
+      ]
+    },
+    {
+      "id": "uni.social.deception.misdirect",
+      "name": "Misdirect",
+      "kind": "action",
+      "archetypeId": "arch.social.deceive",
+      "section": "deception",
+      "tags": [
+        "social",
+        "deception"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Point someone's attention the wrong way.",
+      "aliases": [
+        "misdirect",
+        "distract them with words"
+      ]
+    },
+    {
+      "id": "uni.social.deception.keep_a_straight_face",
+      "name": "Keep a Straight Face",
+      "kind": "action",
+      "archetypeId": "arch.social.deceive",
+      "section": "deception",
+      "tags": [
+        "social",
+        "deception"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Give nothing away under questioning.",
+      "aliases": [
+        "poker face",
+        "keep a straight face"
+      ]
+    },
+    {
+      "id": "uni.social.deception.impersonate",
+      "name": "Impersonate",
+      "kind": "action",
+      "archetypeId": "arch.social.deceive",
+      "section": "deception",
+      "tags": [
+        "social",
+        "deception",
+        "disguise"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Pass yourself off as someone else.",
+      "aliases": [
+        "pose as",
+        "pretend to be",
+        "impersonate"
+      ]
+    },
+    {
+      "id": "uni.social.pressure.intimidate",
+      "name": "Intimidate",
+      "kind": "action",
+      "archetypeId": "arch.social.intimidate",
+      "section": "pressure",
+      "tags": [
+        "social",
+        "pressure"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Make someone afraid of what you might do.",
+      "aliases": [
+        "intimidate",
+        "threaten",
+        "menace"
+      ]
+    },
+    {
+      "id": "uni.social.pressure.stare_down",
+      "name": "Stare Down",
+      "kind": "action",
+      "archetypeId": "arch.social.intimidate",
+      "section": "pressure",
+      "tags": [
+        "social",
+        "pressure"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Win a silent contest of wills.",
+      "aliases": [
+        "stare down",
+        "glare"
+      ]
+    },
+    {
+      "id": "uni.social.pressure.issue_an_ultimatum",
+      "name": "Issue an Ultimatum",
+      "kind": "action",
+      "archetypeId": "arch.social.intimidate",
+      "section": "pressure",
+      "tags": [
+        "social",
+        "pressure"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Leave someone a hard choice.",
+      "aliases": [
+        "ultimatum",
+        "or else"
+      ]
+    },
+    {
+      "id": "uni.social.pressure.interrogate",
+      "name": "Interrogate",
+      "kind": "action",
+      "archetypeId": "arch.social.intimidate",
+      "section": "pressure",
+      "tags": [
+        "social",
+        "pressure",
+        "information"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Press someone hard for answers.",
+      "aliases": [
+        "interrogate",
+        "grill"
+      ]
+    },
+    {
+      "id": "uni.social.pressure.compel_obedience",
+      "name": "Compel Obedience",
+      "kind": "action",
+      "archetypeId": "arch.social.intimidate",
+      "section": "pressure",
+      "tags": [
+        "social",
+        "control"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Make someone do whatever you say.",
+      "aliases": [
+        "compel",
+        "make them obey"
+      ],
+      "excluded": true,
+      "exclusionReason": "Would let a check dictate another character's choices outright; the engine rules outcomes, not wills. Intimidate and Persuade cover the honest version."
+    },
+    {
+      "id": "uni.social.insight.read_body_language",
+      "name": "Read Body Language",
+      "kind": "action",
+      "archetypeId": "arch.social.read",
+      "section": "insight",
+      "tags": [
+        "social",
+        "insight"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Watch someone's tells.",
+      "aliases": [
+        "read body language",
+        "watch their reactions"
+      ]
+    },
+    {
+      "id": "uni.social.insight.sense_motive",
+      "name": "Sense Motive",
+      "kind": "action",
+      "archetypeId": "arch.social.read",
+      "section": "insight",
+      "tags": [
+        "social",
+        "insight"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Work out what someone really wants.",
+      "aliases": [
+        "sense motive",
+        "what do they want",
+        "see through"
+      ]
+    },
+    {
+      "id": "uni.social.insight.spot_a_lie",
+      "name": "Spot a Lie",
+      "kind": "action",
+      "archetypeId": "arch.social.read",
+      "section": "insight",
+      "tags": [
+        "social",
+        "insight"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Catch someone in an untruth.",
+      "aliases": [
+        "spot a lie",
+        "catch a lie",
+        "is he lying"
+      ]
+    },
+    {
+      "id": "uni.social.insight.read_the_room",
+      "name": "Read the Room",
+      "kind": "action",
+      "archetypeId": "arch.explore.observe",
+      "section": "insight",
+      "tags": [
+        "social",
+        "insight"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Gauge the mood of everyone present.",
+      "aliases": [
+        "read the room",
+        "gauge the mood"
+      ]
+    },
+    {
+      "id": "uni.social.insight.read_minds",
+      "name": "Read Minds",
+      "kind": "action",
+      "archetypeId": "arch.social.read",
+      "section": "insight",
+      "tags": [
+        "social",
+        "telepathy"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Hear someone's thoughts directly.",
+      "aliases": [
+        "read minds"
+      ],
+      "excluded": true,
+      "exclusionReason": "Needs hidden mental state the engine does not track; telepathy belongs with the magic archetypes (S12) if anywhere."
+    },
+    {
+      "id": "uni.social.etiquette.observe_protocol",
+      "name": "Observe Protocol",
+      "kind": "action",
+      "archetypeId": "arch.social.sway",
+      "section": "etiquette",
+      "tags": [
+        "social",
+        "courtesy"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Follow the forms a situation demands.",
+      "aliases": [
+        "bow",
+        "follow etiquette",
+        "observe protocol"
+      ]
+    },
+    {
+      "id": "uni.social.etiquette.pay_respects",
+      "name": "Pay Respects",
+      "kind": "action",
+      "archetypeId": "arch.social.sway",
+      "section": "etiquette",
+      "tags": [
+        "social",
+        "courtesy"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Show someone the respect they expect.",
+      "aliases": [
+        "pay respects",
+        "show respect"
+      ]
+    },
+    {
+      "id": "uni.social.etiquette.make_an_introduction",
+      "name": "Make an Introduction",
+      "kind": "action",
+      "archetypeId": "arch.social.sway",
+      "section": "etiquette",
+      "tags": [
+        "social",
+        "courtesy"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Introduce people to good effect.",
+      "aliases": [
+        "introduce",
+        "make introductions"
+      ]
+    },
+    {
+      "id": "uni.social.etiquette.apologize_gracefully",
+      "name": "Apologize Gracefully",
+      "kind": "action",
+      "archetypeId": "arch.social.sway",
+      "section": "etiquette",
+      "tags": [
+        "social",
+        "courtesy",
+        "repair"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Mend a slight with a good apology.",
+      "aliases": [
+        "apologize",
+        "say sorry"
+      ]
+    },
+    {
+      "id": "uni.social.etiquette.host_a_gathering",
+      "name": "Host a Gathering",
+      "kind": "action",
+      "archetypeId": "arch.social.perform",
+      "section": "etiquette",
+      "tags": [
+        "social",
+        "courtesy",
+        "group"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Make guests feel welcome and cheerful.",
+      "aliases": [
+        "host",
+        "throw a feast",
+        "hold a gathering"
+      ]
+    },
+    {
+      "id": "uni.social.etiquette.speak_a_foreign_language",
+      "name": "Speak a Foreign Language",
+      "kind": "action",
+      "archetypeId": "arch.social.sway",
+      "section": "etiquette",
+      "tags": [
+        "social",
+        "language"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Converse in a language you know.",
+      "aliases": [
+        "speak in",
+        "talk in their language"
+      ],
+      "excluded": true,
+      "exclusionReason": "Languages are better modelled as story flags and lore than as checks with DCs (plan 09 §4.2)."
+    },
+    {
+      "id": "uni.social.leadership.command",
+      "name": "Command",
+      "kind": "skill",
+      "archetypeId": "arch.skill.discipline",
+      "section": "leadership",
+      "tags": [
+        "social",
+        "leadership"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Trained leadership: rallying and inspiring a group."
+    },
+    {
+      "id": "uni.social.leadership.rally_the_group",
+      "name": "Rally the Group",
+      "kind": "action",
+      "archetypeId": "arch.social.rally",
+      "section": "leadership",
+      "tags": [
+        "social",
+        "leadership",
+        "group",
+        "buff"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Lift everyone on your side.",
+      "aliases": [
+        "rally",
+        "rally the troops",
+        "rouse"
+      ],
+      "requiresSkill": "uni.social.leadership.command"
+    },
+    {
+      "id": "uni.social.leadership.inspire_courage",
+      "name": "Inspire Courage",
+      "kind": "action",
+      "archetypeId": "arch.social.rally",
+      "section": "leadership",
+      "tags": [
+        "social",
+        "leadership",
+        "group",
+        "buff"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "A speech that steels your allies.",
+      "aliases": [
+        "inspire",
+        "give a speech"
+      ],
+      "requiresSkill": "uni.social.leadership.command"
+    },
+    {
+      "id": "uni.social.leadership.give_orders",
+      "name": "Give Orders",
+      "kind": "action",
+      "archetypeId": "arch.social.sway",
+      "section": "leadership",
+      "tags": [
+        "social",
+        "leadership"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Get someone to do what needs doing.",
+      "aliases": [
+        "give orders",
+        "command",
+        "order"
+      ]
+    },
+    {
+      "id": "uni.social.leadership.delegate_tasks",
+      "name": "Delegate Tasks",
+      "kind": "action",
+      "archetypeId": "arch.social.sway",
+      "section": "leadership",
+      "tags": [
+        "social",
+        "leadership"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Hand the right job to the right person.",
+      "aliases": [
+        "delegate",
+        "assign tasks"
+      ]
+    },
+    {
+      "id": "uni.social.diplomacy.diplomacy",
+      "name": "Diplomacy",
+      "kind": "skill",
+      "archetypeId": "arch.skill.discipline",
+      "section": "diplomacy",
+      "tags": [
+        "social",
+        "diplomacy"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Trained statecraft: treaties, alliances and mediation."
+    },
+    {
+      "id": "uni.social.diplomacy.broker_an_agreement",
+      "name": "Broker an Agreement",
+      "kind": "action",
+      "archetypeId": "arch.social.sway_hard",
+      "section": "diplomacy",
+      "tags": [
+        "social",
+        "diplomacy"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Bring opposed parties to terms.",
+      "aliases": [
+        "broker",
+        "broker a deal"
+      ],
+      "requiresSkill": "uni.social.diplomacy.diplomacy"
+    },
+    {
+      "id": "uni.social.diplomacy.form_an_alliance",
+      "name": "Form an Alliance",
+      "kind": "action",
+      "archetypeId": "arch.social.sway_hard",
+      "section": "diplomacy",
+      "tags": [
+        "social",
+        "diplomacy"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Bind another party to your cause.",
+      "aliases": [
+        "form an alliance",
+        "ally with"
+      ],
+      "requiresSkill": "uni.social.diplomacy.diplomacy"
+    },
+    {
+      "id": "uni.social.diplomacy.mediate_a_dispute",
+      "name": "Mediate a Dispute",
+      "kind": "action",
+      "archetypeId": "arch.social.sway_hard",
+      "section": "diplomacy",
+      "tags": [
+        "social",
+        "diplomacy"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Settle a quarrel between others.",
+      "aliases": [
+        "mediate",
+        "settle a dispute"
+      ],
+      "requiresSkill": "uni.social.diplomacy.diplomacy"
+    },
+    {
+      "id": "uni.social.diplomacy.lobby_for_support",
+      "name": "Lobby for Support",
+      "kind": "action",
+      "archetypeId": "arch.social.sway",
+      "section": "diplomacy",
+      "tags": [
+        "social",
+        "diplomacy"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Win backing one person at a time.",
+      "aliases": [
+        "lobby",
+        "gather support",
+        "canvass"
+      ]
+    },
+    {
+      "id": "uni.social.diplomacy.read_political_currents",
+      "name": "Read Political Currents",
+      "kind": "action",
+      "archetypeId": "arch.knowledge.recall",
+      "section": "diplomacy",
+      "tags": [
+        "social",
+        "diplomacy",
+        "knowledge"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Work out who holds power and who wants it.",
+      "aliases": [
+        "read the politics",
+        "who holds power"
+      ]
+    },
+    {
+      "id": "uni.social.law.legal_expertise",
+      "name": "Legal Expertise",
+      "kind": "skill",
+      "archetypeId": "arch.skill.discipline",
+      "section": "law",
+      "tags": [
+        "social",
+        "law"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Trained knowledge of law and courts."
+    },
+    {
+      "id": "uni.social.law.plead_a_case",
+      "name": "Plead a Case",
+      "kind": "action",
+      "archetypeId": "arch.social.sway_hard",
+      "section": "law",
+      "tags": [
+        "social",
+        "law"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Argue before a judge or council.",
+      "aliases": [
+        "plead a case",
+        "argue in court"
+      ],
+      "requiresSkill": "uni.social.law.legal_expertise"
+    },
+    {
+      "id": "uni.social.law.find_a_loophole",
+      "name": "Find a Loophole",
+      "kind": "action",
+      "archetypeId": "arch.knowledge.study",
+      "section": "law",
+      "tags": [
+        "social",
+        "law",
+        "knowledge"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Find the gap in a rule or contract.",
+      "aliases": [
+        "find a loophole"
+      ],
+      "requiresSkill": "uni.social.law.legal_expertise"
+    },
+    {
+      "id": "uni.social.law.cross_examine",
+      "name": "Cross-Examine",
+      "kind": "action",
+      "archetypeId": "arch.social.read",
+      "section": "law",
+      "tags": [
+        "social",
+        "law",
+        "insight"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Expose the holes in a witness's account.",
+      "aliases": [
+        "cross-examine",
+        "question the witness"
+      ]
+    },
+    {
+      "id": "uni.social.law.cite_the_law",
+      "name": "Cite the Law",
+      "kind": "action",
+      "archetypeId": "arch.knowledge.recall",
+      "section": "law",
+      "tags": [
+        "social",
+        "law",
+        "knowledge"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Know which rule applies.",
+      "aliases": [
+        "cite the law",
+        "quote the law"
+      ]
+    },
+    {
+      "id": "uni.social.law.draft_a_contract",
+      "name": "Draft a Contract",
+      "kind": "action",
+      "archetypeId": "arch.knowledge.recall",
+      "section": "law",
+      "tags": [
+        "social",
+        "law"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Put an agreement into binding words.",
+      "aliases": [
+        "draft a contract",
+        "write up terms"
+      ]
+    },
+    {
+      "id": "uni.social.commerce.appraise",
+      "name": "Appraise",
+      "kind": "action",
+      "archetypeId": "arch.knowledge.recall",
+      "section": "commerce",
+      "tags": [
+        "social",
+        "trade",
+        "knowledge"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Judge what something is worth.",
+      "aliases": [
+        "appraise",
+        "value",
+        "how much is it worth"
+      ]
+    },
+    {
+      "id": "uni.social.commerce.find_a_buyer",
+      "name": "Find a Buyer",
+      "kind": "action",
+      "archetypeId": "arch.social.bargain",
+      "section": "commerce",
+      "tags": [
+        "social",
+        "trade"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Sell something for a fair price.",
+      "aliases": [
+        "find a buyer",
+        "sell"
+      ]
+    },
+    {
+      "id": "uni.social.commerce.assess_a_deal",
+      "name": "Assess a Deal",
+      "kind": "action",
+      "archetypeId": "arch.knowledge.recall",
+      "section": "commerce",
+      "tags": [
+        "social",
+        "trade",
+        "knowledge"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Judge whether an offer is good.",
+      "aliases": [
+        "assess the deal",
+        "is this a good deal"
+      ]
+    },
+    {
+      "id": "uni.social.commerce.trade_goods",
+      "name": "Trade Goods",
+      "kind": "action",
+      "archetypeId": "arch.social.bargain",
+      "section": "commerce",
+      "tags": [
+        "social",
+        "trade"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Swap goods or favours.",
+      "aliases": [
+        "trade",
+        "barter",
+        "swap"
+      ]
+    },
+    {
+      "id": "uni.social.performance.perform_music",
+      "name": "Perform Music",
+      "kind": "action",
+      "archetypeId": "arch.social.perform",
+      "section": "performance",
+      "tags": [
+        "social",
+        "performance",
+        "group"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Play or sing for whoever is listening.",
+      "aliases": [
+        "play music",
+        "sing",
+        "perform"
+      ]
+    },
+    {
+      "id": "uni.social.performance.recite_poetry",
+      "name": "Recite Poetry",
+      "kind": "action",
+      "archetypeId": "arch.social.perform",
+      "section": "performance",
+      "tags": [
+        "social",
+        "performance",
+        "group"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Move a room with words.",
+      "aliases": [
+        "recite",
+        "declaim"
+      ]
+    },
+    {
+      "id": "uni.social.performance.dance",
+      "name": "Dance",
+      "kind": "action",
+      "archetypeId": "arch.social.perform",
+      "section": "performance",
+      "tags": [
+        "social",
+        "performance",
+        "group"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Dance to impress or delight.",
+      "aliases": [
+        "dance"
+      ]
+    },
+    {
+      "id": "uni.social.performance.entertain_a_crowd",
+      "name": "Entertain a Crowd",
+      "kind": "action",
+      "archetypeId": "arch.social.perform",
+      "section": "performance",
+      "tags": [
+        "social",
+        "performance",
+        "group"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Put on a show.",
+      "aliases": [
+        "entertain",
+        "put on a show"
+      ]
+    },
+    {
+      "id": "uni.social.performance.tell_a_joke",
+      "name": "Tell a Joke",
+      "kind": "action",
+      "archetypeId": "arch.social.sway",
+      "section": "performance",
+      "tags": [
+        "social",
+        "performance",
+        "rapport"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Make someone laugh.",
+      "aliases": [
+        "tell a joke",
+        "make them laugh"
+      ]
+    },
+    {
+      "id": "uni.social.reputation.spread_a_rumor",
+      "name": "Spread a Rumor",
+      "kind": "action",
+      "archetypeId": "arch.social.sway",
+      "section": "reputation",
+      "tags": [
+        "social",
+        "reputation"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Start a story going round.",
+      "aliases": [
+        "spread a rumor",
+        "gossip"
+      ]
+    },
+    {
+      "id": "uni.social.reputation.call_in_a_favor",
+      "name": "Call in a Favor",
+      "kind": "action",
+      "archetypeId": "arch.social.sway",
+      "section": "reputation",
+      "tags": [
+        "social",
+        "reputation"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Remind someone what they owe you.",
+      "aliases": [
+        "call in a favor"
+      ]
+    },
+    {
+      "id": "uni.social.reputation.drop_a_name",
+      "name": "Drop a Name",
+      "kind": "action",
+      "archetypeId": "arch.social.sway",
+      "section": "reputation",
+      "tags": [
+        "social",
+        "reputation"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Mention who you know to open a door.",
+      "aliases": [
+        "drop a name",
+        "mention who I know"
+      ]
+    },
+    {
+      "id": "uni.social.reputation.clear_your_name",
+      "name": "Clear Your Name",
+      "kind": "action",
+      "archetypeId": "arch.social.sway",
+      "section": "reputation",
+      "tags": [
+        "social",
+        "reputation",
+        "repair"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Persuade someone you were wronged.",
+      "aliases": [
+        "clear my name",
+        "restore my reputation"
+      ]
+    },
+    {
+      "id": "uni.social.household.comfort_a_child",
+      "name": "Comfort a Child",
+      "kind": "action",
+      "archetypeId": "arch.social.reassure",
+      "section": "household",
+      "tags": [
+        "social",
+        "family",
+        "support"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Soothe a frightened or upset child.",
+      "aliases": [
+        "comfort the child",
+        "soothe the kid"
+      ]
+    },
+    {
+      "id": "uni.social.household.settle_a_family_quarrel",
+      "name": "Settle a Family Quarrel",
+      "kind": "action",
+      "archetypeId": "arch.social.sway",
+      "section": "household",
+      "tags": [
+        "social",
+        "family"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Make peace between relatives.",
+      "aliases": [
+        "settle the quarrel",
+        "make peace between"
+      ]
+    },
+    {
+      "id": "uni.social.household.cook_a_meal",
+      "name": "Cook a Meal",
+      "kind": "action",
+      "archetypeId": "arch.craft.brew",
+      "section": "household",
+      "tags": [
+        "family",
+        "crafting",
+        "food"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Make a filling meal from what there is.",
+      "aliases": [
+        "cook",
+        "make dinner",
+        "prepare a meal"
+      ]
+    },
+    {
+      "id": "uni.social.household.keep_house",
+      "name": "Keep House",
+      "kind": "action",
+      "archetypeId": "arch.craft.mend",
+      "section": "household",
+      "tags": [
+        "family",
+        "crafting"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Put a home in order.",
+      "aliases": [
+        "tidy",
+        "clean up",
+        "keep house"
+      ]
+    },
+    {
+      "id": "uni.knowledge.lore.scholarship",
+      "name": "Scholarship",
+      "kind": "skill",
+      "archetypeId": "arch.skill.discipline",
+      "section": "lore",
+      "tags": [
+        "knowledge"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Trained study: research and old writings."
+    },
+    {
+      "id": "uni.knowledge.lore.deep_focus",
+      "name": "Deep Focus",
+      "kind": "skill",
+      "archetypeId": "arch.skill.focus_toggle",
+      "section": "lore",
+      "tags": [
+        "knowledge",
+        "exploration",
+        "toggle"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Sustained concentration that sharpens every observation."
+    },
+    {
+      "id": "uni.knowledge.lore.recall_lore",
+      "name": "Recall Lore",
+      "kind": "action",
+      "archetypeId": "arch.knowledge.recall",
+      "section": "lore",
+      "tags": [
+        "knowledge"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Remember what is known about something.",
+      "aliases": [
+        "recall",
+        "remember",
+        "what do I know about"
+      ]
+    },
+    {
+      "id": "uni.knowledge.lore.identify",
+      "name": "Identify",
+      "kind": "action",
+      "archetypeId": "arch.knowledge.recall",
+      "section": "lore",
+      "tags": [
+        "knowledge"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Recognise what something is.",
+      "aliases": [
+        "identify",
+        "what is this"
+      ]
+    },
+    {
+      "id": "uni.knowledge.lore.consult_records",
+      "name": "Consult Records",
+      "kind": "action",
+      "archetypeId": "arch.knowledge.recall",
+      "section": "lore",
+      "tags": [
+        "knowledge",
+        "research"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Find the answer in written records.",
+      "aliases": [
+        "consult records",
+        "check the archives",
+        "look it up"
+      ]
+    },
+    {
+      "id": "uni.knowledge.lore.recall_history",
+      "name": "Recall History",
+      "kind": "action",
+      "archetypeId": "arch.knowledge.recall",
+      "section": "lore",
+      "tags": [
+        "knowledge"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Remember what happened before.",
+      "aliases": [
+        "recall history",
+        "historical precedent"
+      ]
+    },
+    {
+      "id": "uni.knowledge.lore.research_a_mystery",
+      "name": "Research a Mystery",
+      "kind": "action",
+      "archetypeId": "arch.knowledge.study",
+      "section": "lore",
+      "tags": [
+        "knowledge",
+        "research"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Dig until the answer gives way.",
+      "aliases": [
+        "research",
+        "study the problem"
+      ],
+      "requiresSkill": "uni.knowledge.lore.scholarship"
+    },
+    {
+      "id": "uni.knowledge.lore.decipher_an_ancient_script",
+      "name": "Decipher an Ancient Script",
+      "kind": "action",
+      "archetypeId": "arch.knowledge.study",
+      "section": "lore",
+      "tags": [
+        "knowledge",
+        "research"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Read what few can.",
+      "aliases": [
+        "decipher",
+        "translate the script"
+      ],
+      "requiresSkill": "uni.knowledge.lore.scholarship"
+    },
+    {
+      "id": "uni.knowledge.lore.predict_the_future",
+      "name": "Predict the Future",
+      "kind": "action",
+      "archetypeId": "arch.knowledge.study",
+      "section": "lore",
+      "tags": [
+        "knowledge",
+        "prophecy"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Know what will happen.",
+      "aliases": [
+        "predict",
+        "foresee"
+      ],
+      "excluded": true,
+      "exclusionReason": "Would require the engine to know future state; prophecy is narration, not a check."
+    },
+    {
+      "id": "uni.explore.investigation.search_for_clues",
+      "name": "Search for Clues",
+      "kind": "action",
+      "archetypeId": "arch.explore.search",
+      "section": "investigation",
+      "tags": [
+        "exploration",
+        "investigation"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Hunt a place for evidence.",
+      "aliases": [
+        "search for clues",
+        "look for clues",
+        "search the room"
+      ]
+    },
+    {
+      "id": "uni.explore.investigation.examine_the_scene",
+      "name": "Examine the Scene",
+      "kind": "action",
+      "archetypeId": "arch.explore.search",
+      "section": "investigation",
+      "tags": [
+        "exploration",
+        "investigation"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Study a scene closely.",
+      "aliases": [
+        "examine",
+        "inspect the scene"
+      ]
+    },
+    {
+      "id": "uni.explore.investigation.follow_a_lead",
+      "name": "Follow a Lead",
+      "kind": "action",
+      "archetypeId": "arch.explore.search",
+      "section": "investigation",
+      "tags": [
+        "exploration",
+        "investigation"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Chase a lead to its source.",
+      "aliases": [
+        "follow the lead",
+        "chase the lead"
+      ]
+    },
+    {
+      "id": "uni.explore.investigation.spot_inconsistencies",
+      "name": "Spot Inconsistencies",
+      "kind": "action",
+      "archetypeId": "arch.explore.search",
+      "section": "investigation",
+      "tags": [
+        "exploration",
+        "investigation"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Notice what does not add up.",
+      "aliases": [
+        "spot inconsistencies",
+        "notice what's off"
+      ]
+    },
+    {
+      "id": "uni.explore.investigation.reconstruct_events",
+      "name": "Reconstruct Events",
+      "kind": "action",
+      "archetypeId": "arch.knowledge.recall",
+      "section": "investigation",
+      "tags": [
+        "exploration",
+        "investigation",
+        "knowledge"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Piece together what happened.",
+      "aliases": [
+        "reconstruct what happened",
+        "piece it together"
+      ]
+    },
+    {
+      "id": "uni.explore.awareness.keen_senses",
+      "name": "Keen Senses",
+      "kind": "skill",
+      "archetypeId": "arch.skill.explorer_knack",
+      "section": "awareness",
+      "tags": [
+        "exploration",
+        "passive"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Sharp eyes and ears; a small edge in exploration."
+    },
+    {
+      "id": "uni.explore.awareness.keep_watch",
+      "name": "Keep Watch",
+      "kind": "action",
+      "archetypeId": "arch.explore.observe",
+      "section": "awareness",
+      "tags": [
+        "exploration",
+        "awareness"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Watch for anything coming.",
+      "aliases": [
+        "keep watch",
+        "stand guard",
+        "keep a lookout"
+      ]
+    },
+    {
+      "id": "uni.explore.awareness.listen_closely",
+      "name": "Listen Closely",
+      "kind": "action",
+      "archetypeId": "arch.explore.observe",
+      "section": "awareness",
+      "tags": [
+        "exploration",
+        "awareness"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Hear what others miss.",
+      "aliases": [
+        "listen",
+        "eavesdrop",
+        "listen at the door"
+      ]
+    },
+    {
+      "id": "uni.explore.awareness.spot_danger",
+      "name": "Spot Danger",
+      "kind": "action",
+      "archetypeId": "arch.explore.observe",
+      "section": "awareness",
+      "tags": [
+        "exploration",
+        "awareness"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Notice a threat before it strikes.",
+      "aliases": [
+        "look for danger",
+        "scan for threats"
+      ]
+    },
+    {
+      "id": "uni.explore.awareness.survey_the_area",
+      "name": "Survey the Area",
+      "kind": "action",
+      "archetypeId": "arch.explore.observe",
+      "section": "awareness",
+      "tags": [
+        "exploration",
+        "awareness"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Take in your surroundings.",
+      "aliases": [
+        "look around",
+        "survey",
+        "take in the surroundings"
+      ]
+    },
+    {
+      "id": "uni.stealth.stealth.light_footed",
+      "name": "Light-Footed",
+      "kind": "skill",
+      "archetypeId": "arch.skill.nimble",
+      "section": "stealth",
+      "tags": [
+        "stealth",
+        "passive"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Quick and quiet on your feet."
+    },
+    {
+      "id": "uni.stealth.stealth.sneak",
+      "name": "Sneak",
+      "kind": "action",
+      "archetypeId": "arch.stealth.sneak",
+      "section": "stealth",
+      "tags": [
+        "stealth"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Move without being heard.",
+      "aliases": [
+        "sneak",
+        "creep",
+        "move quietly"
+      ]
+    },
+    {
+      "id": "uni.stealth.stealth.hide",
+      "name": "Hide",
+      "kind": "action",
+      "archetypeId": "arch.stealth.sneak",
+      "section": "stealth",
+      "tags": [
+        "stealth"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Get out of sight.",
+      "aliases": [
+        "hide",
+        "take cover",
+        "duck out of sight"
+      ]
+    },
+    {
+      "id": "uni.stealth.stealth.slip_away",
+      "name": "Slip Away",
+      "kind": "action",
+      "archetypeId": "arch.stealth.sneak",
+      "section": "stealth",
+      "tags": [
+        "stealth",
+        "escape"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Leave without anyone noticing.",
+      "aliases": [
+        "slip away",
+        "sneak off"
+      ]
+    },
+    {
+      "id": "uni.stealth.stealth.blend_into_a_crowd",
+      "name": "Blend into a Crowd",
+      "kind": "action",
+      "archetypeId": "arch.stealth.sneak",
+      "section": "stealth",
+      "tags": [
+        "stealth"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Disappear among other people.",
+      "aliases": [
+        "blend in",
+        "lose myself in the crowd"
+      ]
+    },
+    {
+      "id": "uni.stealth.stealth.shadow_someone",
+      "name": "Shadow Someone",
+      "kind": "action",
+      "archetypeId": "arch.stealth.sneak",
+      "section": "stealth",
+      "tags": [
+        "stealth"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Follow someone unseen.",
+      "aliases": [
+        "follow",
+        "tail",
+        "shadow"
+      ]
+    },
+    {
+      "id": "uni.stealth.stealth.pick_a_pocket",
+      "name": "Pick a Pocket",
+      "kind": "action",
+      "archetypeId": "arch.stealth.filch",
+      "section": "stealth",
+      "tags": [
+        "stealth",
+        "sleight_of_hand"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Lift something from someone unnoticed.",
+      "aliases": [
+        "pick a pocket",
+        "pickpocket",
+        "lift"
+      ]
+    },
+    {
+      "id": "uni.stealth.stealth.palm_an_object",
+      "name": "Palm an Object",
+      "kind": "action",
+      "archetypeId": "arch.stealth.filch",
+      "section": "stealth",
+      "tags": [
+        "stealth",
+        "sleight_of_hand"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Make something vanish into your hand.",
+      "aliases": [
+        "palm",
+        "sleight of hand",
+        "pocket it"
+      ]
+    },
+    {
+      "id": "uni.stealth.stealth.plant_an_item",
+      "name": "Plant an Item",
+      "kind": "action",
+      "archetypeId": "arch.stealth.filch",
+      "section": "stealth",
+      "tags": [
+        "stealth",
+        "sleight_of_hand"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Slip something onto someone.",
+      "aliases": [
+        "plant",
+        "slip it into"
+      ]
+    },
+    {
+      "id": "uni.physical.athletics.hardy",
+      "name": "Hardy",
+      "kind": "skill",
+      "archetypeId": "arch.skill.hardy",
+      "section": "athletics",
+      "tags": [
+        "physical",
+        "passive"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "A tough constitution."
+    },
+    {
+      "id": "uni.physical.athletics.climb",
+      "name": "Climb",
+      "kind": "action",
+      "archetypeId": "arch.physical.exert",
+      "section": "athletics",
+      "tags": [
+        "physical",
+        "movement"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Climb a wall, cliff or rope.",
+      "aliases": [
+        "climb",
+        "scale"
+      ]
+    },
+    {
+      "id": "uni.physical.athletics.swim",
+      "name": "Swim",
+      "kind": "action",
+      "archetypeId": "arch.physical.exert",
+      "section": "athletics",
+      "tags": [
+        "physical",
+        "movement"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Swim through difficult water.",
+      "aliases": [
+        "swim"
+      ]
+    },
+    {
+      "id": "uni.physical.athletics.leap_a_gap",
+      "name": "Leap a Gap",
+      "kind": "action",
+      "archetypeId": "arch.physical.exert",
+      "section": "athletics",
+      "tags": [
+        "physical",
+        "movement"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Jump across or over something.",
+      "aliases": [
+        "jump",
+        "leap"
+      ]
+    },
+    {
+      "id": "uni.physical.athletics.sprint",
+      "name": "Sprint",
+      "kind": "action",
+      "archetypeId": "arch.physical.exert",
+      "section": "athletics",
+      "tags": [
+        "physical",
+        "movement"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Run flat out.",
+      "aliases": [
+        "sprint",
+        "run",
+        "dash"
+      ]
+    },
+    {
+      "id": "uni.physical.athletics.force_a_door",
+      "name": "Force a Door",
+      "kind": "action",
+      "archetypeId": "arch.physical.exert",
+      "section": "athletics",
+      "tags": [
+        "physical",
+        "strength"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Break through by strength.",
+      "aliases": [
+        "force the door",
+        "break down the door",
+        "shoulder the door"
+      ]
+    },
+    {
+      "id": "uni.physical.athletics.lift_a_heavy_load",
+      "name": "Lift a Heavy Load",
+      "kind": "action",
+      "archetypeId": "arch.physical.exert",
+      "section": "athletics",
+      "tags": [
+        "physical",
+        "strength"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Lift, carry or haul something heavy.",
+      "aliases": [
+        "lift",
+        "carry",
+        "haul"
+      ]
+    },
+    {
+      "id": "uni.physical.athletics.endure_hardship",
+      "name": "Endure Hardship",
+      "kind": "action",
+      "archetypeId": "arch.physical.exert",
+      "section": "athletics",
+      "tags": [
+        "physical",
+        "endurance"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Push through pain, cold or exhaustion.",
+      "aliases": [
+        "endure",
+        "push through",
+        "grit my teeth"
+      ]
+    },
+    {
+      "id": "uni.wild.survival.woodwise",
+      "name": "Woodwise",
+      "kind": "skill",
+      "archetypeId": "arch.skill.explorer_knack",
+      "section": "survival",
+      "tags": [
+        "wilderness",
+        "passive"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "At home in the wild; a small edge in exploration."
+    },
+    {
+      "id": "uni.wild.survival.forage",
+      "name": "Forage",
+      "kind": "action",
+      "archetypeId": "arch.wild.survive",
+      "section": "survival",
+      "tags": [
+        "wilderness",
+        "food"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Find food or water in the wild.",
+      "aliases": [
+        "forage",
+        "gather food",
+        "find water"
+      ]
+    },
+    {
+      "id": "uni.wild.survival.find_shelter",
+      "name": "Find Shelter",
+      "kind": "action",
+      "archetypeId": "arch.wild.survive",
+      "section": "survival",
+      "tags": [
+        "wilderness",
+        "rest"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Find or make a safe place to rest.",
+      "aliases": [
+        "find shelter",
+        "make camp"
+      ]
+    },
+    {
+      "id": "uni.wild.survival.start_a_fire",
+      "name": "Start a Fire",
+      "kind": "action",
+      "archetypeId": "arch.wild.survive",
+      "section": "survival",
+      "tags": [
+        "wilderness"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Make fire from what is at hand.",
+      "aliases": [
+        "start a fire",
+        "build a fire",
+        "light a fire"
+      ]
+    },
+    {
+      "id": "uni.wild.survival.navigate_by_the_stars",
+      "name": "Navigate by the Stars",
+      "kind": "action",
+      "archetypeId": "arch.wild.survive",
+      "section": "survival",
+      "tags": [
+        "wilderness",
+        "navigation"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Find your way without a road.",
+      "aliases": [
+        "navigate",
+        "find my way",
+        "orient myself"
+      ]
+    },
+    {
+      "id": "uni.wild.survival.read_the_weather",
+      "name": "Read the Weather",
+      "kind": "action",
+      "archetypeId": "arch.explore.observe",
+      "section": "survival",
+      "tags": [
+        "wilderness",
+        "awareness"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Tell what the sky is about to do.",
+      "aliases": [
+        "read the weather",
+        "will it rain"
+      ]
+    },
+    {
+      "id": "uni.wild.survival.track",
+      "name": "Track",
+      "kind": "action",
+      "archetypeId": "arch.explore.track",
+      "section": "survival",
+      "tags": [
+        "wilderness",
+        "tracking"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Follow tracks over ground.",
+      "aliases": [
+        "track",
+        "follow the tracks",
+        "follow the trail"
+      ]
+    },
+    {
+      "id": "uni.wild.survival.hunt_game",
+      "name": "Hunt Game",
+      "kind": "action",
+      "archetypeId": "arch.explore.track",
+      "section": "survival",
+      "tags": [
+        "wilderness",
+        "tracking",
+        "food"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Stalk and find an animal.",
+      "aliases": [
+        "hunt",
+        "stalk game"
+      ]
+    },
+    {
+      "id": "uni.care.medicine.medicine",
+      "name": "Medicine",
+      "kind": "skill",
+      "archetypeId": "arch.skill.discipline",
+      "section": "medicine",
+      "tags": [
+        "care",
+        "healing"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Trained healing: treatment, diagnosis and nursing."
+    },
+    {
+      "id": "uni.care.medicine.tend_wounds",
+      "name": "Tend Wounds",
+      "kind": "action",
+      "archetypeId": "arch.care.tend",
+      "section": "medicine",
+      "tags": [
+        "care",
+        "healing"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Dress someone's injuries.",
+      "aliases": [
+        "tend wounds",
+        "bandage",
+        "patch up"
+      ]
+    },
+    {
+      "id": "uni.care.medicine.steady_the_dying",
+      "name": "Steady the Dying",
+      "kind": "action",
+      "archetypeId": "arch.care.tend",
+      "section": "medicine",
+      "tags": [
+        "care",
+        "healing"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Keep someone alive who is slipping.",
+      "aliases": [
+        "stabilize",
+        "keep them alive",
+        "stop the bleeding"
+      ]
+    },
+    {
+      "id": "uni.care.medicine.bind_your_wounds",
+      "name": "Bind Your Wounds",
+      "kind": "action",
+      "archetypeId": "arch.care.self_tend",
+      "section": "medicine",
+      "tags": [
+        "care",
+        "healing",
+        "self"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Patch up your own injuries.",
+      "aliases": [
+        "bandage myself",
+        "bind my wounds",
+        "patch myself up"
+      ]
+    },
+    {
+      "id": "uni.care.medicine.treat_poison",
+      "name": "Treat Poison",
+      "kind": "action",
+      "archetypeId": "arch.care.remedy",
+      "section": "medicine",
+      "tags": [
+        "care",
+        "healing"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Draw out a poison over time.",
+      "aliases": [
+        "treat the poison",
+        "draw out the venom"
+      ],
+      "requiresSkill": "uni.care.medicine.medicine"
+    },
+    {
+      "id": "uni.care.medicine.nurse_back_to_health",
+      "name": "Nurse Back to Health",
+      "kind": "action",
+      "archetypeId": "arch.care.remedy",
+      "section": "medicine",
+      "tags": [
+        "care",
+        "healing"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Care for someone through recovery.",
+      "aliases": [
+        "nurse",
+        "care for the sick"
+      ],
+      "requiresSkill": "uni.care.medicine.medicine"
+    },
+    {
+      "id": "uni.care.medicine.diagnose_an_illness",
+      "name": "Diagnose an Illness",
+      "kind": "action",
+      "archetypeId": "arch.knowledge.study",
+      "section": "medicine",
+      "tags": [
+        "care",
+        "knowledge"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Work out what ails someone.",
+      "aliases": [
+        "diagnose",
+        "what's wrong with him"
+      ],
+      "requiresSkill": "uni.care.medicine.medicine"
+    },
+    {
+      "id": "uni.care.medicine.raise_the_dead",
+      "name": "Raise the Dead",
+      "kind": "action",
+      "archetypeId": "arch.care.remedy",
+      "section": "medicine",
+      "tags": [
+        "care",
+        "resurrection"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Bring the dead back to life.",
+      "aliases": [
+        "revive",
+        "bring back to life"
+      ],
+      "excluded": true,
+      "exclusionReason": "Death is engine-owned and final unless a story's own rules say otherwise; no check may revive the dead (plan 08 §5.3)."
+    },
+    {
+      "id": "uni.craft.making.steady_hands",
+      "name": "Steady Hands",
+      "kind": "skill",
+      "archetypeId": "arch.skill.craft_knack",
+      "section": "making",
+      "tags": [
+        "crafting",
+        "passive"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Sure, careful hands; a small edge in crafting."
+    },
+    {
+      "id": "uni.craft.making.artisanship",
+      "name": "Artisanship",
+      "kind": "skill",
+      "archetypeId": "arch.skill.discipline",
+      "section": "making",
+      "tags": [
+        "crafting"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Trained craft at the highest level."
+    },
+    {
+      "id": "uni.craft.making.craft_a_simple_item",
+      "name": "Craft a Simple Item",
+      "kind": "action",
+      "archetypeId": "arch.craft.make",
+      "section": "making",
+      "tags": [
+        "crafting"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Make something useful from materials at hand.",
+      "aliases": [
+        "craft",
+        "make",
+        "build"
+      ]
+    },
+    {
+      "id": "uni.craft.making.improvise_a_tool",
+      "name": "Improvise a Tool",
+      "kind": "action",
+      "archetypeId": "arch.craft.make",
+      "section": "making",
+      "tags": [
+        "crafting",
+        "improvise"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Rig up whatever the moment needs.",
+      "aliases": [
+        "improvise",
+        "rig up",
+        "cobble together"
+      ]
+    },
+    {
+      "id": "uni.craft.making.repair_gear",
+      "name": "Repair Gear",
+      "kind": "action",
+      "archetypeId": "arch.craft.mend",
+      "section": "making",
+      "tags": [
+        "crafting",
+        "repair"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Fix damaged equipment.",
+      "aliases": [
+        "repair",
+        "fix",
+        "mend"
+      ]
+    },
+    {
+      "id": "uni.craft.making.mend_clothing",
+      "name": "Mend Clothing",
+      "kind": "action",
+      "archetypeId": "arch.craft.mend",
+      "section": "making",
+      "tags": [
+        "crafting",
+        "repair"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Sew and patch clothes.",
+      "aliases": [
+        "sew",
+        "mend clothes",
+        "patch"
+      ]
+    },
+    {
+      "id": "uni.craft.making.brew_a_remedy",
+      "name": "Brew a Remedy",
+      "kind": "action",
+      "archetypeId": "arch.craft.brew",
+      "section": "making",
+      "tags": [
+        "crafting",
+        "healing"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Mix a simple restorative.",
+      "aliases": [
+        "brew",
+        "mix a remedy"
+      ]
+    },
+    {
+      "id": "uni.craft.making.craft_a_masterwork",
+      "name": "Craft a Masterwork",
+      "kind": "action",
+      "archetypeId": "arch.craft.masterwork",
+      "section": "making",
+      "tags": [
+        "crafting"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Make something truly fine.",
+      "aliases": [
+        "masterwork",
+        "craft something fine"
+      ],
+      "requiresSkill": "uni.craft.making.artisanship"
+    },
+    {
+      "id": "uni.craft.making.restore_a_relic",
+      "name": "Restore a Relic",
+      "kind": "action",
+      "archetypeId": "arch.craft.masterwork",
+      "section": "making",
+      "tags": [
+        "crafting",
+        "repair"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Bring something precious back from ruin.",
+      "aliases": [
+        "restore",
+        "restore the relic"
+      ],
+      "requiresSkill": "uni.craft.making.artisanship"
+    },
+    {
+      "id": "uni.animal.animals.calm_an_animal",
+      "name": "Calm an Animal",
+      "kind": "action",
+      "archetypeId": "arch.social.defuse",
+      "section": "animals",
+      "tags": [
+        "animals",
+        "calm"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Settle a frightened or hostile animal.",
+      "aliases": [
+        "calm the animal",
+        "soothe the beast"
+      ]
+    },
+    {
+      "id": "uni.animal.animals.bond_with_an_animal",
+      "name": "Bond with an Animal",
+      "kind": "action",
+      "archetypeId": "arch.social.reassure",
+      "section": "animals",
+      "tags": [
+        "animals",
+        "support"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Win an animal's trust.",
+      "aliases": [
+        "befriend",
+        "bond with"
+      ]
+    },
+    {
+      "id": "uni.animal.animals.ride_hard",
+      "name": "Ride Hard",
+      "kind": "action",
+      "archetypeId": "arch.physical.exert",
+      "section": "animals",
+      "tags": [
+        "animals",
+        "movement"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Push a mount to its limit.",
+      "aliases": [
+        "ride",
+        "gallop",
+        "spur on"
+      ]
+    },
+    {
+      "id": "uni.animal.animals.train_an_animal",
+      "name": "Train an Animal",
+      "kind": "action",
+      "archetypeId": "arch.social.sway",
+      "section": "animals",
+      "tags": [
+        "animals"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Teach an animal a command.",
+      "aliases": [
+        "train",
+        "teach a trick"
+      ]
+    },
+    {
+      "id": "uni.tech.technology.electronics",
+      "name": "Electronics",
+      "kind": "skill",
+      "archetypeId": "arch.skill.discipline",
+      "section": "technology",
+      "tags": [
+        "technology"
+      ],
+      "settingFit": [
+        "modern",
+        "scifi"
+      ],
+      "description": "Trained knowledge of systems and circuitry."
+    },
+    {
+      "id": "uni.tech.technology.operate_machinery",
+      "name": "Operate Machinery",
+      "kind": "action",
+      "archetypeId": "arch.tech.operate",
+      "section": "technology",
+      "tags": [
+        "technology"
+      ],
+      "settingFit": [
+        "modern",
+        "scifi",
+        "post_apocalyptic"
+      ],
+      "description": "Run a machine properly.",
+      "aliases": [
+        "operate",
+        "work the machine",
+        "start the engine"
+      ]
+    },
+    {
+      "id": "uni.tech.technology.use_a_computer",
+      "name": "Use a Computer",
+      "kind": "action",
+      "archetypeId": "arch.tech.operate",
+      "section": "technology",
+      "tags": [
+        "technology",
+        "research"
+      ],
+      "settingFit": [
+        "modern",
+        "scifi"
+      ],
+      "description": "Find what you need on a computer.",
+      "aliases": [
+        "use the computer",
+        "search the database",
+        "look it up online"
+      ]
+    },
+    {
+      "id": "uni.tech.technology.drive_a_vehicle",
+      "name": "Drive a Vehicle",
+      "kind": "action",
+      "archetypeId": "arch.tech.operate",
+      "section": "technology",
+      "tags": [
+        "technology",
+        "movement"
+      ],
+      "settingFit": [
+        "modern",
+        "scifi",
+        "post_apocalyptic"
+      ],
+      "description": "Drive well under pressure.",
+      "aliases": [
+        "drive",
+        "steer",
+        "floor it"
+      ]
+    },
+    {
+      "id": "uni.tech.technology.use_a_radio",
+      "name": "Use a Radio",
+      "kind": "action",
+      "archetypeId": "arch.tech.operate",
+      "section": "technology",
+      "tags": [
+        "technology",
+        "communication"
+      ],
+      "settingFit": [
+        "modern",
+        "scifi",
+        "post_apocalyptic"
+      ],
+      "description": "Send or catch a transmission.",
+      "aliases": [
+        "radio",
+        "call in",
+        "use the comms"
+      ]
+    },
+    {
+      "id": "uni.tech.technology.hack_a_terminal",
+      "name": "Hack a Terminal",
+      "kind": "action",
+      "archetypeId": "arch.tech.hack",
+      "section": "technology",
+      "tags": [
+        "technology",
+        "intrusion"
+      ],
+      "settingFit": [
+        "modern",
+        "scifi"
+      ],
+      "description": "Break into a system.",
+      "aliases": [
+        "hack",
+        "hack the terminal",
+        "crack the password"
+      ],
+      "requiresSkill": "uni.tech.technology.electronics"
+    },
+    {
+      "id": "uni.tech.technology.bypass_security",
+      "name": "Bypass Security",
+      "kind": "action",
+      "archetypeId": "arch.tech.hack",
+      "section": "technology",
+      "tags": [
+        "technology",
+        "intrusion"
+      ],
+      "settingFit": [
+        "modern",
+        "scifi"
+      ],
+      "description": "Defeat alarms, locks and cameras.",
+      "aliases": [
+        "bypass security",
+        "disable the alarm",
+        "spoof the camera"
+      ],
+      "requiresSkill": "uni.tech.technology.electronics"
+    },
+    {
+      "id": "uni.tech.technology.jury_rig_electronics",
+      "name": "Jury-Rig Electronics",
+      "kind": "action",
+      "archetypeId": "arch.tech.hack",
+      "section": "technology",
+      "tags": [
+        "technology",
+        "improvise"
+      ],
+      "settingFit": [
+        "modern",
+        "scifi",
+        "post_apocalyptic"
+      ],
+      "description": "Make broken electronics work.",
+      "aliases": [
+        "jury-rig",
+        "hotwire",
+        "splice the wires"
+      ],
+      "requiresSkill": "uni.tech.technology.electronics"
+    },
+    {
+      "id": "uni.civic.civic.keep_accounts",
+      "name": "Keep Accounts",
+      "kind": "action",
+      "archetypeId": "arch.knowledge.recall",
+      "section": "civic",
+      "tags": [
+        "civic",
+        "knowledge"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Keep the books straight.",
+      "aliases": [
+        "keep accounts",
+        "balance the books"
+      ]
+    },
+    {
+      "id": "uni.civic.civic.manage_supplies",
+      "name": "Manage Supplies",
+      "kind": "action",
+      "archetypeId": "arch.knowledge.recall",
+      "section": "civic",
+      "tags": [
+        "civic"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Know what you have and what you need.",
+      "aliases": [
+        "manage supplies",
+        "ration",
+        "take inventory"
+      ]
+    },
+    {
+      "id": "uni.civic.civic.organize_labor",
+      "name": "Organize Labor",
+      "kind": "action",
+      "archetypeId": "arch.social.sway",
+      "section": "civic",
+      "tags": [
+        "civic",
+        "leadership"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Get people working together.",
+      "aliases": [
+        "organize",
+        "put people to work"
+      ]
+    },
+    {
+      "id": "uni.civic.civic.hold_court",
+      "name": "Hold Court",
+      "kind": "action",
+      "archetypeId": "arch.social.sway",
+      "section": "civic",
+      "tags": [
+        "civic",
+        "leadership"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Hear petitions and give judgements.",
+      "aliases": [
+        "hold court",
+        "hear petitions"
+      ]
+    }
+  ]
+}

@@ -55,7 +55,7 @@ Shipping plan 02 alone still makes the game feel more inert. These two must land
 **The taxonomy is names, not mechanics.** Not one entry carries a DC, governing attribute, outcome
 table, cost, or gate. §4 is how that gets solved affordably.
 
-- [ ] **2.1** Read the full taxonomy file before implementing (it exceeds a single read; page through
+- [x] **2.1** *(Moot, 2026-10-09: the file was never committed and the owner's machine was wiped; engineering authors the pool under the owner's grants — see the action plan.)* Read the full taxonomy file before implementing (it exceeds a single read; page through
       it). Record the exact section count and total named-skill count in this plan — the numbers
       above are an estimate from the first ~2,000 lines.
 
@@ -170,7 +170,7 @@ different elements, and sections 27–29 (healing / buff / debuff) likewise.
       Everything else in the 166 sections is expressible. Note that the exclusions are concentrated
       in Part I; **the non-combat expansion (§68–166) is almost entirely expressible** as social,
       knowledge, craft, and care checks — which is why §4.3 does it first.
-- [ ] **4.3** Non-combat sections (68–166) are largely **social/knowledge checks** against an
+- [x] **4.3** *(S9: 25 non-combat sections, 28 action + 8 skill archetypes, 153 entries.)* Non-combat sections (68–166) are largely **social/knowledge checks** against an
       attribute with no target harm — a very small number of archetypes covers hundreds of entries
       (`social_check`, `knowledge_check`, `craft_check`, `care_check`). Do these first; they are the
       cheapest coverage in the whole file and they directly address finding 19, because "show my
@@ -194,10 +194,10 @@ validator tests rather than opinions.
 | Gates | A skill-requiring action names a skill in the same archetype family. No action requires an item kind the pool does not define. |
 | Symmetry | Shape-identical entries (Fire/Ice/Lightning Bolt) must have **identical** numbers. Flavour differs; mechanics do not. Enforced by deriving them from one archetype. |
 
-- [ ] **4.6** Write these as validator tests in `packages/core/test/config/` that run over the whole
+- [x] **4.6** *(S9: `config/poolRules.ts` + `test/config/pool.test.ts`.)* Write these as validator tests in `packages/core/test/config/` that run over the whole
       pool, so a badly authored entry fails CI rather than reaching a player. This is the mechanism
       that makes bulk authoring safe.
-- [ ] **4.7** Where an entry cannot satisfy the rules without inventing a new engine capability
+- [x] **4.7** Where an entry cannot satisfy the rules without inventing a new engine capability
       (summoning, transformation, time manipulation), it goes on §4.2's exclusion list rather than
       being forced into an ill-fitting archetype. **Record it; do not silently drop it.**
 
@@ -268,11 +268,11 @@ and stops the forge wasting tokens rejecting obviously wrong entries.
 it), tags are functional (what it does). Selection and the plan 11 suggestion funnel both key off
 tags; the browser keys off sections.
 
-- [ ] **4b.1** `kind: "action" | "skill"` distinguishes the two, but they share one file, one id
+- [x] **4b.1** `kind: "action" | "skill"` distinguishes the two, but they share one file, one id
       scheme, and one browser. They differ only in whether they gate (skill) or are performed
       (action). Keeping them in one structure avoids two parallel systems that would inevitably
       drift, which is the same mistake §8.1 warns about for items.
-- [ ] **4b.2** Entries excluded per §4.2 stay in the file with `"excluded": true` and a reason, so
+- [x] **4b.2** Entries excluded per §4.2 stay in the file with `"excluded": true` and a reason, so
       the exclusion is visible and reviewable rather than an absence.
 
 ## 4c. External configuration and user overrides

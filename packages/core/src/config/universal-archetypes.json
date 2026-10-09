@@ -1,0 +1,1334 @@
+{
+  "version": 1,
+  "archetypes": [
+    {
+      "id": "arch.social.sway",
+      "kind": "action",
+      "description": "Win someone over in an ordinary exchange: talk, ask, persuade, perform for one listener.",
+      "category": "social",
+      "universalFamily": "influence",
+      "governingRoles": [
+        "presence",
+        "insight"
+      ],
+      "difficulty": "standard",
+      "dc": 12,
+      "tier": "common",
+      "targetStance": "none",
+      "effects": {
+        "crit_success": {
+          "narrationHint": "they come round completely",
+          "statusSelf": {
+            "id": "confident",
+            "label": "Confident",
+            "durationTurns": 1,
+            "checkBonus": 1
+          }
+        },
+        "success": {
+          "narrationHint": "they come round"
+        },
+        "failure": {
+          "narrationHint": "they are unmoved"
+        },
+        "crit_failure": {
+          "narrationHint": "it backfires awkwardly",
+          "statusSelf": {
+            "id": "flustered",
+            "label": "Flustered",
+            "durationTurns": 1,
+            "checkBonus": -1
+          }
+        }
+      }
+    },
+    {
+      "id": "arch.social.sway_hard",
+      "kind": "action",
+      "description": "A demanding, high-stakes appeal that needs real expertise: treaties, court pleas, alliances.",
+      "category": "social",
+      "universalFamily": "influence",
+      "governingRoles": [
+        "presence",
+        "intellect"
+      ],
+      "difficulty": "hard",
+      "dc": 16,
+      "tier": "uncommon",
+      "targetStance": "none",
+      "effects": {
+        "crit_success": {
+          "narrationHint": "a decisive, lasting win",
+          "statusSelf": {
+            "id": "assured",
+            "label": "Assured",
+            "durationTurns": 2,
+            "checkBonus": 1
+          }
+        },
+        "success": {
+          "narrationHint": "the argument carries"
+        },
+        "failure": {
+          "narrationHint": "the argument falls short"
+        },
+        "crit_failure": {
+          "narrationHint": "credibility suffers",
+          "statusSelf": {
+            "id": "discredited",
+            "label": "Discredited",
+            "durationTurns": 2,
+            "checkBonus": -1
+          }
+        }
+      }
+    },
+    {
+      "id": "arch.social.reassure",
+      "kind": "action",
+      "description": "Steady someone on your side: comfort, encourage, calm a panic.",
+      "category": "social",
+      "universalFamily": "empathize",
+      "governingRoles": [
+        "presence",
+        "insight"
+      ],
+      "difficulty": "standard",
+      "dc": 11,
+      "tier": "common",
+      "targetStance": "ally",
+      "effects": {
+        "crit_success": {
+          "narrationHint": "they find real resolve",
+          "statusTarget": {
+            "id": "steadied",
+            "label": "Steadied",
+            "durationTurns": 3,
+            "checkBonus": 1
+          }
+        },
+        "success": {
+          "narrationHint": "they steady themselves",
+          "statusTarget": {
+            "id": "steadied",
+            "label": "Steadied",
+            "durationTurns": 2,
+            "checkBonus": 1
+          }
+        },
+        "failure": {
+          "narrationHint": "the words do not land"
+        },
+        "crit_failure": {
+          "narrationHint": "you make it worse",
+          "statusTarget": {
+            "id": "unsettled",
+            "label": "Unsettled",
+            "durationTurns": 1,
+            "checkBonus": -1
+          }
+        }
+      }
+    },
+    {
+      "id": "arch.social.defuse",
+      "kind": "action",
+      "description": "Take the fight out of someone hostile without striking: show peaceful intent, talk them down.",
+      "category": "social",
+      "universalFamily": "influence",
+      "governingRoles": [
+        "presence",
+        "insight"
+      ],
+      "difficulty": "standard",
+      "dc": 12,
+      "tier": "common",
+      "targetStance": "foe",
+      "effects": {
+        "crit_success": {
+          "narrationHint": "their aggression drains away",
+          "statusTarget": {
+            "id": "hesitant",
+            "label": "Hesitant",
+            "durationTurns": 3,
+            "checkBonus": -1
+          }
+        },
+        "success": {
+          "narrationHint": "they hesitate",
+          "statusTarget": {
+            "id": "hesitant",
+            "label": "Hesitant",
+            "durationTurns": 2,
+            "checkBonus": -1
+          }
+        },
+        "failure": {
+          "narrationHint": "they stay on edge"
+        },
+        "crit_failure": {
+          "narrationHint": "you leave yourself open",
+          "statusSelf": {
+            "id": "exposed",
+            "label": "Exposed",
+            "durationTurns": 1,
+            "checkBonus": -1
+          }
+        }
+      }
+    },
+    {
+      "id": "arch.social.intimidate",
+      "kind": "action",
+      "description": "Pressure someone with threat or presence, against their nerve.",
+      "category": "social",
+      "universalFamily": "intimidate",
+      "governingRoles": [
+        "presence",
+        "might"
+      ],
+      "difficulty": "standard",
+      "dc": 13,
+      "tier": "common",
+      "targetStance": "foe",
+      "opposed": true,
+      "effects": {
+        "crit_success": {
+          "narrationHint": "they are badly shaken",
+          "statusTarget": {
+            "id": "shaken",
+            "label": "Shaken",
+            "durationTurns": 2,
+            "checkBonus": -2
+          }
+        },
+        "success": {
+          "narrationHint": "they are shaken",
+          "statusTarget": {
+            "id": "shaken",
+            "label": "Shaken",
+            "durationTurns": 2,
+            "checkBonus": -1
+          }
+        },
+        "failure": {
+          "narrationHint": "they hold their nerve"
+        },
+        "crit_failure": {
+          "narrationHint": "they call your bluff",
+          "statusSelf": {
+            "id": "flustered",
+            "label": "Flustered",
+            "durationTurns": 1,
+            "checkBonus": -1
+          }
+        }
+      }
+    },
+    {
+      "id": "arch.social.deceive",
+      "kind": "action",
+      "description": "Mislead someone, against their wits.",
+      "category": "social",
+      "universalFamily": "deceive",
+      "governingRoles": [
+        "presence",
+        "insight"
+      ],
+      "difficulty": "standard",
+      "dc": 13,
+      "tier": "common",
+      "targetStance": "none",
+      "opposed": true,
+      "effects": {
+        "crit_success": {
+          "narrationHint": "they believe every word",
+          "statusSelf": {
+            "id": "unsuspected",
+            "label": "Unsuspected",
+            "durationTurns": 2,
+            "checkBonus": 1
+          }
+        },
+        "success": {
+          "narrationHint": "they believe it"
+        },
+        "failure": {
+          "narrationHint": "they are not convinced"
+        },
+        "crit_failure": {
+          "narrationHint": "you are caught out",
+          "statusSelf": {
+            "id": "caught_out",
+            "label": "Caught Out",
+            "durationTurns": 2,
+            "checkBonus": -1
+          }
+        }
+      }
+    },
+    {
+      "id": "arch.social.read",
+      "kind": "action",
+      "description": "Read a person: their tells, motives and lies, against their composure.",
+      "category": "social",
+      "universalFamily": "empathize",
+      "governingRoles": [
+        "insight"
+      ],
+      "difficulty": "standard",
+      "dc": 12,
+      "tier": "common",
+      "targetStance": "none",
+      "opposed": true,
+      "effects": {
+        "crit_success": {
+          "narrationHint": "you see right through them",
+          "statusSelf": {
+            "id": "insightful",
+            "label": "Insightful",
+            "durationTurns": 2,
+            "checkBonus": 1
+          }
+        },
+        "success": {
+          "narrationHint": "you read them"
+        },
+        "failure": {
+          "narrationHint": "they give nothing away"
+        },
+        "crit_failure": {
+          "narrationHint": "you misread them badly",
+          "statusSelf": {
+            "id": "misled",
+            "label": "Misled",
+            "durationTurns": 1,
+            "checkBonus": -1
+          }
+        }
+      }
+    },
+    {
+      "id": "arch.social.bargain",
+      "kind": "action",
+      "description": "Trade value or terms with someone.",
+      "category": "social",
+      "universalFamily": "barter",
+      "governingRoles": [
+        "presence",
+        "intellect"
+      ],
+      "difficulty": "standard",
+      "dc": 12,
+      "tier": "common",
+      "targetStance": "none",
+      "effects": {
+        "crit_success": {
+          "narrationHint": "a deal well in your favour",
+          "statusSelf": {
+            "id": "confident",
+            "label": "Confident",
+            "durationTurns": 1,
+            "checkBonus": 1
+          }
+        },
+        "success": {
+          "narrationHint": "a fair deal"
+        },
+        "failure": {
+          "narrationHint": "no deal"
+        },
+        "crit_failure": {
+          "narrationHint": "you are fleeced",
+          "statusSelf": {
+            "id": "flustered",
+            "label": "Flustered",
+            "durationTurns": 1,
+            "checkBonus": -1
+          }
+        }
+      }
+    },
+    {
+      "id": "arch.social.rally",
+      "kind": "action",
+      "description": "Lift everyone on your side at once; tiring, and not every turn.",
+      "category": "social",
+      "universalFamily": "influence",
+      "governingRoles": [
+        "presence"
+      ],
+      "difficulty": "standard",
+      "dc": 12,
+      "tier": "uncommon",
+      "targetStance": "ally",
+      "costs": {
+        "stamina": 3
+      },
+      "cooldownTurns": 2,
+      "targeting": {
+        "scope": "all_allies"
+      },
+      "effects": {
+        "crit_success": {
+          "narrationHint": "spirits soar",
+          "statusTarget": {
+            "id": "inspired",
+            "label": "Inspired",
+            "durationTurns": 2,
+            "checkBonus": 2
+          }
+        },
+        "success": {
+          "narrationHint": "spirits lift",
+          "statusTarget": {
+            "id": "inspired",
+            "label": "Inspired",
+            "durationTurns": 2,
+            "checkBonus": 1
+          }
+        },
+        "failure": {
+          "narrationHint": "the words fall flat"
+        },
+        "crit_failure": {
+          "narrationHint": "your voice cracks",
+          "statusSelf": {
+            "id": "flustered",
+            "label": "Flustered",
+            "durationTurns": 1,
+            "checkBonus": -1
+          }
+        }
+      }
+    },
+    {
+      "id": "arch.social.perform",
+      "kind": "action",
+      "description": "Play to everyone present: music, a speech, a show.",
+      "category": "social",
+      "universalFamily": "influence",
+      "governingRoles": [
+        "presence",
+        "agility"
+      ],
+      "difficulty": "standard",
+      "dc": 12,
+      "tier": "common",
+      "targetStance": "ally",
+      "targeting": {
+        "scope": "area"
+      },
+      "effects": {
+        "crit_success": {
+          "narrationHint": "the room is delighted",
+          "statusTarget": {
+            "id": "delighted",
+            "label": "Delighted",
+            "durationTurns": 2,
+            "checkBonus": 1
+          }
+        },
+        "success": {
+          "narrationHint": "it goes over well",
+          "statusTarget": {
+            "id": "delighted",
+            "label": "Delighted",
+            "durationTurns": 1,
+            "checkBonus": 1
+          }
+        },
+        "failure": {
+          "narrationHint": "polite indifference"
+        },
+        "crit_failure": {
+          "narrationHint": "you are jeered",
+          "statusSelf": {
+            "id": "jeered",
+            "label": "Jeered",
+            "durationTurns": 1,
+            "checkBonus": -1
+          }
+        }
+      }
+    },
+    {
+      "id": "arch.knowledge.recall",
+      "kind": "action",
+      "description": "Bring what you know to bear: lore, records, values, precedent.",
+      "category": "exploration",
+      "universalFamily": "decipher",
+      "governingRoles": [
+        "intellect",
+        "insight"
+      ],
+      "difficulty": "standard",
+      "dc": 12,
+      "tier": "common",
+      "targetStance": "none",
+      "effects": {
+        "crit_success": {
+          "narrationHint": "you know exactly what matters",
+          "statusSelf": {
+            "id": "well_informed",
+            "label": "Well-Informed",
+            "durationTurns": 2,
+            "checkBonus": 1
+          }
+        },
+        "success": {
+          "narrationHint": "you recall something useful"
+        },
+        "failure": {
+          "narrationHint": "nothing comes to mind"
+        },
+        "crit_failure": {
+          "narrationHint": "you remember it wrong",
+          "statusSelf": {
+            "id": "misinformed",
+            "label": "Misinformed",
+            "durationTurns": 1,
+            "checkBonus": -1
+          }
+        }
+      }
+    },
+    {
+      "id": "arch.knowledge.study",
+      "kind": "action",
+      "description": "Hard intellectual work that needs training: research, decipherment, diagnosis, legal craft.",
+      "category": "exploration",
+      "universalFamily": "decipher",
+      "governingRoles": [
+        "intellect"
+      ],
+      "difficulty": "hard",
+      "dc": 16,
+      "tier": "uncommon",
+      "targetStance": "none",
+      "effects": {
+        "crit_success": {
+          "narrationHint": "a breakthrough",
+          "statusSelf": {
+            "id": "enlightened",
+            "label": "Enlightened",
+            "durationTurns": 2,
+            "checkBonus": 2
+          }
+        },
+        "success": {
+          "narrationHint": "you work it out"
+        },
+        "failure": {
+          "narrationHint": "it eludes you"
+        },
+        "crit_failure": {
+          "narrationHint": "you chase a false trail",
+          "statusSelf": {
+            "id": "misinformed",
+            "label": "Misinformed",
+            "durationTurns": 2,
+            "checkBonus": -1
+          }
+        }
+      }
+    },
+    {
+      "id": "arch.explore.search",
+      "kind": "action",
+      "description": "Hunt for what is hidden: clues, details, a lead.",
+      "category": "exploration",
+      "universalFamily": "search",
+      "governingRoles": [
+        "insight",
+        "intellect"
+      ],
+      "difficulty": "standard",
+      "dc": 12,
+      "tier": "common",
+      "targetStance": "none",
+      "effects": {
+        "crit_success": {
+          "narrationHint": "nothing escapes you",
+          "statusSelf": {
+            "id": "keen_eyed",
+            "label": "Keen-Eyed",
+            "durationTurns": 2,
+            "checkBonus": 1
+          }
+        },
+        "success": {
+          "narrationHint": "you find something"
+        },
+        "failure": {
+          "narrationHint": "you find nothing"
+        },
+        "crit_failure": {
+          "narrationHint": "you lose the thread",
+          "statusSelf": {
+            "id": "distracted",
+            "label": "Distracted",
+            "durationTurns": 1,
+            "checkBonus": -1
+          }
+        }
+      }
+    },
+    {
+      "id": "arch.explore.observe",
+      "kind": "action",
+      "description": "Take in what is plainly there to notice: watch, listen, survey.",
+      "category": "exploration",
+      "universalFamily": "observe",
+      "governingRoles": [
+        "insight"
+      ],
+      "difficulty": "trivial",
+      "dc": 9,
+      "tier": "common",
+      "targetStance": "none",
+      "effects": {
+        "crit_success": {
+          "narrationHint": "you miss nothing",
+          "statusSelf": {
+            "id": "alert",
+            "label": "Alert",
+            "durationTurns": 2,
+            "checkBonus": 1
+          }
+        },
+        "success": {
+          "narrationHint": "you notice what matters"
+        },
+        "failure": {
+          "narrationHint": "nothing stands out"
+        },
+        "crit_failure": {
+          "narrationHint": "your attention slips",
+          "statusSelf": {
+            "id": "distracted",
+            "label": "Distracted",
+            "durationTurns": 1,
+            "checkBonus": -1
+          }
+        }
+      }
+    },
+    {
+      "id": "arch.explore.track",
+      "kind": "action",
+      "description": "Follow traces over ground: tracks, trails, game.",
+      "category": "exploration",
+      "universalFamily": "track",
+      "governingRoles": [
+        "insight",
+        "endurance"
+      ],
+      "difficulty": "standard",
+      "dc": 13,
+      "tier": "common",
+      "targetStance": "none",
+      "effects": {
+        "crit_success": {
+          "narrationHint": "the trail is plain as day",
+          "statusSelf": {
+            "id": "on_the_trail",
+            "label": "On the Trail",
+            "durationTurns": 2,
+            "checkBonus": 1
+          }
+        },
+        "success": {
+          "narrationHint": "you pick up the trail"
+        },
+        "failure": {
+          "narrationHint": "the trail goes cold"
+        },
+        "crit_failure": {
+          "narrationHint": "you wander off course",
+          "selfPools": {
+            "stamina": -1
+          },
+          "statusSelf": {
+            "id": "lost",
+            "label": "Lost",
+            "durationTurns": 1,
+            "checkBonus": -1
+          }
+        }
+      }
+    },
+    {
+      "id": "arch.wild.survive",
+      "kind": "action",
+      "description": "Keep going in the wild: forage, shelter, fire, finding the way.",
+      "category": "exploration",
+      "universalFamily": "navigate",
+      "governingRoles": [
+        "endurance",
+        "insight"
+      ],
+      "difficulty": "standard",
+      "dc": 12,
+      "tier": "common",
+      "targetStance": "none",
+      "costs": {
+        "stamina": 1
+      },
+      "effects": {
+        "crit_success": {
+          "narrationHint": "the land provides",
+          "selfPools": {
+            "stamina": 2
+          }
+        },
+        "success": {
+          "narrationHint": "you manage"
+        },
+        "failure": {
+          "narrationHint": "hard going",
+          "selfPools": {
+            "stamina": -1
+          }
+        },
+        "crit_failure": {
+          "narrationHint": "you hurt yourself",
+          "selfHealth": -0.25,
+          "selfPools": {
+            "stamina": -1
+          }
+        }
+      }
+    },
+    {
+      "id": "arch.physical.exert",
+      "kind": "action",
+      "description": "A feat of the body: climb, swim, leap, force, haul, endure.",
+      "category": "utility",
+      "universalFamily": "move",
+      "governingRoles": [
+        "might",
+        "agility",
+        "endurance"
+      ],
+      "difficulty": "standard",
+      "dc": 12,
+      "tier": "common",
+      "targetStance": "none",
+      "costs": {
+        "stamina": 1
+      },
+      "effects": {
+        "crit_success": {
+          "narrationHint": "effortless",
+          "selfPools": {
+            "stamina": 1
+          }
+        },
+        "success": {
+          "narrationHint": "you make it"
+        },
+        "failure": {
+          "narrationHint": "you strain and fall short",
+          "selfPools": {
+            "stamina": -1
+          }
+        },
+        "crit_failure": {
+          "narrationHint": "you fall and hurt yourself",
+          "selfHealth": -0.5
+        }
+      }
+    },
+    {
+      "id": "arch.stealth.sneak",
+      "kind": "action",
+      "description": "Go unnoticed: sneak, hide, slip away, blend in, shadow someone.",
+      "category": "exploration",
+      "universalFamily": "scout",
+      "governingRoles": [
+        "agility"
+      ],
+      "difficulty": "standard",
+      "dc": 12,
+      "tier": "common",
+      "targetStance": "none",
+      "effects": {
+        "crit_success": {
+          "narrationHint": "you are a ghost",
+          "statusSelf": {
+            "id": "unseen",
+            "label": "Unseen",
+            "durationTurns": 2,
+            "checkBonus": 1
+          }
+        },
+        "success": {
+          "narrationHint": "you go unnoticed"
+        },
+        "failure": {
+          "narrationHint": "you are not sure you were seen"
+        },
+        "crit_failure": {
+          "narrationHint": "you are spotted",
+          "statusSelf": {
+            "id": "exposed",
+            "label": "Exposed",
+            "durationTurns": 1,
+            "checkBonus": -1
+          }
+        }
+      }
+    },
+    {
+      "id": "arch.stealth.filch",
+      "kind": "action",
+      "description": "Sleight of hand against someone's attention: lift, palm, plant.",
+      "category": "utility",
+      "universalFamily": "interact",
+      "governingRoles": [
+        "agility"
+      ],
+      "difficulty": "standard",
+      "dc": 13,
+      "tier": "common",
+      "targetStance": "none",
+      "opposed": true,
+      "effects": {
+        "crit_success": {
+          "narrationHint": "clean as a whistle",
+          "statusSelf": {
+            "id": "unseen",
+            "label": "Unseen",
+            "durationTurns": 1,
+            "checkBonus": 1
+          }
+        },
+        "success": {
+          "narrationHint": "done without notice"
+        },
+        "failure": {
+          "narrationHint": "you cannot manage it unseen"
+        },
+        "crit_failure": {
+          "narrationHint": "caught red-handed",
+          "statusSelf": {
+            "id": "caught_out",
+            "label": "Caught Out",
+            "durationTurns": 2,
+            "checkBonus": -1
+          }
+        }
+      }
+    },
+    {
+      "id": "arch.care.tend",
+      "kind": "action",
+      "description": "Treat someone else's injuries with hands and supplies.",
+      "category": "utility",
+      "universalFamily": "assist",
+      "governingRoles": [
+        "insight",
+        "intellect"
+      ],
+      "difficulty": "standard",
+      "dc": 11,
+      "tier": "common",
+      "targetStance": "ally",
+      "costs": {
+        "stamina": 1
+      },
+      "cooldownTurns": 2,
+      "effects": {
+        "crit_success": {
+          "narrationHint": "expert care",
+          "targetHealth": 1
+        },
+        "success": {
+          "narrationHint": "the wounds are dressed",
+          "targetHealth": 0.5
+        },
+        "failure": {
+          "narrationHint": "little improvement"
+        },
+        "crit_failure": {
+          "narrationHint": "you make it worse",
+          "targetHealth": -0.25
+        }
+      }
+    },
+    {
+      "id": "arch.care.self_tend",
+      "kind": "action",
+      "description": "Patch up your own injuries.",
+      "category": "utility",
+      "universalFamily": "recover",
+      "governingRoles": [
+        "endurance",
+        "insight"
+      ],
+      "difficulty": "standard",
+      "dc": 11,
+      "tier": "common",
+      "targetStance": "none",
+      "costs": {
+        "stamina": 1
+      },
+      "cooldownTurns": 2,
+      "effects": {
+        "crit_success": {
+          "narrationHint": "properly patched up",
+          "selfHealth": 1
+        },
+        "success": {
+          "narrationHint": "the bleeding stops",
+          "selfHealth": 0.5
+        },
+        "failure": {
+          "narrationHint": "it barely helps"
+        },
+        "crit_failure": {
+          "narrationHint": "you reopen the wound",
+          "selfHealth": -0.25
+        }
+      }
+    },
+    {
+      "id": "arch.care.remedy",
+      "kind": "action",
+      "description": "Sustained skilled treatment that keeps healing over the next turns.",
+      "category": "utility",
+      "universalFamily": "assist",
+      "governingRoles": [
+        "intellect",
+        "insight"
+      ],
+      "difficulty": "hard",
+      "dc": 15,
+      "tier": "uncommon",
+      "targetStance": "ally",
+      "cooldownTurns": 2,
+      "effects": {
+        "crit_success": {
+          "narrationHint": "a swift recovery begins",
+          "statusTarget": {
+            "id": "recovering",
+            "label": "Recovering",
+            "durationTurns": 3,
+            "resourcePerTurn": {
+              "health": 2
+            }
+          }
+        },
+        "success": {
+          "narrationHint": "recovery begins",
+          "statusTarget": {
+            "id": "recovering",
+            "label": "Recovering",
+            "durationTurns": 3,
+            "resourcePerTurn": {
+              "health": 1
+            }
+          }
+        },
+        "failure": {
+          "narrationHint": "no improvement"
+        },
+        "crit_failure": {
+          "narrationHint": "the treatment goes wrong",
+          "statusTarget": {
+            "id": "aggravated",
+            "label": "Aggravated",
+            "durationTurns": 1,
+            "resourcePerTurn": {
+              "health": -1
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "arch.craft.make",
+      "kind": "action",
+      "description": "Make something useful from materials at hand.",
+      "category": "crafting",
+      "universalFamily": "craft",
+      "governingRoles": [
+        "intellect",
+        "agility"
+      ],
+      "difficulty": "standard",
+      "dc": 12,
+      "tier": "common",
+      "targetStance": "none",
+      "costs": {
+        "stamina": 1
+      },
+      "effects": {
+        "crit_success": {
+          "narrationHint": "fine work",
+          "statusSelf": {
+            "id": "in_the_flow",
+            "label": "In the Flow",
+            "durationTurns": 2,
+            "checkBonus": 1
+          }
+        },
+        "success": {
+          "narrationHint": "it serves"
+        },
+        "failure": {
+          "narrationHint": "wasted effort",
+          "selfPools": {
+            "stamina": -1
+          }
+        },
+        "crit_failure": {
+          "narrationHint": "you hurt yourself",
+          "selfHealth": -0.25,
+          "selfPools": {
+            "stamina": -1
+          }
+        }
+      }
+    },
+    {
+      "id": "arch.craft.mend",
+      "kind": "action",
+      "description": "Fix or restore something worn or broken.",
+      "category": "crafting",
+      "universalFamily": "repair",
+      "governingRoles": [
+        "intellect",
+        "agility"
+      ],
+      "difficulty": "standard",
+      "dc": 11,
+      "tier": "common",
+      "targetStance": "none",
+      "costs": {
+        "stamina": 1
+      },
+      "effects": {
+        "crit_success": {
+          "narrationHint": "good as new",
+          "statusSelf": {
+            "id": "in_the_flow",
+            "label": "In the Flow",
+            "durationTurns": 2,
+            "checkBonus": 1
+          }
+        },
+        "success": {
+          "narrationHint": "it holds"
+        },
+        "failure": {
+          "narrationHint": "it will not hold",
+          "selfPools": {
+            "stamina": -1
+          }
+        },
+        "crit_failure": {
+          "narrationHint": "you break it further and nick yourself",
+          "selfHealth": -0.25,
+          "selfPools": {
+            "stamina": -1
+          }
+        }
+      }
+    },
+    {
+      "id": "arch.craft.brew",
+      "kind": "action",
+      "description": "Prepare a meal, remedy or mixture.",
+      "category": "crafting",
+      "universalFamily": "concoct",
+      "governingRoles": [
+        "intellect",
+        "insight"
+      ],
+      "difficulty": "standard",
+      "dc": 12,
+      "tier": "common",
+      "targetStance": "none",
+      "costs": {
+        "stamina": 1
+      },
+      "effects": {
+        "crit_success": {
+          "narrationHint": "a superb batch",
+          "selfPools": {
+            "stamina": 2
+          }
+        },
+        "success": {
+          "narrationHint": "it turns out well"
+        },
+        "failure": {
+          "narrationHint": "it spoils",
+          "selfPools": {
+            "stamina": -1
+          }
+        },
+        "crit_failure": {
+          "narrationHint": "you scald yourself",
+          "selfHealth": -0.25,
+          "selfPools": {
+            "stamina": -1
+          }
+        }
+      }
+    },
+    {
+      "id": "arch.craft.masterwork",
+      "kind": "action",
+      "description": "Ambitious, expert craft that needs training.",
+      "category": "crafting",
+      "universalFamily": "craft",
+      "governingRoles": [
+        "intellect",
+        "agility"
+      ],
+      "difficulty": "hard",
+      "dc": 16,
+      "tier": "uncommon",
+      "targetStance": "none",
+      "costs": {
+        "stamina": 3
+      },
+      "effects": {
+        "crit_success": {
+          "narrationHint": "a masterpiece",
+          "statusSelf": {
+            "id": "in_the_flow",
+            "label": "In the Flow",
+            "durationTurns": 2,
+            "checkBonus": 2
+          }
+        },
+        "success": {
+          "narrationHint": "exceptional work",
+          "statusSelf": {
+            "id": "satisfied",
+            "label": "Satisfied",
+            "durationTurns": 1,
+            "checkBonus": 1
+          }
+        },
+        "failure": {
+          "narrationHint": "not up to standard",
+          "selfPools": {
+            "stamina": -1
+          }
+        },
+        "crit_failure": {
+          "narrationHint": "you ruin it and hurt yourself",
+          "selfHealth": -0.25,
+          "selfPools": {
+            "stamina": -1
+          }
+        }
+      }
+    },
+    {
+      "id": "arch.tech.operate",
+      "kind": "action",
+      "description": "Work a machine or device as it was meant to be used.",
+      "category": "utility",
+      "universalFamily": "interact",
+      "governingRoles": [
+        "intellect",
+        "agility"
+      ],
+      "difficulty": "standard",
+      "dc": 12,
+      "tier": "common",
+      "targetStance": "none",
+      "effects": {
+        "crit_success": {
+          "narrationHint": "smooth as anything",
+          "statusSelf": {
+            "id": "dialled_in",
+            "label": "Dialled In",
+            "durationTurns": 2,
+            "checkBonus": 1
+          }
+        },
+        "success": {
+          "narrationHint": "it works"
+        },
+        "failure": {
+          "narrationHint": "it will not cooperate"
+        },
+        "crit_failure": {
+          "narrationHint": "you jam it up",
+          "statusSelf": {
+            "id": "flustered",
+            "label": "Flustered",
+            "durationTurns": 1,
+            "checkBonus": -1
+          }
+        }
+      }
+    },
+    {
+      "id": "arch.tech.hack",
+      "kind": "action",
+      "description": "Make a system do what it was not meant to; needs training and leaves traces.",
+      "category": "utility",
+      "universalFamily": "interact",
+      "governingRoles": [
+        "intellect"
+      ],
+      "difficulty": "hard",
+      "dc": 16,
+      "tier": "uncommon",
+      "targetStance": "none",
+      "costs": {
+        "stamina": 3
+      },
+      "effects": {
+        "crit_success": {
+          "narrationHint": "total access",
+          "statusSelf": {
+            "id": "root_access",
+            "label": "Root Access",
+            "durationTurns": 2,
+            "checkBonus": 2
+          }
+        },
+        "success": {
+          "narrationHint": "you are in"
+        },
+        "failure": {
+          "narrationHint": "locked out"
+        },
+        "crit_failure": {
+          "narrationHint": "you trip an alarm",
+          "statusSelf": {
+            "id": "traced",
+            "label": "Traced",
+            "durationTurns": 3,
+            "checkBonus": -1
+          }
+        }
+      }
+    },
+    {
+      "id": "arch.skill.discipline",
+      "kind": "skill",
+      "description": "A trained discipline that gates the demanding actions of its domain.",
+      "tier": "uncommon",
+      "skillType": "active"
+    },
+    {
+      "id": "arch.skill.social_knack",
+      "kind": "skill",
+      "description": "A natural way with people: a small, always-on edge in social checks.",
+      "tier": "common",
+      "skillType": "passive",
+      "passive": {
+        "checkBonus": {
+          "amount": 1,
+          "categories": [
+            "social"
+          ]
+        }
+      }
+    },
+    {
+      "id": "arch.skill.explorer_knack",
+      "kind": "skill",
+      "description": "A sharp eye for surroundings: a small, always-on edge in exploration checks.",
+      "tier": "common",
+      "skillType": "passive",
+      "passive": {
+        "checkBonus": {
+          "amount": 1,
+          "categories": [
+            "exploration"
+          ]
+        }
+      }
+    },
+    {
+      "id": "arch.skill.craft_knack",
+      "kind": "skill",
+      "description": "Good hands: a small, always-on edge in crafting checks.",
+      "tier": "common",
+      "skillType": "passive",
+      "passive": {
+        "checkBonus": {
+          "amount": 1,
+          "categories": [
+            "crafting"
+          ]
+        }
+      }
+    },
+    {
+      "id": "arch.skill.hardy",
+      "kind": "skill",
+      "description": "A tough constitution: +1 to the endurance attribute.",
+      "tier": "common",
+      "skillType": "passive",
+      "passive": {
+        "attributeBonus": {
+          "endurance": 1
+        }
+      }
+    },
+    {
+      "id": "arch.skill.nimble",
+      "kind": "skill",
+      "description": "Light on your feet: +1 to the agility attribute.",
+      "tier": "common",
+      "skillType": "passive",
+      "passive": {
+        "attributeBonus": {
+          "agility": 1
+        }
+      }
+    },
+    {
+      "id": "arch.skill.focus_toggle",
+      "kind": "skill",
+      "description": "Sustained concentration: +2 to exploration checks while held, at a stamina upkeep.",
+      "tier": "uncommon",
+      "skillType": "toggle",
+      "toggle": {
+        "upkeep": {
+          "stamina": 1
+        },
+        "bonus": {
+          "checkBonus": {
+            "amount": 2,
+            "categories": [
+              "exploration"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "arch.skill.charm_toggle",
+      "kind": "skill",
+      "description": "Turning the charm all the way up: +2 to social checks while held, at a stamina upkeep.",
+      "tier": "uncommon",
+      "skillType": "toggle",
+      "toggle": {
+        "upkeep": {
+          "stamina": 1
+        },
+        "bonus": {
+          "checkBonus": {
+            "amount": 2,
+            "categories": [
+              "social"
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

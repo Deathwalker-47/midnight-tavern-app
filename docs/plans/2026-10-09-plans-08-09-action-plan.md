@@ -91,7 +91,7 @@ push to `main`.
 
 ### Plan 09 — universal catalogues and enablement
 
-- [ ] **S9. Pool format + non-combat starter pool.** `universal-archetypes.json` + `universal-pool.json`,
+- [x] **S9. Pool format + non-combat starter pool.** `universal-archetypes.json` + `universal-pool.json`,
       Zod schemas, the seven balance rules as tests over the whole pool, exclusion records.
 - [ ] **S10. Story enablement set.** Persisted per story (migration), checkpointed, materialized into the
       effective rulebook (roles → story ids, damage multiples → numbers); classifier sees only enabled
