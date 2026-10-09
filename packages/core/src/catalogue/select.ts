@@ -10,9 +10,9 @@
  *   3. A short or failed answer is topped up — or replaced — by a deterministic premise-relevance
  *      ranking, so selection can never fail story creation.
  *
- * The plan's two-stage funnel (sections first, then entries) only pays off once the candidate index
- * is far larger than one prompt; with today's pool a single call is cheaper. `SECTION_STAGE_THRESHOLD`
- * marks where that changes.
+ * The plan's two-stage funnel (§5.3) runs only above `SECTION_STAGE_THRESHOLD` candidates — a pool
+ * grown by the user's own config (§4c) — first choosing up to `SECTION_PICKS` sections, then entries
+ * within them; below it, one call over the whole index is cheaper.
  */
 import { z } from "zod";
 import { callStructured, type Router } from "../router/index.js";
@@ -26,8 +26,10 @@ export const POOL_SELECTION_TARGET = {
   skills: { min: 2, max: 6 },
 } as const;
 
-/** Above this many candidates, pick sections first (plan 09 §5.3) — not needed yet. */
+/** Above this many candidates, pick sections first (plan 09 §5.3); also the most entries one call lists. */
 export const SECTION_STAGE_THRESHOLD = 300;
+/** How many sections the first stage keeps. */
+export const SECTION_PICKS = 15;
 
 const SETTING_CUES: ReadonlyArray<readonly [SettingFit, RegExp]> = [
   ["fantasy", /\b(magic|wizard|witch|dragon|elf|elves|dwarf|orc|kingdom|castle|knight|sorcer\w*|spell|enchant\w*|sword|guild|tavern|realm|necromancer|paladin|mage)\b/i],
@@ -89,6 +91,67 @@ export const POOL_SELECTION_SYSTEM = [
   `Return {"actions":[ids],"skills":[ids]} with ${POOL_SELECTION_TARGET.actions.min}-${POOL_SELECTION_TARGET.actions.max} action ids and ${POOL_SELECTION_TARGET.skills.min}-${POOL_SELECTION_TARGET.skills.max} skill ids, copied exactly from the index.`,
 ].join("\n");
 
+export const POOL_SECTION_SYSTEM = [
+  "You are the story bootstrapper for a d20 roleplay engine. This is POOL SECTION SELECTION.",
+  "The universal pool is too large to list whole. From the SECTIONS, choose the ones this premise will",
+  `genuinely use in play — up to ${SECTION_PICKS}, varied, skipping any the premise would never call for.`,
+  'Return {"sections":[ids]} with ids copied exactly from the list.',
+].join("\n");
+
+/** The section index for the first stage: one line per section that has candidates. */
+export function buildSectionSelectionUser(
+  premise: string,
+  sections: readonly { id: string; title: string; description: string; count: number }[]
+): string {
+  return [
+    "PREMISE:",
+    premise,
+    "",
+    "SECTIONS:",
+    ...sections.map((section) => `- ${section.id} · ${section.title} · ${section.description} (${section.count})`),
+  ].join("\n");
+}
+
+/**
+ * Stage one of the funnel: keep the candidates in the sections the model picks (or, if it cannot,
+ * the sections holding the most relevant candidates), at most `SECTION_STAGE_THRESHOLD` of them.
+ * Below the threshold the ranking passes through untouched.
+ */
+async function narrowBySection(
+  router: Router,
+  premise: string,
+  ranked: readonly PoolEntry[],
+  catalogue: PoolCatalogue,
+  signal: AbortSignal
+): Promise<PoolEntry[]> {
+  if (ranked.length <= SECTION_STAGE_THRESHOLD) return [...ranked];
+  const counts = new Map<string, number>();
+  for (const entry of ranked) counts.set(entry.section, (counts.get(entry.section) ?? 0) + 1);
+  // Sections in the order their most relevant candidate appears: the deterministic choice.
+  const firstSeen = [...new Set(ranked.map((entry) => entry.section))];
+  const sections = firstSeen.flatMap((id) => {
+    const section = catalogue.pool.sections.find((candidate) => candidate.id === id);
+    return section ? [{ ...section, count: counts.get(id)! }] : [];
+  });
+  let chosen = sections.slice(0, SECTION_PICKS).map((section) => section.id);
+  try {
+    const ids = sections.map((section) => section.id) as [string, ...string[]];
+    const answer = await callStructured(
+      router,
+      "bootstrapper",
+      { system: POOL_SECTION_SYSTEM, user: buildSectionSelectionUser(premise, sections) },
+      z.object({ sections: z.array(z.enum(ids)).max(SECTION_PICKS * 2) }),
+      { maxRepairs: 1, maxTokens: 600, signal }
+    );
+    const picked = [...new Set(answer.sections)].slice(0, SECTION_PICKS);
+    if (picked.length > 0) chosen = picked;
+  } catch {
+    // The deterministic sections stand; a deadline or abort is honoured by the next stage.
+  }
+  const kept = new Set(chosen);
+  return ranked.filter((entry) => kept.has(entry.section)).slice(0, SECTION_STAGE_THRESHOLD);
+}
+
 /** The compact index the model chooses from: one line per candidate. */
 export function buildPoolSelectionUser(premise: string, candidates: readonly PoolEntry[]): string {
   const line = (entry: PoolEntry) => `- ${entry.id} · ${entry.name} · ${entry.description}`;
@@ -144,24 +207,25 @@ export async function selectPoolEntries(
   const settings = inferSettingFits(schema.premise);
   const ranked = rankCandidates(poolCandidates(schema, settings, catalogue), schema.premise);
   if (ranked.length === 0) return { ids: [], via: "fallback", settings };
-  const actionIds = ranked.filter((entry) => entry.kind === "action").map((entry) => entry.id);
-  const skillIds = ranked.filter((entry) => entry.kind === "skill").map((entry) => entry.id);
-  const idsOf = (ids: string[]) =>
-    ids.length > 0 ? z.array(z.enum(ids as [string, ...string[]])) : z.array(z.never());
-  const answerSchema = z.object({
-    actions: idsOf(actionIds).max(POOL_SELECTION_TARGET.actions.max * 2),
-    skills: idsOf(skillIds).max(POOL_SELECTION_TARGET.skills.max * 2),
-  });
 
   const controller = new AbortController();
   const abort = () => controller.abort();
   options.signal?.addEventListener("abort", abort);
   const timer = setTimeout(abort, options.deadlineMs ?? 60_000);
   try {
+    const listed = await narrowBySection(router, schema.premise, ranked, catalogue, controller.signal);
+    const idsOf = (kind: PoolEntry["kind"]) => {
+      const ids = listed.filter((entry) => entry.kind === kind).map((entry) => entry.id);
+      return ids.length > 0 ? z.array(z.enum(ids as [string, ...string[]])) : z.array(z.never());
+    };
+    const answerSchema = z.object({
+      actions: idsOf("action").max(POOL_SELECTION_TARGET.actions.max * 2),
+      skills: idsOf("skill").max(POOL_SELECTION_TARGET.skills.max * 2),
+    });
     const answer = await callStructured(
       router,
       "bootstrapper",
-      { system: POOL_SELECTION_SYSTEM, user: buildPoolSelectionUser(schema.premise, ranked) },
+      { system: POOL_SELECTION_SYSTEM, user: buildPoolSelectionUser(schema.premise, listed) },
       answerSchema,
       { maxRepairs: 1, maxTokens: 1_500, signal: controller.signal }
     );

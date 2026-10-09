@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   buildPoolSelectionUser,
+  POOL_SECTION_SYSTEM,
+  SECTION_PICKS,
+  SECTION_STAGE_THRESHOLD,
+  UNIVERSAL_ARCHETYPES,
+  UNIVERSAL_POOL,
+  type PoolCatalogue,
   inferSettingFits,
   poolCandidates,
   POOL_SELECTION_TARGET,
@@ -150,3 +156,68 @@ describe("selecting pool entries for a sealed rulebook", () => {
     });
   });
 });
+
+describe("a pool too large for one call (plan 09 §5.3)", () => {
+  // Four copies of every section and entry: well past the threshold for a fantasy premise.
+  const copies = 4;
+  const remap = (id: string, k: number) => {
+    const [uni, domain, group, name] = id.split(".");
+    return `${uni}.${domain}.${group}x${k}.${name}`;
+  };
+  const big: PoolCatalogue = {
+    archetypes: UNIVERSAL_ARCHETYPES,
+    pool: {
+      version: 1,
+      sections: Array.from({ length: copies }, (_, k) => UNIVERSAL_POOL.sections.map((section) => ({ ...section, id: `${section.id}_${k}` }))).flat(),
+      entries: Array.from({ length: copies }, (_, k) =>
+        UNIVERSAL_POOL.entries.map((entry) => ({
+          ...entry,
+          id: remap(entry.id, k),
+          section: `${entry.section}_${k}`,
+          ...(entry.requiresSkill ? { requiresSkill: remap(entry.requiresSkill, k) } : {}),
+        }))
+      ).flat(),
+    },
+  };
+  const userOf = (router: { prompts: RolePrompt[] }, system: string) =>
+    router.prompts.find((prompt) => prompt.system.includes(system))?.user ?? "";
+  const listed = (user: string) => user.split("\n").filter((line) => line.startsWith("- uni."));
+
+  it("picks sections first, then entries only from those sections, never listing more than the threshold", async () => {
+    const router = selectingRouter("unused");
+    let call = 0;
+    router.complete = async (_role, prompt) => {
+      router.prompts.push(prompt);
+      call++;
+      return {
+        content: JSON.stringify(
+          call === 1 ? { sections: ["persuasion_0", "lore_1", "persuasion_0"] } : { actions: ["uni.social.persuasionx0.persuade"], skills: [] }
+        ),
+      };
+    };
+    const selection = await selectPoolEntries(router, fantasy, { catalogue: big });
+    expect(poolCandidates(fantasy, inferSettingFits(fantasy.premise), big).length).toBeGreaterThan(SECTION_STAGE_THRESHOLD);
+    expect(router.prompts[0]!.system).toContain(POOL_SECTION_SYSTEM);
+    expect(userOf(router, "POOL SECTION SELECTION")).toMatch(/- persuasion_0 · Persuasion & Negotiation · .*\(\d+\)/);
+    const entryLines = listed(router.prompts[1]!.user);
+    expect(entryLines.every((line) => /^- uni\.(social\.persuasionx0|knowledge\.lorex1)\./.test(line))).toBe(true);
+    expect(selection.via).toBe("model");
+    expect(selection.ids[0]).toBe("uni.social.persuasionx0.persuade");
+  });
+
+  it("falls back to the sections with the most relevant entries, and stays bounded", async () => {
+    const router = selectingRouter("unused");
+    router.complete = async (_role, prompt) => {
+      router.prompts.push(prompt);
+      if (prompt.system.includes("POOL SECTION SELECTION")) throw new Error("down");
+      return { content: JSON.stringify({ actions: [], skills: [] }) };
+    };
+    const selection = await selectPoolEntries(router, fantasy, { catalogue: big });
+    const lines = listed(router.prompts[1]!.user);
+    expect(lines.length).toBeLessThanOrEqual(SECTION_STAGE_THRESHOLD);
+    const sections = new Set(lines.map((line) => line.split(" ")[1]!.split(".").slice(1, 3).join(".")));
+    expect(sections.size).toBeLessThanOrEqual(SECTION_PICKS);
+    expect(selection.ids.length).toBeGreaterThanOrEqual(POOL_SELECTION_TARGET.actions.min);
+  });
+});
+
