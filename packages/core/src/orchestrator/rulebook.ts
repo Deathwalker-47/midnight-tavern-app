@@ -361,6 +361,8 @@ export async function regenerateRulebook(
     await store.checkpoints.deleteFrom(storyId, 0);
     await store.turnOperations.deleteByStory(storyId);
     await store.events.deleteMechanicalHistory(storyId);
+    // Enabled pool entries were materialized against the old rulebook's attributes and pools.
+    await store.poolEnablements.deleteAll(storyId);
     await store.runtimeItems.deleteStoryItems(storyId);
     await store.stories.update(next);
     for (const character of roster) {

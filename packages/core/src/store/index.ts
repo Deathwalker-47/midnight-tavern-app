@@ -31,6 +31,10 @@ import {
   makeRulebookSnapshotRepo,
   type RulebookSnapshotRepo,
 } from "./repositories/rulebookSnapshots.js";
+import {
+  makePoolEnablementRepo,
+  type PoolEnablementRepo,
+} from "./repositories/poolEnablements.js";
 
 export { openDb, openDbWith, type Db, type SqlDriver, type SqlParam, type RunResult } from "./db.js";
 export type { StoryRepo } from "./repositories/stories.js";
@@ -63,6 +67,13 @@ export type {
   RulebookSnapshotRepo,
   RulebookSnapshot,
 } from "./repositories/rulebookSnapshots.js";
+export {
+  PoolEnablementSchema,
+  PoolEnablementSourceSchema,
+  type PoolEnablementRepo,
+  type PoolEnablement,
+  type PoolEnablementSource,
+} from "./repositories/poolEnablements.js";
 
 /** The full persistence surface: one migrated DB plus a typed repository per table. */
 export interface Store {
@@ -82,6 +93,7 @@ export interface Store {
   readonly turnOperations: TurnOperationRepo;
   readonly runtimeItems: RuntimeItemRepo;
   readonly rulebookSnapshots: RulebookSnapshotRepo;
+  readonly poolEnablements: PoolEnablementRepo;
   /** Run `fn` across repositories atomically (commit on return, roll back on throw). */
   transaction<T>(fn: () => Promise<T>): Promise<T>;
   close(): Promise<void>;
@@ -106,6 +118,7 @@ function makeStore(db: Db): Store {
     turnOperations: makeTurnOperationRepo(db),
     runtimeItems: makeRuntimeItemRepo(db),
     rulebookSnapshots: makeRulebookSnapshotRepo(db),
+    poolEnablements: makePoolEnablementRepo(db),
     transaction: (fn) => db.transaction(fn),
     close: () => db.close(),
   };

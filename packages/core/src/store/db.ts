@@ -526,6 +526,26 @@ WHERE lower(name) IN ('he', 'it', 'third')
   );
 `,
   },
+  {
+    version: 17,
+    name: "story_pool_enablements",
+    // Plan 09 §3: the universal-pool entries a story has enabled. Each row snapshots the entry's
+    // materialized definition so an app update that retunes the pool cannot change a running story.
+    // Rows made by a turn carry its index so rewind removes exactly what that turn enabled.
+    sql: `
+CREATE TABLE story_pool_enablements (
+  story_id        TEXT NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
+  entry_id        TEXT NOT NULL,
+  kind            TEXT NOT NULL CHECK (kind IN ('action', 'skill')),
+  definition_json TEXT NOT NULL,
+  source          TEXT NOT NULL CHECK (source IN ('forge', 'player', 'analyzer')),
+  enabled_at      INTEGER NOT NULL,
+  turn_index      INTEGER,
+  PRIMARY KEY (story_id, entry_id)
+);
+CREATE INDEX idx_story_pool_enablements_turn ON story_pool_enablements(story_id, turn_index);
+`,
+  },
 ];
 
 /**

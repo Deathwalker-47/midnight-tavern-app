@@ -11,6 +11,7 @@ export {
   TurnOperationRecoveryError,
   DEFAULT_TURN_OPERATION_STALE_MS,
   ensureHardState,
+  requirePlayableStory,
   type SubmitTurnOptions,
   type SubmitTurnResult,
   type InspectTurnOperationOptions,

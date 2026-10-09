@@ -10,6 +10,7 @@
 export * from "./types/index.js";
 export * from "./config/index.js";
 export * from "./engine/index.js";
+export * from "./catalogue/index.js";
 export * from "./store/index.js";
 export * from "./router/index.js";
 export * from "./classifier/index.js";

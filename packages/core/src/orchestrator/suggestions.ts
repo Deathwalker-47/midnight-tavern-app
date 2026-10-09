@@ -6,7 +6,7 @@ import {
   assemblePlayerSuggestionContext,
   type PlayerSuggestionContext,
 } from "./context.js";
-import { requireStory } from "./turn.js";
+import { requirePlayableStory } from "./turn.js";
 
 export const SuggestedActionSchema = z.object({
   id: z.string().min(1),
@@ -144,7 +144,7 @@ export async function suggestPlayerActions(
   storyId: string,
   signal?: AbortSignal
 ): Promise<SuggestedAction[]> {
-  const story = await requireStory(store, storyId);
+  const story = await requirePlayableStory(store, storyId);
   const context = await assemblePlayerSuggestionContext(store, story);
   if (context.recentScene.length === 0) return [];
 

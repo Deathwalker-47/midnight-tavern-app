@@ -66,6 +66,7 @@ import {
   TOGGLE_SKILL_ACTION_ID,
 } from "../types/index.js";
 import { applyUniversalActionDefaults } from "../config/index.js";
+import { effectiveSchema } from "../catalogue/enablement.js";
 import { assembleContext } from "./context.js";
 import { capture } from "./checkpoint.js";
 import { generateGuardedNarration } from "./authorityGuard.js";
@@ -156,6 +157,16 @@ export async function requireStory(store: Store, storyId: string): Promise<Story
   const story = await store.stories.get(storyId);
   if (!story) throw new Error(`requireStory: unknown story ${storyId}`);
   return { ...story, schema: applyUniversalActionDefaults(story.schema) };
+}
+
+/**
+ * The story as play sees it: its frozen rulebook plus every universal-pool entry it has enabled
+ * (plan 09 §3). Use this for anything that resolves, classifies or narrates; never persist its
+ * schema back as the frozen rulebook (rulebook operations keep using {@link requireStory}).
+ */
+export async function requirePlayableStory(store: Store, storyId: string): Promise<StoryRecord> {
+  const story = await requireStory(store, storyId);
+  return { ...story, schema: effectiveSchema(story.schema, await store.poolEnablements.list(storyId)) };
 }
 
 /** Merge deterministic narrator discoveries with model proposals without duplicating identities. */
@@ -449,7 +460,7 @@ async function runTurnOperation(
   opts: SubmitTurnOptions,
   existing?: ExistingTurnOperation
 ): Promise<SubmitTurnResult> {
-  const story = await requireStory(store, storyId);
+  const story = await requirePlayableStory(store, storyId);
   const schema = story.schema;
   if (schema.migrationPending) {
     throw new Error(
@@ -1525,7 +1536,7 @@ async function runBackground(router: Router, store: Store, args: BackgroundArgs)
 
   // Summaries are independent; each swallows its own errors, but guard anyway.
   try {
-    const story = await requireStory(store, storyId);
+    const story = await requirePlayableStory(store, storyId);
     const chapter = await maybeSummarizeChapter(
       router,
       store,

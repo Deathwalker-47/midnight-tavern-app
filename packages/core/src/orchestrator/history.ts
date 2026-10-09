@@ -28,7 +28,7 @@ import {
 } from "../types/index.js";
 import { assembleContext, AUTHORITY_CLAUSE, NO_STATS_CLAUSE } from "./context.js";
 import { applyRestore, restoreSoftWorld } from "./checkpoint.js";
-import { requireStory } from "./turn.js";
+import { requirePlayableStory } from "./turn.js";
 import { runAnalyzer } from "../memory/analyzer.js";
 import { generateGuardedNarration } from "./authorityGuard.js";
 import { randomUUID } from "../util/uuid.js";
@@ -117,7 +117,7 @@ export async function swipeLastTurn(
   storyId: string,
   opts: SwipeOptions = {}
 ): Promise<SwipeResult> {
-  const story = await requireStory(store, storyId);
+  const story = await requirePlayableStory(store, storyId);
   const schema = story.schema;
   const feedback = validateFeedback(opts.feedback);
 
@@ -298,7 +298,7 @@ async function restoreDifficultyBeforeIdx(
   if (!earliest) return;
   const previous = earliest.payload["previous"];
   if (!previous || typeof previous !== "object") return;
-  const story = await requireStory(store, storyId);
+  const story = await requirePlayableStory(store, storyId);
   await store.stories.setRuntimeConfig(storyId, {
     difficulty: normalizeDifficultyConfig(previous),
     actionBudget: story.actionBudget,
@@ -319,7 +319,7 @@ async function journalTruncation(
   fromIdx: number,
   operation: "rewind" | "delete_last" | "delete_from_exchange"
 ): Promise<void> {
-  const story = await requireStory(store, storyId);
+  const story = await requirePlayableStory(store, storyId);
   await store.events.insert({
     id: randomUUID(),
     storyId,
@@ -355,6 +355,7 @@ export async function deleteLastTurn(store: Store, storyId: string): Promise<voi
     await removeRuntimeLootFromIdx(store, storyId, fromIdx);
     await restoreDifficultyBeforeIdx(store, storyId, fromIdx);
     await store.events.deleteFromTurn(storyId, fromIdx);
+    await store.poolEnablements.deleteFromTurn(storyId, fromIdx);
     await store.rulings.deleteFromIdx(storyId, fromIdx);
     await store.messages.deleteFrom(storyId, fromIdx);
     await store.checkpoints.deleteFrom(storyId, fromIdx);
@@ -386,6 +387,7 @@ export async function rewindTo(store: Store, storyId: string, selectedIdx: numbe
     await removeRuntimeLootFromIdx(store, storyId, fromIdx);
     await restoreDifficultyBeforeIdx(store, storyId, fromIdx);
     await store.events.deleteFromTurn(storyId, fromIdx);
+    await store.poolEnablements.deleteFromTurn(storyId, fromIdx);
     await store.rulings.deleteFromIdx(storyId, fromIdx);
     await store.messages.deleteFrom(storyId, fromIdx);
     await store.checkpoints.deleteFrom(storyId, fromIdx);
@@ -415,6 +417,7 @@ export async function deleteFromExchange(store: Store, storyId: string, selected
     await removeRuntimeLootFromIdx(store, storyId, fromIdx);
     await restoreDifficultyBeforeIdx(store, storyId, fromIdx);
     await store.events.deleteFromTurn(storyId, fromIdx);
+    await store.poolEnablements.deleteFromTurn(storyId, fromIdx);
     await store.rulings.deleteFromIdx(storyId, fromIdx);
     await store.messages.deleteFrom(storyId, fromIdx);
     await store.checkpoints.deleteFrom(storyId, fromIdx);

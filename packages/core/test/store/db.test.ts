@@ -31,13 +31,14 @@ const EXPECTED_TABLES = [
   "stories",
   "story_events",
   "story_lorebooks",
+  "story_pool_enablements",
   "turn_checkpoints",
   "turn_operations",
   "world_soft",
 ];
 
 /** Number of embedded migrations. Bump when adding one. */
-const MIGRATION_COUNT = 16;
+const MIGRATION_COUNT = 17;
 
 async function tableNames(db: Db): Promise<string[]> {
   const rows = await db.all<{ name: string }>(
@@ -73,6 +74,7 @@ describe("openDb / migrations", () => {
       { version: 14, name: "turn_operation_stage_metrics" },
       { version: 15, name: "checkpoint_character_identity" },
       { version: 16, name: "remove_false_pronoun_characters" },
+      { version: 17, name: "story_pool_enablements" },
     ]);
     await db.close();
   });

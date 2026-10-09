@@ -43,12 +43,14 @@ Plans 01-07 and 10-12 of the 2026-08-13 set remain written but **not authorized*
 | S8b | UI: living card CONDITIONS (statuses in words, recovering actions) + skill tags (PASSIVE / TOGGLE ON-OFF / REACTION); ruling card `automatic` variant (no-roll rulings that changed something were previously invisible), gate-code titles, reaction / target-spread / cooldown / status facts, Conditions + Passive modifier terms | done |
 | — | **Plan 08 complete** | done |
 | S9 | Universal pool format (`config/pool.ts`: story-agnostic archetypes by attribute/pool **role**, health as multiples of the baseline hit; entries = flavour only, tier inherited) + balance rules (`config/poolRules.ts`, plan 09 §4.5 as code) + non-combat starter pool: 25 sections, 28 action + 8 skill archetypes, 153 entries (5 recorded exclusions); id lock test | done |
-| S10–S18 | Plan 09 (enablement set, selection, combat archetypes, mid-story enablement, UI, items, weapon specials, external config, close-out) | not started |
+| S10a | Enablement set in core: migration 17 `story_pool_enablements` (snapshots the materialized definition), `catalogue/` (attribute-role inference, materialization, enable/disable + D8 guard, effective schema), `requirePlayableStory` for turns/history/suggestions, turn-made enablements removed on rewind | done |
+| S10b | Bridge methods (both backends + parity test); cards/dossier read the effective rulebook | not started |
+| S11–S18 | Plan 09 (selection, combat archetypes, mid-story enablement, UI, items, weapon specials, external config, close-out) | not started |
 
 ## Verification state
 
-After S9 (Linux/Node 22): `npm run typecheck` clean; core **814 / 58 files** (engine coverage 100%),
-UI **192 / 28 files** = **1006** passing; root `npm test` passes here (the tinypool worker crash is
+After S10a (Linux/Node 22): `npm run typecheck` clean; core **826 / 59 files** (engine coverage 100%),
+UI **192 / 28 files** = **1018** passing; root `npm test` passes here (the tinypool worker crash is
 Windows/Node 24 only — plan 07 P0-0, not authorized).
 
 ## Facts established earlier (still true — do not re-derive)
@@ -83,10 +85,8 @@ Windows/Node 24 only — plan 07 P0-0, not authorized).
 
 ## Single next action
 
-Start **S10**: the story enablement set. Persist a per-story set of enabled pool ids (migration),
-capture it in the turn checkpoint (rewind must restore it — plan 09 §6.5), and materialize enabled
-entries into the effective rulebook: resolve archetype attribute roles to the story's attributes
-(needs attribute-role inference, like `engine/resources.ts` does for pools), pool roles to pool ids,
-health multiples to numbers via the story's baseline natural attack. The classifier must see only
-enabled entries. Add `mayDisableEntry` (D8: refuse if anyone learned it) in core and the bridge methods
-in both backends with a parity test.
+Do **S10b**: expose enablement through `CoreBridge` in BOTH backends (`packages/ui/src/bridge/core.ts`
+in-memory and `sqliteBridge.ts`) — list a story's enabled entries, enable / disable an entry (player
+source) with the D8 refusal reason, and check `mayDisable` — with a parity test; and make the SQLite
+bridge's living card / dossier use the effective rulebook (`core.loadEffectiveSchema`) so learned pool
+skills show their names. Then tick S10.

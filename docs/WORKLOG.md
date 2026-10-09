@@ -2419,3 +2419,42 @@ violation (so "clean" is not vacuous); schemas reject mechanics on entries; a co
 814/58, UI 192/28 = 1006; engine coverage 100%.
 
 **Next:** S10 (enablement set: persistence, checkpoint, materialization, `mayDisableEntry`, bridges).
+
+---
+
+## 2026-10-09 - S10a: story enablement set in core (plan 09 §3, §6.5, §7.2)
+
+**Storage.** Migration 17 adds `story_pool_enablements` (story, entry id, kind, **materialized
+definition JSON**, source forge/player/analyzer, enabled_at, optional turn_index). Repository
+`store.poolEnablements` (list / upsert / delete / deleteFromTurn / deleteAll).
+**Design decisions (deviations from plan 09's sketch, recorded):**
+- Each enablement **snapshots its materialized definition**, so the effective rulebook is just the frozen
+  one plus those snapshots: no pool lookup at runtime, and an app update that retunes the pool can never
+  change a running story (plan 09 §4c.9's "locked to creation" default, for free).
+- **Timeline scoping instead of a checkpoint column.** Only a turn (the analyzer, S13) enables mid-turn;
+  such rows carry the turn index and are removed by the same history paths that drop that turn's events
+  (`deleteLastTurn`/rewind/delete). Forge and player choices are settings and survive rewinds — a
+  checkpoint snapshot would have silently reverted the player's own toggles made after that turn.
+**Materialization** (`catalogue/materialize.ts`): attribute roles → the story's attribute via new
+`inferAttributeRole` (themed names: "Allure" → presence, "Grit" → endurance; magic tried first);
+pool roles → resource ids (an entry needing a pool the story lacks is refused with the reason, never made
+free); health multiples → points × the story's baseline hit (its ungated natural attack, else the
+universal default 4; a real change never rounds to 0); pool tier → the story's own tier ladder;
+`{param}` placeholders filled; skills get a trainer unlock path. Output validated by the normal Zod
+schemas.
+**Enablement** (`catalogue/enablement.ts`): `enablePoolEntry` also enables the skill an action needs,
+all-or-nothing, journalled (`pool_enabled`, deterministic order); `mayDisablePoolEntry` refuses while a
+character has learned it (D8, naming who) or an enabled action still needs it; `disablePoolEntry`
+journals `pool_disabled`. `effectiveSchema` / `loadEffectiveSchema` / new `requirePlayableStory` (turns,
+history ops and suggestions now play by the effective rulebook; rulebook operations keep the frozen one
+so a duplicate never bakes pool entries in). Rulebook regeneration clears enablements (they were
+materialized against the old attributes and pools).
+
+**Tests.** 12 in `test/catalogue/enablement.test.ts` (role inference, materialization incl. every refusal
+reason and parameter filling, effective schema collisions, enable/disable/D8, and a real turn resolving
+an enabled entry the classifier was offered, with rewind removing only the turn-made enablement);
+migration tests updated (table list, count 17). Found and fixed a nondeterministic journal order for
+same-instant events. Typecheck clean; core 826/59; engine coverage 100%.
+
+**Next:** S10b — bridge methods in both backends (+ parity test) and cards/dossier on the effective
+rulebook.
