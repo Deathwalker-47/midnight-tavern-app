@@ -2801,3 +2801,40 @@ config, loot shaped by the story's item overrides). Typecheck clean; core 899/68
 UI 204/30 = 1103.
 
 **Next:** S17b — read the override folder in the desktop shell, and the Story Settings surface.
+
+---
+
+## 2026-10-09 - S17b: config overrides in the desktop app and Story Settings (plan 09 §4c)
+
+**Shell.** The Rust `tauri-plugin-fs` (2.5.1) was already registered with an `$APPDATA/**` scope; the JS
+package was missing, so `@tauri-apps/plugin-fs ~2.5.1` is added to `packages/ui` (2.5.2 installed — patch
+compatible). `bridge/configFiles.ts` (a separate lazily loaded chunk, never on the browser path) reads
+`$APPDATA/config/{universal-archetypes,universal-pool,universal-items}.json`, creates the folder and
+`README.md` on first run, moves a file aside as `<name>.<time>.bak` for "restore defaults" (never deletes
+the user's work), and reveals the folder. Capability additions: `fs:allow-exists`,
+`fs:allow-read-text-file`, `fs:allow-write-text-file`, `fs:allow-rename`, scoped to `$APPDATA/config`.
+The identifiers were checked against the plugin's own permission files; **`cargo check` cannot finish in
+this Linux container (no GTK dev libraries), so the capability file was not build-validated here** —
+the next Windows build will validate it.
+
+**Bridge.** `configOverrideStatus`, `reloadConfigOverrides`, `restoreConfigDefaults`, `openConfigFolder`,
+`setRulebookConfigMode` in both backends. The SQLite bridge takes an injectable `ConfigFileAccess`, loads
+the overrides when it starts (a failure never blocks startup), and on an unreadable folder keeps the
+previous config and reports why. Its `listPoolEnablements` returns the definitions a story actually plays
+(re-materialized when it follows edits). The memory bridge (browser) reports "desktop only" and plays the
+shipped defaults.
+
+**UI.** Story Settings § CONFIG: what was skipped (errors, by file · id · field) before warnings, the
+folder with Open / Reload, per-file "Restore defaults", and the per-story radio "Locked to creation" /
+"Follow my edits" — following asks first, explaining that mechanics may change between sessions and
+rewound turns may resolve differently, and that played turns never change.
+
+**Bundle.** Main chunk 457.2 kB (126.5 kB gzip), up from 428.3 kB at S14: S16's specials content and the
+override resolver (reached through the config barrel the memory bridge already imports).
+
+**Tests.** `test/bridge/configOverrides.test.ts` (3: load / report / unreadable folder / restore / reveal
+over real core and store; no folder; locking parity and a following story's edited DC),
+`test/screens/ConfigSection.test.tsx` (4). Typecheck clean; core 899/68 (engine coverage 100%), UI 211/32
+= 1110; UI build verified.
+
+**Next:** S18 — close-out.

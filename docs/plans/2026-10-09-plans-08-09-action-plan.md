@@ -106,7 +106,7 @@ push to `main`.
 - [x] **S15. Universal items** — item-kind expansion with legacy aliases; `universal-items.json` feeding loot.
       *(Done as S15a — kinds, archetypes, migration 18 — and S15b — looted consumables usable and rewind-safe.)*
 - [x] **S16. Weapon specials** via `action_enable` + S4 cooldowns + rarity scaling.
-- [ ] **S17. External config overrides** — merge-by-id override files, validation with surfaced errors,
+- [x] **S17. External config overrides** — merge-by-id override files, validation with surfaced errors,
       per-story "locked to creation / follow my edits", past rulings never recomputed.
 - [ ] **S18. Close-out** — master index status, plan 08/09 boxes, design notes, HANDOFF.
 

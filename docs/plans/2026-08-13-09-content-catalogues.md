@@ -315,7 +315,7 @@ database, in a directory the user can open, edit, and version-control themselves
 - [x] *(S17a)* **4c.5** New ids may be added. **A user-authored entry is as legitimate as a shipped one** —
       this is the natural way for someone to add their own content, and it costs nothing extra since
       the merge already handles it. It must still reference a real archetype and pass validation.
-- [ ] **4c.6** Expose the folder from the UI ("Open config folder") and offer "restore defaults" per
+- [x] *(S17b)* **4c.6** Expose the folder from the UI ("Open config folder") and offer "restore defaults" per
       file. Non-technical users must be able to get back to a working state.
 
 ### 4c.7 Validation — the part that keeps this safe
@@ -345,9 +345,10 @@ deterministic, which matters because a rewound turn re-derives from the current 
 **But the human is the GM**, and refusing to let them tune their own live game would be
 paternalistic. So:
 
-- [ ] **4c.10** Add a per-story setting: **"Rulebook config: locked to creation (default) / follow
+- [x] *(S17a/b: locked stories snapshot the override texts and hash, not only a hash, so they can still
+      resolve their own config later.)* **4c.10** Add a per-story setting: **"Rulebook config: locked to creation (default) / follow
       my edits"**. Locked stories snapshot a config hash; following stories re-resolve on load.
-- [ ] **4c.11** When a story is set to follow, show a clear one-time warning that mechanics may
+- [x] *(S17b: a confirm dialog at the moment of switching.)* **4c.11** When a story is set to follow, show a clear one-time warning that mechanics may
       change between sessions and that rewound turns may resolve differently.
 - [x] *(S17a: tested through edits, a mode switch and a swipe.)* **4c.12** Committed rulings are **never** recomputed under either setting. History is immutable;
       only future resolution changes. Confirm swipe still reuses committed rulings verbatim (it does

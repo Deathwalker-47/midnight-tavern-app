@@ -53,15 +53,15 @@ Plans 01-07 and 10-12 of the 2026-08-13 set remain written but **not authorized*
 | S15b | `consume_item` uses looted runtime items with `restores` (classifier offered them by id + name); quantity recorded on the ruling (`itemConsumed`), written at commit, used-up rows kept at 0 and restored by every rewind path | done |
 | S16 | Weapon specials: `equipmentEnabled` pool actions (9 entries), offered to loot as a sealed `specialId`, attached only to a fitting weapon of sufficient tier, enabled turn-scoped in the commit (enablement split into stage + write); loot can no longer grant actions/skills through effects (**was: a common item could grant master rank**); D8 item half — held granting items keep an entry | done |
 | S17a | Config overrides in core: `resolveConfig` (merge by id, remove, add, schema errors skip with file/id/field, unusable entries left out, balance → warnings, clamps), active config + per-story snapshot, locked (default) / follow modes, everything catalogue-aware threaded; §4c.12 immutability tested | done |
-| S17b | Desktop shell reads the override folder; Story Settings surface (issues, mode toggle with warning, open folder, restore defaults) | next |
-| S18 | Close-out | not started |
+| S17b | Desktop shell reads `$APPDATA/config` (fs plugin JS added; capability names checked against the crate, not build-validated here — no GTK in this container); bridge methods in both backends; Story Settings § CONFIG (issues, open/reload, restore defaults, locked/follow with warning) | done |
+| S18 | Close-out | next |
 
 ## Verification state
 
-After S17a (Linux/Node 22): `npm run typecheck` clean; core **899 / 68 files** (engine coverage 100%),
-UI **204 / 30 files** = **1103** passing; UI production build last verified at S14 (main chunk 428.3 kB /
-118.4 kB gzip); root `npm test` passes here (the tinypool worker crash is Windows/Node 24 only — plan 07
-P0-0, not authorized).
+After S17b (Linux/Node 22): `npm run typecheck` clean; core **899 / 68 files** (engine coverage 100%),
+UI **211 / 32 files** = **1110** passing; UI production build verified at S17b (main chunk 457.2 kB /
+126.5 kB gzip); root `npm test` passes here (the tinypool worker crash is Windows/Node 24 only — plan 07
+P0-0, not authorized). `cargo check` cannot run in this container (missing GTK system libraries).
 
 ## Facts established earlier (still true — do not re-derive)
 
@@ -102,14 +102,8 @@ P0-0, not authorized).
 
 ## Single next action
 
-Do **S17b**: wire the overrides into the app (plan 09 §4c.2, 4c.6, 4c.7, 4c.10, 4c.11). Core is done —
-`resolveConfig`, `installConfigOverrides`, `setRulebookConfigMode`, `CONFIG_README` (S17a). The Rust
-`tauri-plugin-fs` 2.5.1 is already registered with an `$APPDATA/**` scope; the JS package
-`@tauri-apps/plugin-fs` is not installed (add `~2.5.1` to `packages/ui`). The SQLite bridge reads
-`$APPDATA/config/*.json` at startup (creating the folder and README on first run) and calls
-`installConfigOverrides`; add bridge methods for the load report (issues + folder path), reload,
-restore-defaults per file (rename the user's file aside rather than delete it), open the folder
-(`revealItemInDir`, already permitted), and the per-story mode. The memory bridge reports "desktop
-only". Story Settings: a § CONFIG section listing errors and warnings by file/id/field, the
-locked/follow toggle with a one-time warning that mechanics may change between sessions and rewound
-turns may resolve differently, and the folder/restore buttons. Parity-test the bridge surface.
+Do **S18**: close out plans 08 and 09 — update `docs/plans/2026-08-13-00-MASTER-INDEX.md` status for 08 and
+09, sweep both plans' remaining unticked boxes (tick what shipped with the step that shipped it; state
+plainly what did not ship and why), record the open design deliverable (plan 09 §7.3 / design brief §5),
+and write the final HANDOFF with the next decision for the owner (a Windows build to test plans 08/09,
+and which plan comes next).
