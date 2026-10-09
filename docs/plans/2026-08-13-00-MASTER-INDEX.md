@@ -2,7 +2,9 @@
 
 **Created:** 2026-08-13
 **Status:** Plans **08 and 09 SHIPPED** (2026-10-09, `2026-10-09-plans-08-09-action-plan.md`). Every other
-plan in this set remains planned and **not authorized**.
+plan in this set remains planned and **not authorized**. Plan 10 was **rewritten in depth on 2026-10-09**
+(`2026-10-09-10-quests-and-story-director.md`) and may not start until plans 08 and 09 are fully
+complete with zero gaps (its §0).
 **Owner decision required before dev starts:** yes — see "Owner decisions outstanding".
 **Supersedes:** nothing. This is the first plan set created after `docs/PLAN-POLICY.md` took
 effect, so it is the only eligible body of work. Every pre-2026-08-12 plan is cancelled.
@@ -84,7 +86,7 @@ Measured on a clean tree at `b19d4b8`:
 | 07 | Live UI reactivity and play-screen polish | 10, 14, 18, 28, 29 | M | — |
 | 08 | Resource economy and skill mechanics — **SHIPPED 2026-10-09** | 16, 21, 22, 23, 24 | XL | — |
 | 09 | Content catalogues — **SHIPPED 2026-10-09** (§5.4 unmeasured, §7.3 design open) | 20, 25, 31 | XL | 08 |
-| 10 | Quests | 15 | XL | 08, 09 |
+| 10 | Quests on an engine-owned Story Director — **rewritten 2026-10-09** (`2026-10-09-10-quests-and-story-director.md`, supersedes `…-10-quests.md`) | 15 | XL | 08 and 09 **fully complete, zero gaps** (plan 10 §0); 02 strongly recommended first |
 | 11 | Suggestion taxonomy | 30 | M | — |
 | 12 | Overview and settings UI | 26, 27 | M | — |
 | — | `2026-08-13-DESIGN-BRIEF.md` | the prompt to hand to Claude for design work | — | — |
@@ -122,6 +124,10 @@ Rationale: 09 defines the catalogues that 10's quest rewards and 11's suggestion
 
 **Do not start Wave 3 without an explicit owner go-ahead per plan.** 09 and 10 are each XL and
 together represent the largest change since the engine was written.
+
+**Plan 10 carries its own hard gate (owner, 2026-10-09):** it may only be taken up once plans 08 and
+09 are fully complete with zero gaps — build, play-test, the measurements and design deliverables
+09 left open, and the rest of the list in plan 10 §0. Shipped is not complete.
 
 ## Cross-cutting rules every plan must obey
 
@@ -162,8 +168,9 @@ calls, not engineering calls.
 | D3 | Character types: confirm the final list. Proposed: **User, Party, Ally, Neutral, Rival, Enemy, Creature, Background**. | 04 | The whole taxonomy and its migration hang off it. |
 | D4 | Attribute variety: how wide a spread? Proposed default ±3 around the story baseline, wider for named templates. | 05 | Affects perceived difficulty everywhere. |
 | D5 | Recovery model: rest-based, per-scene regen, consumable-based, or a blend? Owner asked for "a tad bit easier than normal". | 08 | Defines the whole economy's feel. |
-| D6 | Quest rewards: confirm the four reward types and the difficulty→reward tiering. | 10 | Determines reward-table shape. |
-| D7 | Is a **new story required** to see Wave 2/3 features, or must existing saves migrate? Migration of a frozen rulebook is materially more expensive. | 05, 08, 09 | Single biggest cost driver in Wave 2 and 3. |
+| D6 | Quest rewards: confirm the four reward types and the difficulty→reward tiering. | 10 (§5.4 of the 2026-10-09 rewrite) | Determines reward-table shape. |
+| ~~D7~~ | ~~Is a new story required to see Wave 2/3 features, or must existing saves migrate?~~ — **ANSWERED: new stories only** (recorded in `2026-10-09-plans-08-09-action-plan.md`, decision table). | 05, 08, 09 | — |
+| D10–D18 | Plan 10's own decisions: same-turn narration of quest progress, acceptance of mid-story quests, reward timing, upgrade targets, loot milestone semantics, quest failure, Nightmare cadence, player authoring, the context inspector. | 10 §13 | Each blocks one phase of plan 10. |
 
 D7 is the most important. My recommendation: **new stories only** for Wave 2 and 3 schema changes,
 with existing saves continuing to work unchanged under their frozen rulebook, plus the existing
@@ -185,7 +192,7 @@ every invariant the engine defends, for saves that are currently test data.
 | 07 Live UI reactivity | `…-07-live-ui-reactivity.md` | ✅ | — |
 | 08 Resource economy | `…-08-resource-economy.md` | ✅ | — |
 | 09 Content catalogues | `…-09-content-catalogues.md` | ✅ | — |
-| 10 Quests | `…-10-quests.md` | ✅ | — |
+| 10 Quests on a Story Director | `2026-10-09-10-quests-and-story-director.md` (supersedes `…-10-quests.md`) | ✅ rewritten 2026-10-09 | — (gated: plan 10 §0) |
 | 11 Suggestion taxonomy | `…-11-suggestion-taxonomy.md` | ✅ | — |
 | 12 Overview and copy | `…-12-overview-and-copy.md` | ✅ | — |
 | Design brief | `…-DESIGN-BRIEF.md` | ✅ | n/a |
@@ -238,6 +245,12 @@ plan 09 §4.5.
   lands.
 - **08 blocks 09 and 10.** Costs, cooldowns and resource roles must exist before universal skills,
   weapon specials, or quest rewards can be defined.
+- **10 needs 08 and 09 complete with zero gaps, and wants 02 first.** The gate is the owner's rule
+  (plan 10 §0). Plan 02 is engineering advice: quest progress is computed from rulings, so while the
+  classifier force-fits, quests progress on misclassified actions and the rewards are permanent.
+- **A live authority gap sits next to 10 but does not wait for it.** The loot model can label its own
+  award `"quest"` and so unlock legendary loot (plan 10 §1.2, A1/A2). The minimal fix is a standalone
+  change the owner can approve at any time.
 - **04 wants 08.** The rich User panel displays mana and stamina, which 08 introduces. Either
   sequence 08 first or ship the panel with health only.
 - **05 before 08.** 05 proves the deterministic seeded-variation approach on a small surface before
