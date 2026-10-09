@@ -66,7 +66,12 @@ import {
   TOGGLE_SKILL_ACTION_ID,
 } from "../types/index.js";
 import { applyUniversalActionDefaults, ECONOMY_CONFIG } from "../config/index.js";
-import { effectiveSchema } from "../catalogue/enablement.js";
+import {
+  effectiveSchema,
+  stagePoolEnablement,
+  writeStagedEnablement,
+  type StagedEnablement,
+} from "../catalogue/enablement.js";
 import { proposeMidStoryEnablements } from "../catalogue/midStory.js";
 import { assembleContext } from "./context.js";
 import { capture } from "./checkpoint.js";
@@ -1136,6 +1141,14 @@ async function runTurnOperation(
     const narratorIdx = playerIdx + 1;
     const narratorMessageId = randomUUID();
 
+    // Weapon specials the turn's loot grants are enabled with it, turn-scoped so rewinding the turn
+    // removes both (plan 09 §8.2). Staged here; written inside the commit transaction below.
+    const specialEnablements: StagedEnablement[] = [];
+    for (const entryId of new Set(lootAwards.flatMap((award) => (award.enablesSpecial ? [award.enablesSpecial] : [])))) {
+      const staged = await stagePoolEnablement(store, storyId, entryId, { source: "analyzer", turnIndex: narratorIdx });
+      if (staged.ok) specialEnablements.push(staged.staged);
+    }
+
     await setPhase("saving", { prose, narratorMessageId });
     await store.transaction(async () => {
       for (const transition of npcTransitions) {
@@ -1226,6 +1239,7 @@ async function runTurnOperation(
           createdAt: Date.now(),
         });
       }
+      for (const staged of specialEnablements) await writeStagedEnablement(store, staged);
       let milestoneLogged = false;
       for (const award of lootAwards) {
         await store.runtimeItems.insertDefinition(award.definition);

@@ -1,10 +1,14 @@
 import { z } from "zod";
-import { EQUIPMENT_LOOT_CONFIG, UNIVERSAL_ITEMS } from "../config/index.js";
-import { finalizeLootProposal } from "../engine/index.js";
+import { applyUniversalActionDefaults, EQUIPMENT_LOOT_CONFIG, UNIVERSAL_ITEMS } from "../config/index.js";
+import { finalizeLootProposal, tierAtMost } from "../engine/index.js";
+import { effectiveSchema } from "../catalogue/enablement.js";
+import { weaponSpecialOptions, type WeaponSpecialOption } from "../catalogue/specials.js";
 import { callStructured, type Router } from "../router/index.js";
 import type { Store } from "../store/index.js";
 import {
+  EquipmentEffectSchema,
   ItemProposalSchema,
+  itemKindSatisfies,
   type ItemDefinition,
   type ItemInstance,
   type LootSourceType,
@@ -15,55 +19,82 @@ import { randomUUID } from "../util/uuid.js";
 
 /**
  * Every awarded item names a universal item archetype from a sealed list (plan 09 §8.1): the model
- * writes the flavour, and the archetype sets the mechanics (`shapeByArchetype`).
+ * writes the flavour, and the archetype sets the mechanics (`shapeByArchetype`). Loot never grants an
+ * action or a skill directly; a weapon may instead carry one weapon special from a sealed list (plan
+ * 09 §8.2), which the engine attaches as an `action_enable` effect only when it suits the weapon.
  */
 const ARCHETYPE_IDS = UNIVERSAL_ITEMS.archetypes.map((archetype) => archetype.id) as [string, ...string[]];
-const LootItemProposalSchema = ItemProposalSchema.extend({ archetypeId: z.enum(ARCHETYPE_IDS) });
+const LootEffectSchema = EquipmentEffectSchema.refine(
+  (effect) => effect.type !== "action_enable" && effect.type !== "skill_enable",
+  "Loot never grants an action or a skill through effects; name a specialId for a weapon special."
+);
+
+function lootDecisionSchema(specialIds: readonly string[]) {
+  const proposal = ItemProposalSchema.extend({
+    archetypeId: z.enum(ARCHETYPE_IDS),
+    effects: z.array(LootEffectSchema).default([]),
+    ...(specialIds.length > 0 ? { specialId: z.enum(specialIds as [string, ...string[]]).optional() } : {}),
+  });
+  const award = z.object({
+    sourceType: z.enum(["combat", "non_combat", "milestone", "quest"]).optional(),
+    sourceLabel: z.string().min(1).max(200).optional(),
+    recipientCharacterId: z.string().min(1).optional(),
+    proposal: proposal.optional(),
+    reason: z.string().min(1).max(300).optional(),
+  });
+  return z
+    .object({
+      award: z.boolean().optional(),
+      sourceType: award.shape.sourceType,
+      sourceLabel: award.shape.sourceLabel,
+      recipientCharacterId: award.shape.recipientCharacterId,
+      proposal: award.shape.proposal,
+      awards: z.array(award).max(EQUIPMENT_LOOT_CONFIG.loot.maximumItemsPerEncounter).optional(),
+      reason: z.string().min(1).max(300),
+    })
+    .superRefine((decision, ctx) => {
+      if (decision.awards?.length) return;
+      if (!decision.award) return;
+      for (const field of ["sourceType", "sourceLabel", "recipientCharacterId", "proposal"] as const) {
+        if (decision[field] === undefined) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [field],
+            message: `${field} is required when award is true.`,
+          });
+        }
+      }
+    });
+}
 
 /** The archetypes as the adjudicator sees them, one line each. */
 export const LOOT_ARCHETYPE_LINES = UNIVERSAL_ITEMS.archetypes.map(
   (archetype) => `- ${archetype.id} · ${archetype.kind} · ${archetype.description}`
 );
 
-const LootAwardProposalSchema = z.object({
-    sourceType: z.enum(["combat", "non_combat", "milestone", "quest"]).optional(),
-    sourceLabel: z.string().min(1).max(200).optional(),
-    recipientCharacterId: z.string().min(1).optional(),
-    proposal: LootItemProposalSchema.optional(),
-    reason: z.string().min(1).max(300).optional(),
-});
-
-const LootDecisionSchema = z
-  .object({
-    award: z.boolean().optional(),
-    sourceType: LootAwardProposalSchema.shape.sourceType,
-    sourceLabel: LootAwardProposalSchema.shape.sourceLabel,
-    recipientCharacterId: LootAwardProposalSchema.shape.recipientCharacterId,
-    proposal: LootAwardProposalSchema.shape.proposal,
-    awards: z
-      .array(LootAwardProposalSchema)
-      .max(EQUIPMENT_LOOT_CONFIG.loot.maximumItemsPerEncounter)
-      .optional(),
-    reason: z.string().min(1).max(300),
-  })
-  .superRefine((decision, ctx) => {
-    if (decision.awards?.length) return;
-    if (!decision.award) return;
-    for (const field of ["sourceType", "sourceLabel", "recipientCharacterId", "proposal"] as const) {
-      if (decision[field] === undefined) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: [field],
-          message: `${field} is required when award is true.`,
-        });
-      }
-    }
-  });
-
 export interface PendingLootAward {
   rulingIndex: number;
   definition: ItemDefinition;
   instance: ItemInstance;
+  /** A weapon special this item grants that the story has not enabled yet; enabled when it commits. */
+  enablesSpecial?: string;
+}
+
+/**
+ * Attach a proposed weapon special when it suits the finalized item: the item must be the kind of
+ * weapon the special swings, at least the special's tier, and have an effect slot left at its tier.
+ * Otherwise the item is still awarded, without the special. Returns the special attached, if any.
+ */
+export function attachWeaponSpecial(
+  definition: ItemDefinition,
+  special: WeaponSpecialOption | undefined
+): WeaponSpecialOption | undefined {
+  if (!special) return undefined;
+  if (!itemKindSatisfies(definition.kind, special.requiresItemKind)) return undefined;
+  if (!tierAtMost(special.tier, definition.tier)) return undefined;
+  if (definition.effects.length >= EQUIPMENT_LOOT_CONFIG.tiers[definition.tier].maximumEffects) return undefined;
+  definition.effects.push({ type: "action_enable", actionId: special.entryId });
+  return special;
 }
 
 function completedSuccess(ruling: Ruling): boolean {
@@ -92,6 +123,14 @@ export async function determineLootAwards(
     .filter((index) => index >= 0);
   if (successfulIndices.length === 0) return [];
 
+  // The weapon specials this story could see granted now (plan 09 §8.2).
+  const frozen = applyUniversalActionDefaults(story.schema);
+  const specials = weaponSpecialOptions(
+    frozen,
+    effectiveSchema(frozen, await store.poolEnablements.list(story.id)),
+    (await store.chapters.listByStory(story.id)).length
+  );
+  const LootDecisionSchema = lootDecisionSchema(specials.map((special) => special.entryId));
   let decision: z.infer<typeof LootDecisionSchema>;
   try {
     decision = await callStructured(
@@ -105,6 +144,7 @@ export async function determineLootAwards(
           `Propose between one and ${EQUIPMENT_LOOT_CONFIG.loot.maximumItemsPerEncounter} items only when the completed encounter truly earned them. The deterministic engine rejects excessive tiers or effects.`,
           "Mythical items are impossible unless separate frozen authorization exists; never assume it.",
           "Every item names an archetypeId from ITEM ARCHETYPES. The archetype and the tier fix the item's kind, slots, hands, damage, stamina per swing and what it restores; you write its name, description, tier and any bonus effects.",
+          "Effects never grant actions or skills. A remarkable weapon may instead carry one specialId from WEAPON SPECIALS, when one is listed: it must suit the weapon, and its tier may not exceed the item's.",
         ].join("\n"),
         user: [
           `STORY: ${story.title}`,
@@ -117,6 +157,16 @@ export async function determineLootAwards(
           "",
           "ITEM ARCHETYPES:",
           ...LOOT_ARCHETYPE_LINES,
+          ...(specials.length > 0
+            ? [
+                "",
+                "WEAPON SPECIALS:",
+                ...specials.map(
+                  (special) =>
+                    `- ${special.entryId} · ${special.name} · ${special.tier} · needs a ${special.requiresItemKind.replace(/_/g, " ")} · ${special.description}`
+                ),
+              ]
+            : []),
         ].join("\n"),
       },
       LootDecisionSchema,
@@ -172,8 +222,9 @@ export async function determineLootAwards(
       (milestoneEvents.length > 0 || completedSuccess(ruling));
     const maximumTier = EQUIPMENT_LOOT_CONFIG.loot.routineMaximumTier[sourceType];
     const now = new Date().toISOString();
+    const { specialId, ...item } = proposal.proposal as typeof proposal.proposal & { specialId?: string };
     const finalized = finalizeLootProposal(
-      proposal.proposal,
+      item,
       {
         storyId: story.id,
         sourceType,
@@ -186,6 +237,10 @@ export async function determineLootAwards(
       { definitionId: randomUUID(), createdAt: now }
     );
     if (!finalized.valid || !finalized.definition) continue;
+    const special = attachWeaponSpecial(
+      finalized.definition,
+      specials.find((candidate) => candidate.entryId === specialId)
+    );
 
     const instance: ItemInstance = {
       id: randomUUID(),
@@ -205,7 +260,12 @@ export async function determineLootAwards(
         grantedAt: now,
       },
     };
-    awards.push({ rulingIndex, definition: finalized.definition, instance });
+    awards.push({
+      rulingIndex,
+      definition: finalized.definition,
+      instance,
+      ...(special && !special.enabled ? { enablesSpecial: special.entryId } : {}),
+    });
   }
   return awards;
 }

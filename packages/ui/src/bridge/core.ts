@@ -76,7 +76,7 @@ export type {
 // evaluating core's native runtime graph.
 import universalActionsJson from "../../../core/src/config/universal-actions.json";
 // Vetted browser-safe deep import: pure pool materialization (config JSON + zod), no store or native.
-import { disableRefusal, planEnablement, tierLock } from "../../../core/src/catalogue/plan.js";
+import { disableRefusal, grantorsByEntry, planEnablement, tierLock } from "../../../core/src/catalogue/plan.js";
 import { browsePool, learnersBySkill, poolSections, type PoolBrowseContext } from "../../../core/src/catalogue/browse.js";
 
 // Browser-safe pure logic: a deep import straight at engine/equipment.js (not the
@@ -1069,6 +1069,8 @@ function persistMemoryForgeOperation(operation: ForgeOperationRecord | undefined
 /** Test-only seam for seeding diagnostic counters without a real turn pipeline. */
 export type MemoryBridge = CoreBridge & {
   __seedDiagnosticCounters(counters: DiagnosticCounters): void;
+  /** Give a character a runtime item, as loot would (the stub runs no loot adjudicator). */
+  __seedRuntimeItem(storyId: string, definition: ItemDefinition, instance: ItemInstance): void;
 };
 
 export function makeMemoryBridge(): MemoryBridge {
@@ -1107,6 +1109,20 @@ export function makeMemoryBridge(): MemoryBridge {
     return s;
   }
 
+  /** Entry id → the held runtime items that grant it ("Ari's Flamebrand"), as core computes it. */
+  function grantorsOf(story: MemStory): Map<string, string[]> {
+    return grantorsByEntry(
+      [...story.cards.values()].map((card) => ({
+        name: card.name,
+        items: story.runtimeItems.instances.flatMap((instance) => {
+          if (instance.ownerCharacterId !== card.characterId || instance.quantity < 1) return [];
+          const definition = story.runtimeItems.definitions.find((candidate) => candidate.id === instance.definitionId);
+          return definition ? [definition] : [];
+        }),
+      }))
+    );
+  }
+
   /** What core's pool browser needs about one in-memory story (no summarizer → no chapters). */
   function poolBrowseContext(story: MemStory): PoolBrowseContext {
     return {
@@ -1118,6 +1134,7 @@ export function makeMemoryBridge(): MemoryBridge {
           skillIds: card.skills.map((skill) => skill.skillId),
         }))
       ),
+      grantors: grantorsOf(story),
       completedChapters: 0,
     };
   }
@@ -1452,7 +1469,7 @@ export function makeMemoryBridge(): MemoryBridge {
       const learners = [...story.cards.values()]
         .filter((card) => card.skills.some((skill) => skill.skillId === entryId))
         .map((card) => card.name);
-      const reason = disableRefusal(story.poolEnablements ?? [], learners, entryId);
+      const reason = disableRefusal(story.poolEnablements ?? [], learners, entryId, grantorsOf(story).get(entryId) ?? []);
       return reason ? { allowed: false, reason } : { allowed: true };
     },
 
@@ -1776,6 +1793,12 @@ export function makeMemoryBridge(): MemoryBridge {
 
     async clearDiagnosticCounters() {
       memCounters = {};
+    },
+
+    __seedRuntimeItem(storyId, definition, instance) {
+      const story = requireStory(storyId);
+      story.runtimeItems.definitions.push(structuredCloneSafe(definition));
+      story.runtimeItems.instances.push(structuredCloneSafe(instance));
     },
 
     __seedDiagnosticCounters(counters) {

@@ -19,7 +19,7 @@ import type { PoolEnablement, PoolEnablementSource, Store } from "../store/index
 import type { StoryRecord, StorySchema } from "../types/index.js";
 import { applyUniversalActionDefaults } from "../config/index.js";
 import { SHIPPED_CATALOGUE, type PoolCatalogue } from "./materialize.js";
-import { disableRefusal, planEnablement, tierLock } from "./plan.js";
+import { disableRefusal, grantorsByEntry, planEnablement, tierLock } from "./plan.js";
 import { learnersBySkill, type PoolBrowseContext } from "./browse.js";
 
 /** The frozen rulebook plus every enabled entry. Frozen definitions win any id collision. */
@@ -60,17 +60,25 @@ export type EnableResult =
   | { ok: true; enabled: string[] }
   | { ok: false; reason: string };
 
+/** An enablement checked and ready to write: the rows and the journal turn they belong to. */
+export interface StagedEnablement {
+  storyId: string;
+  rulebookVersion: number;
+  turnIndex: number;
+  additions: PoolEnablement[];
+}
+
 /**
- * Enable a pool entry, plus any skill entry it needs that the story does not already have. Already
- * enabled (or forged into the rulebook) is a no-op success. All-or-nothing, journalled per entry.
- * Outside the forge, every part must have unlocked by tier (`tierLock`).
+ * Check an enablement without writing anything: the entry plus any skill entry it needs that the
+ * story does not already have, all-or-nothing. Outside the forge, every part must have unlocked by
+ * tier (`tierLock`). Already enabled (or forged into the rulebook) stages nothing.
  */
-export async function enablePoolEntry(
+export async function stagePoolEnablement(
   store: Store,
   storyId: string,
   entryId: string,
   options: EnableOptions
-): Promise<EnableResult> {
+): Promise<{ ok: true; staged: StagedEnablement } | { ok: false; reason: string }> {
   const story = await store.stories.get(storyId);
   if (!story) return { ok: false, reason: `Unknown story "${storyId}".` };
   const frozen = applyUniversalActionDefaults(story.schema);
@@ -97,33 +105,70 @@ export async function enablePoolEntry(
       ...(options.turnIndex !== undefined ? { turnIndex: options.turnIndex } : {}),
     })
   );
-  if (additions.length === 0) return { ok: true, enabled: [] };
+  const turnIndex = options.turnIndex ?? (additions.length > 0 ? await store.messages.nextIdx(storyId) : 0);
+  return { ok: true, staged: { storyId, rulebookVersion: story.rulebookVersion ?? 1, turnIndex, additions } };
+}
 
-  const turnIndex = options.turnIndex ?? (await store.messages.nextIdx(storyId));
-  await store.transaction(async () => {
-    for (const [index, enablement] of additions.entries()) {
-      await store.poolEnablements.upsert(enablement);
-      await store.events.insert({
-        id: randomUUID(),
-        storyId,
-        turnIndex,
-        kind: "pool_enabled",
-        payload: {
-          entryId: enablement.entryId,
-          kind: enablement.kind,
-          name: enablement.kind === "action" ? enablement.definition.label : enablement.definition.name,
-          source: enablement.source,
-        },
-        rulebookVersion: story.rulebookVersion ?? 1,
-        // Distinct timestamps keep the journal in enable order (same-instant rows tie-break by id).
-        createdAt: enablement.enabledAt + index,
-      });
-    }
-  });
-  return { ok: true, enabled: additions.map((enablement) => enablement.entryId) };
+/**
+ * Write a staged enablement and journal each entry (`pool_enabled`). Opens no transaction of its own,
+ * so a caller already inside one (a turn's commit) can include it; everyone else uses
+ * {@link enablePoolEntry}.
+ */
+export async function writeStagedEnablement(store: Store, staged: StagedEnablement): Promise<string[]> {
+  for (const [index, enablement] of staged.additions.entries()) {
+    await store.poolEnablements.upsert(enablement);
+    await store.events.insert({
+      id: randomUUID(),
+      storyId: staged.storyId,
+      turnIndex: staged.turnIndex,
+      kind: "pool_enabled",
+      payload: {
+        entryId: enablement.entryId,
+        kind: enablement.kind,
+        name: enablement.kind === "action" ? enablement.definition.label : enablement.definition.name,
+        source: enablement.source,
+      },
+      rulebookVersion: staged.rulebookVersion,
+      // Distinct timestamps keep the journal in enable order (same-instant rows tie-break by id).
+      createdAt: enablement.enabledAt + index,
+    });
+  }
+  return staged.additions.map((enablement) => enablement.entryId);
+}
+
+/**
+ * Enable a pool entry, plus any skill entry it needs that the story does not already have. Already
+ * enabled (or forged into the rulebook) is a no-op success. All-or-nothing, journalled per entry, in
+ * its own transaction. Outside the forge, every part must have unlocked by tier (`tierLock`).
+ */
+export async function enablePoolEntry(
+  store: Store,
+  storyId: string,
+  entryId: string,
+  options: EnableOptions
+): Promise<EnableResult> {
+  const staged = await stagePoolEnablement(store, storyId, entryId, options);
+  if (!staged.ok) return staged;
+  if (staged.staged.additions.length === 0) return { ok: true, enabled: [] };
+  const enabled = await store.transaction(() => writeStagedEnablement(store, staged.staged));
+  return { ok: true, enabled };
 }
 
 export type DisableCheck = { allowed: true } | { allowed: false; reason: string };
+
+/** Entry id → the held items that grant it, named by holder, across a stored story's cast. */
+async function loadGrantors(store: Store, storyId: string): Promise<Map<string, string[]>> {
+  const definitions = new Map((await store.runtimeItems.listDefinitions(storyId)).map((item) => [item.id, item]));
+  const holders = [];
+  for (const character of await store.characters.listByStory(storyId)) {
+    const items = (await store.runtimeItems.listInventory(character.id)).flatMap((instance) => {
+      const definition = definitions.get(instance.definitionId);
+      return definition ? [definition] : [];
+    });
+    holders.push({ name: character.name, items });
+  }
+  return grantorsByEntry(holders);
+}
 
 /** Whether an enabled entry may be disabled now (D8), with the honest reason when not. */
 export async function mayDisablePoolEntry(
@@ -135,7 +180,8 @@ export async function mayDisablePoolEntry(
   const learners = (await store.characters.listByStory(storyId))
     .filter((character) => character.hard.skills.some((skill) => skill.skillId === entryId))
     .map((character) => character.name);
-  const reason = disableRefusal(enablements, learners, entryId);
+  const grantors = (await loadGrantors(store, storyId)).get(entryId) ?? [];
+  const reason = disableRefusal(enablements, learners, entryId, grantors);
   return reason ? { allowed: false, reason } : { allowed: true };
 }
 
@@ -179,6 +225,7 @@ export async function loadPoolBrowseContext(store: Store, storyId: string): Prom
         skillIds: character.hard.skills.map((skill) => skill.skillId),
       }))
     ),
+    grantors: await loadGrantors(store, storyId),
     completedChapters: (await store.chapters.listByStory(storyId)).length,
   };
 }

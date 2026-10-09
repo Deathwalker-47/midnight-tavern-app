@@ -56,6 +56,12 @@ export type Materialized =
 type CoreRole = "health" | "mana" | "stamina";
 const TIER_ORDER: readonly ItemTier[] = ["common", "uncommon", "rare", "legendary", "mythical"];
 
+/** Whether a pool entry is a weapon special: an action only equipped gear can grant (plan 09 §8.2). */
+export function isWeaponSpecial(entry: PoolEntry, catalogue: PoolCatalogue = SHIPPED_CATALOGUE): boolean {
+  const archetype = catalogue.archetypes.archetypes.find((candidate) => candidate.id === entry.archetypeId);
+  return archetype?.kind === "action" && archetype.equipmentEnabled === true;
+}
+
 /** Damage the story's ungated natural attack deals on a success; the unit health multiples scale. */
 export function baselineHit(schema: Pick<StorySchema, "actions" | "resources">): number {
   const lethal = resourceIdForRole(schema, "health");
@@ -248,6 +254,7 @@ export function materializeEntry(
     ...(governingAttribute ? { governingAttribute } : {}),
     ...(entry.requiresSkill ? { requiresSkill: entry.requiresSkill } : {}),
     ...(archetype.requiresItemKind ? { requiresItemKind: archetype.requiresItemKind } : {}),
+    ...(archetype.equipmentEnabled ? { requiresEquipmentEnabler: true } : {}),
     dc: archetype.dc,
     ...(archetype.opposed ? { opposed: true } : {}),
     ...(Object.keys(costs).length > 0 ? { costs: { resources: costs } } : {}),

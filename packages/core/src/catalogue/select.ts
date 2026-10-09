@@ -18,7 +18,7 @@ import { z } from "zod";
 import { callStructured, type Router } from "../router/index.js";
 import type { StorySchema } from "../types/index.js";
 import type { PoolEntry, SettingFit } from "../config/index.js";
-import { materializeEntry, SHIPPED_CATALOGUE, type PoolCatalogue } from "./materialize.js";
+import { isWeaponSpecial, materializeEntry, SHIPPED_CATALOGUE, type PoolCatalogue } from "./materialize.js";
 
 /** How many pool entries a forged story gains, on top of what it authored. */
 export const POOL_SELECTION_TARGET = {
@@ -51,10 +51,12 @@ export function poolCandidates(
 ): PoolEntry[] {
   const fits = new Set(settings);
   const present = new Set([...schema.actions.map((action) => action.id), ...schema.skills.map((skill) => skill.id)]);
+  // Weapon specials arrive with the gear that grants them (loot), never at creation.
   return catalogue.pool.entries.filter(
     (entry) =>
       !entry.excluded &&
       !present.has(entry.id) &&
+      !isWeaponSpecial(entry, catalogue) &&
       entry.settingFit.some((fit) => fits.has(fit)) &&
       materializeEntry(schema, entry.id, catalogue).ok
   );

@@ -190,6 +190,11 @@
       "id": "beyond",
       "title": "Beyond the Engine",
       "description": "Powers the engine cannot honestly express; kept here, excluded, with the reason."
+    },
+    {
+      "id": "specials",
+      "title": "Weapon Specials",
+      "description": "Signature moves a weapon grants while it is equipped; never learned."
     }
   ],
   "entries": [
@@ -4638,6 +4643,214 @@
       ],
       "excluded": true,
       "exclusionReason": "Rerolling breaks the guarantee that a committed roll never changes (plan 09 §4.2)."
+    },
+    {
+      "id": "uni.combat.specials.flame_strike",
+      "name": "Flame Strike",
+      "kind": "action",
+      "archetypeId": "arch.special.elemental_strike",
+      "params": {
+        "element": "flame"
+      },
+      "section": "specials",
+      "tags": [
+        "combat",
+        "special",
+        "fire",
+        "melee"
+      ],
+      "settingFit": [
+        "fantasy"
+      ],
+      "description": "A blow wreathed in fire.",
+      "aliases": [
+        "flame strike",
+        "fire strike",
+        "burning blow"
+      ]
+    },
+    {
+      "id": "uni.combat.specials.frost_strike",
+      "name": "Frost Strike",
+      "kind": "action",
+      "archetypeId": "arch.special.elemental_strike",
+      "params": {
+        "element": "frost"
+      },
+      "section": "specials",
+      "tags": [
+        "combat",
+        "special",
+        "frost",
+        "melee"
+      ],
+      "settingFit": [
+        "fantasy"
+      ],
+      "description": "A blow wreathed in biting cold.",
+      "aliases": [
+        "frost strike",
+        "ice strike",
+        "freezing blow"
+      ]
+    },
+    {
+      "id": "uni.combat.specials.storm_strike",
+      "name": "Storm Strike",
+      "kind": "action",
+      "archetypeId": "arch.special.elemental_strike",
+      "params": {
+        "element": "lightning"
+      },
+      "section": "specials",
+      "tags": [
+        "combat",
+        "special",
+        "storm",
+        "melee"
+      ],
+      "settingFit": [
+        "fantasy",
+        "scifi"
+      ],
+      "description": "A blow crackling with lightning.",
+      "aliases": [
+        "storm strike",
+        "lightning strike",
+        "shock blow"
+      ]
+    },
+    {
+      "id": "uni.combat.specials.piercing_shot",
+      "name": "Piercing Shot",
+      "kind": "action",
+      "archetypeId": "arch.special.piercing_shot",
+      "section": "specials",
+      "tags": [
+        "combat",
+        "special",
+        "ranged"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "A shot driven through armour and cover.",
+      "aliases": [
+        "piercing shot",
+        "armor-piercing shot",
+        "punch through"
+      ]
+    },
+    {
+      "id": "uni.combat.specials.crippling_shot",
+      "name": "Crippling Shot",
+      "kind": "action",
+      "archetypeId": "arch.special.crippling_shot",
+      "section": "specials",
+      "tags": [
+        "combat",
+        "special",
+        "ranged",
+        "control"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "A shot that leaves the target hobbled.",
+      "aliases": [
+        "crippling shot",
+        "leg shot",
+        "hobble them"
+      ]
+    },
+    {
+      "id": "uni.combat.specials.disarming_blow",
+      "name": "Disarming Blow",
+      "kind": "action",
+      "archetypeId": "arch.special.disarming_blow",
+      "section": "specials",
+      "tags": [
+        "combat",
+        "special",
+        "melee",
+        "control"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Knock the foe's weapon from their grip.",
+      "aliases": [
+        "disarming blow",
+        "disarm",
+        "knock their weapon away"
+      ]
+    },
+    {
+      "id": "uni.combat.specials.whirlwind",
+      "name": "Whirlwind",
+      "kind": "action",
+      "archetypeId": "arch.special.whirlwind",
+      "section": "specials",
+      "tags": [
+        "combat",
+        "special",
+        "melee",
+        "area"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Spin through every foe in reach.",
+      "aliases": [
+        "whirlwind",
+        "spinning attack",
+        "strike everyone around me"
+      ]
+    },
+    {
+      "id": "uni.combat.specials.volley",
+      "name": "Volley",
+      "kind": "action",
+      "archetypeId": "arch.special.volley",
+      "section": "specials",
+      "tags": [
+        "combat",
+        "special",
+        "ranged",
+        "multi_target"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Loose a rapid volley at several targets.",
+      "aliases": [
+        "volley",
+        "rapid fire",
+        "shoot them all"
+      ]
+    },
+    {
+      "id": "uni.combat.specials.life_drinker",
+      "name": "Life Drinker",
+      "kind": "action",
+      "archetypeId": "arch.special.draining_strike",
+      "section": "specials",
+      "tags": [
+        "combat",
+        "special",
+        "melee",
+        "healing"
+      ],
+      "settingFit": [
+        "fantasy",
+        "horror"
+      ],
+      "description": "A blow that feeds you some of what it takes.",
+      "aliases": [
+        "life drinker",
+        "draining strike",
+        "drain their life"
+      ]
     }
   ]
 }

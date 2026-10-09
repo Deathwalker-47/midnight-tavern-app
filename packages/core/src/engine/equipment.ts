@@ -361,9 +361,12 @@ export function equippedEffects(
   return effects;
 }
 
-/** "pick_lock" → "Pick Lock". Ids are the only labels a ruling carries for these. */
+/**
+ * "pick_lock" → "Pick Lock"; a pool id names its entry last ("uni.combat.specials.flame_strike" →
+ * "Flame Strike"). Ids are the only labels a ruling carries for these.
+ */
 function label(id: string): string {
-  return id.replace(/[_-]+/g, " ").trim().replace(/\b\w/g, (c) => c.toUpperCase());
+  return id.split(".").pop()!.replace(/[_-]+/g, " ").trim().replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 function signedAmount(amount: number): string {

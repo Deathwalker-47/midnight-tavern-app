@@ -11,7 +11,7 @@
  *   - "Better" and "worse" outcomes are compared by `outcomeValue`, a single actor-centred score in
  *     which one baseline hit of health is worth 4 points, matching a typical baseline attack.
  */
-import type { ItemTier } from "../types/index.js";
+import { baseItemKind, type ItemTier } from "../types/index.js";
 import type {
   ActionArchetype,
   ArchetypeEffect,
@@ -215,6 +215,14 @@ export function poolViolations(
     if (archetype.opposed && archetype.targeting && archetype.targeting.scope !== "single") {
       flag("gates", archetype.id, "An opposed contest needs one named defender, not a multi-target scope.");
     }
+    if (archetype.equipmentEnabled) {
+      if (!archetype.requiresItemKind || baseItemKind(archetype.requiresItemKind) !== "weapon") {
+        flag("gates", archetype.id, "A weapon special must need the kind of weapon that grants it.");
+      }
+      if (!archetype.cooldownTurns) {
+        flag("cooldown", archetype.id, "A weapon special must cool down between uses.");
+      }
+    }
   }
 
   const archetypesById = new Map(archetypes.archetypes.map((archetype) => [archetype.id, archetype]));
@@ -241,6 +249,9 @@ export function poolViolations(
     }
     if (entry.kind === "action" && !entry.aliases?.length) {
       flag("structure", entry.id, "An action entry needs at least one alias for the classifier.");
+    }
+    if (entry.requiresSkill && archetype.kind === "action" && archetype.equipmentEnabled) {
+      flag("gates", entry.id, "A weapon special is granted by gear, never learned, so it needs no skill.");
     }
     if (entry.requiresSkill) {
       const skill = entriesById.get(entry.requiresSkill);

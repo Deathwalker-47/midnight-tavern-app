@@ -6,14 +6,15 @@
 import { describe, expect, it } from "vitest";
 import * as core from "@midnight-tavern/core";
 import { openStore } from "@midnight-tavern/core";
-import { makeMemoryBridge, type CoreBridge, type PoolEnablementView } from "../../src/bridge/core";
+import { makeMemoryBridge, type CoreBridge, type MemoryBridge, type PoolEnablementView } from "../../src/bridge/core";
 import { buildSqliteBridge } from "../../src/bridge/sqliteBridge";
 
 async function twinBridges(): Promise<{
-  memory: CoreBridge;
+  memory: MemoryBridge;
   sqlite: CoreBridge;
   storyId: string;
   teach: (skillId: string) => Promise<void>;
+  give: (definition: core.ItemDefinition, instance: core.ItemInstance) => Promise<void>;
 }> {
   const memory = makeMemoryBridge();
   const created = await memory.createStory({
@@ -42,7 +43,12 @@ async function twinBridges(): Promise<{
       skills: [{ skillId, rank: "novice", successCount: 0 }],
     });
   };
-  return { memory, sqlite, storyId: created.story.id, teach };
+  const give = async (definition: core.ItemDefinition, instance: core.ItemInstance) => {
+    memory.__seedRuntimeItem(created.story.id, definition, { ...instance, ownerCharacterId: created.playerCharacterId });
+    await store.runtimeItems.insertDefinition({ ...definition, storyId: created.story.id });
+    await store.runtimeItems.insertInstance({ ...instance, storyId: created.story.id, ownerCharacterId: created.playerCharacterId });
+  };
+  return { memory, sqlite, storyId: created.story.id, teach, give };
 }
 
 const withoutTime = (rows: PoolEnablementView[]) => rows.map(({ enabledAt: _at, ...row }) => row);
@@ -128,5 +134,57 @@ describe("pool enablement parity across bridges", () => {
     await both((bridge) => bridge.browsePool(storyId, { search: "persuade" }));
     await both((bridge) => bridge.browsePool(storyId, { offset: 40, limit: 25 }));
     await both((bridge) => bridge.browsePool(storyId));
+  });
+
+  it("keep an entry that a held item grants, naming the holder and the item (D8)", async () => {
+    const { memory, sqlite, storyId, give } = await twinBridges();
+    const both = async <T>(call: (bridge: CoreBridge) => Promise<T>): Promise<T> => {
+      const [fromMemory, fromSqlite] = await Promise.all([call(memory), call(sqlite)]);
+      expect(fromMemory).toEqual(fromSqlite);
+      return fromMemory;
+    };
+    const FIRE = "uni.magic.fire_magic.fire_magic";
+    await both((bridge) => bridge.enablePoolEntry(storyId, FIRE));
+    await give(
+      core.ItemDefinitionSchema.parse({
+        id: "charm-def",
+        storyId,
+        name: "Ember Charm",
+        description: "Warm to the touch.",
+        kind: "jewelry",
+        tier: "uncommon",
+        slotCompatibility: ["accessory_1"],
+        effects: [{ type: "skill_enable", skillId: FIRE, rank: "novice" }],
+        createdAt: "2026-10-09T00:00:00.000Z",
+        configVersion: 1,
+      }),
+      {
+        id: "charm-1",
+        storyId,
+        definitionId: "charm-def",
+        ownerCharacterId: "ari",
+        quantity: 1,
+        acquiredAt: "2026-10-09T00:00:00.000Z",
+        provenance: {
+          sourceType: "combat",
+          sourceLabel: "Found",
+          rulingId: "r",
+          turnId: "t",
+          tierBudget: "uncommon",
+          eligibilityReasons: [],
+          policyVersion: 1,
+          grantedAt: "2026-10-09T00:00:00.000Z",
+        },
+      }
+    );
+    expect(await both((bridge) => bridge.disablePoolEntry(storyId, FIRE))).toEqual({
+      allowed: false,
+      reason: "Ari's Ember Charm grants this, so it stays.",
+    });
+    const page = await both((bridge) => bridge.browsePool(storyId, { sectionId: "fire_magic" }));
+    expect(page.entries.find((entry) => entry.entryId === FIRE)).toMatchObject({
+      state: "enabled",
+      reason: "Ari's Ember Charm grants this, so it stays.",
+    });
   });
 });

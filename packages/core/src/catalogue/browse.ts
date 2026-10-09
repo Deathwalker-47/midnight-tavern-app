@@ -73,6 +73,8 @@ export interface PoolBrowseContext {
   enablements: readonly (PlannedEnablement & { source: PoolEnablementSource })[];
   /** Skill id → the names of the characters who have learned it. */
   learners: ReadonlyMap<string, readonly string[]>;
+  /** Entry id → the held items that grant it ("Ari's Flamebrand"), from `grantorsByEntry`. */
+  grantors?: ReadonlyMap<string, readonly string[]>;
   completedChapters: number;
   catalogue?: PoolCatalogue;
 }
@@ -167,7 +169,12 @@ export function browsePool(context: PoolBrowseContext, query: PoolBrowseQuery = 
     }
     const enablement = enabledById.get(entry.id);
     if (enablement) {
-      const reason = disableRefusal(context.enablements, context.learners.get(entry.id) ?? [], entry.id);
+      const reason = disableRefusal(
+        context.enablements,
+        context.learners.get(entry.id) ?? [],
+        entry.id,
+        context.grantors?.get(entry.id) ?? []
+      );
       return { ...base, state: "enabled", source: enablement.source, ...(reason ? { reason } : {}) };
     }
     if (present.has(entry.id)) {

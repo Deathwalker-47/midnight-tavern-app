@@ -220,5 +220,14 @@
   "uni.wild.survival.read_the_weather",
   "uni.wild.survival.start_a_fire",
   "uni.wild.survival.track",
-  "uni.wild.survival.woodwise"
+  "uni.wild.survival.woodwise",
+  "uni.combat.specials.flame_strike",
+  "uni.combat.specials.frost_strike",
+  "uni.combat.specials.storm_strike",
+  "uni.combat.specials.piercing_shot",
+  "uni.combat.specials.crippling_shot",
+  "uni.combat.specials.disarming_blow",
+  "uni.combat.specials.whirlwind",
+  "uni.combat.specials.volley",
+  "uni.combat.specials.life_drinker"
 ]

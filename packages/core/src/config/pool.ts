@@ -135,6 +135,11 @@ export const ActionArchetypeSchema = z
     cooldownTurns: z.number().int().min(0).max(20).optional(),
     targeting: ActionTargetingSchema.optional(),
     requiresItemKind: ItemKindSchema.optional(),
+    /**
+     * A weapon special (plan 09 §8.2): usable only while equipped gear grants it through an
+     * `action_enable` effect. Granted by loot, never learned, so it carries no skill gate.
+     */
+    equipmentEnabled: z.boolean().optional(),
     params: z.array(ArchetypeParamSchema).optional(),
     effects: z
       .object({

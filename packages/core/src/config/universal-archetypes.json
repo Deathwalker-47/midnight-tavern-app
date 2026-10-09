@@ -2394,6 +2394,345 @@
       "reaction": {
         "trigger": "damaged"
       }
+    },
+    {
+      "id": "arch.special.elemental_strike",
+      "kind": "action",
+      "description": "A weapon blow wreathed in an element the weapon carries.",
+      "category": "combat",
+      "universalFamily": "attack_melee",
+      "governingRoles": [
+        "might",
+        "magic"
+      ],
+      "difficulty": "standard",
+      "dc": 13,
+      "tier": "uncommon",
+      "targetStance": "foe",
+      "requiresItemKind": "melee_weapon",
+      "equipmentEnabled": true,
+      "costs": {
+        "stamina": 3
+      },
+      "cooldownTurns": 2,
+      "params": [
+        {
+          "name": "element",
+          "description": "What wreathes the weapon, as a noun: flame, frost, lightning."
+        }
+      ],
+      "effects": {
+        "crit_success": {
+          "narrationHint": "the {element} roars through the blow",
+          "targetHealth": -2
+        },
+        "success": {
+          "narrationHint": "a blow wreathed in {element}",
+          "targetHealth": -1.5
+        },
+        "failure": {
+          "narrationHint": "the {element} gutters out"
+        },
+        "crit_failure": {
+          "narrationHint": "the {element} flares back at you",
+          "statusSelf": {
+            "id": "off_balance",
+            "label": "Off Balance",
+            "durationTurns": 1,
+            "checkBonus": -1
+          }
+        }
+      }
+    },
+    {
+      "id": "arch.special.piercing_shot",
+      "kind": "action",
+      "description": "A shot the weapon drives through armour and cover.",
+      "category": "combat",
+      "universalFamily": "attack_ranged",
+      "governingRoles": [
+        "agility"
+      ],
+      "difficulty": "standard",
+      "dc": 13,
+      "tier": "uncommon",
+      "targetStance": "foe",
+      "requiresItemKind": "ranged_weapon",
+      "equipmentEnabled": true,
+      "costs": {
+        "stamina": 3
+      },
+      "cooldownTurns": 2,
+      "effects": {
+        "crit_success": {
+          "narrationHint": "clean through",
+          "targetHealth": -2
+        },
+        "success": {
+          "narrationHint": "the shot punches through",
+          "targetHealth": -1.5
+        },
+        "failure": {
+          "narrationHint": "it glances off"
+        },
+        "crit_failure": {
+          "narrationHint": "the shot goes wild",
+          "statusSelf": {
+            "id": "off_balance",
+            "label": "Off Balance",
+            "durationTurns": 1,
+            "checkBonus": -1
+          }
+        }
+      }
+    },
+    {
+      "id": "arch.special.crippling_shot",
+      "kind": "action",
+      "description": "A shot that leaves the target hobbled.",
+      "category": "combat",
+      "universalFamily": "attack_ranged",
+      "governingRoles": [
+        "agility",
+        "insight"
+      ],
+      "difficulty": "standard",
+      "dc": 13,
+      "tier": "uncommon",
+      "targetStance": "foe",
+      "requiresItemKind": "ranged_weapon",
+      "equipmentEnabled": true,
+      "costs": {
+        "stamina": 3
+      },
+      "cooldownTurns": 3,
+      "effects": {
+        "crit_success": {
+          "narrationHint": "it pins them in place",
+          "targetHealth": -1,
+          "statusTarget": {
+            "id": "hobbled",
+            "label": "Hobbled",
+            "durationTurns": 3,
+            "checkBonus": -1
+          }
+        },
+        "success": {
+          "narrationHint": "they stagger, hobbled",
+          "targetHealth": -0.5,
+          "statusTarget": {
+            "id": "hobbled",
+            "label": "Hobbled",
+            "durationTurns": 2,
+            "checkBonus": -1
+          }
+        },
+        "failure": {
+          "narrationHint": "they keep their footing"
+        },
+        "crit_failure": {
+          "narrationHint": "you lose the line",
+          "statusSelf": {
+            "id": "off_balance",
+            "label": "Off Balance",
+            "durationTurns": 1,
+            "checkBonus": -1
+          }
+        }
+      }
+    },
+    {
+      "id": "arch.special.disarming_blow",
+      "kind": "action",
+      "description": "A blow that knocks the foe's guard and grip aside.",
+      "category": "combat",
+      "universalFamily": "attack_melee",
+      "governingRoles": [
+        "agility",
+        "might"
+      ],
+      "difficulty": "standard",
+      "dc": 13,
+      "tier": "uncommon",
+      "targetStance": "foe",
+      "requiresItemKind": "melee_weapon",
+      "equipmentEnabled": true,
+      "costs": {
+        "stamina": 3
+      },
+      "cooldownTurns": 3,
+      "effects": {
+        "crit_success": {
+          "narrationHint": "their weapon goes flying",
+          "targetHealth": -1,
+          "statusTarget": {
+            "id": "disarmed",
+            "label": "Disarmed",
+            "durationTurns": 2,
+            "checkBonus": -2
+          }
+        },
+        "success": {
+          "narrationHint": "their grip falters",
+          "targetHealth": -0.5,
+          "statusTarget": {
+            "id": "disarmed",
+            "label": "Disarmed",
+            "durationTurns": 1,
+            "checkBonus": -2
+          }
+        },
+        "failure": {
+          "narrationHint": "they hold on"
+        },
+        "crit_failure": {
+          "narrationHint": "you overreach",
+          "statusSelf": {
+            "id": "off_balance",
+            "label": "Off Balance",
+            "durationTurns": 1,
+            "checkBonus": -1
+          }
+        }
+      }
+    },
+    {
+      "id": "arch.special.whirlwind",
+      "kind": "action",
+      "description": "A spinning flurry that strikes every foe in reach.",
+      "category": "combat",
+      "universalFamily": "attack_melee",
+      "governingRoles": [
+        "might",
+        "agility"
+      ],
+      "difficulty": "standard",
+      "dc": 14,
+      "tier": "rare",
+      "targetStance": "foe",
+      "requiresItemKind": "melee_weapon",
+      "equipmentEnabled": true,
+      "costs": {
+        "stamina": 6
+      },
+      "cooldownTurns": 3,
+      "targeting": {
+        "scope": "all_enemies",
+        "maxTargets": 4
+      },
+      "effects": {
+        "crit_success": {
+          "narrationHint": "steel everywhere at once",
+          "targetHealth": -1.75
+        },
+        "success": {
+          "narrationHint": "the whirlwind catches them",
+          "targetHealth": -1.25
+        },
+        "failure": {
+          "narrationHint": "they fall back from it"
+        },
+        "crit_failure": {
+          "narrationHint": "you spin yourself dizzy",
+          "statusSelf": {
+            "id": "off_balance",
+            "label": "Off Balance",
+            "durationTurns": 1,
+            "checkBonus": -1
+          }
+        }
+      }
+    },
+    {
+      "id": "arch.special.volley",
+      "kind": "action",
+      "description": "A rapid volley loosed at several targets.",
+      "category": "combat",
+      "universalFamily": "attack_ranged",
+      "governingRoles": [
+        "agility"
+      ],
+      "difficulty": "standard",
+      "dc": 14,
+      "tier": "rare",
+      "targetStance": "foe",
+      "requiresItemKind": "ranged_weapon",
+      "equipmentEnabled": true,
+      "costs": {
+        "stamina": 6
+      },
+      "cooldownTurns": 3,
+      "targeting": {
+        "scope": "multiple",
+        "maxTargets": 3
+      },
+      "effects": {
+        "crit_success": {
+          "narrationHint": "every shot finds a mark",
+          "targetHealth": -1.5
+        },
+        "success": {
+          "narrationHint": "the volley lands",
+          "targetHealth": -1
+        },
+        "failure": {
+          "narrationHint": "the volley scatters"
+        },
+        "crit_failure": {
+          "narrationHint": "you fumble the reload",
+          "statusSelf": {
+            "id": "off_balance",
+            "label": "Off Balance",
+            "durationTurns": 1,
+            "checkBonus": -1
+          }
+        }
+      }
+    },
+    {
+      "id": "arch.special.draining_strike",
+      "kind": "action",
+      "description": "A blow that feeds the wielder some of what it takes.",
+      "category": "combat",
+      "universalFamily": "attack_melee",
+      "governingRoles": [
+        "might",
+        "magic"
+      ],
+      "difficulty": "standard",
+      "dc": 14,
+      "tier": "rare",
+      "targetStance": "foe",
+      "requiresItemKind": "melee_weapon",
+      "equipmentEnabled": true,
+      "costs": {
+        "stamina": 6
+      },
+      "cooldownTurns": 4,
+      "effects": {
+        "crit_success": {
+          "narrationHint": "strength floods back into you",
+          "targetHealth": -1.5,
+          "selfHealth": 0.75
+        },
+        "success": {
+          "narrationHint": "the weapon drinks, and you with it",
+          "targetHealth": -1,
+          "selfHealth": 0.5
+        },
+        "failure": {
+          "narrationHint": "the hunger finds nothing"
+        },
+        "crit_failure": {
+          "narrationHint": "the weapon turns on its bearer",
+          "statusSelf": {
+            "id": "off_balance",
+            "label": "Off Balance",
+            "durationTurns": 1,
+            "checkBonus": -1
+          }
+        }
+      }
     }
   ]
 }

@@ -2,7 +2,7 @@
  * The pure decisions behind enabling and disabling pool entries (plan 09 §3, §7.2), shared by core's
  * store-backed enablement and the UI's in-memory bridge so the two backends cannot disagree.
  */
-import type { ActionDef, ItemTier, SkillDef, StorySchema } from "../types/index.js";
+import type { ActionDef, EquipmentEffect, ItemTier, SkillDef, StorySchema } from "../types/index.js";
 import { materializeEntry, SHIPPED_CATALOGUE, type PoolCatalogue } from "./materialize.js";
 
 /**
@@ -56,6 +56,26 @@ export function planEnablement(
   return { ok: true, additions };
 }
 
+/**
+ * Entry id → "Ari's Flamebrand" for every item a character holds whose effects grant that action or
+ * skill (`action_enable` / `skill_enable`). Held, not only equipped: unequipping must not strand a
+ * special the item still carries.
+ */
+export function grantorsByEntry(
+  holders: readonly { name: string; items: readonly { name: string; effects: readonly EquipmentEffect[] }[] }[]
+): Map<string, string[]> {
+  const grantors = new Map<string, string[]>();
+  for (const holder of holders) {
+    for (const item of holder.items) {
+      for (const effect of item.effects) {
+        const id = effect.type === "action_enable" ? effect.actionId : effect.type === "skill_enable" ? effect.skillId : undefined;
+        if (id) grantors.set(id, [...(grantors.get(id) ?? []), `${holder.name}'s ${item.name}`]);
+      }
+    }
+  }
+  return grantors;
+}
+
 /** A pool entry's tier: its archetype's (entries carry none of their own). */
 export function poolTier(entryId: string, catalogue: PoolCatalogue = SHIPPED_CATALOGUE): ItemTier | undefined {
   const entry = catalogue.pool.entries.find((candidate) => candidate.id === entryId);
@@ -86,19 +106,23 @@ export function tierLock(
 
 /**
  * Why an entry may not be disabled now, or undefined when it may. Refused while it is not enabled,
- * while anyone has learned it (owner decision D8 — the reason names who), or while an enabled action
- * still needs it.
+ * while anyone has learned it, while an item someone holds grants it (owner decision D8, plan 09 §7.2
+ * — the reason names who or what), or while an enabled action still needs it.
  */
 export function disableRefusal(
   enabled: readonly PlannedEnablement[],
   learnerNames: readonly string[],
-  entryId: string
+  entryId: string,
+  grantors: readonly string[] = []
 ): string | undefined {
   if (!enabled.some((enablement) => enablement.entryId === entryId)) {
     return "That entry is not enabled in this story.";
   }
   if (learnerNames.length > 0) {
     return `${learnerNames.join(", ")} ${learnerNames.length === 1 ? "has" : "have"} learned this, so it stays.`;
+  }
+  if (grantors.length > 0) {
+    return `${grantors.join(", ")} ${grantors.length === 1 ? "grants" : "grant"} this, so it stays.`;
   }
   const dependants = enabled.flatMap((enablement) =>
     enablement.kind === "action" && enablement.definition.requiresSkill === entryId

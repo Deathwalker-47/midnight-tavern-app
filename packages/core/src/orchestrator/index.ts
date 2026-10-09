@@ -54,6 +54,7 @@ export {
   type GuardedNarrationResult,
 } from "./authorityGuard.js";
 export {
+  attachWeaponSpecial,
   determineLootAwards,
   type PendingLootAward,
 } from "./loot.js";
