@@ -921,6 +921,13 @@ describe("Phase 3 — register consistency", () => {
         effectsApplied: null,
       },
     },
+    {
+      ruling: {
+        turnId: "t-automatic", actorId: "hero", actionId: "take_rest", actionLabel: "Rest",
+        gate: { allowed: true },
+        effectsApplied: { resourceDeltaSelf: { hp: 5 }, narrationHint: "a proper rest" },
+      },
+    },
   ];
 
   it("rulingToArtifact can emit every declared variant except stacked", () => {
@@ -933,7 +940,7 @@ describe("Phase 3 — register consistency", () => {
     expect(emitted).toEqual(
       new Set([
         "success", "failure", "crit-success", "crit-failure",
-        "opposed", "npc", "denied", "budget-exceeded",
+        "opposed", "npc", "denied", "budget-exceeded", "automatic",
       ])
     );
   });

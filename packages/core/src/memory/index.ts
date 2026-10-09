@@ -21,6 +21,8 @@ export {
   type ResourceBar,
   type InventoryLine,
   type SkillLine,
+  type CooldownLine,
+  type StatusLine,
 } from "./cardView.js";
 export {
   getCharacterDossier,

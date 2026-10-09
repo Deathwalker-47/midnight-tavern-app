@@ -2348,3 +2348,32 @@ empty resources, skill shapes + required lists, unpayable upkeep, action shaping
 `schemaVersion` there is now 3. Typecheck clean; core 795/57, UI 183/26 = 978; engine coverage 100%.
 
 **Next:** S8b (UI surfacing).
+
+---
+
+## 2026-10-09 - S8b: UI surfacing for plan 08 — S8 and plan 08 complete
+
+**Core projection.** `LivingCardView` gains optional `cooldowns` (`{actionId, label, turns}`, rest
+labelled "Rest"), `statuses` (`{id, label, remainingTurns, summary}` — e.g. "+2 to checks · STR +1 ·
+Health -2/turn") and per-skill `kind` (`passive` / `toggle` / `reaction`) with a toggle's `switchedOn`.
+Optional so the in-memory bridge's fixture cards and older bridges stay type-valid; the SQLite bridge
+gets them through core's `getLivingCard`, so the two bridges share one projection.
+
+**Living card.** A CONDITIONS block (statuses with their effect on the full card, terse on the compact
+card; recovering actions with turns left) and a skill tag: PASSIVE, TOGGLE · ON/OFF, REACTION.
+
+**Ruling card.** New `automatic` variant (◆, no die, "No roll needed"). `rulingToArtifact` used to
+return nothing for any allowed ruling without a roll, so status ticks, rests, used items, toggles and
+learned skills were invisible in the transcript; they are now stamped with what changed. Routine
+narration-only successes stay unstamped, as designed. Refusals carry code-specific titles: RECOVERING
+(`on_cooldown`), TOO SPENT (`insufficient_resource`), CANNOT AFFORD, NOT USABLE AT WILL
+(`not_invocable`), NO ONE IN REACH (`no_target`), NOT SAFE TO REST (`in_combat`). Rolled rulings now
+show statuses applied, "Riposte reaction to Grave-wight", "Target 1 of 3", "Recovers in 2T", and the
+roll math lists "Conditions" and "Passive skills" modifier terms.
+
+**Tests.** Core: 3 in `test/memory/cardView.test.ts`. UI: 6 in `test/screens/economyRulings.test.tsx`,
+3 in `test/components/LivingCard.test.tsx`, and the variant-register test now covers `automatic`.
+Typecheck clean; core 798/57, UI 192/28 = 990; engine coverage 100%.
+
+**Plan 08 is complete** (every box ticked; §8 acceptance holds — legacy stories differ only by the
+deliberate S1 XP curve and the narrator-DENIED fix). **Next:** S9, the start of plan 09.

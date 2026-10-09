@@ -86,7 +86,7 @@ push to `main`.
       action), reaction triggers; `ActionDef.targeting` scopes (`self|single|multiple|all_allies|all_enemies|area`).
 - [x] **S7. Recovery model** (finding 24). `economy.json`; out-of-combat regen, mana trickle, engine-owned
       Rest action, restoring consumables; clamped; never revives; journalled.
-- [ ] **S8. v3 forge + UI surfacing.** Forge prompts/validation emit roles, costs, cooldowns, skill types;
+- [x] **S8. v3 forge + UI surfacing.** Forge prompts/validation emit roles, costs, cooldowns, skill types;
       living card shows all resources, cooldowns and active effects; ruling card explains new gate codes.
 
 ### Plan 09 — universal catalogues and enablement

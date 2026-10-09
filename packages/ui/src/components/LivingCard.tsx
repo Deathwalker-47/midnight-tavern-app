@@ -6,6 +6,9 @@
  *                              all skills with pips, relationships, likes/dislikes, recent
  *                              observations.
  *
+ * Both forms show conditions (timed statuses and actions still recovering) and tag passive, toggle
+ * (with its on/off state) and reaction skills (plan 08 §4).
+ *
  * Player cards accent brass; others teal. Fallen state (alive === false) desaturates the card,
  * pins HP to 0, shows a FALLEN marker, and uses --dead. Composes ResourceBar, MasteryPips,
  * Chip, RelationshipRow, DeadMarker. Consumes the core LivingCardView projection directly.
@@ -194,6 +197,62 @@ function signed(value: number): string {
   return value >= 0 ? `+${value}` : String(value);
 }
 
+/** A short system-register tag after a skill name: how the skill works, and a toggle's state. */
+function SkillKindTag(props: { kind?: "passive" | "toggle" | "reaction"; switchedOn?: boolean }): JSX.Element | null {
+  if (!props.kind) return null;
+  const text =
+    props.kind === "toggle" ? (props.switchedOn ? "TOGGLE · ON" : "TOGGLE · OFF") : props.kind.toUpperCase();
+  return (
+    <span
+      data-testid="skill-kind"
+      style={{
+        fontFamily: "var(--font-mono)",
+        fontSize: 8.5,
+        letterSpacing: ".08em",
+        color: props.kind === "toggle" && props.switchedOn ? "var(--brass)" : "var(--muted)",
+      }}
+    >
+      {text}
+    </span>
+  );
+}
+
+/**
+ * Conditions (plan 08 §4): timed statuses with their effect in words, and actions still recovering.
+ * Both come from the engine's hard state; nothing here is inferred from prose.
+ */
+function Conditions(props: { card: CoreLivingCardView; compact?: boolean }): JSX.Element | null {
+  const statuses = props.card.statuses ?? [];
+  const cooldowns = props.card.cooldowns ?? [];
+  if (statuses.length === 0 && cooldowns.length === 0) return null;
+  return (
+    <div data-testid="living-card-conditions" style={{ marginBottom: 12 }}>
+      {!props.compact ? <SectionLabel>CONDITIONS</SectionLabel> : null}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+        {statuses.map((status) => (
+          <Chip
+            key={`status:${status.id}`}
+            tone="advanced"
+            title={status.summary || status.label}
+          >
+            {status.label} · {status.remainingTurns}T
+            {!props.compact && status.summary ? ` · ${status.summary}` : ""}
+          </Chip>
+        ))}
+        {cooldowns.map((cooldown) => (
+          <Chip
+            key={`cooldown:${cooldown.actionId}`}
+            tone="fallen"
+            title={`${cooldown.label} can be used again in ${cooldown.turns} turn(s).`}
+          >
+            {cooldown.label} · recovering {cooldown.turns}T
+          </Chip>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function Attributes(props: { card: CoreLivingCardView; compact?: boolean }): JSX.Element | null {
   if (props.card.attributes.length === 0) return null;
   return (
@@ -254,6 +313,7 @@ export function LivingCard(props: LivingCardProps): JSX.Element {
     <CardShell card={card} accent={accent} fallen={fallen} className={className} style={style}>
       <CardHeader card={card} accent={accent} fallen={fallen} />
       <Resources card={card} fallen={fallen} animate={animate} visibleOnly />
+      <Conditions card={card} compact />
       <Attributes card={card} compact />
       {card.skills.length > 0 ? (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
@@ -267,6 +327,7 @@ export function LivingCard(props: LivingCardProps): JSX.Element {
                   {s.name}
                 </span>
                 <MasteryPips rank={asRank(s.rank)} recentlyAdvanced={recentlyAdvancedSkillIds.includes(s.skillId)} animate={animate} />
+                <SkillKindTag kind={s.kind} switchedOn={s.switchedOn} />
               </span>
               <span style={{ fontFamily: "var(--font-mono)", fontSize: 8.5, color: "var(--muted)" }}>
                 {s.nextRankXp == null
@@ -297,6 +358,8 @@ export function LivingCardView(props: LivingCardProps): JSX.Element {
 
       <Resources card={card} fallen={fallen} animate={animate} visibleOnly={false} />
 
+      <Conditions card={card} />
+
       <Attributes card={card} />
 
       {soft?.traits && soft.traits.length > 0 ? (
@@ -313,11 +376,14 @@ export function LivingCardView(props: LivingCardProps): JSX.Element {
             {card.skills.map((s) => (
               <div key={s.skillId} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-                  <span
-                    title={s.definition}
-                    style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--ui-text)" }}
-                  >
-                    {s.name}
+                  <span style={{ display: "inline-flex", alignItems: "baseline", gap: 8 }}>
+                    <span
+                      title={s.definition}
+                      style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--ui-text)" }}
+                    >
+                      {s.name}
+                    </span>
+                    <SkillKindTag kind={s.kind} switchedOn={s.switchedOn} />
                   </span>
                   <MasteryPips
                     rank={asRank(s.rank)}

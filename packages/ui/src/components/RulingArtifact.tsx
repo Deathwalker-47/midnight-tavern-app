@@ -12,8 +12,9 @@
  * `prefers-reduced-motion: reduce` collapses every duration to ~0 (tokens + motion.css guard),
  * and `animate={false}` renders final values immediately for tests and long lists.
  *
- * Variants: success · failure · crit-success · crit-failure · opposed · npc · stacked · denied.
- * DENIED has no die (dashed ⊘ glyph, --dead, reason + optional hint).
+ * Variants: success · failure · crit-success · crit-failure · opposed · npc · stacked · denied ·
+ * automatic. DENIED has no die (dashed ⊘ glyph, --dead, reason + optional hint). AUTOMATIC has no
+ * die either: the engine applied it without a roll (a status tick, a rest, a toggle, a used item).
  */
 import type { CSSProperties, ReactNode } from "react";
 import type { RollOutcome } from "./_shared";
@@ -66,7 +67,8 @@ export type RulingArtifactVariant =
   | "denied"
   | "budget-exceeded"
   | "unresolved"
-  | "classifier-unavailable";
+  | "classifier-unavailable"
+  | "automatic";
 
 export interface RulingArtifactProps {
   variant: RulingArtifactVariant;
@@ -106,12 +108,13 @@ const LABEL_BY_VARIANT: Record<RulingArtifactVariant, string> = {
   "budget-exceeded": "DM RULING · ACTION BUDGET",
   unresolved: "DM RULING · NEEDS CLARIFICATION",
   "classifier-unavailable": "DM RULING · CLASSIFIER UNAVAILABLE",
+  automatic: "RULING · AUTOMATIC",
 };
 
 /** Resolve the accent color that carries the left border + bg tint. */
 function accentFor(props: RulingArtifactProps): string {
   if (props.variant === "denied" || props.variant === "budget-exceeded" || props.variant === "unresolved" || props.variant === "classifier-unavailable") return "var(--dead)";
-  if (props.variant === "npc") return "var(--teal)";
+  if (props.variant === "npc" || props.variant === "automatic") return "var(--teal)";
   if (props.variant === "stacked") {
     // The exchange takes its color from the final (second) roll's outcome.
     const last = props.rolls?.[1] ?? props.rolls?.[0];
@@ -384,6 +387,33 @@ export function RulingArtifact(props: RulingArtifactProps): ReactNode {
               {props.hint}
             </div>
           ) : null}
+        </div>
+      </div>
+    );
+  } else if (variant === "automatic") {
+    body = (
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div
+          aria-hidden="true"
+          style={{
+            width: 40,
+            height: 40,
+            flex: "0 0 40px",
+            borderRadius: 8,
+            border: "1px solid var(--teal-dim)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: "var(--teal)",
+            fontSize: 18,
+          }}
+          data-testid="ruling-automatic-glyph"
+        >
+          ◆
+        </div>
+        <div>
+          <div style={{ fontFamily: FONT.mono, fontWeight: 600, fontSize: 15, color: "var(--teal)" }}>AUTOMATIC</div>
+          <div style={{ fontSize: 12.5, color: "var(--secondary)", marginTop: 2 }}>No roll needed.</div>
         </div>
       </div>
     );

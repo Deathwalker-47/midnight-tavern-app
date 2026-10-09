@@ -40,13 +40,14 @@ Plans 01-07 and 10-12 of the 2026-08-13 set remain written but **not authorized*
 | S7 | Recovery: `config/economy.json` (versioned into rulebooks); end-of-turn regen as shares of max (stamina 25% / mana 10%, 5% in combat / health 5%, min 1; in combat = acted in or hit by a combat or wounding ruling), journalled as `recovery` events, not rulings; engine actions `take_rest` (50% health, full stamina, 50% mana, 3-turn cooldown, refused with enemies present — gate code `in_combat`) and `consume_item` (`ItemDef.restores`); v3 only for regen/rest; never revives; engine action ids reserved in the validator | done |
 | — | **Pre-existing defect fixed (found in S7):** the narrator was told every no-roll ruling was DENIED (routine automatic successes, status ticks, toggles, learning) | done |
 | S8a | Forge emits v3 for Full Stats: deterministic core pools + roles (`withCorePools`), passive/toggle skills kept, reactions → active (pool supplies them), role-keyed costs survive stabilization, prompts teach roles/costs/cooldowns/targeting | done |
-| S8b | UI surfacing: living card (all pools, cooldowns, statuses, toggles), ruling card (new gate codes, `reaction`, `targeting`) | not started |
+| S8b | UI: living card CONDITIONS (statuses in words, recovering actions) + skill tags (PASSIVE / TOGGLE ON-OFF / REACTION); ruling card `automatic` variant (no-roll rulings that changed something were previously invisible), gate-code titles, reaction / target-spread / cooldown / status facts, Conditions + Passive modifier terms | done |
+| — | **Plan 08 complete** | done |
 | S9–S18 | Plan 09 (pool, enablement, selection, archetypes, mid-story enablement, UI, items, weapon specials, external config, close-out) | not started |
 
 ## Verification state
 
-After S8a (Linux/Node 22): `npm run typecheck` clean; core **795 / 57 files** (engine coverage 100%),
-UI **183 / 26 files** = **978** passing; root `npm test` passes here (the tinypool worker crash is
+After S8b (Linux/Node 22): `npm run typecheck` clean; core **798 / 57 files** (engine coverage 100%),
+UI **192 / 28 files** = **990** passing; root `npm test` passes here (the tinypool worker crash is
 Windows/Node 24 only — plan 07 P0-0, not authorized).
 
 ## Facts established earlier (still true — do not re-derive)
@@ -62,10 +63,6 @@ Windows/Node 24 only — plan 07 P0-0, not authorized).
   `restores` — S8 (forge) and S15 (universal items) must close both.
 - The owner's taxonomy files are **permanently lost** (never committed; laptop formatted; not in Google
   Drive). Engineering authors the pool itself under the owner's existing grants — see the action plan.
-- New gate codes from S3–S7 (`insufficient_resource`, `on_cooldown`, `not_invocable`, `no_target`,
-  `in_combat`) and
-  the new ruling fields (`reaction`, `targeting`, `cooldownApplied`, roll `statusModifier` /
-  `passiveModifier`) are not yet explained in the UI ruling card — that is S8.
 - Equipment's `resource_capacity` effect is display-only: nothing in the engine applies it (found during
   S6b). Not fixed — out of scope; worth a future plan item.
 - The engine's 100% coverage gate (`npx vitest run --coverage` in `packages/core`) was silently failing
@@ -85,7 +82,8 @@ Windows/Node 24 only — plan 07 P0-0, not authorized).
 
 ## Single next action
 
-Do **S8b**: UI surfacing in `packages/ui` — the living card shows every resource pool, running
-cooldowns, active statuses and switched-on toggles; the ruling card explains the gate codes
-`insufficient_resource`, `on_cooldown`, `not_invocable`, `no_target`, `in_combat` and shows `reaction`
-and `targeting` rulings. Then tick S8.
+Start **S9** (plan 09): the universal pool format and the non-combat starter pool —
+`universal-archetypes.json` + `universal-pool.json` under `packages/core/src/config/`, Zod schemas, the
+seven balance rules from plan 09 as tests over the whole pool, and exclusion records. Read plan 09
+(`docs/plans/2026-08-13-09-content-catalogues.md`) and the action plan's corrections first; engineering
+authors the pool (the owner's taxonomy files are gone).

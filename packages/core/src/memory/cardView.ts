@@ -10,11 +10,12 @@
  */
 import type { Store } from "../store/index.js";
 import type { StoryEvent } from "../store/repositories/storyEvents.js";
-import type {
-  CharacterHardState,
-  CharacterSoftState,
-  ItemDef,
-  StorySchema,
+import {
+  REST_ACTION_ID,
+  type CharacterHardState,
+  type CharacterSoftState,
+  type ItemDef,
+  type StorySchema,
 } from "../types/index.js";
 import { scoreToMod } from "../engine/attributes.js";
 import { PROGRESSION_CONFIG } from "../config/index.js";
@@ -53,6 +54,27 @@ export interface SkillLine {
     turnIdx: number;
     rankUp?: { from: string; to: string };
   };
+  /** How the skill works when it is not an ordinary active skill (plan 08 §4). */
+  kind?: "passive" | "toggle" | "reaction";
+  /** For a toggle skill: whether it is switched on now. */
+  switchedOn?: boolean;
+}
+
+/** An action the character must wait to use again (plan 08 §4). */
+export interface CooldownLine {
+  actionId: string;
+  label: string;
+  /** Turns still blocked. */
+  turns: number;
+}
+
+/** A timed status on the character, with its effect in words (plan 08 §4). */
+export interface StatusLine {
+  id: string;
+  label: string;
+  remainingTurns: number;
+  /** e.g. "+2 to checks · STR +1 · Health -2/turn"; empty when the status is purely narrative. */
+  summary: string;
 }
 
 export interface AttributeLine {
@@ -75,6 +97,10 @@ export interface LivingCardView {
   resources: ResourceBar[];
   inventory: InventoryLine[];
   skills: SkillLine[];
+  /** Actions still recovering. Optional so cards from older bridges and fixtures stay valid. */
+  cooldowns?: CooldownLine[];
+  /** Timed statuses (buffs, debuffs, poison, regeneration). Optional for the same reason. */
+  statuses?: StatusLine[];
   /** Narrative side (soft state); undefined when the character has no soft profile yet. */
   soft?: {
     tier: CharacterSoftState["tier"];
@@ -165,6 +191,7 @@ function skillLines(
     const rankIndex = PROGRESSION_CONFIG.ranks.findIndex((entry) => entry.rank === s.rank);
     const nextRank = PROGRESSION_CONFIG.ranks[rankIndex + 1];
     const latestAward = latestAwards.get(s.skillId);
+    const kind = definition?.skillType;
     return {
       skillId: s.skillId,
       name: definition?.name ?? s.skillId,
@@ -185,6 +212,48 @@ function skillLines(
             },
           }
         : {}),
+      ...(kind && kind !== "active" ? { kind } : {}),
+      ...(kind === "toggle" ? { switchedOn: (hard.toggledOn ?? []).includes(s.skillId) } : {}),
+    };
+  });
+}
+
+function signed(value: number): string {
+  return value >= 0 ? `+${value}` : String(value);
+}
+
+/** Running cooldowns, labelled from the catalogue (or the engine's own rest action). */
+function cooldownLines(schema: StorySchema, hard: CharacterHardState): CooldownLine[] {
+  // The hard-state schema only admits positive cooldowns; expired ones are deleted by the ledger.
+  return Object.entries(hard.cooldowns ?? {}).map(([actionId, turns]) => ({
+    actionId,
+    label:
+      actionId === REST_ACTION_ID
+        ? "Rest"
+        : (schema.actions.find((action) => action.id === actionId)?.label ?? actionId),
+    turns,
+  }));
+}
+
+/** Active statuses with their mechanical effect spelled out. */
+function statusLines(schema: StorySchema, hard: CharacterHardState): StatusLine[] {
+  const poolLabel = (id: string) => schema.resources.find((def) => def.id === id)?.label ?? id;
+  const attributeLabel = (id: string) =>
+    schema.attributes.find((def) => def.id === id)?.abbrev ?? id;
+  return (hard.activeEffects ?? []).map((status) => {
+    const parts: string[] = [];
+    if (status.checkBonus) parts.push(`${signed(status.checkBonus)} to checks`);
+    for (const [id, delta] of Object.entries(status.attributeBonus ?? {})) {
+      parts.push(`${attributeLabel(id)} ${signed(delta)}`);
+    }
+    for (const [id, delta] of Object.entries(status.resourcePerTurn ?? {})) {
+      parts.push(`${poolLabel(id)} ${signed(delta)}/turn`);
+    }
+    return {
+      id: status.id,
+      label: status.label,
+      remainingTurns: status.remainingTurns,
+      summary: parts.join(" · "),
     };
   });
 }
@@ -254,6 +323,8 @@ export async function getLivingCard(
       schema.statMode === "full"
         ? skillLines(schema, record.hard, latestXpAwardBySkill(events))
         : [],
+    cooldowns: schema.statMode === "full" ? cooldownLines(schema, record.hard) : [],
+    statuses: schema.statMode === "full" ? statusLines(schema, record.hard) : [],
   };
   if (record.soft) card.soft = softSlice(record.soft, recentObservations);
   return card;

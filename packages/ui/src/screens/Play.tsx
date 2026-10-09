@@ -163,9 +163,13 @@ export function rulingToArtifact(
     // not a gate code — it comes only from the classifier recovery path (Phase 3.4), never here.
     const variant: RulingArtifactVariant =
       r.gate.code === "action_budget_exceeded" ? "budget-exceeded" : "denied";
+    const title =
+      variant === "budget-exceeded"
+        ? "ACTION BUDGET"
+        : (r.gate.code ? GATE_CODE_TITLE[r.gate.code] : undefined) ?? "DENIED";
     return {
       variant,
-      label: `${variant === "denied" ? "RULING" : "DM RULING"} · ${actorName.toUpperCase()} · ${variant === "budget-exceeded" ? "ACTION BUDGET" : "DENIED"}`,
+      label: `${variant === "denied" ? "RULING" : "DM RULING"} · ${actorName.toUpperCase()} · ${title}`,
       reason,
       detailRows: [
         { label: "ACTOR", value: actorName },
@@ -176,7 +180,7 @@ export function rulingToArtifact(
     };
   }
   const roll = r.roll;
-  if (!roll) return undefined;
+  if (!roll) return automaticArtifact(r, nameOf);
 
   const outcome = fromCoreOutcome(roll.outcome);
   const opposed = roll.opposedTotal !== undefined && roll.opposedTotal !== null;
@@ -211,6 +215,8 @@ export function rulingToArtifact(
       ...(roll.masterySkillId && roll.masteryModifier !== undefined
         ? [{ label: humanize(roll.masterySkillId), value: roll.masteryModifier }]
         : []),
+      ...(roll.statusModifier ? [{ label: "Conditions", value: roll.statusModifier }] : []),
+      ...(roll.passiveModifier ? [{ label: "Passive skills", value: roll.passiveModifier }] : []),
     ],
   };
   if (opposed) {
@@ -232,6 +238,8 @@ export function rulingToArtifact(
     r.xpAward ? `${humanize(r.xpAward.skillId)} +${r.xpAward.amount} XP${r.xpAward.rankAfter !== r.xpAward.rankBefore ? ` · RANK UP ${r.xpAward.rankAfter.toUpperCase()}` : ""}` : undefined,
     ...(r.damageAdjustments ?? []).map((adjustment) => `${Math.abs(adjustment.scaledDelta)} ${humanize(adjustment.resourceId)} ×${adjustment.multiplier} ${r.difficulty?.preset ?? ""}`),
     r.causedDeathOf?.length ? `Death · ${r.causedDeathOf.map(nameOf).join(", ")}` : undefined,
+    ...statusParts(r, nameOf),
+    ...attemptParts(r, nameOf),
   ].filter((part): part is string => Boolean(part));
   const effectLine = effectParts.join(" · ") || (r.masteryAdvance
     ? `${humanize(r.masteryAdvance.skillId)} → ${r.masteryAdvance.toRank.toUpperCase()}`
@@ -258,6 +266,86 @@ export function rulingToArtifact(
 
 function signed(value: number): string {
   return value >= 0 ? `+${value}` : String(value);
+}
+
+/** Card titles for gate refusals whose code says more than "denied" (plan 08 economy). */
+const GATE_CODE_TITLE: Partial<Record<NonNullable<Ruling["gate"]["code"]>, string>> = {
+  cannot_afford: "CANNOT AFFORD",
+  insufficient_resource: "TOO SPENT",
+  on_cooldown: "RECOVERING",
+  not_invocable: "NOT USABLE AT WILL",
+  no_target: "NO ONE IN REACH",
+  in_combat: "NOT SAFE TO REST",
+};
+
+/** Timed statuses an outcome applied, in words. */
+function statusParts(r: Ruling, nameOf: (id: string) => string): string[] {
+  const effects = r.effectsApplied;
+  const parts: string[] = [];
+  if (effects?.statusSelf) {
+    parts.push(`${nameOf(r.actorId)} ${effects.statusSelf.label} ${effects.statusSelf.durationTurns}T`);
+  }
+  if (effects?.statusTarget) {
+    const who = r.targetId ? nameOf(r.targetId) : "Target";
+    parts.push(`${who} ${effects.statusTarget.label} ${effects.statusTarget.durationTurns}T`);
+  }
+  return parts;
+}
+
+/** How this attempt came about and what it starts: a reaction, a multi-target spread, a cooldown. */
+function attemptParts(r: Ruling, nameOf: (id: string) => string): string[] {
+  return [
+    ...(r.reaction ? [`${r.reaction.skillName} reaction to ${nameOf(r.reaction.sourceActorId)}`] : []),
+    ...(r.targeting && r.targeting.count > 1
+      ? [`Target ${r.targeting.index + 1} of ${r.targeting.count}`]
+      : []),
+    ...(r.cooldownApplied ? [`Recovers in ${r.cooldownApplied}T`] : []),
+  ];
+}
+
+/** Resource and attribute changes an automatic ruling applied, e.g. "Kestrel Hp +10". */
+function changeParts(r: Ruling, nameOf: (id: string) => string): string[] {
+  const effects = r.effectsApplied;
+  if (!effects) return [];
+  const target = r.targetId ? nameOf(r.targetId) : "Target";
+  return [
+    ...Object.entries(effects.resourceDeltaSelf ?? {}).map(([id, delta]) => `${nameOf(r.actorId)} ${humanize(id)} ${signed(delta)}`),
+    ...Object.entries(effects.resourceDeltaTarget ?? {}).map(([id, delta]) => `${target} ${humanize(id)} ${signed(delta)}`),
+    ...Object.entries(effects.attributeDeltaSelf ?? {}).map(([id, delta]) => `${nameOf(r.actorId)} ${humanize(id)} ${signed(delta)}`),
+    ...Object.entries(effects.attributeDeltaTarget ?? {}).map(([id, delta]) => `${target} ${humanize(id)} ${signed(delta)}`),
+    ...(effects.grantItem ? [`+${effects.grantItem.qty} ${humanize(effects.grantItem.itemId)}`] : []),
+  ];
+}
+
+/**
+ * An allowed ruling that needed no roll. It is stamped only when it changed something mechanical
+ * (a status tick, a rest, a used item, a toggle, a learned skill); a routine narration-only success
+ * stays unstamped so ordinary actions do not clutter the story.
+ */
+function automaticArtifact(r: Ruling, nameOf: (id: string) => string): RulingArtifactVM | undefined {
+  const parts = [
+    ...changeParts(r, nameOf),
+    ...statusParts(r, nameOf),
+    ...attemptParts(r, nameOf),
+    ...(r.costsPaid?.items ?? []).map((item) => `Used ${item.qty} ${humanize(item.itemId)}`),
+    ...(r.masteryAdvance ? [`${humanize(r.masteryAdvance.skillId)} → ${r.masteryAdvance.toRank.toUpperCase()}`] : []),
+    ...(r.causedDeathOf?.length ? [`Death · ${r.causedDeathOf.map(nameOf).join(", ")}`] : []),
+  ];
+  const switched = r.actionId === "toggle_skill";
+  if (parts.length === 0 && !switched) return undefined;
+  const action = r.actionLabel ?? humanize(r.actionId);
+  return {
+    variant: "automatic",
+    label: `RULING · ${nameOf(r.actorId).toUpperCase()} · ${action.toUpperCase()}`,
+    ...(r.effectsApplied?.narrationHint ? { resultLine: r.effectsApplied.narrationHint } : {}),
+    ...(parts.length > 0 ? { effectLine: parts.join(" · ") } : {}),
+    detailRows: [
+      { label: "ACTOR", value: nameOf(r.actorId) },
+      { label: "ACTION", value: action },
+      ...(r.targetId ? [{ label: "TARGET", value: nameOf(r.targetId) }] : []),
+      { label: "ROLL", value: "None — the engine applied this automatically." },
+    ],
+  };
 }
 
 function advancementDecisionFromEvent(
