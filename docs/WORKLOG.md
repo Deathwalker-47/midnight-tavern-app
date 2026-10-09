@@ -2065,3 +2065,24 @@ of `npm test`, which is how it went unnoticed.
 test, one resolver edge case. Typecheck clean; core 690/47, UI 183/26 = 873 passing; engine coverage 100%.
 
 **Next:** S3 (weapon stamina cost).
+
+---
+
+## 2026-10-09 - S3: weapons cost stamina, refused before the roll (plan 08 §3)
+
+**What landed.** Typed `staminaCost` (non-negative int, optional) on legacy `ItemDef`, runtime
+`ItemDefinition` and model `ItemProposal`. New pure `engine/costs.ts`: `weaponStaminaCost` and
+`attemptCost` (the action's own costs plus the equipped/used weapon's stamina from the story's
+stamina-role pool). The gate and the resolver now both use `attemptCost`, so they can never disagree:
+the gate keeps `cannot_afford` for the action's own cost and returns the new code
+`insufficient_resource` ("Not enough Stamina to swing the Greatsword (needs 5, has 4).") when only the
+weapon makes it unaffordable; the resolver pays and records the combined cost in `costsPaid`, win or lose.
+Costs are clamped to `MAX_WEAPON_STAMINA_COST = 10`. On v3 rulebooks a weapon with no declared cost
+defaults to 1 (2 if two-handed) so finding 21 does not depend on the loot model remembering; legacy
+rulebooks stay free (D7). The loot adjudicator prompt now mentions `staminaCost`.
+
+**Tests.** 13 in `test/weaponStamina.test.ts` (combined cost, both gate codes, gate/resolver agreement,
+no stamina pool, clamp, legacy catalogue weapon, non-weapon actions, v3 defaults, proposal schema).
+Typecheck clean; core 703/48, UI 183/26 = 886; engine coverage 100%.
+
+**Next:** S4 (action cooldowns + role-denominated costs).

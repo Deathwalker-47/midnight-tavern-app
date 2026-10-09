@@ -97,6 +97,7 @@ export const GateVerdictSchema = z.object({
       "rank_required",
       "item_required",
       "cannot_afford",
+      "insufficient_resource",
       "prerequisite_failed",
       "action_budget_exceeded",
     ])

@@ -11,7 +11,7 @@
  *   3. `requiresSkill` is learned
  *   4. `minRank` is met
  *   5. `requiresItemKind` is present in inventory
- *   6. `costs` are affordable
+ *   6. `costs` are affordable (the action's own, then with the weapon's stamina cost)
  *   7. all `Condition` prerequisites hold
  */
 import type {
@@ -29,6 +29,7 @@ import {
   equipmentEnabledSkillRank,
   equipmentEnablesAction,
 } from "./equipment.js";
+import { attemptCost, weaponStaminaCost } from "./costs.js";
 
 export { conditionHolds } from "./conditions.js";
 
@@ -154,9 +155,26 @@ export function checkGate(
     }
   }
 
-  // 6. costs affordable
+  // 6. costs affordable — the action's own cost, then the full attempt cost including the weapon's
+  // stamina (plan 08 §3). Both come from `attemptCost`, the same function the resolver pays from.
   if (!canAfford(actor, action.costs)) {
     return deny("Cannot afford the cost of this action.", "cannot_afford");
+  }
+  const weapon = weaponStaminaCost(schema, actor, action, intent, context?.equipment);
+  if (weapon) {
+    // A weapon cost always yields a resource map containing that pool.
+    const needed = attemptCost(schema, actor, action, intent, context?.equipment)!.resources![
+      weapon.resourceId
+    ]!;
+    const has = actor.resources[weapon.resourceId]?.current ?? 0;
+    if (has < needed) {
+      // weaponStaminaCost only returns pools that exist in the schema.
+      const pool = schema.resources.find((resource) => resource.id === weapon.resourceId)!;
+      return deny(
+        `Not enough ${pool.label} to swing the ${weapon.itemName} (needs ${needed}, has ${has}).`,
+        "insufficient_resource"
+      );
+    }
   }
 
   // 7. all prerequisite conditions on the required skill hold

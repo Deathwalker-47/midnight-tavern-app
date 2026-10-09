@@ -92,6 +92,7 @@ export async function determineLootAwards(
           "Do not award routine loot for every successful action. When uncertain, set award=false.",
           `Propose between one and ${EQUIPMENT_LOOT_CONFIG.loot.maximumItemsPerEncounter} items only when the completed encounter truly earned them. The deterministic engine rejects excessive tiers or effects.`,
           "Mythical items are impossible unless separate frozen authorization exists; never assume it.",
+          "Weapons may set staminaCost: the stamina each swing costs (usually 1; 2-3 for heavy or two-handed weapons). The engine clamps it.",
         ].join("\n"),
         user: [
           `STORY: ${story.title}`,

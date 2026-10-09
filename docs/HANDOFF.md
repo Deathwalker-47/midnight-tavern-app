@@ -29,13 +29,14 @@ Plans 01-07 and 10-12 of the 2026-08-13 set remain written but **not authorized*
 | S0 | Action plan written and activated | done |
 | S1 | XP repeat penalty: curve `[1,.8,.6,.5,.4]`, per-actor window over the actor's last 5 turns (`countRecentSimilarUses`) | done |
 | S2 | Resource roles: `ResourceDef.role`, deterministic legacy inference (`engine/resources.ts`), schema v3 contract, generic NPCs get mana + stamina on v3 | done |
-| S3–S8 | Plan 08 (stamina cost, cooldowns, timed effects, skill types/targeting, recovery, v3 forge + UI) | not started |
+| S3 | Weapon stamina cost: typed `staminaCost` on items (clamped ≤10), v3 default 1/2 by hands, shared `attemptCost` for gate + resolver, gate code `insufficient_resource` | done |
+| S4–S8 | Plan 08 (cooldowns, timed effects, skill types/targeting, recovery, v3 forge + UI) | not started |
 | S9–S18 | Plan 09 (pool, enablement, selection, archetypes, mid-story enablement, UI, items, weapon specials, external config, close-out) | not started |
 
 ## Verification state
 
-After S2 (Linux/Node 22): `npm run typecheck` clean; core **690 / 47 files** (engine coverage 100%),
-UI **183 / 26 files** = **873** passing; root `npm test` passes here (the tinypool worker crash is
+After S3 (Linux/Node 22): `npm run typecheck` clean; core **703 / 48 files** (engine coverage 100%),
+UI **183 / 26 files** = **886** passing; root `npm test` passes here (the tinypool worker crash is
 Windows/Node 24 only — plan 07 P0-0, not authorized).
 
 ## Facts established earlier (still true — do not re-derive)
@@ -64,4 +65,4 @@ Windows/Node 24 only — plan 07 P0-0, not authorized).
 
 ## Single next action
 
-Execute **S3** of the action plan (weapon stamina cost), then continue in order.
+Execute **S4** of the action plan (action cooldowns + role-denominated costs), then continue in order.

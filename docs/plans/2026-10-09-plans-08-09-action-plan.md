@@ -72,7 +72,7 @@ push to `main`.
 - [x] **S2. Resource roles** (finding 22). `ResourceDef.role`; deterministic legacy role inference
       (inverted `fatigue` stays `other`); generic NPCs receive health, mana and stamina; `schemaVersion: 3`
       accepted with the V2 contract plus "Full Stats v3 must define health, mana and stamina roles".
-- [ ] **S3. Weapon stamina cost** (finding 21). Typed `staminaCost` on legacy and runtime item
+- [x] **S3. Weapon stamina cost** (finding 21). Typed `staminaCost` on legacy and runtime item
       definitions, clamped; one shared affordability function used by gate and resolver; a weapon attack
       that cannot pay is denied before the roll with code `insufficient_resource`.
 - [ ] **S4. Action cooldowns and role-denominated costs** (finding 23, part). `ActionDef.cooldownTurns`;

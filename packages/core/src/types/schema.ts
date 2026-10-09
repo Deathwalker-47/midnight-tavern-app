@@ -155,6 +155,8 @@ export const ItemDefSchema = z.object({
   tier: z.string(),
   requiresSkill: z.string().optional(),
   props: z.record(z.string(), z.number()), // e.g. { damage: 6, defense: 2, heal: 10 }
+  /** Stamina a weapon adds to every attempt that swings it (plan 08 §3). Clamped at use. */
+  staminaCost: z.number().int().min(0).optional(),
 });
 export type ItemDef = z.infer<typeof ItemDefSchema>;
 

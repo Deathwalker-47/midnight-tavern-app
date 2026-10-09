@@ -99,18 +99,18 @@ naming and theming them; the engine gains a stable way to find them.
 conventional `damage` prop for scaling. So `props.staminaCost` needs no schema change — but an
 untyped convention is how the `damage` prop ended up needing a fallback inference.
 
-- [ ] **3.1** Add a typed optional field instead: `staminaCost: z.number().int().min(0).optional()`
+- [x] **3.1** Add a typed optional field instead: `staminaCost: z.number().int().min(0).optional()`
       on `ItemDefSchema` and on the runtime item definition used by the loot system.
-- [ ] **3.2** In `resolver.ts`, when an action has `requiresItemKind: "weapon"`, add the equipped
+- [x] **3.2** In `resolver.ts`, when an action has `requiresItemKind: "weapon"`, add the equipped
       weapon's `staminaCost` to the attempt cost. **Attempt costs are paid win or lose** (existing
       resolver behaviour) — confirm that is the intended feel with the owner; it is the D&D-ish
       answer and matches "cost to swing".
-- [ ] **3.3** Insufficient stamina must **deny at the gate**, not fail the roll, with a distinct
+- [x] **3.3** Insufficient stamina must **deny at the gate**, not fail the roll, with a distinct
       gate code (`insufficient_resource`) so the ruling card explains it. `checkGate` already checks
       affordability of `action.costs`; extend it to include item-derived costs so the gate and the
       resolver agree. **They must use one shared function — a divergence here means the gate
       permits what the resolver cannot pay.**
-- [ ] **3.4** Clamp `staminaCost` on untrusted/generated definitions the way `MAX_ITEM_DAMAGE_BONUS`
+- [x] **3.4** Clamp `staminaCost` on untrusted/generated definitions the way `MAX_ITEM_DAMAGE_BONUS`
       already clamps damage.
 
 ## 4. Finding 23 — the skill overhaul

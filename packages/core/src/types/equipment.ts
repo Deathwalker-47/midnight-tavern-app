@@ -89,6 +89,8 @@ export const ItemDefinitionSchema = z.object({
   requiresSkill: z.string().optional(),
   effects: z.array(EquipmentEffectSchema).default([]),
   props: z.record(z.string(), z.number()).default({}),
+  /** Stamina a weapon adds to every attempt that swings it (plan 08 §3). Clamped at use. */
+  staminaCost: z.number().int().min(0).optional(),
   tags: z.array(z.string()).default([]),
   createdAt: z.string(),
   configVersion: z.number().int().positive(),
@@ -148,6 +150,8 @@ export const ItemProposalSchema = z.object({
   requiresSkill: z.string().optional(),
   effects: z.array(EquipmentEffectSchema).default([]),
   props: z.record(z.string(), z.number()).default({}),
+  /** Stamina a weapon adds to every attempt that swings it (plan 08 §3). Clamped at use. */
+  staminaCost: z.number().int().min(0).optional(),
   tags: z.array(z.string()).default([]),
 });
 export type ItemProposal = z.infer<typeof ItemProposalSchema>;

@@ -21,6 +21,7 @@ import {
   scaleDamageDelta,
   type StorySchema,
   type ActionDef,
+  type CostSpec,
   type DamageAdjustment,
   type DifficultyConfig,
   type EffectSpec,
@@ -32,6 +33,7 @@ import type { Ruling, MechanicalIntent, Outcome, RollRecord } from "../types/ind
 import { rollD20Mode, type Rng } from "./dice.js";
 import { attrScore, clampAttribute, scoreToMod } from "./attributes.js";
 import { checkGate } from "./gate.js";
+import { attemptCost } from "./costs.js";
 import type { StagedMutation } from "./ledger.js";
 import { computeRollMode } from "./rollMode.js";
 import { damageMultiplierForRecipient, effectiveDc } from "./difficulty.js";
@@ -233,16 +235,16 @@ function stageEffect(
 }
 
 /** Stage cost payment (paid on attempt, win or lose). */
-function stageCosts(action: ActionDef, actorId: string): StagedMutation[] {
+function stageCosts(costs: CostSpec | undefined, actorId: string): StagedMutation[] {
   const muts: StagedMutation[] = [];
-  if (!action.costs) return muts;
-  if (action.costs.resources) {
-    for (const [resId, amount] of Object.entries(action.costs.resources)) {
+  if (!costs) return muts;
+  if (costs.resources) {
+    for (const [resId, amount] of Object.entries(costs.resources)) {
       muts.push({ kind: "resourceDelta", characterId: actorId, resourceId: resId, delta: -amount });
     }
   }
-  if (action.costs.items) {
-    for (const { itemId, qty } of action.costs.items) {
+  if (costs.items) {
+    for (const { itemId, qty } of costs.items) {
       muts.push({ kind: "removeItem", characterId: actorId, itemId, qty });
     }
   }
@@ -308,8 +310,9 @@ export function resolve(
   // Gate passed ⇒ the action exists in the catalog.
   const action = catalogAction!;
 
-  // 2. costs on attempt.
-  const mutations: StagedMutation[] = stageCosts(action, actor.characterId);
+  // 2. costs on attempt — the same attemptCost the gate just checked (action + weapon stamina).
+  const costs = attemptCost(schema, actor, action, intent, options.equipment);
+  const mutations: StagedMutation[] = stageCosts(costs, actor.characterId);
 
   // A valid, low-stakes action with narration-only effects succeeds without a
   // roll. It grants no XP, preventing routine-action grinding.
@@ -521,7 +524,7 @@ export function resolve(
     ...(stagedEffect.damageAdjustments.length > 0
       ? { damageAdjustments: stagedEffect.damageAdjustments }
       : {}),
-    ...(action.costs ? { costsPaid: action.costs } : {}),
+    ...(costs ? { costsPaid: costs } : {}),
   };
 
   if (skill && action.requiresSkill) {
