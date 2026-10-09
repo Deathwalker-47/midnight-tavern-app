@@ -98,7 +98,13 @@ export interface RuntimeItemRepo {
   listDefinitions(storyId: string): Promise<ItemDefinition[]>;
   insertInstance(instance: ItemInstance): Promise<void>;
   getInstance(id: string): Promise<ItemInstance | undefined>;
+  /** What a character holds now: used-up instances (quantity 0) are left out. */
   listInventory(characterId: string): Promise<ItemInstance[]>;
+  /**
+   * Set how many of an instance its owner holds. Zero keeps the row (so rewinding the turn that used
+   * it can put it back) and unequips it.
+   */
+  setInstanceQuantity(instanceId: string, quantity: number): Promise<void>;
   setSlot(assignment: EquipmentAssignment): Promise<void>;
   clearSlot(characterId: string, slot: EquipmentSlot): Promise<void>;
   clearLoadout(characterId: string): Promise<void>;
@@ -177,10 +183,18 @@ export function makeRuntimeItemRepo(db: Db): RuntimeItemRepo {
 
     async listInventory(characterId) {
       const rows = await db.all<InstanceRow>(
-        "SELECT * FROM item_instances WHERE owner_character_id = ? ORDER BY acquired_at, id",
+        "SELECT * FROM item_instances WHERE owner_character_id = ? AND quantity > 0 ORDER BY acquired_at, id",
         characterId
       );
       return rows.map(instanceFromRow);
+    },
+
+    async setInstanceQuantity(instanceId, quantity) {
+      const parsed = ItemInstanceSchema.shape.quantity.parse(quantity);
+      await db.run("UPDATE item_instances SET quantity = ? WHERE id = ?", parsed, instanceId);
+      if (parsed === 0) {
+        await db.run("DELETE FROM equipment_assignments WHERE item_instance_id = ?", instanceId);
+      }
     },
 
     async setSlot(assignment) {

@@ -260,8 +260,13 @@ async function applyVariantState(store: Store, storyId: string, state: VariantSt
   });
 }
 
-/** Remove on-demand loot whose awarding exchange is about to be truncated. */
-async function removeRuntimeLootFromIdx(
+/**
+ * Undo what the exchanges about to be truncated did to runtime items, which live outside hard state
+ * and checkpoints: first put back every item they used up, then remove the loot they awarded. An
+ * instance's quantity only ever falls, so its largest recorded "before" is the quantity it had before
+ * its earliest truncated use — whatever order the rulings come back in.
+ */
+async function undoRuntimeItemsFromIdx(
   store: Store,
   storyId: string,
   fromIdx: number
@@ -270,13 +275,18 @@ async function removeRuntimeLootFromIdx(
   const narratorIds = messages
     .filter((message) => message.role === "narrator" && message.idx >= fromIdx)
     .map((message) => message.id);
-  const instanceIds = new Set<string>();
+  const rulings = [];
   for (const messageId of narratorIds) {
-    const rulings = await store.rulings.listByMessage(messageId);
-    for (const record of rulings) {
-      for (const award of record.ruling.loot ?? []) instanceIds.add(award.itemInstanceId);
-    }
+    rulings.push(...(await store.rulings.listByMessage(messageId)).map((record) => record.ruling));
   }
+  const restored = new Map<string, number>();
+  for (const { itemConsumed: used } of rulings) {
+    if (used) restored.set(used.itemInstanceId, Math.max(used.quantityBefore, restored.get(used.itemInstanceId) ?? 0));
+  }
+  for (const [instanceId, quantity] of restored) {
+    await store.runtimeItems.setInstanceQuantity(instanceId, quantity);
+  }
+  const instanceIds = new Set(rulings.flatMap((ruling) => (ruling.loot ?? []).map((award) => award.itemInstanceId)));
   for (const instanceId of instanceIds) {
     await store.runtimeItems.deleteInstanceAndOrphanDefinition(instanceId);
   }
@@ -352,7 +362,7 @@ export async function deleteLastTurn(store: Store, storyId: string): Promise<voi
   // rollback aborts, so state and transcript can never disagree.
   await store.transaction(async () => {
     if (checkpoint) await applyRestore(store, checkpoint);
-    await removeRuntimeLootFromIdx(store, storyId, fromIdx);
+    await undoRuntimeItemsFromIdx(store, storyId, fromIdx);
     await restoreDifficultyBeforeIdx(store, storyId, fromIdx);
     await store.events.deleteFromTurn(storyId, fromIdx);
     await store.poolEnablements.deleteFromTurn(storyId, fromIdx);
@@ -384,7 +394,7 @@ export async function rewindTo(store: Store, storyId: string, selectedIdx: numbe
   const target = checkpoints.find((c) => c.turnIndex >= fromIdx);
   await store.transaction(async () => {
     if (target) await applyRestore(store, target);
-    await removeRuntimeLootFromIdx(store, storyId, fromIdx);
+    await undoRuntimeItemsFromIdx(store, storyId, fromIdx);
     await restoreDifficultyBeforeIdx(store, storyId, fromIdx);
     await store.events.deleteFromTurn(storyId, fromIdx);
     await store.poolEnablements.deleteFromTurn(storyId, fromIdx);
@@ -414,7 +424,7 @@ export async function deleteFromExchange(store: Store, storyId: string, selected
 
   await store.transaction(async () => {
     if (checkpoint) await applyRestore(store, checkpoint);
-    await removeRuntimeLootFromIdx(store, storyId, fromIdx);
+    await undoRuntimeItemsFromIdx(store, storyId, fromIdx);
     await restoreDifficultyBeforeIdx(store, storyId, fromIdx);
     await store.events.deleteFromTurn(storyId, fromIdx);
     await store.poolEnablements.deleteFromTurn(storyId, fromIdx);

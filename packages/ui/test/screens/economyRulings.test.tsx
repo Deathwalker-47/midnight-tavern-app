@@ -5,7 +5,7 @@
 import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
 import type { Ruling } from "@midnight-tavern/core";
-import { rulingToArtifact } from "../../src/screens/Play";
+import { restoresLine, rulingToArtifact } from "../../src/screens/Play";
 import { RulingArtifact } from "../../src/components/RulingArtifact";
 
 const names: Record<string, string> = { kestrel: "Kestrel", wight: "Grave-wight" };
@@ -53,6 +53,17 @@ describe("automatic rulings", () => {
       nameOf
     )!;
     expect(tonic.effectLine).toBe("Kestrel Aether +4 · Used 1 Tonic");
+    const draught = rulingToArtifact(
+      automatic({
+        actionId: "consume_item",
+        actionLabel: "Use Red Draught",
+        effectsApplied: { resourceDeltaSelf: { hp: 6 }, narrationHint: "the Red Draught is used up" },
+        itemConsumed: { itemInstanceId: "i1", itemDefinitionId: "d1", name: "Red Draught", quantityBefore: 2 },
+      }),
+      nameOf
+    )!;
+    expect(draught.effectLine).toBe("Kestrel Hp +6 · Used 1 Red Draught");
+    expect(restoresLine({ health: 13, mana: 2 })).toBe("Restores 13 health, 2 mana when used");
     const learned = rulingToArtifact(
       automatic({
         actionId: "learn_skill",

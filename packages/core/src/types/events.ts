@@ -18,6 +18,7 @@ import {
 import { CostSpecSchema, ReactionTriggerSchema } from "./schema.js";
 import { DifficultySnapshotSchema } from "./difficulty.js";
 import { ItemTierSchema, EquipmentEffectSchema } from "./equipment.js";
+import { ItemRestoresSchema } from "./primitives.js";
 
 /**
  * One attempted action mapped onto the catalog. `actionId` MUST be a catalog id
@@ -171,6 +172,8 @@ export const LootRulingSchema = z.object({
   effects: z.array(EquipmentEffectSchema).optional(),
   eligibleSlots: z.array(z.string()).optional(),
   requirement: z.string().optional(),
+  /** What one use restores, by core pool role (consumables). */
+  restores: ItemRestoresSchema.optional(),
 });
 export type LootRuling = z.infer<typeof LootRulingSchema>;
 
@@ -197,6 +200,18 @@ export const RulingSchema = z.object({
   difficulty: DifficultySnapshotSchema.optional(),
   damageAdjustments: z.array(DamageAdjustmentSchema).optional(),
   loot: z.array(LootRulingSchema).optional(),
+  /**
+   * A runtime item this ruling used up (plan 09 §8.1). Runtime items live outside hard state and
+   * checkpoints, so this is what rewind reads to put the item back.
+   */
+  itemConsumed: z
+    .object({
+      itemInstanceId: z.string(),
+      itemDefinitionId: z.string(),
+      name: z.string(),
+      quantityBefore: z.number().int().positive(),
+    })
+    .optional(),
   // True when a lethal resource hit 0 as a result of this ruling (target or self).
   causedDeathOf: z.array(z.string()).optional(),
   /**

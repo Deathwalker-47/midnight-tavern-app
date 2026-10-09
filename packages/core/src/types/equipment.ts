@@ -128,7 +128,8 @@ export const ItemInstanceSchema = z.object({
   storyId: z.string(),
   definitionId: z.string(),
   ownerCharacterId: z.string(),
-  quantity: z.number().int().positive().default(1),
+  /** Zero once used up: the row stays so rewinding the turn that used it can put it back. */
+  quantity: z.number().int().nonnegative().default(1),
   acquiredAt: z.string(),
   provenance: LootProvenanceSchema,
 });

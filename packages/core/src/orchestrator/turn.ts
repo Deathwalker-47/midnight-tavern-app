@@ -65,7 +65,7 @@ import {
   STANDARD_DIFFICULTY,
   TOGGLE_SKILL_ACTION_ID,
 } from "../types/index.js";
-import { applyUniversalActionDefaults } from "../config/index.js";
+import { applyUniversalActionDefaults, ECONOMY_CONFIG } from "../config/index.js";
 import { effectiveSchema } from "../catalogue/enablement.js";
 import { proposeMidStoryEnablements } from "../catalogue/midStory.js";
 import { assembleContext } from "./context.js";
@@ -611,11 +611,20 @@ async function runTurnOperation(
         presentRoster,
         new Set(recentMessages.map((message) => message.id))
       );
+      // Loot the player holds that restores something, so "I drink the potion" can name it.
+      const player = presentRoster.find((character) => character.isPlayer);
+      const usableItems = player
+        ? (await store.runtimeItems.listInventory(player.id)).flatMap((instance) => {
+            const definition = equipmentDefinitions.find((candidate) => candidate.id === instance.definitionId);
+            return definition?.restores ? [{ id: instance.id, name: definition.name }] : [];
+          })
+        : [];
       const classifierInput = {
         playerMessage: playerText,
         presentCharacters,
         recentNarration,
         ...(recentTargetId ? { recentTargetId } : {}),
+        ...(usableItems.length > 0 ? { usableItems } : {}),
       };
       const classifier = await runStage<
         Awaited<ReturnType<typeof classifyWithRecovery>>
@@ -790,7 +799,14 @@ async function runTurnOperation(
           continue;
         }
         if (intent.actionId === CONSUME_ITEM_ACTION_ID) {
-          const consumed = resolveConsumeItem(schema, actorHard, intent);
+          const consumed = resolveConsumeItem(schema, actorHard, intent, ECONOMY_CONFIG, {
+            definitions: equipmentDefinitions,
+            instances: equipmentInstances,
+          });
+          const used = consumed.ruling.itemConsumed;
+          // A second use this turn must see one fewer; the store is written when the turn commits.
+          const instance = used && equipmentInstances.find((candidate) => candidate.id === used.itemInstanceId);
+          if (instance) instance.quantity -= 1;
           commit(schema, consumed.mutations, workingById);
           rulings.push(consumed.ruling);
           staged.push(consumed);
@@ -1033,6 +1049,7 @@ async function runTurnOperation(
             description: award.definition.description,
             effects: award.definition.effects,
             eligibleSlots: award.definition.slotCompatibility,
+            ...(award.definition.restores ? { restores: award.definition.restores } : {}),
             ...(award.definition.requiresSkill
               ? { requirement: `Requires ${award.definition.requiresSkill}` }
               : {}),
@@ -1169,6 +1186,8 @@ async function runTurnOperation(
       }
 
       for (const stagedRuling of staged) {
+        const used = stagedRuling.ruling.itemConsumed;
+        if (used) await store.runtimeItems.setInstanceQuantity(used.itemInstanceId, used.quantityBefore - 1);
         stagedRuling.ruling.messageId = narratorMessageId;
         await store.rulings.insert({
           id: randomUUID(),

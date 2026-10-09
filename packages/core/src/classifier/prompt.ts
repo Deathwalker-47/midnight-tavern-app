@@ -41,6 +41,8 @@ export interface ClassifyInput {
   recentNarration: string[];
   /** Engine-validated prior target focus; local recovery may use it only for continuation wording. */
   recentTargetId?: string;
+  /** Runtime items the player holds that restore something (loot), usable by `consume_item`. */
+  usableItems?: { id: string; name: string }[];
 }
 
 /**
@@ -50,14 +52,15 @@ export interface ClassifyInput {
  */
 export function buildClassifierSchema(
   schema: StorySchema,
-  presentCharacterIds: string[]
+  presentCharacterIds: string[],
+  usableItems: readonly { id: string; name: string }[] = []
 ): ZodType<ClassifiedTurn> {
   const actionIds = [
     ...schema.actions.map((a) => a.id),
     LEARN_SKILL_ACTION_ID,
     ...(hasToggleSkills(schema) ? [TOGGLE_SKILL_ACTION_ID] : []),
     ...(canRest(schema) ? [REST_ACTION_ID] : []),
-    ...(hasRestoringItems(schema) ? [CONSUME_ITEM_ACTION_ID] : []),
+    ...(hasRestoringItems(schema) || usableItems.length > 0 ? [CONSUME_ITEM_ACTION_ID] : []),
   ];
   const skillIds = schema.skills.map((s) => s.id);
   const targetRequiredActionIds = new Set(
@@ -167,7 +170,7 @@ function hasToggleSkills(schema: StorySchema): boolean {
  * fire only on their trigger, so they are left out; if the model names one anyway, the id still
  * parses and the gate refuses it with an explanation.
  */
-function renderCatalog(schema: StorySchema): string {
+function renderCatalog(schema: StorySchema, usableItems: readonly { id: string; name: string }[] = []): string {
   const reactionSkillIds = new Set(
     schema.skills.filter((skill) => skill.skillType === "reaction").map((skill) => skill.id)
   );
@@ -200,8 +203,11 @@ function renderCatalog(schema: StorySchema): string {
       `- ${REST_ACTION_ID} [utility] Take a proper rest, out of danger, to recover health, stamina and mana`
     );
   }
-  if (hasRestoringItems(schema)) {
-    const restoring = schema.items.filter((item) => item.restores).map((item) => item.id);
+  const restoring = [
+    ...schema.items.filter((item) => item.restores).map((item) => item.id),
+    ...usableItems.map((item) => `${item.id} = ${item.name}`),
+  ];
+  if (restoring.length > 0) {
     lines.push(
       `- ${CONSUME_ITEM_ACTION_ID} [utility] Drink, eat or use up a restoring item (set itemId: ${restoring.join(", ")})`
     );
@@ -243,7 +249,7 @@ export function buildClassifierUser(schema: StorySchema, input: ClassifyInput): 
 
   return [
     "ACTION CATALOG:",
-    renderCatalog(schema),
+    renderCatalog(schema, input.usableItems),
     "",
     `PRESENT CHARACTERS: ${present || "(none)"}`,
     "",

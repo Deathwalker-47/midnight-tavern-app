@@ -339,7 +339,7 @@ async function classifyDetailed(
   opts?: { maxRepairs?: number; signal?: AbortSignal }
 ): Promise<ClassifiedDetail> {
   const presentIds = input.presentCharacters.map((c) => c.id);
-  const zodSchema = buildClassifierSchema(schema, presentIds);
+  const zodSchema = buildClassifierSchema(schema, presentIds, input.usableItems);
   const prompt = { system: CLASSIFIER_SYSTEM, user: buildClassifierUser(schema, input) };
 
   const raw = await callStructured(router, "classifier", prompt, zodSchema, {

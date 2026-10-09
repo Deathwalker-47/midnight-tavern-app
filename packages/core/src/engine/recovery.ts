@@ -8,7 +8,9 @@
  *     turn when it acted in or was the target of a combat or wounding ruling that turn (the engine has
  *     no scene boundary, so "per scene" is per quiet turn);
  *   - `take_rest`, an engine-owned action that restores a larger share out of danger, then cools down;
- *   - `consume_item`, which uses up one held item that declares `restores`.
+ *   - `consume_item`, which uses up one held item that declares `restores` — a legacy rulebook item
+ *     in hard-state inventory, or a runtime item (loot) the actor owns, which the ruling records in
+ *     `itemConsumed` for the orchestrator to persist and for rewind to undo.
  * Regeneration and resting apply to schema-version-3 rulebooks only (D7: legacy stories keep their
  * economy); consuming works wherever an item declares what it restores. The dead never recover, and
  * nothing is restored past a pool's maximum.
@@ -20,7 +22,9 @@ import {
   CONSUME_ITEM_ACTION_ID,
   REST_ACTION_ID,
   type CharacterHardState,
+  type EquipmentRuntimeCatalog,
   type GateVerdict,
+  type ItemRestores,
   type MechanicalIntent,
   type Ruling,
   type StorySchema,
@@ -177,14 +181,67 @@ export function resolveRest(
   };
 }
 
-/** Use up one held item that declares what it restores. Never rolls; allowed in combat. */
+/** One usable thing the intent named: a legacy rulebook item, or a runtime item the actor owns. */
+type UsableItem =
+  | { source: "rulebook"; id: string; name: string; restores?: ItemRestores; held: number }
+  | {
+      source: "runtime";
+      instanceId: string;
+      definitionId: string;
+      name: string;
+      restores?: ItemRestores;
+      held: number;
+    };
+
+function findUsable(
+  schema: StorySchema,
+  actor: CharacterHardState,
+  itemId: string,
+  equipment: EquipmentRuntimeCatalog | undefined
+): UsableItem | undefined {
+  // An owned runtime instance (named by instance or definition id) wins over the legacy catalogue;
+  // among several, one that is not used up.
+  const runtime = (equipment?.instances ?? []).flatMap((instance): UsableItem[] => {
+    const definition = equipment!.definitions.find((candidate) => candidate.id === instance.definitionId);
+    if (instance.ownerCharacterId !== actor.characterId || !definition) return [];
+    if (instance.id !== itemId && definition.id !== itemId) return [];
+    return [
+      {
+        source: "runtime",
+        instanceId: instance.id,
+        definitionId: definition.id,
+        name: definition.name,
+        ...(definition.restores ? { restores: definition.restores } : {}),
+        held: instance.quantity,
+      },
+    ];
+  });
+  const usable = runtime.find((candidate) => candidate.held > 0) ?? runtime[0];
+  if (usable) return usable;
+  const item = schema.items.find((entry) => entry.id === itemId);
+  if (!item) return undefined;
+  return {
+    source: "rulebook",
+    id: item.id,
+    name: item.name,
+    ...(item.restores ? { restores: item.restores } : {}),
+    held: actor.inventory.find((entry) => entry.itemId === item.id)?.qty ?? 0,
+  };
+}
+
+/**
+ * Use up one held item that declares what it restores. Never rolls; allowed in combat. A legacy
+ * rulebook item leaves hard-state inventory through the ledger; a runtime item is reported in
+ * `itemConsumed` (its quantity lives outside hard state, so the orchestrator persists it).
+ */
 export function resolveConsumeItem(
   schema: StorySchema,
   actor: CharacterHardState,
   intent: MechanicalIntent,
-  config: EconomyConfig = ECONOMY_CONFIG
+  config: EconomyConfig = ECONOMY_CONFIG,
+  equipment?: EquipmentRuntimeCatalog
 ): RecoveryResolution {
-  const item = intent.itemId ? schema.items.find((entry) => entry.id === intent.itemId) : undefined;
+  const item = intent.itemId ? findUsable(schema, actor, intent.itemId, equipment) : undefined;
   const base = {
     turnId: `${intent.actorId}:${CONSUME_ITEM_ACTION_ID}`,
     actorId: actor.characterId,
@@ -204,17 +261,33 @@ export function resolveConsumeItem(
   }
   const restores = item.restores;
   if (!restores) return refusal(base, `${item.name} restores nothing when used.`, "not_invocable");
-  const held = actor.inventory.find((entry) => entry.itemId === item.id)?.qty ?? 0;
-  if (held < 1) return refusal(base, `No ${item.name} left to use.`, "item_required");
+  if (item.held < 1) return refusal(base, `No ${item.name} left to use.`, "item_required");
   const { gains, mutations } = restore(schema, actor, (role, pool) =>
     Math.min(restores[role] ?? 0, config.maximumConsumableRestore, headroom(pool))
   );
+  const effectsApplied = { resourceDeltaSelf: gains, narrationHint: `the ${item.name} is used up` };
+  if (item.source === "runtime") {
+    return {
+      ruling: {
+        ...base,
+        gate: { allowed: true },
+        effectsApplied,
+        itemConsumed: {
+          itemInstanceId: item.instanceId,
+          itemDefinitionId: item.definitionId,
+          name: item.name,
+          quantityBefore: item.held,
+        },
+      },
+      mutations,
+    };
+  }
   mutations.push({ kind: "removeItem", characterId: actor.characterId, itemId: item.id, qty: 1 });
   return {
     ruling: {
       ...base,
       gate: { allowed: true },
-      effectsApplied: { resourceDeltaSelf: gains, narrationHint: `the ${item.name} is used up` },
+      effectsApplied,
       costsPaid: { items: [{ itemId: item.id, qty: 1 }] },
     },
     mutations,

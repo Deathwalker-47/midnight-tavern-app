@@ -279,6 +279,14 @@ const GATE_CODE_TITLE: Partial<Record<NonNullable<Ruling["gate"]["code"]>, strin
 };
 
 /** Timed statuses an outcome applied, in words. */
+/** "Restores 13 health, 2 stamina" — a consumable's per-use amounts, by pool role. */
+export function restoresLine(restores: NonNullable<NonNullable<Ruling["loot"]>[number]["restores"]>): string {
+  const parts = (["health", "stamina", "mana"] as const).flatMap((role) =>
+    restores[role] ? [`${restores[role]} ${role}`] : []
+  );
+  return `Restores ${parts.join(", ")} when used`;
+}
+
 function statusParts(r: Ruling, nameOf: (id: string) => string): string[] {
   const effects = r.effectsApplied;
   const parts: string[] = [];
@@ -328,6 +336,7 @@ function automaticArtifact(r: Ruling, nameOf: (id: string) => string): RulingArt
     ...statusParts(r, nameOf),
     ...attemptParts(r, nameOf),
     ...(r.costsPaid?.items ?? []).map((item) => `Used ${item.qty} ${humanize(item.itemId)}`),
+    ...(r.itemConsumed ? [`Used 1 ${r.itemConsumed.name}`] : []),
     ...(r.masteryAdvance ? [`${humanize(r.masteryAdvance.skillId)} → ${r.masteryAdvance.toRank.toUpperCase()}`] : []),
     ...(r.causedDeathOf?.length ? [`Death · ${r.causedDeathOf.map(nameOf).join(", ")}`] : []),
   ];
@@ -1491,7 +1500,10 @@ function RulingBlock(props: {
     tier: `${item.tier[0]?.toUpperCase() ?? ""}${item.tier.slice(1)}` as LootAwardItem["tier"],
     quantity: item.quantity,
     definition: item.description ?? item.provenanceSummary,
-    effects: (item.effects ?? []).map(formatEquipmentEffect),
+    effects: [
+      ...(item.restores ? [restoresLine(item.restores)] : []),
+      ...(item.effects ?? []).map(formatEquipmentEffect),
+    ],
     source: item.provenanceSummary,
     eligibleSlots: item.eligibleSlots,
   }));

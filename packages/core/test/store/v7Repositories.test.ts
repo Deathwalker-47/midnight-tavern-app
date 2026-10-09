@@ -323,6 +323,14 @@ describe("V7 persistence repositories", () => {
         itemInstanceId: instance.id,
       },
     ]);
+    // A used-up instance keeps its row (rewind may restore it) but leaves inventory and loadout.
+    await store.runtimeItems.setInstanceQuantity(instance.id, 0);
+    expect(await store.runtimeItems.listInventory(player.characterId)).toEqual([]);
+    expect(await store.runtimeItems.listLoadout(player.characterId)).toEqual([]);
+    expect((await store.runtimeItems.getInstance(instance.id))?.quantity).toBe(0);
+    await store.runtimeItems.setInstanceQuantity(instance.id, 3);
+    expect(await store.runtimeItems.listInventory(player.characterId)).toEqual([{ ...instance, quantity: 3 }]);
+    await expect(store.runtimeItems.setInstanceQuantity(instance.id, -1)).rejects.toThrow();
     expect((await store.turnOperations.latestIncomplete(schema.storyId))?.id).toBe("op1");
     expect((await store.turnOperations.get("op1"))?.classifierRecovery).toMatchObject({
       issues: [{ kind: "no_content" }],
