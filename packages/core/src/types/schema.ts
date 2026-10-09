@@ -152,6 +152,14 @@ export const SkillBonusSchema = z.object({
 });
 export type SkillBonus = z.infer<typeof SkillBonusSchema>;
 
+/** A toggle skill: its bonus applies while switched on, paying `upkeep` at the end of every turn. */
+export const ToggleDefSchema = z.object({
+  /** Keys are pool ids or core roles ("stamina"). */
+  upkeep: z.record(z.string(), z.number().int().min(1).max(20)),
+  bonus: SkillBonusSchema,
+});
+export type ToggleDef = z.infer<typeof ToggleDefSchema>;
+
 /** A learnable skill. Unlock is binary (the gate); a rank rides on top (D1). */
 export const SkillDefSchema = z.object({
   id: z.string(),
@@ -167,6 +175,8 @@ export const SkillDefSchema = z.object({
   skillType: SkillTypeSchema.optional(),
   /** Always-on bonuses of a passive skill. */
   passive: SkillBonusSchema.optional(),
+  /** Upkeep and bonus of a toggle skill. */
+  toggle: ToggleDefSchema.optional(),
 });
 export type SkillDef = z.infer<typeof SkillDefSchema>;
 

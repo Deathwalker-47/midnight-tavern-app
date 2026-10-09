@@ -106,6 +106,12 @@ export type ActionDef = z.infer<typeof ActionDefSchema>;
  */
 export const LEARN_SKILL_ACTION_ID = "learn_skill";
 
+/**
+ * The engine-owned action id for switching a learned toggle skill on or off (plan 08 §4). Offered
+ * to the classifier only when the rulebook has toggle skills; routed to `resolveToggleSkill`.
+ */
+export const TOGGLE_SKILL_ACTION_ID = "toggle_skill";
+
 /** Catalog-shape invariants the bootstrapper must satisfy (§2.2). */
 export const CATALOG_MIN_ACTIONS = 30;
 export const CATALOG_MIN_PER_CATEGORY = 6;

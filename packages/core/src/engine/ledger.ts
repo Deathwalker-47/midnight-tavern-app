@@ -48,7 +48,9 @@ export type StagedMutation =
   /** Apply (or refresh — never stack) a timed status (plan 08 §4). */
   | { kind: "applyStatus"; characterId: string; status: ActiveStatus }
   /** End-of-turn countdown for the listed statuses, which existed when the turn began. */
-  | { kind: "tickStatuses"; characterId: string; statusIds: readonly string[] };
+  | { kind: "tickStatuses"; characterId: string; statusIds: readonly string[] }
+  /** Switch a toggle skill on or off (plan 08 §4). */
+  | { kind: "setToggle"; characterId: string; skillId: string; on: boolean };
 
 /** Clamp a value into [0, max]. */
 function clamp(value: number, max: number): number {
@@ -153,6 +155,11 @@ export function commit(
               ? [{ ...status, remainingTurns: status.remainingTurns - 1 }]
               : []
         );
+        break;
+      }
+      case "setToggle": {
+        const others = (actor.toggledOn ?? []).filter((skillId) => skillId !== m.skillId);
+        actor.toggledOn = m.on ? [...others, m.skillId] : others;
         break;
       }
       case "setSkill": {

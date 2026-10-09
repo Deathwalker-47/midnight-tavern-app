@@ -11,7 +11,11 @@
  * extract NPC intents the fiction commits to — D7).
  */
 import { z, type ZodType } from "zod";
-import { LEARN_SKILL_ACTION_ID, type StorySchema } from "../types/index.js";
+import {
+  LEARN_SKILL_ACTION_ID,
+  TOGGLE_SKILL_ACTION_ID,
+  type StorySchema,
+} from "../types/index.js";
 import type { ClassifiedTurn } from "../types/index.js";
 import { actionRequiresCharacterTarget } from "../config/index.js";
 
@@ -44,7 +48,11 @@ export function buildClassifierSchema(
   schema: StorySchema,
   presentCharacterIds: string[]
 ): ZodType<ClassifiedTurn> {
-  const actionIds = [...schema.actions.map((a) => a.id), LEARN_SKILL_ACTION_ID];
+  const actionIds = [
+    ...schema.actions.map((a) => a.id),
+    LEARN_SKILL_ACTION_ID,
+    ...(hasToggleSkills(schema) ? [TOGGLE_SKILL_ACTION_ID] : []),
+  ];
   const skillIds = schema.skills.map((s) => s.id);
   const targetRequiredActionIds = new Set(
     schema.actions
@@ -127,6 +135,11 @@ export function buildClassifierSchema(
   }) as unknown as ZodType<ClassifiedTurn>;
 }
 
+/** Whether the rulebook has any toggle skill the player could switch on or off. */
+function hasToggleSkills(schema: StorySchema): boolean {
+  return schema.skills.some((skill) => skill.skillType === "toggle");
+}
+
 /** Render the catalog as compact lines the model can map against. */
 function renderCatalog(schema: StorySchema): string {
   const lines = schema.actions.map((a) => {
@@ -139,6 +152,11 @@ function renderCatalog(schema: StorySchema): string {
     return "- " + parts.join(" · ");
   });
   lines.push(`- ${LEARN_SKILL_ACTION_ID} [utility] Learn a new skill (set skillId)`);
+  if (hasToggleSkills(schema)) {
+    lines.push(
+      `- ${TOGGLE_SKILL_ACTION_ID} [utility] Switch a learned toggle skill on or off (set skillId)`
+    );
+  }
   return lines.join("\n");
 }
 

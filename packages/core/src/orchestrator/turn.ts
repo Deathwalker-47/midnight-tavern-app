@@ -37,7 +37,9 @@ import {
   countRecentSimilarUses,
   enforceActionBudget,
   planStatusTick,
+  planToggleUpkeep,
   resolveLearnSkill,
+  resolveToggleSkill,
 } from "../engine/index.js";
 import { cryptoRng, type Rng } from "../engine/dice.js";
 import { runAnalyzer } from "../memory/index.js";
@@ -48,6 +50,7 @@ import {
   createCharacterSoftState,
   LEARN_SKILL_ACTION_ID,
   STANDARD_DIFFICULTY,
+  TOGGLE_SKILL_ACTION_ID,
 } from "../types/index.js";
 import { applyUniversalActionDefaults } from "../config/index.js";
 import { assembleContext } from "./context.js";
@@ -693,6 +696,14 @@ async function runTurnOperation(
       const stakesByTurnId = new Map<string, MechanicalIntent["stakes"]>();
       for (const intent of intents) {
         const actorHard = await workingState(intent.actorId);
+        if (intent.actionId === TOGGLE_SKILL_ACTION_ID) {
+          const toggled = resolveToggleSkill(schema, actorHard, intent);
+          commit(schema, toggled.mutations, workingById);
+          rulings.push(toggled.ruling);
+          staged.push(toggled);
+          stakesByTurnId.set(toggled.ruling.turnId, intent.stakes);
+          continue;
+        }
         if (intent.actionId === LEARN_SKILL_ACTION_ID) {
           // Learning is ledger-only and deterministic (plan 09 §3.2); it never rolls.
           const teacher = presentRoster.some(
@@ -878,6 +889,24 @@ async function runTurnOperation(
         const lastTick = tick.rulings.at(-1);
         if (lastTick && died.length) lastTick.causedDeathOf = died;
         for (const ruling of tick.rulings) {
+          rulings.push(ruling);
+          staged.push({ ruling, mutations: [] });
+        }
+      }
+      // Toggle upkeep is paid at the end of every turn a toggle is on — including the turn it was
+      // switched on — so it reads the working state, not the start-of-turn snapshot.
+      const toggleHolders = new Set([
+        ...roster
+          .filter((character) => (character.hard.toggledOn ?? []).length > 0)
+          .map((character) => character.id),
+        ...[...workingById]
+          .filter(([, hard]) => (hard.toggledOn ?? []).length > 0)
+          .map(([id]) => id),
+      ]);
+      for (const characterId of toggleHolders) {
+        const upkeep = planToggleUpkeep(schema, await workingState(characterId));
+        commit(schema, upkeep.mutations, workingById);
+        for (const ruling of upkeep.rulings) {
           rulings.push(ruling);
           staged.push({ ruling, mutations: [] });
         }

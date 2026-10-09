@@ -34,14 +34,15 @@ Plans 01-07 and 10-12 of the 2026-08-13 set remain written but **not authorized*
 | S5 | Timed statuses: `statusSelf`/`statusTarget` on outcomes, optional `hard.activeEffects`, check/attribute bonuses in rolls, end-of-turn per-turn pool changes reported as `status_<id>` rulings | done |
 | S6a | **Pre-existing defect fixed:** `learn_skill` was never routed in the V7 turn pipeline (always refused as an unknown action). Now `resolveLearnSkill`: first usable path in rulebook order; trainer paths need a present, living, non-hostile teacher | done |
 | S6b | Passive skills: `SkillDef.skillType` + bounded `passive` bonuses (category-scoped check bonus, attribute bonus) on both sides of a roll (`roll.passiveModifier`); gate code `not_invocable`; validator rejects actions gated by a passive and no longer demands passive/toggle skills be "used" by an action | done |
-| S6c–e | Toggle and reaction skills, targeting scopes | in progress |
+| S6c | Toggle skills: `SkillDef.toggle` (upkeep + bonus), engine action `toggle_skill` (offered to the classifier only when the rulebook has toggles), optional `hard.toggledOn`, upkeep paid at the end of every turn on (incl. the first), lapse reported as a ruling | done |
+| S6d–e | Reaction skills, targeting scopes | not started |
 | S7–S8 | Plan 08 (recovery, v3 forge + UI) | not started |
 | S9–S18 | Plan 09 (pool, enablement, selection, archetypes, mid-story enablement, UI, items, weapon specials, external config, close-out) | not started |
 
 ## Verification state
 
-After S6b (Linux/Node 22): `npm run typecheck` clean; core **744 / 52 files** (engine coverage 100%),
-UI **183 / 26 files** = **927** passing; root `npm test` passes here (the tinypool worker crash is
+After S6c (Linux/Node 22): `npm run typecheck` clean; core **751 / 53 files** (engine coverage 100%),
+UI **183 / 26 files** = **934** passing; root `npm test` passes here (the tinypool worker crash is
 Windows/Node 24 only — plan 07 P0-0, not authorized).
 
 ## Facts established earlier (still true — do not re-derive)
@@ -72,4 +73,4 @@ Windows/Node 24 only — plan 07 P0-0, not authorized).
 
 ## Single next action
 
-Continue **S6** of the action plan: S6c toggles, S6d reactions, S6e targeting scopes.
+Continue **S6** of the action plan: S6d reaction skills, then S6e targeting scopes.

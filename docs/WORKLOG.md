@@ -2182,3 +2182,24 @@ Recorded in HANDOFF as out of scope.
 100%.
 
 **Next:** S6c (toggle skills).
+
+---
+
+## 2026-10-09 - S6c: toggle skills (plan 08 §4)
+
+**What landed.** `SkillDef.toggle` (`upkeep` 1–20 per pool id or core role, plus a `SkillBonus`) and the
+engine-owned action `toggle_skill` (`TOGGLE_SKILL_ACTION_ID`), added to the classifier's enum and
+catalogue only when the rulebook has toggle skills. `resolveToggleSkill` switches a learned toggle on
+(only if one upkeep is affordable now) or off (free), refusing with typed codes otherwise
+(`not_invocable` for a non-toggle skill, `skill_required` if unlearned). Optional `hard.toggledOn`
+(rewind-safe); ledger mutation `setToggle`. While on, a toggle's bonus joins passive bonuses in every
+roll. `planToggleUpkeep` pays upkeep at the end of every turn the toggle is on — including the turn it
+was switched on, so there is no free turn — and lapses an unaffordable toggle with a ruling
+("Battle Trance fades"); a toggle no longer in the rulebook is switched off.
+
+**Tests.** 7 in `test/toggleSkills.test.ts`, including a real 3-turn drain → lapse → rewind sequence.
+Typecheck clean; core 751/53, UI 183/26 = 934; engine coverage 100%.
+
+**Session note.** The owner paused the session here to compact context.
+
+**Next:** S6d (reaction skills), then S6e (targeting scopes).

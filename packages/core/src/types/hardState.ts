@@ -62,5 +62,7 @@ export const CharacterHardStateSchema = z.object({
   cooldowns: z.record(z.string(), z.number().int().positive()).optional(),
   /** Timed statuses (plan 08 §4). Optional for the same rewind-safety reason as `cooldowns`. */
   activeEffects: z.array(ActiveStatusSchema).optional(),
+  /** Toggle skills currently switched on (plan 08 §4). Optional for rewind safety. */
+  toggledOn: z.array(z.string()).optional(),
 });
 export type CharacterHardState = z.infer<typeof CharacterHardStateSchema>;
