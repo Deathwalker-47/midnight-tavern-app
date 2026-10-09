@@ -31,13 +31,14 @@ Plans 01-07 and 10-12 of the 2026-08-13 set remain written but **not authorized*
 | S2 | Resource roles: `ResourceDef.role`, deterministic legacy inference (`engine/resources.ts`), schema v3 contract, generic NPCs get mana + stamina on v3 | done |
 | S3 | Weapon stamina cost: typed `staminaCost` on items (clamped ≤10), v3 default 1/2 by hands, shared `attemptCost` for gate + resolver, gate code `insufficient_resource` | done |
 | S4 | Action cooldowns (`ActionDef.cooldownTurns`, optional `hard.cooldowns`, gate code `on_cooldown`, end-of-turn tick of pre-existing cooldowns only) + role-denominated costs (`normalizeCost`) | done |
-| S5–S8 | Plan 08 (timed effects, skill types/targeting, recovery, v3 forge + UI) | not started |
+| S5 | Timed statuses: `statusSelf`/`statusTarget` on outcomes, optional `hard.activeEffects`, check/attribute bonuses in rolls, end-of-turn per-turn pool changes reported as `status_<id>` rulings | done |
+| S6–S8 | Plan 08 (skill types/targeting, recovery, v3 forge + UI) | not started |
 | S9–S18 | Plan 09 (pool, enablement, selection, archetypes, mid-story enablement, UI, items, weapon specials, external config, close-out) | not started |
 
 ## Verification state
 
-After S4 (Linux/Node 22): `npm run typecheck` clean; core **714 / 49 files** (engine coverage 100%),
-UI **183 / 26 files** = **897** passing; root `npm test` passes here (the tinypool worker crash is
+After S5 (Linux/Node 22): `npm run typecheck` clean; core **730 / 50 files** (engine coverage 100%),
+UI **183 / 26 files** = **913** passing; root `npm test` passes here (the tinypool worker crash is
 Windows/Node 24 only — plan 07 P0-0, not authorized).
 
 ## Facts established earlier (still true — do not re-derive)
@@ -66,4 +67,4 @@ Windows/Node 24 only — plan 07 P0-0, not authorized).
 
 ## Single next action
 
-Execute **S5** of the action plan (timed effects / durations), then continue in order.
+Execute **S6** of the action plan (skill types + targeting scopes), then continue in order.

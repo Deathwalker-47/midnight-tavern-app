@@ -78,7 +78,7 @@ push to `main`.
 - [x] **S4. Action cooldowns and role-denominated costs** (finding 23, part). `ActionDef.cooldownTurns`;
       `CharacterHardState.cooldowns` (default `{}`); start-of-turn tick; gate code `on_cooldown`; costs may
       name a resource role.
-- [ ] **S5. Timed effects / durations** (finding 23, part). Effects may apply a timed status (check bonus,
+- [x] **S5. Timed effects / durations** (finding 23, part). Effects may apply a timed status (check bonus,
       attribute bonus, per-turn resource change) to self or target; `CharacterHardState.activeEffects`
       (default `[]`); ticked deterministically; visible on the ruling and living card.
 - [ ] **S6. Skill types and targeting** (finding 23, rest). `SkillDef.skillType`

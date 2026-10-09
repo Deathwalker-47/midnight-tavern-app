@@ -27,6 +27,7 @@ import {
   type EffectSpec,
   type EquipmentRuntimeCatalog,
   type ItemDef,
+  type StatusEffectSpec,
 } from "../types/index.js";
 import type { CharacterHardState, LearnedSkill } from "../types/index.js";
 import type { Ruling, MechanicalIntent, Outcome, RollRecord } from "../types/index.js";
@@ -34,6 +35,7 @@ import { rollD20Mode, type Rng } from "./dice.js";
 import { attrScore, clampAttribute, scoreToMod } from "./attributes.js";
 import { checkGate } from "./gate.js";
 import { attemptCost } from "./costs.js";
+import { statusAttributeBonus, statusCheckBonus } from "./statuses.js";
 import type { StagedMutation } from "./ledger.js";
 import { computeRollMode } from "./rollMode.js";
 import { damageMultiplierForRecipient, effectiveDc } from "./difficulty.js";
@@ -122,6 +124,7 @@ function stageEffect(
   target: CharacterHardState | undefined,
   itemPropValue: number | undefined,
   difficulty: DifficultyConfig,
+  sourceActionId: string,
   attackDamage?: AttackDamageContext
 ): { mutations: StagedMutation[]; damageAdjustments: DamageAdjustment[] } {
   const muts: StagedMutation[] = [];
@@ -231,6 +234,23 @@ function stageEffect(
     });
   }
 
+  // Timed statuses (plan 08 §4): applied (or refreshed) on the actor and/or the target.
+  const applyStatus = (recipient: CharacterHardState, status: StatusEffectSpec): void => {
+    const { durationTurns, ...rest } = status;
+    muts.push({
+      kind: "applyStatus",
+      characterId: recipient.characterId,
+      status: {
+        ...rest,
+        remainingTurns: durationTurns,
+        sourceActorId: actor.characterId,
+        sourceActionId,
+      },
+    });
+  };
+  if (effect.statusSelf) applyStatus(actor, effect.statusSelf);
+  if (effect.statusTarget && target) applyStatus(target, effect.statusTarget);
+
   return { mutations: muts, damageAdjustments };
 }
 
@@ -258,7 +278,9 @@ function effectChangesTrackedState(effect: EffectSpec): boolean {
       effect.attributeDeltaSelf ||
       effect.attributeDeltaTarget ||
       effect.grantItem ||
-      effect.setFlag
+      effect.setFlag ||
+      effect.statusSelf ||
+      effect.statusTarget
   );
 }
 
@@ -331,7 +353,7 @@ export function resolve(
     const effect = action.effects.success;
     // requiresCheck already proved this effect cannot mutate tracked state, so equipment/item
     // scaling and damage provenance are inapplicable on this narration-only path.
-    const stagedEffect = stageEffect(effect, actor, target, undefined, difficulty);
+    const stagedEffect = stageEffect(effect, actor, target, undefined, difficulty, action.id);
     mutations.push(...stagedEffect.mutations);
     return {
       ruling: {
@@ -364,14 +386,17 @@ export function resolve(
       ? equipmentAttributeBonus(actor, action.governingAttribute, options.equipment)
       : 0;
   const attributeScore = clampAttribute(
-    attrScore(actor, action.governingAttribute, schema) + equipmentAttribute,
+    attrScore(actor, action.governingAttribute, schema) +
+      equipmentAttribute +
+      (action.governingAttribute ? statusAttributeBonus(actor, action.governingAttribute) : 0),
     attributeDefinition
   );
   const attributeModifier = action.governingAttribute ? scoreToMod(attributeScore) : 0;
   const equipmentModifier = options.equipment
     ? equipmentCheckBonus(actor, action.id, action.requiresSkill, options.equipment)
     : 0;
-  const modifier = attributeModifier + masteryModifier + equipmentModifier;
+  const statusModifier = statusCheckBonus(actor);
+  const modifier = attributeModifier + masteryModifier + equipmentModifier + statusModifier;
 
   // 4. roll + outcome.
   const rollMode = computeRollMode(schema, action, actor);
@@ -407,7 +432,9 @@ export function resolve(
         ? equipmentAttributeBonus(target, action.governingAttribute, options.equipment)
         : 0;
     opposedAttributeScore = clampAttribute(
-      attrScore(target, action.governingAttribute, schema) + opposedEquipmentAttributeBonus,
+      attrScore(target, action.governingAttribute, schema) +
+        opposedEquipmentAttributeBonus +
+        (action.governingAttribute ? statusAttributeBonus(target, action.governingAttribute) : 0),
       targetAttributeDefinition
     );
     opposedAttributeModifier = action.governingAttribute ? scoreToMod(opposedAttributeScore) : 0;
@@ -425,7 +452,10 @@ export function resolve(
       ? equipmentCheckBonus(target, action.id, action.requiresSkill, options.equipment)
       : 0;
     opposedModifier =
-      opposedAttributeModifier + opposedMasteryModifier + opposedEquipmentModifier;
+      opposedAttributeModifier +
+      opposedMasteryModifier +
+      opposedEquipmentModifier +
+      statusCheckBonus(target);
     opposedTotal = opposedD20 + opposedModifier;
     if (diceRoll.natural === 20 && opposedD20 !== 20) outcome = "crit_success";
     else if (diceRoll.natural === 1) outcome = "crit_failure";
@@ -461,6 +491,7 @@ export function resolve(
       ? { masterySkillId: action.requiresSkill, masteryModifier }
       : {}),
     equipmentModifier,
+    ...(statusModifier !== 0 ? { statusModifier } : {}),
     total,
     dc: dcEffective,
     dcBase,
@@ -522,6 +553,7 @@ export function resolve(
     target,
     itemPropValue,
     difficulty,
+    action.id,
     attackDamage
   );
   mutations.push(...stagedEffect.mutations);

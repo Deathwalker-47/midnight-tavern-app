@@ -36,6 +36,7 @@ import {
   commit,
   countRecentSimilarUses,
   enforceActionBudget,
+  planStatusTick,
 } from "../engine/index.js";
 import { cryptoRng, type Rng } from "../engine/dice.js";
 import { runAnalyzer } from "../memory/index.js";
@@ -674,9 +675,13 @@ async function runTurnOperation(
       // Cooldowns that exist as this turn begins count down once it ends (plan 08 §4). Cooldowns
       // started during the turn are not in this snapshot, so a 1-turn cooldown blocks the next turn.
       const cooldownsAtStart = new Map<string, string[]>();
+      // Timed statuses follow the same rule: only those present now tick at the end of the turn.
+      const statusesAtStart = new Map<string, string[]>();
       for (const character of roster) {
         const running = Object.keys(character.hard.cooldowns ?? {});
         if (running.length > 0) cooldownsAtStart.set(character.id, running);
+        const statuses = (character.hard.activeEffects ?? []).map((status) => status.id);
+        if (statuses.length > 0) statusesAtStart.set(character.id, statuses);
       }
 
       const intents: MechanicalIntent[] = [...budget.accepted, ...classified.npcIntents];
@@ -840,6 +845,24 @@ async function runTurnOperation(
       for (const [characterId, actionIds] of cooldownsAtStart) {
         await workingState(characterId);
         commit(schema, [{ kind: "tickCooldowns", characterId, actionIds }], workingById);
+      }
+      // Per-turn status effects (poison, regeneration) resolve after every action this turn and are
+      // reported as rulings, so the narrator is told and a death they cause is threshold-backed.
+      for (const [characterId, statusIds] of statusesAtStart) {
+        const bearer = await workingState(characterId);
+        const tick = planStatusTick(
+          schema,
+          bearer,
+          statusIds,
+          story.difficulty ?? STANDARD_DIFFICULTY
+        );
+        const died = commit(schema, tick.mutations, workingById);
+        const lastTick = tick.rulings.at(-1);
+        if (lastTick && died.length) lastTick.causedDeathOf = died;
+        for (const ruling of tick.rulings) {
+          rulings.push(ruling);
+          staged.push({ ruling, mutations: [] });
+        }
       }
 
       await setPhase("generating_loot", { rulings, staged });

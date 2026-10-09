@@ -27,6 +27,21 @@ export const RollModeSchema = z.enum(["normal", "advantage", "disadvantage"]);
 export type RollMode = z.infer<typeof RollModeSchema>;
 
 /**
+ * A timed status an outcome applies (plan 08 §4 durations): a named buff, debuff, poison or
+ * regeneration lasting the next `durationTurns` turns. Bounded so generated content stays sane.
+ * `resourcePerTurn` keys may be a resource id or a core role ("health").
+ */
+export const StatusEffectSpecSchema = z.object({
+  id: z.string().regex(/^[a-z0-9_]+$/).max(40),
+  label: z.string().trim().min(1).max(40),
+  durationTurns: z.number().int().min(1).max(10),
+  checkBonus: z.number().int().min(-5).max(5).optional(),
+  attributeBonus: z.record(z.string(), z.number().int().min(-5).max(5)).optional(),
+  resourcePerTurn: z.record(z.string(), z.number().int().min(-20).max(20)).optional(),
+});
+export type StatusEffectSpec = z.infer<typeof StatusEffectSpecSchema>;
+
+/**
  * A deterministic outcome effect. The narrationHint guides the narrator but is
  * never itself truth — the ledger applies the mechanical fields.
  */
@@ -38,6 +53,8 @@ export const EffectSpecSchema = z.object({
   scaleByItemProp: z.string().optional(), // e.g. "damage" — scale target delta by item prop
   grantItem: z.object({ itemId: z.string(), qty: z.number().int() }).optional(),
   setFlag: z.object({ flagId: z.string(), value: z.boolean() }).optional(),
+  statusSelf: StatusEffectSpecSchema.optional(), // timed status on the actor
+  statusTarget: StatusEffectSpecSchema.optional(), // timed status on the target
   narrationHint: z.string(), // guidance for the narrator, not truth
 });
 export type EffectSpec = z.infer<typeof EffectSpecSchema>;

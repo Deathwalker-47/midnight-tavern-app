@@ -61,6 +61,8 @@ export const RollRecordSchema = z.object({
   masteryModifier: z.number().int().optional(),
   equipmentAttributeBonus: z.number().int().optional(),
   equipmentModifier: z.number().int().optional(),
+  /** Check bonus from the roller's active statuses (plan 08 §4). */
+  statusModifier: z.number().int().optional(),
   total: z.number().int(),
   dc: z.number().int(),
   dcBase: z.number().int().optional(),

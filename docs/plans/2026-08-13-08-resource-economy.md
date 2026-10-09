@@ -161,7 +161,7 @@ Cooldowns are **hard state** and need a home:
   activeEffects: Array<{ sourceSkillId: string; expiresAtTurn: number; /* effect payload */ }>;
 ```
 
-- [ ] **4.1** Cooldowns and effect expiry tick in the **ledger**, once per committed turn, and must
+- [x] **4.1** Cooldowns and effect expiry tick in the **ledger**, once per committed turn, and must
       be captured in the turn checkpoint so rewind restores them exactly. This is the single most
       likely place to break invariant 7 (delete/rewind restores hard state exactly). Add an explicit
       rollback test.

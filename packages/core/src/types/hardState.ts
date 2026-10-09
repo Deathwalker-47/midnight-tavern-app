@@ -7,6 +7,15 @@
 import { z } from "zod";
 import { MasteryRankSchema } from "./schema.js";
 import { EquipmentAssignmentSchema } from "./equipment.js";
+import { StatusEffectSpecSchema } from "./actions.js";
+
+/** A status currently affecting a character, with its remaining turns and provenance. */
+export const ActiveStatusSchema = StatusEffectSpecSchema.omit({ durationTurns: true }).extend({
+  remainingTurns: z.number().int().positive(),
+  sourceActorId: z.string(),
+  sourceActionId: z.string(),
+});
+export type ActiveStatus = z.infer<typeof ActiveStatusSchema>;
 
 /** A single tracked resource's current value and ceiling. */
 export const ResourceStateSchema = z.object({
@@ -51,5 +60,7 @@ export const CharacterHardStateSchema = z.object({
    * existed — including old turn checkpoints that rewind re-parses — still decodes.
    */
   cooldowns: z.record(z.string(), z.number().int().positive()).optional(),
+  /** Timed statuses (plan 08 §4). Optional for the same rewind-safety reason as `cooldowns`. */
+  activeEffects: z.array(ActiveStatusSchema).optional(),
 });
 export type CharacterHardState = z.infer<typeof CharacterHardStateSchema>;

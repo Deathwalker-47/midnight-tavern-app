@@ -2113,3 +2113,25 @@ archetypes (plan 09) can be priced by role.
 UI 183/26 = 897; engine coverage 100%.
 
 **Next:** S5 (timed effects / durations).
+
+---
+
+## 2026-10-09 - S5: timed statuses — durations, buffs, debuffs, damage/heal over time (plan 08 §4)
+
+**What landed.** `StatusEffectSpec` (id, label, `durationTurns` 1–10, optional `checkBonus` ±5,
+`attributeBonus` ±5, `resourcePerTurn` ±20 keyed by pool id or core role) can be applied by any outcome
+via `statusSelf` / `statusTarget`. Hard state gains optional `activeEffects` (rewind-safe like
+`cooldowns`). Ledger mutations `applyStatus` (refresh, never stack) and `tickStatuses`. The resolver
+adds active check bonuses (`roll.statusModifier`) and attribute bonuses to both sides of a roll, and
+treats a status-applying outcome as mechanical (it always rolls). New pure `engine/statuses.ts`:
+`planStatusTick` turns per-turn pool changes into **rulings** (`status_<id>`, label = status name) so
+the narrator, journal and authority audit see them; the turn orchestrator snapshots statuses at turn
+start, ticks only those after every action, commits through the ledger, and attaches any death to the
+tick's ruling (`causedDeathOf`) so the threshold-backed death guard still holds. Dead bearers are never
+healed; damage-over-time on the player obeys the story's difficulty multiplier.
+
+**Tests.** 16 in `test/statusEffects.test.ts`, including a real multi-turn sequence (apply → burns for
+exactly the next two turns → rewind restores HP and remaining turns → finishes). Typecheck clean; core
+730/50, UI 183/26 = 913; engine coverage 100%.
+
+**Next:** S6 (skill types: passive/toggle/reaction; targeting scopes).

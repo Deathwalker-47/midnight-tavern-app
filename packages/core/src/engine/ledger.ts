@@ -7,7 +7,12 @@
  *
  * Nothing else in the codebase writes CharacterHardState. Prose never reaches here.
  */
-import type { CharacterHardState, MasteryRank, StorySchema } from "../types/index.js";
+import type {
+  ActiveStatus,
+  CharacterHardState,
+  MasteryRank,
+  StorySchema,
+} from "../types/index.js";
 import { scaleDamageDelta } from "../types/index.js";
 import { attrScore, clampAttribute } from "./attributes.js";
 
@@ -39,7 +44,11 @@ export type StagedMutation =
    * End-of-turn countdown: decrement only the listed cooldowns (those that existed when the turn
    * began), so a cooldown started this turn is not shortened by the turn that started it.
    */
-  | { kind: "tickCooldowns"; characterId: string; actionIds: readonly string[] };
+  | { kind: "tickCooldowns"; characterId: string; actionIds: readonly string[] }
+  /** Apply (or refresh — never stack) a timed status (plan 08 §4). */
+  | { kind: "applyStatus"; characterId: string; status: ActiveStatus }
+  /** End-of-turn countdown for the listed statuses, which existed when the turn began. */
+  | { kind: "tickStatuses"; characterId: string; statusIds: readonly string[] };
 
 /** Clamp a value into [0, max]. */
 function clamp(value: number, max: number): number {
@@ -127,6 +136,23 @@ export function commit(
           else delete next[actionId];
         }
         actor.cooldowns = next;
+        break;
+      }
+      case "applyStatus":
+        actor.activeEffects = [
+          ...(actor.activeEffects ?? []).filter((status) => status.id !== m.status.id),
+          { ...m.status },
+        ];
+        break;
+      case "tickStatuses": {
+        const ticking = new Set(m.statusIds);
+        actor.activeEffects = (actor.activeEffects ?? []).flatMap((status) =>
+          !ticking.has(status.id)
+            ? [status]
+            : status.remainingTurns > 1
+              ? [{ ...status, remainingTurns: status.remainingTurns - 1 }]
+              : []
+        );
         break;
       }
       case "setSkill": {
