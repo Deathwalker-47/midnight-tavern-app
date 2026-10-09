@@ -18,7 +18,8 @@ import { randomUUID } from "../util/uuid.js";
 import type { PoolEnablement, PoolEnablementSource, Store } from "../store/index.js";
 import type { StoryRecord, StorySchema } from "../types/index.js";
 import { applyUniversalActionDefaults } from "../config/index.js";
-import { materializeEntry, SHIPPED_CATALOGUE, type PoolCatalogue } from "./materialize.js";
+import { SHIPPED_CATALOGUE, type PoolCatalogue } from "./materialize.js";
+import { disableRefusal, planEnablement } from "./plan.js";
 
 /** The frozen rulebook plus every enabled entry. Frozen definitions win any id collision. */
 export function effectiveSchema(
@@ -78,27 +79,17 @@ export async function enablePoolEntry(
     ...frozen.skills.map((skill) => skill.id),
   ]);
   const now = options.now ?? Date.now;
-  const catalogue = options.catalogue ?? SHIPPED_CATALOGUE;
-
-  const additions: PoolEnablement[] = [];
-  const queue = [entryId];
-  while (queue.length > 0) {
-    const id = queue.shift()!;
-    if (present.has(id)) continue;
-    const materialized = materializeEntry(frozen, id, catalogue);
-    if (!materialized.ok) return { ok: false, reason: materialized.reason };
-    present.add(id);
-    additions.push({
+  const plan = planEnablement(frozen, present, entryId, options.catalogue ?? SHIPPED_CATALOGUE);
+  if (!plan.ok) return plan;
+  const additions = plan.additions.map(
+    (planned): PoolEnablement => ({
+      ...planned,
       storyId,
-      entryId: id,
-      kind: materialized.kind,
-      definition: materialized.definition,
       source: options.source,
       enabledAt: now(),
       ...(options.turnIndex !== undefined ? { turnIndex: options.turnIndex } : {}),
-    } as PoolEnablement);
-    queue.push(...materialized.requires);
-  }
+    })
+  );
   if (additions.length === 0) return { ok: true, enabled: [] };
 
   const turnIndex = options.turnIndex ?? (await store.messages.nextIdx(storyId));
@@ -134,24 +125,11 @@ export async function mayDisablePoolEntry(
   entryId: string
 ): Promise<DisableCheck> {
   const enablements = await store.poolEnablements.list(storyId);
-  const target = enablements.find((enablement) => enablement.entryId === entryId);
-  if (!target) return { allowed: false, reason: "That entry is not enabled in this story." };
   const learners = (await store.characters.listByStory(storyId))
     .filter((character) => character.hard.skills.some((skill) => skill.skillId === entryId))
     .map((character) => character.name);
-  if (learners.length > 0) {
-    return {
-      allowed: false,
-      reason: `${learners.join(", ")} ${learners.length === 1 ? "has" : "have"} learned this, so it stays.`,
-    };
-  }
-  const dependants = enablements
-    .filter((enablement) => enablement.kind === "action" && enablement.definition.requiresSkill === entryId)
-    .map((enablement) => (enablement.kind === "action" ? enablement.definition.label : ""));
-  if (dependants.length > 0) {
-    return { allowed: false, reason: `${dependants.join(", ")} still ${dependants.length === 1 ? "needs" : "need"} it; disable ${dependants.length === 1 ? "that" : "those"} first.` };
-  }
-  return { allowed: true };
+  const reason = disableRefusal(enablements, learners, entryId);
+  return reason ? { allowed: false, reason } : { allowed: true };
 }
 
 /** Disable an enabled entry if D8 allows it; journalled. */

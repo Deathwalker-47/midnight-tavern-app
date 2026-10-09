@@ -44,13 +44,13 @@ Plans 01-07 and 10-12 of the 2026-08-13 set remain written but **not authorized*
 | — | **Plan 08 complete** | done |
 | S9 | Universal pool format (`config/pool.ts`: story-agnostic archetypes by attribute/pool **role**, health as multiples of the baseline hit; entries = flavour only, tier inherited) + balance rules (`config/poolRules.ts`, plan 09 §4.5 as code) + non-combat starter pool: 25 sections, 28 action + 8 skill archetypes, 153 entries (5 recorded exclusions); id lock test | done |
 | S10a | Enablement set in core: migration 17 `story_pool_enablements` (snapshots the materialized definition), `catalogue/` (attribute-role inference, materialization, enable/disable + D8 guard, effective schema), `requirePlayableStory` for turns/history/suggestions, turn-made enablements removed on rewind | done |
-| S10b | Bridge methods (both backends + parity test); cards/dossier read the effective rulebook | not started |
+| S10b | Bridge methods `listPoolEnablements` / `enablePoolEntry` / `mayDisablePoolEntry` / `disablePoolEntry` in both backends, sharing core's pure `catalogue/plan.ts` (parity test over real core + store); cards/dossier on the effective rulebook | done |
 | S11–S18 | Plan 09 (selection, combat archetypes, mid-story enablement, UI, items, weapon specials, external config, close-out) | not started |
 
 ## Verification state
 
-After S10a (Linux/Node 22): `npm run typecheck` clean; core **826 / 59 files** (engine coverage 100%),
-UI **192 / 28 files** = **1018** passing; root `npm test` passes here (the tinypool worker crash is
+After S10b (Linux/Node 22): `npm run typecheck` clean; core **826 / 59 files** (engine coverage 100%),
+UI **193 / 29 files** = **1019** passing; UI production build verified; root `npm test` passes here (the tinypool worker crash is
 Windows/Node 24 only — plan 07 P0-0, not authorized).
 
 ## Facts established earlier (still true — do not re-derive)
@@ -85,8 +85,9 @@ Windows/Node 24 only — plan 07 P0-0, not authorized).
 
 ## Single next action
 
-Do **S10b**: expose enablement through `CoreBridge` in BOTH backends (`packages/ui/src/bridge/core.ts`
-in-memory and `sqliteBridge.ts`) — list a story's enabled entries, enable / disable an entry (player
-source) with the D8 refusal reason, and check `mayDisable` — with a parity test; and make the SQLite
-bridge's living card / dossier use the effective rulebook (`core.loadEffectiveSchema`) so learned pool
-skills show their names. Then tick S10.
+Do **S11**: forge-time pool selection (plan 09 §5). After Phase A, deterministically filter the pool by
+`settingFit` and by what the rulebook can express (`materializeEntry` refusals), ask one bounded model
+call to pick sections, then one to pick entry ids (sealed Zod enum of the candidates), validate, and
+fall back deterministically (e.g. a fixed starter set per section) when the model fails. Enable the
+picks with source `forge` after the story is created. Keep the forge **hybrid**: the authored Phase B
+catalogue stays; the pool adds to it. Measure the extra latency honestly.

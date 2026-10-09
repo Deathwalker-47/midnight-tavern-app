@@ -2458,3 +2458,25 @@ same-instant events. Typecheck clean; core 826/59; engine coverage 100%.
 
 **Next:** S10b — bridge methods in both backends (+ parity test) and cards/dossier on the effective
 rulebook.
+
+---
+
+## 2026-10-09 - S10b: pool enablement through both bridges — S10 complete
+
+**Bridge surface** (`CoreBridge`): `listPoolEnablements`, `enablePoolEntry` (player source),
+`mayDisablePoolEntry`, `disablePoolEntry`, with `PoolEnablementView` / `PoolEnableResult` /
+`PoolDisableResult`. The SQLite bridge delegates to core; the in-memory bridge keeps enablements on its
+story. **Parity by construction:** the decisions (what enabling adds, why a disable is refused) moved
+into a pure `catalogue/plan.ts` (`planEnablement`, `disableRefusal`) that core's store-backed service and
+the in-memory bridge both call; the memory bridge reaches it through a vetted deep import (config JSON +
+zod, no store or native code). UI build verified: the eager bundle grows 378.3 → 386.8 kB (+3 kB gzip).
+The memory stub rulebook gained explicit health/stamina/mana roles and one tier so dev mode can enable
+pool entries. The SQLite bridge's living card, present cast and dossier now read the effective rulebook,
+so a learned pool skill shows its name instead of its id.
+
+**Tests.** New `test/bridge/poolParity.test.ts` runs one enable / list / refuse / disable / D8 sequence
+against the memory bridge and a SQLite bridge over a real store and real core and requires identical
+results. Typecheck clean; core 826/59, UI 193/29 = 1019; engine coverage 100%.
+
+**Next:** S11 — forge-time selection (setting-fit filter → section pick → entry pick, validated,
+deterministic fallback), wired into new-story creation.

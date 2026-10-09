@@ -175,7 +175,7 @@ different elements, and sections 27–29 (healing / buff / debuff) likewise.
       (`social_check`, `knowledge_check`, `craft_check`, `care_check`). Do these first; they are the
       cheapest coverage in the whole file and they directly address finding 19, because "show my
       empty hands" has an honest home in a `social_check`-shaped *Reassurance* or *De-Escalation*.
-- [ ] **4.4** Story-specific numbers (which attribute governs, what the lethal resource is called)
+- [x] **4.4** Story-specific numbers (which attribute governs, what the lethal resource is called)
       resolve at **enablement time** against the frozen story schema, not in the pool. The pool is
       story-agnostic.
 
@@ -382,7 +382,7 @@ A model may propose enabling a pool entry when the story demands it. Guards, all
 - [ ] **6.3** **Rate limit.** At most N enablements per chapter (proposed: 2). Prevents a slow leak
       of the entire pool into every story.
 - [ ] **6.4** **Enable ≠ learn** (§3). Enablement never grants the skill to anyone.
-- [ ] **6.5** **Checkpointed.** The enablement set is hard state and must be captured in the turn
+- [x] **6.5** *(S10: turn-scoped rows removed with the reverted turn instead of a checkpoint column — see WORKLOG 2026-10-09 S10a.)* **Checkpointed.** The enablement set is hard state and must be captured in the turn
       checkpoint, so rewind un-enables what the reverted turn enabled. **Missing this breaks
       invariant 7** and is the most likely silent bug in this plan.
 - [ ] **6.6** **Visible and reversible.** Every enablement is a journal event and the player can

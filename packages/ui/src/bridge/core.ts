@@ -63,11 +63,15 @@ export type {
   RulebookRegenerationImpact,
   AttributeAdvancementDecision,
   DiagnosticCounters,
+  ActionDef,
+  SkillDef,
 } from "@midnight-tavern/core";
 
 // Browser-safe shared data: importing the JSON avoids a hand-maintained catalogue copy without
 // evaluating core's native runtime graph.
 import universalActionsJson from "../../../core/src/config/universal-actions.json";
+// Vetted browser-safe deep import: pure pool materialization (config JSON + zod), no store or native.
+import { disableRefusal, planEnablement } from "../../../core/src/catalogue/plan.js";
 
 // Browser-safe pure logic: a deep import straight at engine/equipment.js (not the
 // `@midnight-tavern/core` barrel) so evaluating this module never pulls in the store's native
@@ -156,6 +160,8 @@ import type {
   RulebookRegenerationImpact,
   AttributeAdvancementDecision,
   DiagnosticCounters,
+  ActionDef,
+  SkillDef,
 } from "@midnight-tavern/core";
 
 // Value import: the Tauri storage driver. Browser-safe — it only pulls `@tauri-apps/api/core`
@@ -493,6 +499,14 @@ export interface CoreBridge {
     storyId: string
   ): Promise<RulebookRegenerationImpact>;
   setStoryDifficulty(storyId: string, difficulty: Partial<DifficultyConfig>): Promise<StoryRecord>;
+  /** Universal-pool entries this story has enabled, oldest first (plan 09 §3). */
+  listPoolEnablements(storyId: string): Promise<PoolEnablementView[]>;
+  /** Enable a pool entry by hand, plus any skill it needs. Enabling never teaches anyone anything. */
+  enablePoolEntry(storyId: string, entryId: string): Promise<PoolEnableResult>;
+  /** Whether an enabled entry may be disabled now (D8: never while anyone has learned it). */
+  mayDisablePoolEntry(storyId: string, entryId: string): Promise<PoolDisableResult>;
+  /** Disable an enabled entry when {@link mayDisablePoolEntry} allows it. */
+  disablePoolEntry(storyId: string, entryId: string): Promise<PoolDisableResult>;
   /** Read a story's author-facing Story Blueprint (§3), or undefined if it has none. */
   getBlueprint(id: string): Promise<Blueprint | undefined>;
   /** Save (or clear, with `undefined`) a story's Story Blueprint. Style/identity only — the frozen mechanical schema is untouched. */
@@ -799,6 +813,19 @@ const MEMORY_KNOWN_MODELS: KnownModel[] = [
 
 const TRIAL_DURATION_MS = 14 * 24 * 60 * 60 * 1000;
 
+/** A universal-pool entry enabled in a story (plan 09 §3), with its story-specific definition. */
+export type PoolEnablementView = (
+  | { kind: "action"; definition: ActionDef }
+  | { kind: "skill"; definition: SkillDef }
+) & {
+  entryId: string;
+  name: string;
+  source: "forge" | "player" | "analyzer";
+  enabledAt: number;
+};
+export type PoolEnableResult = { ok: true; enabled: string[] } | { ok: false; reason: string };
+export type PoolDisableResult = { allowed: true } | { allowed: false; reason: string };
+
 /** One in-memory story with the rows the stub tracks. */
 interface MemStory {
   record: StoryRecord;
@@ -811,6 +838,8 @@ interface MemStory {
   activePersonaId?: string;
   /** Global lorebooks attached to this story, with link-level enabled flag (v2 §2). */
   attachedLorebooks: { lorebookId: string; enabled: boolean }[];
+  /** Universal-pool entries enabled in this story (plan 09 §3). */
+  poolEnablements?: PoolEnablementView[];
   /** Runtime-only possessions owned by this story's characters. */
   runtimeItems: {
     definitions: ItemDefinition[];
@@ -966,10 +995,15 @@ function stubSchema(
     attributes: statMode === "full"
       ? [{ id: "resolve", name: "Resolve", abbrev: "RES", description: "Force of will.", defaultScore: 10 }]
       : [],
+    // Health, mana and stamina with explicit roles, and one tier, so dev mode can enable pool entries.
     resources: statMode === "full"
-      ? [{ id: "hp", label: "Health", start: 20, max: 20, playerVisible: true, lethal: true }]
+      ? [
+          { id: "hp", label: "Health", start: 20, max: 20, playerVisible: true, lethal: true, role: "health" },
+          { id: "stamina", label: "Stamina", start: 10, max: 10, playerVisible: true, role: "stamina" },
+          { id: "mana", label: "Mana", start: 10, max: 10, playerVisible: true, role: "mana" },
+        ]
       : [],
-    tiers: [],
+    tiers: statMode === "full" ? [{ id: "common", label: "Common", minProgress: 0 }] : [],
     skills: [],
     items: [],
     actions: [],
@@ -1343,6 +1377,60 @@ export function makeMemoryBridge(): MemoryBridge {
         damageDealtMultiplier: difficulty.damageDealtMultiplier ?? 1,
       };
       return story.record;
+    },
+
+    // Pool enablement shares core's pure decisions (`catalogue/plan.ts`), so the two backends
+    // materialize and refuse identically; only persistence differs.
+    async listPoolEnablements(storyId) {
+      return structuredCloneSafe(
+        [...(requireStory(storyId).poolEnablements ?? [])].sort(
+          (left, right) => left.enabledAt - right.enabledAt || left.entryId.localeCompare(right.entryId)
+        )
+      );
+    },
+
+    async enablePoolEntry(storyId, entryId) {
+      const story = requireStory(storyId);
+      const enabled = story.poolEnablements ?? [];
+      const frozen = story.record.schema;
+      const present = new Set([
+        ...enabled.map((enablement) => enablement.entryId),
+        ...frozen.actions.map((action) => action.id),
+        ...frozen.skills.map((skill) => skill.id),
+      ]);
+      const plan = planEnablement(frozen, present, entryId);
+      if (!plan.ok) return plan;
+      const enabledAt = Date.now();
+      story.poolEnablements = [
+        ...enabled,
+        ...plan.additions.map((planned) => ({
+          ...planned,
+          name: planned.kind === "action" ? planned.definition.label : planned.definition.name,
+          source: "player" as const,
+          enabledAt,
+        })),
+      ];
+      return { ok: true, enabled: plan.additions.map((planned) => planned.entryId) };
+    },
+
+    async mayDisablePoolEntry(storyId, entryId) {
+      const story = requireStory(storyId);
+      const learners = [...story.cards.values()]
+        .filter((card) => card.skills.some((skill) => skill.skillId === entryId))
+        .map((card) => card.name);
+      const reason = disableRefusal(story.poolEnablements ?? [], learners, entryId);
+      return reason ? { allowed: false, reason } : { allowed: true };
+    },
+
+    async disablePoolEntry(storyId, entryId) {
+      const check = await this.mayDisablePoolEntry(storyId, entryId);
+      if (check.allowed) {
+        const story = requireStory(storyId);
+        story.poolEnablements = (story.poolEnablements ?? []).filter(
+          (enablement) => enablement.entryId !== entryId
+        );
+      }
+      return check;
     },
 
     async getBlueprint(id) {

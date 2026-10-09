@@ -52,6 +52,7 @@ function fakeCore(overrides: Record<string, unknown> = {}) {
     bootstrapStory: vi.fn(),
     submitTurn: vi.fn(),
     getLivingCard: vi.fn(),
+    loadEffectiveSchema: vi.fn(async (_store: unknown, story: { schema: unknown }) => story.schema),
     makeProvider: vi.fn(),
     evaluateCachedLicense: vi.fn(),
     validateLicenseKey: vi.fn(),

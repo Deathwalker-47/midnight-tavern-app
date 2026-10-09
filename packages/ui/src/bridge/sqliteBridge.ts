@@ -408,6 +408,27 @@ export function buildSqliteBridge(
       return core.setStoryDifficulty(store, storyId, difficulty);
     },
 
+    async listPoolEnablements(storyId) {
+      return (await store.poolEnablements.list(storyId)).map(
+        ({ storyId: _story, turnIndex: _turn, ...enablement }) => ({
+          ...enablement,
+          name: enablement.kind === "action" ? enablement.definition.label : enablement.definition.name,
+        })
+      );
+    },
+
+    async enablePoolEntry(storyId, entryId) {
+      return core.enablePoolEntry(store, storyId, entryId, { source: "player" });
+    },
+
+    async mayDisablePoolEntry(storyId, entryId) {
+      return core.mayDisablePoolEntry(store, storyId, entryId);
+    },
+
+    async disablePoolEntry(storyId, entryId) {
+      return core.disablePoolEntry(store, storyId, entryId);
+    },
+
     async getBlueprint(id) {
       return (await requireStory(id)).blueprint;
     },
@@ -562,8 +583,9 @@ export function buildSqliteBridge(
       const roster = await store.characters.listPresentByStory(storyId);
       // Reuse core's hard/soft join (getLivingCard) rather than reimplementing it; the strip only
       // needs a condensed slice (name/alive, the player-visible resource as hp, and soft.mood).
+      const schema = await core.loadEffectiveSchema(store, story);
       const cards = await Promise.all(
-        roster.map((r) => core.getLivingCard(store, story.schema, r.id))
+        roster.map((r) => core.getLivingCard(store, schema, r.id))
       );
       const cast: CastMember[] = [];
       for (const card of cards) {
@@ -583,14 +605,15 @@ export function buildSqliteBridge(
       return cast;
     },
 
+    // Cards and dossiers read the effective rulebook so learned pool skills show their names.
     async getLivingCard(storyId, characterId) {
       const story = await requireStory(storyId);
-      return core.getLivingCard(store, story.schema, characterId);
+      return core.getLivingCard(store, await core.loadEffectiveSchema(store, story), characterId);
     },
 
     async getCharacterDossier(storyId, characterId) {
       const story = await requireStory(storyId);
-      return core.getCharacterDossier(store, story.schema, characterId);
+      return core.getCharacterDossier(store, await core.loadEffectiveSchema(store, story), characterId);
     },
 
     // ── Play: turn history (v2 §6) ───────────────────────────────────────────────────────────────
