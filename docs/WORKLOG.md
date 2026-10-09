@@ -2135,3 +2135,29 @@ exactly the next two turns → rewind restores HP and remaining turns → finish
 730/50, UI 183/26 = 913; engine coverage 100%.
 
 **Next:** S6 (skill types: passive/toggle/reaction; targeting scopes).
+
+---
+
+## 2026-10-09 - S6a: learning a skill in play actually works now (pre-existing defect)
+
+**Found.** `learn_skill` is in the classifier's action enum and prompt, and `engine/unlock.ts` documents
+that "the orchestrator routes it to `tryUnlock`" — but no code in the V7 turn pipeline ever did, in any
+commit of the available history. A `learn_skill` intent fell through to `resolve()` and was refused as
+`Unknown action "learn_skill"`. So every in-play attempt to learn a skill has failed since the V7
+pipeline replaced the legacy one. Plan 09 §3.2 (and plan 10's quest grants) assumed this path worked.
+
+**Fixed.** New pure `resolveLearnSkill` (`engine/unlock.ts`) produces a proper ruling: refuses with
+typed codes for an unfrozen rulebook, a dead learner, an unknown/unnamed skill (`unknown_action`), an
+already-learned skill or unmet prerequisite (`prerequisite_failed`), or an unaffordable teacher
+(`cannot_afford`). Otherwise it learns through the first usable path in rulebook order (a held manual,
+a completed trial, or a teacher the learner can pay), records `costsPaid` and a
+`masteryAdvance untrained → novice` (which already emits the `skill_unlocked` journal event). New rule:
+a trainer path needs a present, living, non-hostile character other than the learner — previously a
+trainer path was gated by cost alone, so a skill could be "taught" in an empty room. `turn.ts` routes
+`learn_skill` intents here; it never rolls. `tryUnlock` is unchanged and still tested.
+
+**Tests.** 9 in `test/learnSkill.test.ts`, including a real turn refused alone and learned once a teacher
+is present (skill persisted, stamina paid, `skill_unlocked` event). Typecheck clean; core 739/51, UI
+183/26 = 922; engine coverage 100%.
+
+**Next:** S6b (passive skills).

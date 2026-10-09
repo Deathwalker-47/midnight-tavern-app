@@ -6,8 +6,17 @@
  * cost, then stages the mutations that grant the skill at novice rank and pay the
  * cost. Pure: returns a result + staged mutations for the ledger to commit.
  */
-import type { StorySchema, UnlockPath, CostSpec } from "../types/index.js";
-import type { CharacterHardState } from "../types/index.js";
+import { LEARN_SKILL_ACTION_ID } from "../types/index.js";
+import type {
+  CharacterHardState,
+  CostSpec,
+  GateVerdict,
+  MechanicalIntent,
+  Ruling,
+  StorySchema,
+  UnlockPath,
+} from "../types/index.js";
+import { normalizeCost } from "./costs.js";
 import { canAfford, conditionHolds } from "./gate.js";
 import type { StagedMutation } from "./ledger.js";
 
@@ -106,4 +115,91 @@ export function tryUnlock(
     { kind: "setSkill", characterId: actor.characterId, skillId, rank: "novice", successCount: 0 },
   ];
   return { ok: true, mutations };
+}
+
+export interface LearnSkillContext {
+  /** A present, living, non-hostile character other than the learner is available to teach. */
+  trainerPresent: boolean;
+}
+
+export interface LearnSkillResolution {
+  ruling: Ruling;
+  mutations: StagedMutation[];
+}
+
+/**
+ * Resolve a `learn_skill` intent into a ruling (plan 09 §3.2). Learning is ledger-only and fully
+ * deterministic: the skill must exist, be unlearned, have its prerequisites met, and offer a path the
+ * actor can use right now — a held manual, a completed trial, or a present teacher they can pay.
+ * Paths are tried in rulebook order, so a free satisfied path wins over a later paid one.
+ */
+export function resolveLearnSkill(
+  schema: StorySchema,
+  actor: CharacterHardState,
+  intent: MechanicalIntent,
+  context: LearnSkillContext
+): LearnSkillResolution {
+  const skill = intent.skillId
+    ? schema.skills.find((candidate) => candidate.id === intent.skillId)
+    : undefined;
+  const base = {
+    turnId: `${intent.actorId}:${LEARN_SKILL_ACTION_ID}`,
+    actorId: actor.characterId,
+    actionId: LEARN_SKILL_ACTION_ID,
+    actionLabel: skill ? `Learn ${skill.name}` : "Learn a skill",
+  };
+  const refuse = (reason: string, code: NonNullable<GateVerdict["code"]>): LearnSkillResolution => ({
+    ruling: { ...base, gate: { allowed: false, reason, code }, effectsApplied: null },
+    mutations: [],
+  });
+
+  if (!schema.locked) {
+    return refuse("Story schema is not frozen; the gate refuses unlocked schemas.", "schema_unlocked");
+  }
+  if (!actor.alive) return refuse("Actor is not alive.", "actor_dead");
+  if (!skill) {
+    return refuse(
+      intent.skillId ? `Unknown skill "${intent.skillId}".` : "No skill was named to learn.",
+      "unknown_action"
+    );
+  }
+  if (alreadyLearned(actor, skill.id)) {
+    return refuse(`${skill.name} is already learned.`, "prerequisite_failed");
+  }
+  for (const condition of skill.prerequisites) {
+    if (!conditionHolds(actor, condition)) {
+      return refuse(`Prerequisite not met for ${skill.name}.`, "prerequisite_failed");
+    }
+  }
+
+  let teacherMissing = false;
+  let unaffordable = false;
+  for (const path of skill.unlockPaths) {
+    if (!pathSatisfied(actor, path)) continue;
+    if (path.method === "trainer" && !context.trainerPresent) {
+      teacherMissing = true;
+      continue;
+    }
+    const cost = normalizeCost(schema, pathCost(path));
+    if (!canAfford(actor, cost)) {
+      unaffordable = true;
+      continue;
+    }
+    return {
+      ruling: {
+        ...base,
+        gate: { allowed: true },
+        effectsApplied: { narrationHint: `${skill.name} is learned at novice rank.` },
+        ...(cost ? { costsPaid: cost } : {}),
+        masteryAdvance: { skillId: skill.id, fromRank: "untrained", toRank: "novice" },
+      },
+      mutations: [
+        ...stageCost(cost, actor.characterId),
+        { kind: "setSkill", characterId: actor.characterId, skillId: skill.id, rank: "novice", successCount: 0 },
+      ],
+    };
+  }
+  if (unaffordable) return refuse(`Cannot afford to learn ${skill.name}.`, "cannot_afford");
+  if (teacherMissing) return refuse(`No one here can teach ${skill.name}.`, "prerequisite_failed");
+  return refuse(`No way to learn ${skill.name} is available right now.`, "prerequisite_failed");
 }

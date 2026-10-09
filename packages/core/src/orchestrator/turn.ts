@@ -37,6 +37,7 @@ import {
   countRecentSimilarUses,
   enforceActionBudget,
   planStatusTick,
+  resolveLearnSkill,
 } from "../engine/index.js";
 import { cryptoRng, type Rng } from "../engine/dice.js";
 import { runAnalyzer } from "../memory/index.js";
@@ -45,6 +46,7 @@ import { instantiateFromTemplate, instantiateGeneric } from "../bootstrap/instan
 import {
   blueprintToStyleInputs,
   createCharacterSoftState,
+  LEARN_SKILL_ACTION_ID,
   STANDARD_DIFFICULTY,
 } from "../types/index.js";
 import { applyUniversalActionDefaults } from "../config/index.js";
@@ -65,6 +67,7 @@ import {
 } from "./sceneEntityPromotion.js";
 import { deriveRecentPlayerTargetId } from "./targetFocus.js";
 import {
+  NPC_HOSTILE_TO_PLAYER_FLAG,
   planNpcTransitions,
   type ApprovedNpcTransition,
 } from "./npcIntroduction.js";
@@ -690,6 +693,21 @@ async function runTurnOperation(
       const stakesByTurnId = new Map<string, MechanicalIntent["stakes"]>();
       for (const intent of intents) {
         const actorHard = await workingState(intent.actorId);
+        if (intent.actionId === LEARN_SKILL_ACTION_ID) {
+          // Learning is ledger-only and deterministic (plan 09 §3.2); it never rolls.
+          const teacher = presentRoster.some(
+            (character) =>
+              character.id !== intent.actorId &&
+              character.hard.alive &&
+              !character.hard.flags[NPC_HOSTILE_TO_PLAYER_FLAG]
+          );
+          const learned = resolveLearnSkill(schema, actorHard, intent, { trainerPresent: teacher });
+          commit(schema, learned.mutations, workingById);
+          rulings.push(learned.ruling);
+          staged.push(learned);
+          stakesByTurnId.set(learned.ruling.turnId, intent.stakes);
+          continue;
+        }
         const targetHard = intent.targetId ? await workingState(intent.targetId) : undefined;
         const recentSimilarUses = countRecentSimilarUses(priorRulings, intent);
         const result = resolve(
