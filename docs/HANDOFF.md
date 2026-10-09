@@ -39,13 +39,14 @@ Plans 01-07 and 10-12 of the 2026-08-13 set remain written but **not authorized*
 | S6e | Targeting scopes: `ActionDef.targeting` (`self/single/multiple/all_allies/all_enemies/area`), `expandTargets` (sides = validated hostility flag), `resolveAgainstEach` (one cost/cooldown/roll/XP, one ruling per target, target-side effects only after the first), gate code `no_target`, `MechanicalIntent.targetIds`; all turn resolutions go through one `resolveIntent` | done |
 | S7 | Recovery: `config/economy.json` (versioned into rulebooks); end-of-turn regen as shares of max (stamina 25% / mana 10%, 5% in combat / health 5%, min 1; in combat = acted in or hit by a combat or wounding ruling), journalled as `recovery` events, not rulings; engine actions `take_rest` (50% health, full stamina, 50% mana, 3-turn cooldown, refused with enemies present — gate code `in_combat`) and `consume_item` (`ItemDef.restores`); v3 only for regen/rest; never revives; engine action ids reserved in the validator | done |
 | — | **Pre-existing defect fixed (found in S7):** the narrator was told every no-roll ruling was DENIED (routine automatic successes, status ticks, toggles, learning) | done |
-| S8 | Plan 08 v3 forge + UI surfacing | not started |
+| S8a | Forge emits v3 for Full Stats: deterministic core pools + roles (`withCorePools`), passive/toggle skills kept, reactions → active (pool supplies them), role-keyed costs survive stabilization, prompts teach roles/costs/cooldowns/targeting | done |
+| S8b | UI surfacing: living card (all pools, cooldowns, statuses, toggles), ruling card (new gate codes, `reaction`, `targeting`) | not started |
 | S9–S18 | Plan 09 (pool, enablement, selection, archetypes, mid-story enablement, UI, items, weapon specials, external config, close-out) | not started |
 
 ## Verification state
 
-After S7 (Linux/Node 22): `npm run typecheck` clean; core **789 / 57 files** (engine coverage 100%),
-UI **183 / 26 files** = **972** passing; root `npm test` passes here (the tinypool worker crash is
+After S8a (Linux/Node 22): `npm run typecheck` clean; core **795 / 57 files** (engine coverage 100%),
+UI **183 / 26 files** = **978** passing; root `npm test` passes here (the tinypool worker crash is
 Windows/Node 24 only — plan 07 P0-0, not authorized).
 
 ## Facts established earlier (still true — do not re-derive)
@@ -84,7 +85,7 @@ Windows/Node 24 only — plan 07 P0-0, not authorized).
 
 ## Single next action
 
-Start **S8** of the action plan: the v3 forge (prompts + validation emit `schemaVersion: 3`, resource
-roles, costs, cooldowns, skill types, targeting, item `restores`/`staminaCost`) and UI surfacing (living
-card shows all resources, cooldowns, statuses, toggles; ruling card explains the new gate codes and
-`reaction` / `targeting` rulings).
+Do **S8b**: UI surfacing in `packages/ui` — the living card shows every resource pool, running
+cooldowns, active statuses and switched-on toggles; the ruling card explains the gate codes
+`insufficient_resource`, `on_cooldown`, `not_invocable`, `no_target`, `in_combat` and shows `reaction`
+and `targeting` rulings. Then tick S8.

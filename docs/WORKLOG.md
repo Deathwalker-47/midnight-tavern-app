@@ -2315,3 +2315,36 @@ rest → cooldown, tonic used up, combat stops regen, rest refused beside an ene
 manifests updated. Typecheck clean; core 789/57, UI 183/26 = 972; engine coverage 100%.
 
 **Next:** S8 (v3 forge + UI surfacing).
+
+---
+
+## 2026-10-09 - S8a: the forge emits v3 rulebooks (plan 08)
+
+**What landed.** `assemble()` emits `schemaVersion: 3` for Full Stats (no-stats stays 2). The v3 contract
+is met **deterministically** after Phase A, so it never costs a provider repair:
+- `withCorePools`: every resource gets an explicit role (explicit, else inferred); health is exactly
+  the lethal pool; a core role keeps only its first claimant (later ones become `other`); a missing
+  health/mana/stamina pool is added from engine defaults (Health 20, Mana 10, Stamina 10), with ids
+  suffixed if taken. Instantiation already fills absent pools at `start`, so characters get them all.
+- `forgeableSkillShape`: passive (with bonus) and toggle (with upkeep + bonus) skills are kept; toggle
+  upkeep keeps only payable keys (pool ids or core roles, else `{stamina: 1}`); anything else — including
+  **reaction skills** — becomes an ordinary active skill. Reactions need an action from Phase B, a
+  cross-phase dependency that would add a new forge failure mode; they come from the engineering-authored
+  pool (S12) instead.
+- Phase B required-skill lists exclude passive/toggle skills (they can never gate an action).
+- Action stabilization: role-keyed costs (`{mana: 2}`) are mapped to the story's pool before unknown
+  keys are filtered (previously they would have been silently dropped); a gate on a passive/toggle
+  skill is dropped; `targeting` is dropped from opposed contests.
+Prompts: Phase A asks for roles (one each of health/mana/stamina, premise-named) and allows ≤2 passive
+and ≤1 toggle skills with examples; Phase B allows role-keyed costs, `cooldownTurns` 2–4 on the 1–3
+strongest actions, `targeting` scopes (never on opposed actions), and forbids gating by bonus skills.
+The prompt no longer mentions the dormant `regenPerScene`.
+
+**Not in this step.** Item `restores`/runtime consumables (S15) — the V2+ forge emits no item catalog,
+so restoring consumables in forged stories depend on runtime loot items.
+
+**Tests.** 6 new in `test/bootstrap/generate.test.ts` (roles + defaults, duplicate/collision handling,
+empty resources, skill shapes + required lists, unpayable upkeep, action shaping); the pinned
+`schemaVersion` there is now 3. Typecheck clean; core 795/57, UI 183/26 = 978; engine coverage 100%.
+
+**Next:** S8b (UI surfacing).

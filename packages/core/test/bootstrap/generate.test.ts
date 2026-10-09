@@ -1271,10 +1271,11 @@ describe("generateStorySchema — repair loop", () => {
     ).toBe(true);
   });
 
-  it("keeps the V2 rulebook free of a pregenerated item catalog and embedded gear", async () => {
+  it("keeps the forged rulebook free of a pregenerated item catalog and embedded gear", async () => {
     const { router } = phasedRouter({ a: [J(PHASE_A)], b: [J(PHASE_B)] });
     const out = await generateStorySchema(router, input);
-    expect(out.schemaVersion).toBe(2);
+    // Full Stats rulebooks forge as v3 since plan 08 (S8).
+    expect(out.schemaVersion).toBe(3);
     expect(out.items).toEqual([]);
     expect(out.startingState.inventory).toEqual([]);
     expect(out.npcTemplates.every((template) => template.inventory.length === 0)).toBe(true);
@@ -1736,5 +1737,141 @@ describe("generateStorySchema — repair loop", () => {
     const err = await generateStorySchema(router, input, { maxSchemaRepairs: 1 }).catch((e) => e as ModelOutputError);
     expect(err).toBeInstanceOf(ModelOutputError);
     expect((err as ModelOutputError).message).toMatch(/no_such_attribute|cross-validation/i);
+  });
+});
+
+describe("v3 forge shaping (plan 08, S8)", () => {
+  const roles = (schema: StorySchema) =>
+    schema.resources.map((resource) => [resource.id, resource.role, Boolean(resource.lethal)]);
+
+  it("gives every resource a role and adds any missing core pool", async () => {
+    const { router, prompts } = phasedRouter({ a: [J(PHASE_A)], b: [J(PHASE_B)] });
+    const out = await generateStorySchema(router, input);
+    expect(roles(out)).toEqual([
+      ["hp", "health", true],
+      ["stamina", "stamina", false],
+      ["mana", "mana", false],
+    ]);
+    expect(prompts.find((prompt) => prompt.system.includes("PHASE A"))!.system).toMatch(
+      /EXACTLY ONE resource each with role health, mana and stamina/
+    );
+    expect(prompts.find((prompt) => prompt.system.includes("ACTION BATCH"))!.system).toMatch(
+      /cooldownTurns 2-4/
+    );
+  });
+
+  it("keeps one claimant per core role, health is the lethal pool, and defaults never collide", async () => {
+    const phaseA = {
+      ...PHASE_A,
+      resources: [
+        { id: "hp", label: "Health", start: 20, max: 20, playerVisible: true, lethal: true },
+        { id: "stamina", label: "Coins", start: 5, max: 99, playerVisible: true, role: "currency" },
+        { id: "ether", label: "Ether", start: 8, max: 8, playerVisible: true, role: "mana" },
+        { id: "spirit", label: "Spirit", start: 8, max: 8, playerVisible: true, role: "mana" },
+        { id: "vigor", label: "Vigor", start: 8, max: 8, playerVisible: true, role: "health" },
+      ],
+    };
+    const { router } = phasedRouter({ a: [J(phaseA)], b: [J(PHASE_B)] });
+    const out = await generateStorySchema(router, input);
+    expect(roles(out)).toEqual([
+      ["hp", "health", true],
+      ["stamina", "currency", false],
+      ["ether", "mana", false],
+      ["spirit", "other", false],
+      ["vigor", "other", false],
+      ["stamina_2", "stamina", false],
+    ]);
+  });
+
+  it("supplies a lethal health pool when the forge emitted no resources", async () => {
+    const { router } = phasedRouter({ a: [J({ ...PHASE_A, resources: [] })], b: [J(PHASE_B)] });
+    const out = await generateStorySchema(router, input);
+    expect(roles(out)).toEqual([
+      ["hp", "health", true],
+      ["mana", "mana", false],
+      ["stamina", "stamina", false],
+    ]);
+  });
+
+  it("keeps passive and toggle skills, makes other types active, and never requires them as gates", async () => {
+    const bonusBase = { ...PHASE_A.skills[0]!, prerequisites: [], unlockPaths: [] };
+    const phaseA = {
+      ...PHASE_A,
+      skills: [
+        ...PHASE_A.skills.map((skill) =>
+          skill.id === "premise_specialty"
+            ? { ...skill, skillType: "reaction", reaction: { trigger: "attacked", actionId: "nowhere" } }
+            : skill.id === "utility_skill"
+              ? { ...skill, skillType: "passive" }
+              : skill
+        ),
+        { ...bonusBase, id: "keen_eye", name: "Keen Eye", skillType: "passive", passive: { checkBonus: { amount: 1 } } },
+        {
+          ...bonusBase,
+          id: "fury",
+          name: "Fury",
+          skillType: "toggle",
+          toggle: { upkeep: { stamina: 2, gold: 3 }, bonus: { checkBonus: { amount: 2 } } },
+        },
+      ],
+    };
+    const { router, prompts } = phasedRouter({ a: [J(phaseA)], b: [J(PHASE_B)] });
+    const out = await generateStorySchema(router, input);
+    const skill = (id: string) => out.skills.find((candidate) => candidate.id === id)!;
+    expect(skill("keen_eye")).toMatchObject({ skillType: "passive", passive: { checkBonus: { amount: 1 } } });
+    expect(skill("fury").toggle!.upkeep).toEqual({ stamina: 2 });
+    expect(skill("premise_specialty").skillType).toBeUndefined();
+    expect(skill("premise_specialty").reaction).toBeUndefined();
+    expect(skill("utility_skill").skillType).toBeUndefined();
+    const required = prompts
+      .flatMap((prompt) => prompt.user.match(/REQUIRED SKILL IDS: ([^\n]+)/)?.[1] ?? [])
+      .join(",");
+    expect(required).toMatch(/combat_skill/);
+    expect(required).not.toMatch(/keen_eye|fury/);
+  });
+
+  it("pays an unpayable toggle upkeep in stamina", async () => {
+    const bonusBase = { ...PHASE_A.skills[0]!, prerequisites: [], unlockPaths: [] };
+    const calm = {
+      ...bonusBase,
+      id: "calm",
+      name: "Calm",
+      skillType: "toggle",
+      toggle: { upkeep: { gold: 1 }, bonus: { checkBonus: { amount: 1 } } },
+    };
+    const { router } = phasedRouter({ a: [J({ ...PHASE_A, skills: [...PHASE_A.skills, calm] })], b: [J(PHASE_B)] });
+    const out = await generateStorySchema(router, input);
+    expect(out.skills.find((candidate) => candidate.id === "calm")!.toggle!.upkeep).toEqual({ stamina: 1 });
+  });
+
+  it("makes generated action mechanics v3-safe", async () => {
+    const bonusBase = { ...PHASE_A.skills[0]!, prerequisites: [], unlockPaths: [] };
+    const phaseA = {
+      ...PHASE_A,
+      resources: [
+        ...PHASE_A.resources,
+        { id: "ether", label: "Ether", start: 8, max: 8, playerVisible: true, role: "mana" },
+      ],
+      skills: [
+        ...PHASE_A.skills,
+        { ...bonusBase, id: "keen_eye", name: "Keen Eye", skillType: "passive", passive: { checkBonus: { amount: 1 } } },
+      ],
+    };
+    const tuned = PHASE_B.actions.map((action) => {
+      if (action.id === "combat_0") return { ...action, costs: { resources: { mana: 2 } }, cooldownTurns: 2 };
+      // Coverage reassignment consumes combat_0/combat_1 first, so social_3 keeps this gate until shaping.
+      if (action.id === "social_3") return { ...action, requiresSkill: "keen_eye" };
+      if (action.id === "social_0") return { ...action, opposed: true, targeting: { scope: "area" } };
+      if (action.id === "social_1") return { ...action, targeting: { scope: "all_enemies" } };
+      return action;
+    });
+    const { router } = phasedRouter({ a: [J(phaseA)], b: [J({ ...PHASE_B, actions: tuned })] });
+    const out = await generateStorySchema(router, input);
+    const action = (id: string) => out.actions.find((candidate) => candidate.id === id)!;
+    expect(action("combat_0")).toMatchObject({ costs: { resources: { ether: 2 } }, cooldownTurns: 2 });
+    expect(action("social_3").requiresSkill).toBeUndefined();
+    expect(out.actions.some((candidate) => candidate.requiresSkill === "keen_eye")).toBe(false);
+    expect(action("social_0").targeting).toBeUndefined();
+    expect(action("social_1").targeting).toEqual({ scope: "all_enemies" });
   });
 });

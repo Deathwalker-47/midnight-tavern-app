@@ -31,13 +31,18 @@ import {
   DC_MIN,
   DC_MAX,
   MAX_EQUIPPED_SLOTS,
+  CORE_RESOURCE_ROLES,
   type ActionDef,
   type ActionCategory,
   type Condition,
   type ConditionWithReason,
+  type ResourceDef,
+  type SkillDef,
   type StorySchema,
   type StatMode,
 } from "../types/index.js";
+import { normalizeCost } from "../engine/costs.js";
+import { resourceRoles } from "../engine/resources.js";
 import {
   MECHANICS_CONFIG_VERSIONS,
   UNIVERSAL_ACTIONS_CONFIG,
@@ -475,11 +480,81 @@ function stabilizePhaseAReferences(phaseA: PhaseA): PhaseA {
     };
   });
 
+  const shapedResources = withCorePools(normalizedResources);
   return {
     ...phaseA,
-    resources: normalizedResources,
-    skills,
+    resources: shapedResources,
+    skills: skills.map((skill) => forgeableSkillShape(skill, shapedResources)),
   };
+}
+
+/**
+ * Engine-owned defaults for a core pool the forge left out (plan 08 §2, finding 22): every Full
+ * Stats v3 character carries health, mana and stamina, whether or not the premise uses magic.
+ */
+const DEFAULT_CORE_POOLS: Readonly<Record<(typeof CORE_RESOURCE_ROLES)[number], ResourceDef>> = {
+  health: { id: "hp", label: "Health", start: 20, max: 20, playerVisible: true, lethal: true, role: "health" },
+  mana: { id: "mana", label: "Mana", start: 10, max: 10, playerVisible: true, role: "mana" },
+  stamina: { id: "stamina", label: "Stamina", start: 10, max: 10, playerVisible: true, role: "stamina" },
+};
+
+/**
+ * Give every resource an explicit role and guarantee exactly one health (the lethal pool), mana and
+ * stamina pool, adding engine defaults for any that are missing. Deterministic, so the v3 contract
+ * never costs a provider repair.
+ */
+function withCorePools(resources: readonly ResourceDef[]): ResourceDef[] {
+  const inferred = resourceRoles({ resources: [...resources] });
+  const core = new Set<string>(CORE_RESOURCE_ROLES);
+  const claimed = new Set<string>();
+  const shaped: ResourceDef[] = resources.map((resource) => {
+    // Health is exactly the lethal pool; any other core role goes to its first claimant only.
+    let role = resource.lethal ? "health" : inferred.get(resource.id)!;
+    if (!resource.lethal && role === "health") role = "other";
+    if (core.has(role)) {
+      if (claimed.has(role)) role = "other";
+      claimed.add(role);
+    }
+    return { ...resource, role };
+  });
+  for (const role of CORE_RESOURCE_ROLES) {
+    if (shaped.some((resource) => resource.role === role)) continue;
+    const pool = DEFAULT_CORE_POOLS[role];
+    let id = pool.id;
+    for (let suffix = 2; shaped.some((resource) => resource.id === id); suffix++) {
+      id = `${pool.id}_${suffix}`;
+    }
+    shaped.push({ ...pool, id });
+  }
+  return shaped;
+}
+
+/**
+ * Keep only skill types the forge can author coherently: a passive with its bonus, a toggle with its
+ * upkeep and bonus. Anything else — including reaction skills, which need an action from a later
+ * phase and are supplied by the engineering-authored pool instead — becomes an ordinary active skill.
+ */
+function forgeableSkillShape(skill: SkillDef, resources: readonly ResourceDef[]): SkillDef {
+  const { skillType, passive, toggle, reaction: _reaction, ...rest } = skill;
+  if (skillType === "passive" && passive) return { ...rest, skillType, passive };
+  if (skillType === "toggle" && toggle) {
+    // Upkeep may name a pool or a core role; anything else could never be paid.
+    const payable = new Set<string>([...resources.map((resource) => resource.id), ...CORE_RESOURCE_ROLES]);
+    const upkeep = Object.fromEntries(
+      Object.entries(toggle.upkeep).filter(([key]) => payable.has(key))
+    );
+    return {
+      ...rest,
+      skillType,
+      toggle: { ...toggle, upkeep: Object.keys(upkeep).length > 0 ? upkeep : { stamina: 1 } },
+    };
+  }
+  return rest;
+}
+
+/** Skills that act through bonuses, never by gating an action. */
+function isBonusSkill(skill: Pick<SkillDef, "skillType">): boolean {
+  return skill.skillType === "passive" || skill.skillType === "toggle";
 }
 
 function abbreviation(name: string): string {
@@ -759,22 +834,30 @@ function filterNumericReferences(
 
 function stabilizeActionReferences(
   action: ActionDef,
-  skillIds: ReadonlySet<string>,
+  gatingSkillIds: ReadonlySet<string>,
   resourceIds: ReadonlySet<string>,
-  attributeIds: ReadonlySet<string>
+  attributeIds: ReadonlySet<string>,
+  resources: Pick<StorySchema, "resources">
 ): ActionDef {
+  // Passive and toggle skills never gate an action (plan 08 §4), so such a gate is dropped.
   const requiresSkill =
-    action.requiresSkill && skillIds.has(action.requiresSkill)
+    action.requiresSkill && gatingSkillIds.has(action.requiresSkill)
       ? action.requiresSkill
       : undefined;
   const governingAttribute =
     action.governingAttribute && attributeIds.has(action.governingAttribute)
       ? action.governingAttribute
       : undefined;
+  // Costs may name a core role ("mana"); map it to the story's pool before filtering.
   const resourceCosts = filterNumericReferences(
-    action.costs?.resources,
+    normalizeCost(resources, action.costs)?.resources,
     resourceIds
   );
+  // An opposed contest needs one named defender, so it cannot reach several characters.
+  const targeting =
+    action.opposed && action.targeting && action.targeting.scope !== "single"
+      ? undefined
+      : action.targeting;
   const effects = Object.fromEntries(
     Object.entries(action.effects).map(([outcome, effect]) => [
       outcome,
@@ -805,6 +888,7 @@ function stabilizeActionReferences(
     requiresSkill,
     minRank: requiresSkill ? action.minRank : undefined,
     governingAttribute,
+    targeting,
     dc: Math.max(DC_MIN, Math.min(DC_MAX, action.dc)),
     costs: action.costs
       ? {
@@ -842,9 +926,12 @@ function stabilizeActionConditions(
   const attributeIds = new Set(
     phaseA.attributes.map((attribute) => attribute.id)
   );
+  const gatingSkillIds = new Set(
+    phaseA.skills.filter((skill) => !isBonusSkill(skill)).map((skill) => skill.id)
+  );
   const pruned = actions.map((action) =>
     pruneInvalidActionConditions(
-      stabilizeActionReferences(action, skillIds, resourceIds, attributeIds),
+      stabilizeActionReferences(action, gatingSkillIds, resourceIds, attributeIds, phaseA),
       flags,
       skillIds,
       resourceIds,
@@ -1298,7 +1385,8 @@ export function resolveBootstrapCreationInput(
 /** Assemble a candidate StorySchema from the two phase outputs (unlocked). */
 function assemble(input: BootstrapInput, a: PhaseA, b: PhaseB): StorySchema {
   return applyUniversalActionDefaults({
-    schemaVersion: 2,
+    // Full Stats rulebooks forge as v3 (plan 08: roles, recovery economy); no-stats stay v2.
+    schemaVersion: a.statMode === "full" ? 3 : 2,
     storyId: input.storyId,
     title: input.title,
     premise: input.premise,
@@ -1735,7 +1823,8 @@ export async function generateStorySchema(
       ? Promise.resolve(foundation)
       : generateFoundation(phaseBFeedback, pass + 1);
     const skillPartitions = partitionRequirements(
-      mechanicsCore.skills.map((skill) => skill.id),
+      // Passive and toggle skills act through bonuses; no action may be gated by one.
+      mechanicsCore.skills.filter((skill) => !isBonusSkill(skill)).map((skill) => skill.id),
       ACTION_BATCHES.length
     );
     const progressionFlagPartitions = partitionRequirements(
