@@ -2480,3 +2480,36 @@ results. Typecheck clean; core 826/59, UI 193/29 = 1019; engine coverage 100%.
 
 **Next:** S11 — forge-time selection (setting-fit filter → section pick → entry pick, validated,
 deterministic fallback), wired into new-story creation.
+
+---
+
+## 2026-10-09 - S11: forge-time pool selection (plan 09 §5)
+
+**What landed** (`catalogue/select.ts`, wired into `bootstrapStory` and `regenerateRulebook`): after the
+rulebook is sealed, Full Stats stories gain universal-pool entries on top of their authored catalogue
+(the forge stays **hybrid**):
+1. Deterministic candidates — not excluded, `settingFit` matching the premise's setting cues
+   (`inferSettingFits`: fantasy / scifi / modern / historical / horror / post-apocalyptic, always "any"),
+   expressible in this rulebook (`materializeEntry` succeeds), not already present.
+2. One bounded `bootstrapper` call over a compact index (id · name · description), answered as a sealed
+   Zod enum of the candidates — it cannot name anything outside the pool.
+3. Picks are capped (12–24 actions, 2–6 skills) and topped up from a deterministic premise-relevance
+   ranking; a failed, invalid or stalled call (deadline = the forge fragment deadline) falls back to
+   that ranking entirely, so selection can never fail story creation. A caller cancel still aborts.
+Picks are enabled with source `forge` after install (their required skills come along). Regeneration
+re-selects for the new rulebook.
+
+**Honest notes.** The two-stage section funnel (plan 09 §5.3) is not built: with ~150 candidates one
+call is cheaper; `SECTION_STAGE_THRESHOLD` (300) marks where it would pay. Latency is **one extra
+bounded call** (≤1,500 output tokens) after sealing — not measured, there is no provider here. Plan 09
+§5.4 ("latency should drop") applies to *replacing* authoring, which the hybrid forge deliberately does
+not do yet. Selection quality is unproven until the owner judges real premises (§12 risk).
+
+**Tests.** 7 in `test/catalogue/select.test.ts` (setting inference, candidate filters, ranking, index
+shape, model picks with caps and top-up, failure / invented ids / deadline fallbacks, abort, nothing to
+pick) + 1 end-to-end in `test/bootstrap/generate.test.ts` (a forged story keeps its 30 authored actions
+and gains forge-sourced pool entries even when the selection call fails). Typecheck clean; core 834/60,
+UI 193/29 = 1027; engine coverage 100%.
+
+**Next:** S12 — combat and magic archetypes with the plan's exclusion list (and reaction skills paired
+with their actions).

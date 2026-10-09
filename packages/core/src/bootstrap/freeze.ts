@@ -37,6 +37,8 @@ import {
   type BootstrapResumeState,
 } from "./generate.js";
 import { MECHANICS_CONFIG_VERSIONS } from "../config/index.js";
+import { enablePoolEntry } from "../catalogue/enablement.js";
+import { selectPoolEntries } from "../catalogue/select.js";
 
 /** Raised when a caller tries to freeze a schema that still fails cross-validation. */
 export class UnfreezableSchemaError extends Error {
@@ -187,6 +189,16 @@ export async function bootstrapStory(
     },
   };
 
+  // Plan 09 §5: pick universal-pool entries to enable on top of the authored catalogue. Never fails
+  // creation — a failed or slow model falls back to a deterministic premise-relevance ranking.
+  const poolSelection =
+    installedSchema.statMode === "full"
+      ? await selectPoolEntries(router, installedSchema, {
+          ...(options.signal ? { signal: options.signal } : {}),
+          ...(options.fragmentDeadlineMs ? { deadlineMs: options.fragmentDeadlineMs } : {}),
+        })
+      : undefined;
+
   const playerCharacterId = player.characterId ?? randomUUID();
   const hard = instantiatePlayer(installedSchema, playerCharacterId);
   const generatedStartingGear: StartingGearSeed[] =
@@ -231,6 +243,9 @@ export async function bootstrapStory(
       });
     }
   });
+  for (const entryId of poolSelection?.ids ?? []) {
+    await enablePoolEntry(store, input.storyId, entryId, { source: "forge" });
+  }
   options.onProgressDetail?.({
     phase: "install",
     fragment: "install",

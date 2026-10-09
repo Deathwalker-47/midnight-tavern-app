@@ -96,7 +96,7 @@ push to `main`.
 - [x] **S10. Story enablement set.** Persisted per story (migration), checkpointed, materialized into the
       effective rulebook (roles → story ids, damage multiples → numbers); classifier sees only enabled
       entries; `mayDisableEntry` (D8) in core; bridge methods in both backends.
-- [ ] **S11. Forge-time selection.** Setting-fit filter → section pick → entry pick, validated, with a
+- [x] **S11. Forge-time selection.** Setting-fit filter → section pick → entry pick, validated, with a
       deterministic fallback; wired into new-story creation.
 - [ ] **S12. Combat and magic archetypes** with the exclusion list.
 - [ ] **S13. Mid-story enablement** by the analyzer with every guard (pool id, tier gate, 2 per chapter,

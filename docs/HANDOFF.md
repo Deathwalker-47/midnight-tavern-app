@@ -45,12 +45,13 @@ Plans 01-07 and 10-12 of the 2026-08-13 set remain written but **not authorized*
 | S9 | Universal pool format (`config/pool.ts`: story-agnostic archetypes by attribute/pool **role**, health as multiples of the baseline hit; entries = flavour only, tier inherited) + balance rules (`config/poolRules.ts`, plan 09 §4.5 as code) + non-combat starter pool: 25 sections, 28 action + 8 skill archetypes, 153 entries (5 recorded exclusions); id lock test | done |
 | S10a | Enablement set in core: migration 17 `story_pool_enablements` (snapshots the materialized definition), `catalogue/` (attribute-role inference, materialization, enable/disable + D8 guard, effective schema), `requirePlayableStory` for turns/history/suggestions, turn-made enablements removed on rewind | done |
 | S10b | Bridge methods `listPoolEnablements` / `enablePoolEntry` / `mayDisablePoolEntry` / `disablePoolEntry` in both backends, sharing core's pure `catalogue/plan.ts` (parity test over real core + store); cards/dossier on the effective rulebook | done |
-| S11–S18 | Plan 09 (selection, combat archetypes, mid-story enablement, UI, items, weapon specials, external config, close-out) | not started |
+| S11 | Forge-time selection: setting-fit + expressibility filter → one sealed-enum model call → capped, topped up, deterministic fallback; enabled as `forge` after install and after regeneration; forge stays hybrid | done |
+| S12–S18 | Plan 09 (combat archetypes, mid-story enablement, UI, items, weapon specials, external config, close-out) | not started |
 
 ## Verification state
 
-After S10b (Linux/Node 22): `npm run typecheck` clean; core **826 / 59 files** (engine coverage 100%),
-UI **193 / 29 files** = **1019** passing; UI production build verified; root `npm test` passes here (the tinypool worker crash is
+After S11 (Linux/Node 22): `npm run typecheck` clean; core **834 / 60 files** (engine coverage 100%),
+UI **193 / 29 files** = **1027** passing; UI production build verified at S10b; root `npm test` passes here (the tinypool worker crash is
 Windows/Node 24 only — plan 07 P0-0, not authorized).
 
 ## Facts established earlier (still true — do not re-derive)
@@ -85,9 +86,8 @@ Windows/Node 24 only — plan 07 P0-0, not authorized).
 
 ## Single next action
 
-Do **S11**: forge-time pool selection (plan 09 §5). After Phase A, deterministically filter the pool by
-`settingFit` and by what the rulebook can express (`materializeEntry` refusals), ask one bounded model
-call to pick sections, then one to pick entry ids (sealed Zod enum of the candidates), validate, and
-fall back deterministically (e.g. a fixed starter set per section) when the model fails. Enable the
-picks with source `forge` after the story is created. Keep the forge **hybrid**: the authored Phase B
-catalogue stays; the pool adds to it. Measure the extra latency honestly.
+Do **S12**: combat and magic archetypes for the pool (plan 09 §4.1–4.2) — attacks, elemental bolts,
+healing/buff/debuff magic, defensive moves, and **reaction skills paired with their reaction-only
+actions** (S6d) — plus the plan's exclusion records (time magic, summoning, transformation, soul/dream,
+lifespan/memory sacrifice, rerolls, languages). Every archetype must pass `poolRules.ts`; extend the
+id lock. Damage stays a multiple of the baseline hit.

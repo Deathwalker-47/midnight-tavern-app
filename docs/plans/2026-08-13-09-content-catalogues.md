@@ -358,10 +358,10 @@ history, only the future — which is exactly what a GM changing a house rule mi
 
 ## 5. Forge-time selection (owner's point 1)
 
-- [ ] **5.1** Replace Phase B's action *authoring* with action *selection*: given the premise, the
+- [x] **5.1** *(S11, hybrid: selection is added on top of authoring rather than replacing it — see WORKLOG.)* Replace Phase B's action *authoring* with action *selection*: given the premise, the
       generated attributes/skills/resources, and a compact index of the pool (archetype + name +
       one-line description, **not** full definitions), return a list of ids to enable.
-- [ ] **5.2** Target **40–70 actions** and **20–40 skills** enabled per story. Validate: minimum
+- [x] **5.2** *(S11: 30 authored + 12–24 selected actions; 6–10 authored + 2–6 selected skills.)* Target **40–70 actions** and **20–40 skills** enabled per story. Validate: minimum
       coverage per category survives (the existing `CATALOG_MIN_PER_CATEGORY` rule), the ungated
       canonical natural attack is always enabled, and every selected id exists in the pool.
 - [ ] **5.3** The pool index sent for selection is itself large (~3,000 lines). **Do not send it

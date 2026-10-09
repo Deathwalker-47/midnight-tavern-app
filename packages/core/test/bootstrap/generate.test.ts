@@ -34,6 +34,9 @@ import {
   PHASE_B_FOUNDATION_SYSTEM,
 } from "../../src/bootstrap/prompts.js";
 import { validateStorySchema } from "../../src/bootstrap/validate.js";
+import { bootstrapStory } from "../../src/bootstrap/freeze.js";
+import { POOL_SELECTION_TARGET } from "../../src/catalogue/select.js";
+import { openStore } from "../../src/store/index.js";
 import { ModelOutputError } from "../../src/router/index.js";
 import type { Router, RolePrompt, ChatResponse } from "../../src/router/index.js";
 import {
@@ -1873,5 +1876,22 @@ describe("v3 forge shaping (plan 08, S8)", () => {
     expect(out.actions.some((candidate) => candidate.requiresSkill === "keen_eye")).toBe(false);
     expect(action("social_0").targeting).toBeUndefined();
     expect(action("social_1").targeting).toEqual({ scope: "all_enemies" });
+  });
+});
+
+describe("forge-time pool selection (plan 09 §5, S11)", () => {
+  it("enables pool entries on top of the authored catalogue, even when the selection call fails", async () => {
+    const { router, prompts } = phasedRouter({ a: [J(PHASE_A)], b: [J(PHASE_B)] });
+    const store = await openStore(":memory:");
+    const created = await bootstrapStory(router, store, input, { name: "Ari" });
+    expect(created.story.schema.actions).toHaveLength(30);
+    const enabled = await store.poolEnablements.list(input.storyId);
+    expect(enabled.filter((record) => record.kind === "action").length).toBeGreaterThanOrEqual(
+      POOL_SELECTION_TARGET.actions.min
+    );
+    expect(enabled.every((record) => record.source === "forge")).toBe(true);
+    // The scripted router cannot answer the selection call, so the deterministic ranking stood in.
+    expect(prompts.some((prompt) => prompt.system.includes("POOL SELECTION"))).toBe(true);
+    await store.close();
   });
 });

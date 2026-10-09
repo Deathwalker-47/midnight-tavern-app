@@ -12,6 +12,8 @@ import {
 } from "../bootstrap/index.js";
 import type { CharacterCard, ImportedMechanics } from "../importer/index.js";
 import { MECHANICS_CONFIG_VERSIONS } from "../config/index.js";
+import { enablePoolEntry } from "../catalogue/enablement.js";
+import { selectPoolEntries } from "../catalogue/select.js";
 import { UNIVERSAL_ACTIONS_CONFIG } from "../config/index.js";
 import type { Router } from "../router/index.js";
 import type { Store } from "../store/index.js";
@@ -287,6 +289,14 @@ export async function regenerateRulebook(
           )
         );
   const startingGear = resolveStartingGear(input, generatedStartingGear);
+  // The old enablements were materialized against the old rulebook; choose afresh for the new one.
+  const poolSelection =
+    schema.statMode === "full"
+      ? await selectPoolEntries(router, schema, {
+          ...(options.signal ? { signal: options.signal } : {}),
+          ...(options.fragmentDeadlineMs ? { deadlineMs: options.fragmentDeadlineMs } : {}),
+        })
+      : undefined;
   const next: StoryRecord = {
     ...story,
     schema,
@@ -410,6 +420,9 @@ export async function regenerateRulebook(
       createdAt: Date.now(),
     });
   });
+  for (const entryId of poolSelection?.ids ?? []) {
+    await enablePoolEntry(store, storyId, entryId, { source: "forge" });
+  }
   return next;
 }
 
