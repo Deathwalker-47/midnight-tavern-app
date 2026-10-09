@@ -4,7 +4,7 @@
  * minimal frozen schema stands in for a bootstrapped story.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, screen, act, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, act, fireEvent, waitFor, within } from "@testing-library/react";
 import { StorySettings } from "../../src/screens/StorySettings";
 import { useStoriesStore } from "../../src/state/storiesStore";
 import { useSettingsStore } from "../../src/state/settingsStore";
@@ -83,7 +83,65 @@ describe("StorySettings", () => {
     // Read-only catalog surfaces the frozen schema's skill + action.
     expect(screen.getByText("Blade Adept")).toBeInTheDocument();
     expect(screen.getByText("Strike")).toBeInTheDocument();
-    expect(screen.getByText("DC 12")).toBeInTheDocument();
+    expect(screen.getByText("combat · DC 12")).toBeInTheDocument();
+    expect(screen.getAllByText("written for this story")).toHaveLength(2);
+    await flush();
+  });
+
+  it("catalogues forged and enabled entries with provenance, filters and a detail view", async () => {
+    const bridge = makeMemoryBridge();
+    setBridge(bridge);
+    const { story: created } = await bridge.createStory({
+      storyId: "pool",
+      title: "Pool",
+      premise: "A fading kingdom.",
+      playerName: "Ari",
+      statMode: "full",
+    });
+    await bridge.enablePoolEntry("pool", "uni.social.persuasion.persuade");
+    await bridge.enablePoolEntry("pool", "uni.magic.fire_magic.fire_bolt");
+    useStoriesStore.setState({ current: created, currentStatus: "ready" });
+    render(<StorySettings storyId="pool" />);
+
+    const catalogue = within(await screen.findByTestId("rulebook-catalogue"));
+    expect(await catalogue.findByText("Persuade")).toBeInTheDocument();
+    expect(catalogue.getAllByText("added by you")).toHaveLength(3);
+    const visible = () => catalogue.getAllByRole("button", { expanded: false }).map((button) => button.textContent);
+
+    fireEvent.change(catalogue.getByLabelText("Filter by kind"), { target: { value: "skill" } });
+    expect(visible()).toEqual([expect.stringContaining("Fire Magic")]);
+    fireEvent.change(catalogue.getByLabelText("Filter by kind"), { target: { value: "all" } });
+    fireEvent.change(catalogue.getByLabelText("Filter by category"), { target: { value: "social" } });
+    expect(visible()).toEqual([expect.stringContaining("Persuade")]);
+    fireEvent.change(catalogue.getByLabelText("Filter by category"), { target: { value: "all" } });
+    fireEvent.change(catalogue.getByLabelText("Filter by tier"), { target: { value: "common" } });
+    expect(visible()).toEqual([expect.stringContaining("Fire Magic")]);
+    fireEvent.change(catalogue.getByLabelText("Filter by tier"), { target: { value: "all" } });
+    fireEvent.change(catalogue.getByLabelText("Search the rulebook catalogue"), { target: { value: "zzz" } });
+    expect(catalogue.getByText("Nothing in this story's catalogue matches.")).toBeInTheDocument();
+    fireEvent.change(catalogue.getByLabelText("Search the rulebook catalogue"), { target: { value: "bolt" } });
+    expect(visible()).toEqual([expect.stringContaining("Fire Bolt")]);
+
+    fireEvent.click(catalogue.getByRole("button", { name: /Fire Bolt/ }));
+    const bolt = within(catalogue.getByTestId("catalogue-detail-uni.magic.fire_magic.fire_bolt"));
+    expect(bolt.getByText("Skill: Fire Magic")).toBeInTheDocument();
+    expect(bolt.getByText("2 Mana per attempt")).toBeInTheDocument();
+    expect(bolt.getByText("One target")).toBeInTheDocument();
+    expect(bolt.getByText("OUTCOME TABLE")).toBeInTheDocument();
+    const success = within(bolt.getByText("SUCCESS").closest("tr")!);
+    expect(success.getByText(/^Target -\d+ Health/)).toBeInTheDocument();
+    expect(success.getByText(/^“.+”$/)).toBeInTheDocument();
+
+    fireEvent.change(catalogue.getByLabelText("Search the rulebook catalogue"), { target: { value: "" } });
+    fireEvent.click(catalogue.getByRole("button", { name: /Fire Magic/ }));
+    const magic = within(catalogue.getByTestId("catalogue-detail-uni.magic.fire_magic.fire_magic"));
+    expect(magic.getByText("Active — unlocks and improves actions")).toBeInTheDocument();
+    expect(magic.getByText("Fire Bolt")).toBeInTheDocument();
+
+    // Disabling in the pool browser drops the entry from the catalogue.
+    fireEvent.click(await screen.findByRole("button", { name: /^Persuasion & Negotiation/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Disable Persuade" }));
+    await waitFor(() => expect(catalogue.queryByText("Persuade")).toBeNull());
     await flush();
   });
 

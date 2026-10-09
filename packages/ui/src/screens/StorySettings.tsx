@@ -1,6 +1,7 @@
 /**
  * StorySettings — per-story settings: rename, story-scoped model overrides (baseline from the
- * global role map), the read-only rulebook (frozen story schema), and a danger-zone delete.
+ * global role map), the rulebook catalogue (forged entries plus enabled universal-pool entries), the
+ * universal pool browser with enable / disable (plan 09 §7), and a danger-zone delete.
  * Ported from Design/handoff/screens/StorySettings.dc.html (the "Demo" chip row is dropped).
  *
  * As a story sub-tab it receives `props.storyId`; with none it renders a "no story open" empty
@@ -15,7 +16,7 @@
  * method exists, point the picker's onChange at it. Rename → `useStoriesStore.rename`; delete →
  * `useStoriesStore.remove`.
  */
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { useStoriesStore } from "../state/storiesStore";
 import { useSettingsStore } from "../state/settingsStore";
@@ -28,6 +29,7 @@ import type {
   EquipmentLootConfig,
   LorebookLibraryEntry,
   PersonaRecord,
+  PoolEnablementView,
   RulebookRegenerationImpact,
   UniversalActionConfig,
 } from "../bridge/core";
@@ -44,6 +46,8 @@ import {
 } from "../components";
 import type { AttachSourceTag, DifficultyValue, ForgeOperationState, ForgeStep } from "../components";
 import type { ScreenProps } from "./registry";
+import { RulebookCatalogue } from "./storySettings/RulebookCatalogue";
+import { PoolBrowser } from "./storySettings/PoolBrowser";
 
 export function StorySettings(props: ScreenProps): JSX.Element {
   const storyId = props.storyId;
@@ -110,6 +114,21 @@ export function StorySettings(props: ScreenProps): JSX.Element {
     },
     []
   );
+
+  // Enabled pool entries feed the catalogue; the pool browser asks for a re-read after each change.
+  const [poolEnablements, setPoolEnablements] = useState<PoolEnablementView[]>([]);
+  const fullStats = loaded && current?.schema.statMode === "full";
+  const refreshPoolEnablements = useCallback(async () => {
+    if (!storyId) return;
+    try {
+      setPoolEnablements(await getBridge().listPoolEnablements(storyId));
+    } catch {
+      setPoolEnablements([]);
+    }
+  }, [storyId]);
+  useEffect(() => {
+    if (fullStats) void refreshPoolEnablements();
+  }, [fullStats, refreshPoolEnablements]);
 
   // Sync the local title once the story record loads (deeplink / tab-switch).
   const effectiveTitle = title ?? current?.title ?? "";
@@ -446,25 +465,17 @@ export function StorySettings(props: ScreenProps): JSX.Element {
         )}
 
         {schema.statMode === "full" ? <>
-        {/* SKILLS — read-only catalog from the frozen schema. */}
-        <Section kicker="§ SKILLS" heading="Skill catalog" aside={`${schema.skills.length} skills`}>
-          {schema.skills.length === 0 ? (
-            <div style={styles.sectionNote}>This story defines no learnable skills.</div>
-          ) : (
-            <div style={styles.list}>
-              {schema.skills.map((sk) => (
-                <div key={sk.id} style={styles.listRow}>
-                  <div style={{ flex: "0 0 160px" }}>
-                    <div style={styles.rowName}>{sk.name}</div>
-                    <div className="mono" style={styles.rowMeta}>
-                      {sk.tier}
-                    </div>
-                  </div>
-                  <div style={styles.rowDesc}>{sk.description}</div>
-                </div>
-              ))}
-            </div>
-          )}
+        {/* CATALOGUE — what the story runs on now: forged entries plus enabled pool entries. */}
+        <Section
+          kicker="§ CATALOGUE"
+          heading="Rulebook catalogue"
+          aside={`${schema.skills.length + schema.actions.length + poolEnablements.length} entries`}
+        >
+          <RulebookCatalogue schema={schema} enablements={poolEnablements} />
+        </Section>
+
+        <Section kicker="§ POOL" heading="Universal pool">
+          <PoolBrowser storyId={storyId} onChanged={() => void refreshPoolEnablements()} />
         </Section>
 
         <Section kicker="§ UNIVERSAL ACTIONS" heading="Universal action reference" aside={`${universalActions.length} configured`}>
@@ -495,41 +506,6 @@ export function StorySettings(props: ScreenProps): JSX.Element {
                   </div>
                 </div>
               ))}
-            </div>
-          )}
-        </Section>
-
-        {/* ACTIONS — read-only catalog; DC values shown (editable once the override API lands). */}
-        <Section kicker="§ ACTIONS" heading="Action catalog" aside={`${schema.actions.length} actions`}>
-          {schema.actions.length === 0 ? (
-            <div style={styles.sectionNote}>This story defines no catalog actions.</div>
-          ) : (
-            <div style={styles.list}>
-              {schema.actions.map((a) => {
-                const attribute = a.governingAttribute
-                  ? schema.attributes?.find((candidate) => candidate.id === a.governingAttribute)
-                  : undefined;
-                const terms = [
-                  attribute ? `${attribute.abbrev} (${attribute.name})` : undefined,
-                  a.requiresSkill ? `skill: ${a.requiresSkill}` : undefined,
-                ].filter(Boolean);
-                return (
-                  <div key={a.id} style={styles.actionRow}>
-                    <div>
-                      <div style={styles.rowName}>{a.label}</div>
-                      <div className="mono" style={styles.rowMeta}>
-                        {(a as typeof a & { universalBase?: string; description?: string }).universalBase ? `BASE · ${(a as typeof a & { universalBase?: string }).universalBase}` : "STORY-SPECIFIC"}
-                      </div>
-                    </div>
-                    <div style={styles.rowCat}>{a.category}</div>
-                    <div className="mono" style={styles.rowDc}>{a.opposed ? "OPPOSED" : `DC ${a.dc}`}</div>
-                    <div style={styles.rowReq}>
-                      {terms.length ? terms.join(" · ") : "—"}
-                      {(a as typeof a & { description?: string }).description ? <div style={{ marginTop: 3 }}>{(a as typeof a & { description?: string }).description}</div> : null}
-                    </div>
-                  </div>
-                );
-              })}
             </div>
           )}
         </Section>
