@@ -103,7 +103,8 @@ push to `main`.
 - [x] **S13. Mid-story enablement** by the analyzer with every guard (pool id, tier gate, 2 per chapter,
       skill-gated only, own transaction, journal, checkpoint).
 - [x] **S14. Story Settings UI.** Enabled catalogue + pool browser with toggles and the D8 lock reason.
-- [ ] **S15. Universal items** — item-kind expansion with legacy aliases; `universal-items.json` feeding loot.
+- [x] **S15. Universal items** — item-kind expansion with legacy aliases; `universal-items.json` feeding loot.
+      *(Done as S15a — kinds, archetypes, migration 18 — and S15b — looted consumables usable and rewind-safe.)*
 - [ ] **S16. Weapon specials** via `action_enable` + S4 cooldowns + rarity scaling.
 - [ ] **S17. External config overrides** — merge-by-id override files, validation with surfaced errors,
       per-story "locked to creation / follow my edits", past rulings never recomputed.
