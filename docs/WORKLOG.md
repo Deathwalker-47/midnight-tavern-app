@@ -2513,3 +2513,35 @@ UI 193/29 = 1027; engine coverage 100%.
 
 **Next:** S12 — combat and magic archetypes with the plan's exclusion list (and reaction skills paired
 with their actions).
+
+---
+
+## 2026-10-09 - S12: combat and magic in the pool, reaction pairs, exclusions (plan 09 §4.1–4.2)
+
+**Format.** Skill archetypes may now be `reaction` (with a `trigger`). A reaction skill entry is paired
+with exactly one live action entry gated by it (new `gates` rule); materialization sets the skill's
+`reaction.actionId` to that pair and each half `requires` the other, so enabling either enables both.
+A reaction with no pair is refused.
+**Content** (+27 archetypes, +69 entries, 13 sections): melee (Strike, Power Attack, Cleave), brawling
+(Punch, Trip, Shove, Disarm, Grapple), ranged (Shoot, Aimed Shot), defense (Guard, Dodge, Take Cover),
+combat skills (Weapon Mastery, Marksmanship, Battle Stance toggle, Combat Instincts passive), reflexes
+(**Riposte** — attacked → Riposte Strike; **Retaliation** — damaged → Retaliating Blow); five elemental
+schools (fire, frost, lightning, stone, shadow) sharing bolt / blast / storm / affliction archetypes
+via an `{element}` parameter, each with a school skill and a mastery skill; healing magic (Heal, Mass
+Heal, Regeneration, Ward, Arcane Attunement); hexcraft (Hex, Drain Life). Magic is setting-fit
+fantasy / historical / horror; martial entries fit any setting.
+**Exclusions recorded** ("Beyond the Engine" section, each with its reason): Stop Time, Rewind Time,
+Summon a Familiar, Shapeshift, Bind a Soul, Walk in Dreams, Sacrifice Lifespan, Reroll Fate.
+**The rules did their job:** the first draft gave common attacks a −2× crit; `poolRules` flagged it
+against the common cap (1.5×) and the content was fixed, not the rule.
+
+**Scale, honestly.** The pool is now 63 archetypes / 222 entries (209 live, 35 skills). Plan 09 §4.1's
+"80–150 archetypes covering ~3,000 entries" assumed the owner's taxonomy file, which is gone; the format,
+rules and selection scale to that size without code changes — growing it is now content work.
+
+**Tests.** Pool tests updated (size/categories, collapse ratio, reaction pairs, pairing-rule
+violations both ways, reaction archetype schema); enablement tests for pairs both ways, an orphaned
+reaction, a validator-clean effective rulebook, and spell parameter filling with magic → intellect
+fallback. Id lock extended (222). Typecheck clean; core 838/60, UI 193/29 = 1031; engine coverage 100%.
+
+**Next:** S13 — mid-story enablement by the analyzer, with every guard.

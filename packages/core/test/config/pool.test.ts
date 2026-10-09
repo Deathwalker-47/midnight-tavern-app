@@ -39,14 +39,25 @@ describe("the shipped universal pool", () => {
     expect(poolViolations(UNIVERSAL_ARCHETYPES, UNIVERSAL_POOL)).toEqual([]);
   });
 
-  it("is a non-combat starter pool of meaningful size", () => {
+  it("covers everyday, combat and magic play at a meaningful size", () => {
     const live = UNIVERSAL_POOL.entries.filter((candidate) => !candidate.excluded);
-    expect(live.filter((candidate) => candidate.kind === "action").length).toBeGreaterThanOrEqual(120);
-    expect(live.filter((candidate) => candidate.kind === "skill").length).toBeGreaterThanOrEqual(12);
-    expect(UNIVERSAL_POOL.sections.length).toBeGreaterThanOrEqual(20);
-    // Non-combat only for now: combat and magic archetypes arrive in S12.
-    expect(UNIVERSAL_ARCHETYPES.archetypes.some((archetype) => archetype.kind === "action" && archetype.category === "combat"))
-      .toBe(false);
+    expect(live.filter((candidate) => candidate.kind === "action").length).toBeGreaterThanOrEqual(170);
+    expect(live.filter((candidate) => candidate.kind === "skill").length).toBeGreaterThanOrEqual(30);
+    expect(UNIVERSAL_POOL.sections.length).toBeGreaterThanOrEqual(35);
+    const actionArchetypes = UNIVERSAL_ARCHETYPES.archetypes.filter((archetype) => archetype.kind === "action");
+    expect(new Set(actionArchetypes.map((archetype) => archetype.category))).toEqual(
+      new Set(["combat", "social", "exploration", "crafting", "utility"])
+    );
+    // Shape-identical entries really do collapse: far fewer archetypes than entries.
+    expect(UNIVERSAL_ARCHETYPES.archetypes.length * 3).toBeLessThan(live.length);
+  });
+
+  it("pairs every reaction skill with the one action it fires", () => {
+    const reactions = UNIVERSAL_POOL.entries.filter((candidate) => {
+      const archetype = UNIVERSAL_ARCHETYPES.archetypes.find((a) => a.id === candidate.archetypeId);
+      return archetype?.kind === "skill" && archetype.skillType === "reaction";
+    });
+    expect(reactions.map((reaction) => reaction.name)).toEqual(["Riposte", "Retaliation"]);
   });
 
   it("never loses an id once shipped", () => {
@@ -81,6 +92,9 @@ describe("pool schemas", () => {
       .toBe(false);
     expect(ArchetypeSchema.safeParse({ ...base, skillType: "toggle" }).success).toBe(false);
     expect(ArchetypeSchema.safeParse({ ...base, skillType: "active" }).success).toBe(true);
+    expect(ArchetypeSchema.safeParse({ ...base, skillType: "reaction" }).success).toBe(false);
+    expect(ArchetypeSchema.safeParse({ ...base, skillType: "active", reaction: { trigger: "attacked" } }).success).toBe(false);
+    expect(ArchetypeSchema.safeParse({ ...base, skillType: "reaction", reaction: { trigger: "damaged" } }).success).toBe(true);
   });
 });
 
@@ -221,6 +235,13 @@ describe("each balance rule catches what it claims to", () => {
     expect(
       violationsAfter((_, p) => (entry(p, "uni.care.medicine.medicine").requiresSkill = "uni.care.medicine.medicine"))
     ).toContainEqual(expect.objectContaining({ rule: "gates", message: "Only an action can require a skill." }));
+    // A reaction skill fires exactly one action.
+    expect(
+      violationsAfter((_, p) => (entry(p, "uni.combat.reflexes.riposte_strike").requiresSkill = "uni.combat.melee.weapon_mastery"))
+    ).toContainEqual(expect.objectContaining({ rule: "gates", id: "uni.combat.reflexes.riposte", message: "A reaction skill must gate exactly one action (it gates 0)." }));
+    expect(
+      violationsAfter((_, p) => (entry(p, "uni.combat.reflexes.retaliating_blow").requiresSkill = "uni.combat.reflexes.riposte"))
+    ).toContainEqual(expect.objectContaining({ rule: "gates", id: "uni.combat.reflexes.riposte", message: "A reaction skill must gate exactly one action (it gates 2)." }));
   });
 
   it("symmetry", () => {

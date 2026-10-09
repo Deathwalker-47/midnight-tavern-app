@@ -14,6 +14,7 @@ import {
   requirePlayableStory,
   submitTurn,
   UNIVERSAL_ARCHETYPES,
+  validateStorySchema,
   UNIVERSAL_POOL,
   type ActionDef,
   type ChatResponse,
@@ -382,5 +383,48 @@ describe("enabling and disabling in a story", () => {
     expect((await store.poolEnablements.list(storyId)).map((record) => record.entryId)).toEqual([
       "uni.social.persuasion.persuade",
     ]);
+  });
+});
+
+describe("combat and magic entries (S12)", () => {
+  it("pair a reaction skill with the action it fires, whichever half is enabled first", () => {
+    const riposte = ok(story, "uni.combat.reflexes.riposte");
+    expect(riposte.definition).toMatchObject({
+      skillType: "reaction",
+      reaction: { trigger: "attacked", actionId: "uni.combat.reflexes.riposte_strike" },
+    });
+    expect(riposte.requires).toEqual(["uni.combat.reflexes.riposte_strike"]);
+    expect(ok(story, "uni.combat.reflexes.riposte_strike").requires).toEqual(["uni.combat.reflexes.riposte"]);
+    const orphaned: PoolCatalogue = {
+      archetypes: UNIVERSAL_ARCHETYPES,
+      pool: {
+        ...UNIVERSAL_POOL,
+        entries: UNIVERSAL_POOL.entries.filter((entry) => entry.id !== "uni.combat.reflexes.riposte_strike"),
+      },
+    };
+    const lonely = materializeEntry(story, "uni.combat.reflexes.riposte", orphaned);
+    expect(lonely).toEqual({ ok: false, reason: "Riposte has no paired action to fire." });
+  });
+
+  it("enable a reaction pair into a rulebook the validator accepts", async () => {
+    const store = await openStore(":memory:");
+    await store.stories.insert({ id: "duel", title: "Duel", createdAt: 0, schema: { ...story, storyId: "duel" }, locked: true });
+    expect(await enablePoolEntry(store, "duel", "uni.combat.reflexes.riposte", { source: "player" })).toEqual({
+      ok: true,
+      enabled: ["uni.combat.reflexes.riposte", "uni.combat.reflexes.riposte_strike"],
+    });
+    const effective = await loadEffectiveSchema(store, (await store.stories.get("duel"))!);
+    expect(validateStorySchema(effective).filter((error) => /riposte/i.test(error))).toEqual([]);
+    await store.close();
+  });
+
+  it("fill a spell's element into its narration and fall back from magic to intellect", () => {
+    const bolt = ok({ ...story, attributes: [...story.attributes, { id: "wit", name: "Wits", abbrev: "WIT", description: "x", defaultScore: 10 }] },
+      "uni.magic.fire_magic.fire_bolt").definition as ActionDef;
+    expect(bolt).toMatchObject({ costs: { resources: { aether: 2 } }, governingAttribute: "wit", requiresSkill: "uni.magic.fire_magic.fire_magic" });
+    expect(bolt.effects.success.narrationHint).toBe("a bolt of flame strikes");
+    expect(bolt.effects.success.resourceDeltaTarget).toEqual({ hp: -4 });
+    const storm = ok(story, "uni.magic.storm_magic.tempest").definition as ActionDef;
+    expect(storm).toMatchObject({ targeting: { scope: "area", maxTargets: 6 }, cooldownTurns: 4 });
   });
 });

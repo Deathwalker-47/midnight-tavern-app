@@ -125,6 +125,71 @@
       "id": "civic",
       "title": "Governance & Administration",
       "description": "Accounts, supplies, labour and petitions."
+    },
+    {
+      "id": "melee",
+      "title": "Melee Combat",
+      "description": "Weapon blows, power attacks and sweeps at close range."
+    },
+    {
+      "id": "brawling",
+      "title": "Brawling & Grappling",
+      "description": "Unarmed blows, trips, shoves and holds."
+    },
+    {
+      "id": "ranged",
+      "title": "Ranged Combat",
+      "description": "Bows, guns, throws and aimed shots."
+    },
+    {
+      "id": "defense",
+      "title": "Defense & Evasion",
+      "description": "Guarding, dodging and taking cover."
+    },
+    {
+      "id": "reflexes",
+      "title": "Combat Reflexes",
+      "description": "Reaction skills that answer an attack on their own, and their counters."
+    },
+    {
+      "id": "fire_magic",
+      "title": "Fire Magic",
+      "description": "Flame bolts, blasts and burning curses."
+    },
+    {
+      "id": "frost_magic",
+      "title": "Frost Magic",
+      "description": "Ice bolts, blizzards and numbing cold."
+    },
+    {
+      "id": "storm_magic",
+      "title": "Storm Magic",
+      "description": "Lightning and thunder."
+    },
+    {
+      "id": "earth_magic",
+      "title": "Earth Magic",
+      "description": "Stone, quake and crushing weight."
+    },
+    {
+      "id": "shadow_magic",
+      "title": "Shadow Magic",
+      "description": "Darkness, decay and dread."
+    },
+    {
+      "id": "healing_magic",
+      "title": "Healing Magic",
+      "description": "Mending, regeneration and wards."
+    },
+    {
+      "id": "hexcraft",
+      "title": "Hexcraft",
+      "description": "Curses, drains and weakening."
+    },
+    {
+      "id": "beyond",
+      "title": "Beyond the Engine",
+      "description": "Powers the engine cannot honestly express; kept here, excluded, with the reason."
     }
   ],
   "entries": [
@@ -3087,6 +3152,1492 @@
         "hold court",
         "hear petitions"
       ]
+    },
+    {
+      "id": "uni.combat.melee.weapon_mastery",
+      "name": "Weapon Mastery",
+      "kind": "skill",
+      "archetypeId": "arch.skill.discipline",
+      "section": "melee",
+      "tags": [
+        "combat",
+        "weapons"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Trained weaponcraft: power attacks and sweeps."
+    },
+    {
+      "id": "uni.combat.melee.battle_stance",
+      "name": "Battle Stance",
+      "kind": "skill",
+      "archetypeId": "arch.skill.battle_stance",
+      "section": "melee",
+      "tags": [
+        "combat",
+        "toggle"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "A fighting stance held at a stamina cost."
+    },
+    {
+      "id": "uni.combat.melee.combat_instincts",
+      "name": "Combat Instincts",
+      "kind": "skill",
+      "archetypeId": "arch.skill.combat_knack",
+      "section": "melee",
+      "tags": [
+        "combat",
+        "passive"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "A fighter's instincts; a small edge in combat."
+    },
+    {
+      "id": "uni.combat.melee.strike",
+      "name": "Strike",
+      "kind": "action",
+      "archetypeId": "arch.combat.strike",
+      "section": "melee",
+      "tags": [
+        "combat",
+        "melee",
+        "damage"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Hit a foe with your weapon.",
+      "aliases": [
+        "strike",
+        "slash",
+        "stab",
+        "hit with my sword"
+      ]
+    },
+    {
+      "id": "uni.combat.melee.power_attack",
+      "name": "Power Attack",
+      "kind": "action",
+      "archetypeId": "arch.combat.power_strike",
+      "section": "melee",
+      "tags": [
+        "combat",
+        "melee",
+        "damage"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Put everything into one blow.",
+      "aliases": [
+        "power attack",
+        "heavy blow",
+        "smash"
+      ],
+      "requiresSkill": "uni.combat.melee.weapon_mastery"
+    },
+    {
+      "id": "uni.combat.melee.cleave",
+      "name": "Cleave",
+      "kind": "action",
+      "archetypeId": "arch.combat.sweep",
+      "section": "melee",
+      "tags": [
+        "combat",
+        "melee",
+        "damage",
+        "group"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Sweep through several foes at once.",
+      "aliases": [
+        "cleave",
+        "sweep",
+        "wide swing"
+      ],
+      "requiresSkill": "uni.combat.melee.weapon_mastery"
+    },
+    {
+      "id": "uni.combat.brawling.punch",
+      "name": "Punch",
+      "kind": "action",
+      "archetypeId": "arch.combat.brawl",
+      "section": "brawling",
+      "tags": [
+        "combat",
+        "unarmed",
+        "damage"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Hit with your fists or body.",
+      "aliases": [
+        "punch",
+        "kick",
+        "headbutt"
+      ]
+    },
+    {
+      "id": "uni.combat.brawling.trip",
+      "name": "Trip",
+      "kind": "action",
+      "archetypeId": "arch.combat.unbalance",
+      "section": "brawling",
+      "tags": [
+        "combat",
+        "control"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Take a foe's legs out.",
+      "aliases": [
+        "trip",
+        "sweep the legs"
+      ]
+    },
+    {
+      "id": "uni.combat.brawling.shove",
+      "name": "Shove",
+      "kind": "action",
+      "archetypeId": "arch.combat.unbalance",
+      "section": "brawling",
+      "tags": [
+        "combat",
+        "control"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Push a foe off balance.",
+      "aliases": [
+        "shove",
+        "push"
+      ]
+    },
+    {
+      "id": "uni.combat.brawling.disarm",
+      "name": "Disarm",
+      "kind": "action",
+      "archetypeId": "arch.combat.unbalance",
+      "section": "brawling",
+      "tags": [
+        "combat",
+        "control"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Knock a weapon from a foe's grip.",
+      "aliases": [
+        "disarm",
+        "knock the weapon away"
+      ]
+    },
+    {
+      "id": "uni.combat.brawling.grapple",
+      "name": "Grapple",
+      "kind": "action",
+      "archetypeId": "arch.combat.grapple",
+      "section": "brawling",
+      "tags": [
+        "combat",
+        "control"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Seize and hold a foe.",
+      "aliases": [
+        "grapple",
+        "grab",
+        "wrestle",
+        "pin"
+      ]
+    },
+    {
+      "id": "uni.combat.ranged.marksmanship",
+      "name": "Marksmanship",
+      "kind": "skill",
+      "archetypeId": "arch.skill.discipline",
+      "section": "ranged",
+      "tags": [
+        "combat",
+        "ranged"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Trained aim: careful, deadly shots."
+    },
+    {
+      "id": "uni.combat.ranged.shoot",
+      "name": "Shoot",
+      "kind": "action",
+      "archetypeId": "arch.combat.shoot",
+      "section": "ranged",
+      "tags": [
+        "combat",
+        "ranged",
+        "damage"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Shoot or throw at a target.",
+      "aliases": [
+        "shoot",
+        "fire",
+        "throw",
+        "loose an arrow"
+      ]
+    },
+    {
+      "id": "uni.combat.ranged.aimed_shot",
+      "name": "Aimed Shot",
+      "kind": "action",
+      "archetypeId": "arch.combat.aimed_shot",
+      "section": "ranged",
+      "tags": [
+        "combat",
+        "ranged",
+        "damage"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Take a moment and make it count.",
+      "aliases": [
+        "aim",
+        "aimed shot",
+        "line up the shot"
+      ],
+      "requiresSkill": "uni.combat.ranged.marksmanship"
+    },
+    {
+      "id": "uni.combat.defense.guard",
+      "name": "Guard",
+      "kind": "action",
+      "archetypeId": "arch.combat.guard",
+      "section": "defense",
+      "tags": [
+        "combat",
+        "defense"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Raise your guard.",
+      "aliases": [
+        "guard",
+        "block",
+        "brace",
+        "parry"
+      ]
+    },
+    {
+      "id": "uni.combat.defense.dodge",
+      "name": "Dodge",
+      "kind": "action",
+      "archetypeId": "arch.combat.evade",
+      "section": "defense",
+      "tags": [
+        "combat",
+        "defense"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Get out of the way.",
+      "aliases": [
+        "dodge",
+        "duck",
+        "sidestep"
+      ]
+    },
+    {
+      "id": "uni.combat.defense.take_cover",
+      "name": "Take Cover",
+      "kind": "action",
+      "archetypeId": "arch.combat.evade",
+      "section": "defense",
+      "tags": [
+        "combat",
+        "defense"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Get behind something solid.",
+      "aliases": [
+        "take cover",
+        "hide behind"
+      ]
+    },
+    {
+      "id": "uni.combat.reflexes.riposte",
+      "name": "Riposte",
+      "kind": "skill",
+      "archetypeId": "arch.skill.reflex_attacked",
+      "section": "reflexes",
+      "tags": [
+        "combat",
+        "reaction"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Answer every attack with an instant counter."
+    },
+    {
+      "id": "uni.combat.reflexes.riposte_strike",
+      "name": "Riposte Strike",
+      "kind": "action",
+      "archetypeId": "arch.combat.counter",
+      "section": "reflexes",
+      "tags": [
+        "combat",
+        "reaction",
+        "damage"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "The counter your Riposte throws when you are attacked.",
+      "aliases": [
+        "riposte"
+      ],
+      "requiresSkill": "uni.combat.reflexes.riposte"
+    },
+    {
+      "id": "uni.combat.reflexes.retaliation",
+      "name": "Retaliation",
+      "kind": "skill",
+      "archetypeId": "arch.skill.reflex_damaged",
+      "section": "reflexes",
+      "tags": [
+        "combat",
+        "reaction"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "Strike back whenever a blow actually hurts you."
+    },
+    {
+      "id": "uni.combat.reflexes.retaliating_blow",
+      "name": "Retaliating Blow",
+      "kind": "action",
+      "archetypeId": "arch.combat.counter",
+      "section": "reflexes",
+      "tags": [
+        "combat",
+        "reaction",
+        "damage"
+      ],
+      "settingFit": [
+        "any"
+      ],
+      "description": "The blow your Retaliation throws when you are hurt.",
+      "aliases": [
+        "retaliate"
+      ],
+      "requiresSkill": "uni.combat.reflexes.retaliation"
+    },
+    {
+      "id": "uni.magic.fire_magic.fire_magic",
+      "name": "Fire Magic",
+      "kind": "skill",
+      "archetypeId": "arch.skill.training",
+      "section": "fire_magic",
+      "tags": [
+        "magic",
+        "fire"
+      ],
+      "settingFit": [
+        "fantasy",
+        "historical",
+        "horror"
+      ],
+      "description": "The basic art of flame magic."
+    },
+    {
+      "id": "uni.magic.fire_magic.fire_mastery",
+      "name": "Fire Mastery",
+      "kind": "skill",
+      "archetypeId": "arch.skill.discipline",
+      "section": "fire_magic",
+      "tags": [
+        "magic",
+        "fire"
+      ],
+      "settingFit": [
+        "fantasy",
+        "historical",
+        "horror"
+      ],
+      "description": "Deep command of flame magic."
+    },
+    {
+      "id": "uni.magic.fire_magic.fire_bolt",
+      "name": "Fire Bolt",
+      "kind": "action",
+      "archetypeId": "arch.magic.bolt",
+      "section": "fire_magic",
+      "tags": [
+        "magic",
+        "fire",
+        "damage"
+      ],
+      "settingFit": [
+        "fantasy",
+        "historical",
+        "horror"
+      ],
+      "description": "Hurl a bolt of flame.",
+      "aliases": [
+        "flame bolt",
+        "cast a flame bolt",
+        "throw flame"
+      ],
+      "requiresSkill": "uni.magic.fire_magic.fire_magic",
+      "params": {
+        "element": "flame"
+      }
+    },
+    {
+      "id": "uni.magic.fire_magic.fire_blast",
+      "name": "Fire Blast",
+      "kind": "action",
+      "archetypeId": "arch.magic.blast",
+      "section": "fire_magic",
+      "tags": [
+        "magic",
+        "fire",
+        "damage",
+        "group"
+      ],
+      "settingFit": [
+        "fantasy",
+        "historical",
+        "horror"
+      ],
+      "description": "A burst of flame over several foes.",
+      "aliases": [
+        "flame blast",
+        "burst of flame"
+      ],
+      "requiresSkill": "uni.magic.fire_magic.fire_magic",
+      "params": {
+        "element": "flame"
+      }
+    },
+    {
+      "id": "uni.magic.fire_magic.fire_storm",
+      "name": "Fire Storm",
+      "kind": "action",
+      "archetypeId": "arch.magic.storm",
+      "section": "fire_magic",
+      "tags": [
+        "magic",
+        "fire",
+        "damage",
+        "area"
+      ],
+      "settingFit": [
+        "fantasy",
+        "historical",
+        "horror"
+      ],
+      "description": "Unleash a storm of flame on everything nearby.",
+      "aliases": [
+        "flame storm",
+        "storm of flame"
+      ],
+      "requiresSkill": "uni.magic.fire_magic.fire_mastery",
+      "params": {
+        "element": "flame"
+      }
+    },
+    {
+      "id": "uni.magic.fire_magic.immolate",
+      "name": "Immolate",
+      "kind": "action",
+      "archetypeId": "arch.magic.affliction",
+      "section": "fire_magic",
+      "tags": [
+        "magic",
+        "fire",
+        "damage_over_time"
+      ],
+      "settingFit": [
+        "fantasy",
+        "historical",
+        "horror"
+      ],
+      "description": "A lingering curse of flame.",
+      "aliases": [
+        "immolate",
+        "curse with flame"
+      ],
+      "requiresSkill": "uni.magic.fire_magic.fire_magic",
+      "params": {
+        "element": "flame"
+      }
+    },
+    {
+      "id": "uni.magic.frost_magic.frost_magic",
+      "name": "Frost Magic",
+      "kind": "skill",
+      "archetypeId": "arch.skill.training",
+      "section": "frost_magic",
+      "tags": [
+        "magic",
+        "frost"
+      ],
+      "settingFit": [
+        "fantasy",
+        "historical",
+        "horror"
+      ],
+      "description": "The basic art of ice magic."
+    },
+    {
+      "id": "uni.magic.frost_magic.frost_mastery",
+      "name": "Frost Mastery",
+      "kind": "skill",
+      "archetypeId": "arch.skill.discipline",
+      "section": "frost_magic",
+      "tags": [
+        "magic",
+        "frost"
+      ],
+      "settingFit": [
+        "fantasy",
+        "historical",
+        "horror"
+      ],
+      "description": "Deep command of ice magic."
+    },
+    {
+      "id": "uni.magic.frost_magic.frost_bolt",
+      "name": "Frost Bolt",
+      "kind": "action",
+      "archetypeId": "arch.magic.bolt",
+      "section": "frost_magic",
+      "tags": [
+        "magic",
+        "frost",
+        "damage"
+      ],
+      "settingFit": [
+        "fantasy",
+        "historical",
+        "horror"
+      ],
+      "description": "Hurl a bolt of ice.",
+      "aliases": [
+        "ice bolt",
+        "cast a ice bolt",
+        "throw ice"
+      ],
+      "requiresSkill": "uni.magic.frost_magic.frost_magic",
+      "params": {
+        "element": "ice"
+      }
+    },
+    {
+      "id": "uni.magic.frost_magic.frost_blast",
+      "name": "Frost Blast",
+      "kind": "action",
+      "archetypeId": "arch.magic.blast",
+      "section": "frost_magic",
+      "tags": [
+        "magic",
+        "frost",
+        "damage",
+        "group"
+      ],
+      "settingFit": [
+        "fantasy",
+        "historical",
+        "horror"
+      ],
+      "description": "A burst of ice over several foes.",
+      "aliases": [
+        "ice blast",
+        "burst of ice"
+      ],
+      "requiresSkill": "uni.magic.frost_magic.frost_magic",
+      "params": {
+        "element": "ice"
+      }
+    },
+    {
+      "id": "uni.magic.frost_magic.frost_storm",
+      "name": "Frost Storm",
+      "kind": "action",
+      "archetypeId": "arch.magic.storm",
+      "section": "frost_magic",
+      "tags": [
+        "magic",
+        "frost",
+        "damage",
+        "area"
+      ],
+      "settingFit": [
+        "fantasy",
+        "historical",
+        "horror"
+      ],
+      "description": "Unleash a storm of ice on everything nearby.",
+      "aliases": [
+        "ice storm",
+        "storm of ice"
+      ],
+      "requiresSkill": "uni.magic.frost_magic.frost_mastery",
+      "params": {
+        "element": "ice"
+      }
+    },
+    {
+      "id": "uni.magic.frost_magic.frostbite",
+      "name": "Frostbite",
+      "kind": "action",
+      "archetypeId": "arch.magic.affliction",
+      "section": "frost_magic",
+      "tags": [
+        "magic",
+        "frost",
+        "damage_over_time"
+      ],
+      "settingFit": [
+        "fantasy",
+        "historical",
+        "horror"
+      ],
+      "description": "A lingering curse of ice.",
+      "aliases": [
+        "frostbite",
+        "curse with ice"
+      ],
+      "requiresSkill": "uni.magic.frost_magic.frost_magic",
+      "params": {
+        "element": "ice"
+      }
+    },
+    {
+      "id": "uni.magic.storm_magic.storm_magic",
+      "name": "Storm Magic",
+      "kind": "skill",
+      "archetypeId": "arch.skill.training",
+      "section": "storm_magic",
+      "tags": [
+        "magic",
+        "lightning"
+      ],
+      "settingFit": [
+        "fantasy",
+        "historical",
+        "horror"
+      ],
+      "description": "The basic art of lightning magic."
+    },
+    {
+      "id": "uni.magic.storm_magic.storm_mastery",
+      "name": "Storm Mastery",
+      "kind": "skill",
+      "archetypeId": "arch.skill.discipline",
+      "section": "storm_magic",
+      "tags": [
+        "magic",
+        "lightning"
+      ],
+      "settingFit": [
+        "fantasy",
+        "historical",
+        "horror"
+      ],
+      "description": "Deep command of lightning magic."
+    },
+    {
+      "id": "uni.magic.storm_magic.storm_bolt",
+      "name": "Storm Bolt",
+      "kind": "action",
+      "archetypeId": "arch.magic.bolt",
+      "section": "storm_magic",
+      "tags": [
+        "magic",
+        "lightning",
+        "damage"
+      ],
+      "settingFit": [
+        "fantasy",
+        "historical",
+        "horror"
+      ],
+      "description": "Hurl a bolt of lightning.",
+      "aliases": [
+        "lightning bolt",
+        "cast a lightning bolt",
+        "throw lightning"
+      ],
+      "requiresSkill": "uni.magic.storm_magic.storm_magic",
+      "params": {
+        "element": "lightning"
+      }
+    },
+    {
+      "id": "uni.magic.storm_magic.storm_blast",
+      "name": "Storm Blast",
+      "kind": "action",
+      "archetypeId": "arch.magic.blast",
+      "section": "storm_magic",
+      "tags": [
+        "magic",
+        "lightning",
+        "damage",
+        "group"
+      ],
+      "settingFit": [
+        "fantasy",
+        "historical",
+        "horror"
+      ],
+      "description": "A burst of lightning over several foes.",
+      "aliases": [
+        "lightning blast",
+        "burst of lightning"
+      ],
+      "requiresSkill": "uni.magic.storm_magic.storm_magic",
+      "params": {
+        "element": "lightning"
+      }
+    },
+    {
+      "id": "uni.magic.storm_magic.tempest",
+      "name": "Tempest",
+      "kind": "action",
+      "archetypeId": "arch.magic.storm",
+      "section": "storm_magic",
+      "tags": [
+        "magic",
+        "lightning",
+        "damage",
+        "area"
+      ],
+      "settingFit": [
+        "fantasy",
+        "historical",
+        "horror"
+      ],
+      "description": "Unleash a storm of lightning on everything nearby.",
+      "aliases": [
+        "lightning storm",
+        "storm of lightning"
+      ],
+      "requiresSkill": "uni.magic.storm_magic.storm_mastery",
+      "params": {
+        "element": "lightning"
+      }
+    },
+    {
+      "id": "uni.magic.storm_magic.static_lock",
+      "name": "Static Lock",
+      "kind": "action",
+      "archetypeId": "arch.magic.affliction",
+      "section": "storm_magic",
+      "tags": [
+        "magic",
+        "lightning",
+        "damage_over_time"
+      ],
+      "settingFit": [
+        "fantasy",
+        "historical",
+        "horror"
+      ],
+      "description": "A lingering curse of lightning.",
+      "aliases": [
+        "static lock",
+        "curse with lightning"
+      ],
+      "requiresSkill": "uni.magic.storm_magic.storm_magic",
+      "params": {
+        "element": "lightning"
+      }
+    },
+    {
+      "id": "uni.magic.earth_magic.earth_magic",
+      "name": "Earth Magic",
+      "kind": "skill",
+      "archetypeId": "arch.skill.training",
+      "section": "earth_magic",
+      "tags": [
+        "magic",
+        "stone"
+      ],
+      "settingFit": [
+        "fantasy",
+        "historical",
+        "horror"
+      ],
+      "description": "The basic art of stone magic."
+    },
+    {
+      "id": "uni.magic.earth_magic.earth_mastery",
+      "name": "Earth Mastery",
+      "kind": "skill",
+      "archetypeId": "arch.skill.discipline",
+      "section": "earth_magic",
+      "tags": [
+        "magic",
+        "stone"
+      ],
+      "settingFit": [
+        "fantasy",
+        "historical",
+        "horror"
+      ],
+      "description": "Deep command of stone magic."
+    },
+    {
+      "id": "uni.magic.earth_magic.earth_bolt",
+      "name": "Earth Bolt",
+      "kind": "action",
+      "archetypeId": "arch.magic.bolt",
+      "section": "earth_magic",
+      "tags": [
+        "magic",
+        "stone",
+        "damage"
+      ],
+      "settingFit": [
+        "fantasy",
+        "historical",
+        "horror"
+      ],
+      "description": "Hurl a bolt of stone.",
+      "aliases": [
+        "stone bolt",
+        "cast a stone bolt",
+        "throw stone"
+      ],
+      "requiresSkill": "uni.magic.earth_magic.earth_magic",
+      "params": {
+        "element": "stone"
+      }
+    },
+    {
+      "id": "uni.magic.earth_magic.earth_blast",
+      "name": "Earth Blast",
+      "kind": "action",
+      "archetypeId": "arch.magic.blast",
+      "section": "earth_magic",
+      "tags": [
+        "magic",
+        "stone",
+        "damage",
+        "group"
+      ],
+      "settingFit": [
+        "fantasy",
+        "historical",
+        "horror"
+      ],
+      "description": "A burst of stone over several foes.",
+      "aliases": [
+        "stone blast",
+        "burst of stone"
+      ],
+      "requiresSkill": "uni.magic.earth_magic.earth_magic",
+      "params": {
+        "element": "stone"
+      }
+    },
+    {
+      "id": "uni.magic.earth_magic.earth_storm",
+      "name": "Earth Storm",
+      "kind": "action",
+      "archetypeId": "arch.magic.storm",
+      "section": "earth_magic",
+      "tags": [
+        "magic",
+        "stone",
+        "damage",
+        "area"
+      ],
+      "settingFit": [
+        "fantasy",
+        "historical",
+        "horror"
+      ],
+      "description": "Unleash a storm of stone on everything nearby.",
+      "aliases": [
+        "stone storm",
+        "storm of stone"
+      ],
+      "requiresSkill": "uni.magic.earth_magic.earth_mastery",
+      "params": {
+        "element": "stone"
+      }
+    },
+    {
+      "id": "uni.magic.earth_magic.crushing_weight",
+      "name": "Crushing Weight",
+      "kind": "action",
+      "archetypeId": "arch.magic.affliction",
+      "section": "earth_magic",
+      "tags": [
+        "magic",
+        "stone",
+        "damage_over_time"
+      ],
+      "settingFit": [
+        "fantasy",
+        "historical",
+        "horror"
+      ],
+      "description": "A lingering curse of stone.",
+      "aliases": [
+        "crushing weight",
+        "curse with stone"
+      ],
+      "requiresSkill": "uni.magic.earth_magic.earth_magic",
+      "params": {
+        "element": "stone"
+      }
+    },
+    {
+      "id": "uni.magic.shadow_magic.shadow_magic",
+      "name": "Shadow Magic",
+      "kind": "skill",
+      "archetypeId": "arch.skill.training",
+      "section": "shadow_magic",
+      "tags": [
+        "magic",
+        "shadow"
+      ],
+      "settingFit": [
+        "fantasy",
+        "historical",
+        "horror"
+      ],
+      "description": "The basic art of shadow magic."
+    },
+    {
+      "id": "uni.magic.shadow_magic.shadow_mastery",
+      "name": "Shadow Mastery",
+      "kind": "skill",
+      "archetypeId": "arch.skill.discipline",
+      "section": "shadow_magic",
+      "tags": [
+        "magic",
+        "shadow"
+      ],
+      "settingFit": [
+        "fantasy",
+        "historical",
+        "horror"
+      ],
+      "description": "Deep command of shadow magic."
+    },
+    {
+      "id": "uni.magic.shadow_magic.shadow_bolt",
+      "name": "Shadow Bolt",
+      "kind": "action",
+      "archetypeId": "arch.magic.bolt",
+      "section": "shadow_magic",
+      "tags": [
+        "magic",
+        "shadow",
+        "damage"
+      ],
+      "settingFit": [
+        "fantasy",
+        "historical",
+        "horror"
+      ],
+      "description": "Hurl a bolt of shadow.",
+      "aliases": [
+        "shadow bolt",
+        "cast a shadow bolt",
+        "throw shadow"
+      ],
+      "requiresSkill": "uni.magic.shadow_magic.shadow_magic",
+      "params": {
+        "element": "shadow"
+      }
+    },
+    {
+      "id": "uni.magic.shadow_magic.shadow_blast",
+      "name": "Shadow Blast",
+      "kind": "action",
+      "archetypeId": "arch.magic.blast",
+      "section": "shadow_magic",
+      "tags": [
+        "magic",
+        "shadow",
+        "damage",
+        "group"
+      ],
+      "settingFit": [
+        "fantasy",
+        "historical",
+        "horror"
+      ],
+      "description": "A burst of shadow over several foes.",
+      "aliases": [
+        "shadow blast",
+        "burst of shadow"
+      ],
+      "requiresSkill": "uni.magic.shadow_magic.shadow_magic",
+      "params": {
+        "element": "shadow"
+      }
+    },
+    {
+      "id": "uni.magic.shadow_magic.shadow_storm",
+      "name": "Shadow Storm",
+      "kind": "action",
+      "archetypeId": "arch.magic.storm",
+      "section": "shadow_magic",
+      "tags": [
+        "magic",
+        "shadow",
+        "damage",
+        "area"
+      ],
+      "settingFit": [
+        "fantasy",
+        "historical",
+        "horror"
+      ],
+      "description": "Unleash a storm of shadow on everything nearby.",
+      "aliases": [
+        "shadow storm",
+        "storm of shadow"
+      ],
+      "requiresSkill": "uni.magic.shadow_magic.shadow_mastery",
+      "params": {
+        "element": "shadow"
+      }
+    },
+    {
+      "id": "uni.magic.shadow_magic.wither",
+      "name": "Wither",
+      "kind": "action",
+      "archetypeId": "arch.magic.affliction",
+      "section": "shadow_magic",
+      "tags": [
+        "magic",
+        "shadow",
+        "damage_over_time"
+      ],
+      "settingFit": [
+        "fantasy",
+        "historical",
+        "horror"
+      ],
+      "description": "A lingering curse of shadow.",
+      "aliases": [
+        "wither",
+        "curse with shadow"
+      ],
+      "requiresSkill": "uni.magic.shadow_magic.shadow_magic",
+      "params": {
+        "element": "shadow"
+      }
+    },
+    {
+      "id": "uni.magic.healing_magic.healing_magic",
+      "name": "Healing Magic",
+      "kind": "skill",
+      "archetypeId": "arch.skill.training",
+      "section": "healing_magic",
+      "tags": [
+        "magic",
+        "healing"
+      ],
+      "settingFit": [
+        "fantasy",
+        "historical",
+        "horror"
+      ],
+      "description": "The basic art of magical healing."
+    },
+    {
+      "id": "uni.magic.healing_magic.healing_mastery",
+      "name": "Healing Mastery",
+      "kind": "skill",
+      "archetypeId": "arch.skill.discipline",
+      "section": "healing_magic",
+      "tags": [
+        "magic",
+        "healing"
+      ],
+      "settingFit": [
+        "fantasy",
+        "historical",
+        "horror"
+      ],
+      "description": "Deep command of healing magic."
+    },
+    {
+      "id": "uni.magic.healing_magic.arcane_attunement",
+      "name": "Arcane Attunement",
+      "kind": "skill",
+      "archetypeId": "arch.skill.attuned",
+      "section": "healing_magic",
+      "tags": [
+        "magic",
+        "passive"
+      ],
+      "settingFit": [
+        "fantasy",
+        "historical",
+        "horror"
+      ],
+      "description": "A natural affinity for magic."
+    },
+    {
+      "id": "uni.magic.healing_magic.heal",
+      "name": "Heal",
+      "kind": "action",
+      "archetypeId": "arch.magic.heal",
+      "section": "healing_magic",
+      "tags": [
+        "magic",
+        "healing"
+      ],
+      "settingFit": [
+        "fantasy",
+        "historical",
+        "horror"
+      ],
+      "description": "Close an ally's wounds.",
+      "aliases": [
+        "heal",
+        "cast heal",
+        "mend wounds with magic"
+      ],
+      "requiresSkill": "uni.magic.healing_magic.healing_magic"
+    },
+    {
+      "id": "uni.magic.healing_magic.mass_heal",
+      "name": "Mass Heal",
+      "kind": "action",
+      "archetypeId": "arch.magic.mass_heal",
+      "section": "healing_magic",
+      "tags": [
+        "magic",
+        "healing",
+        "group"
+      ],
+      "settingFit": [
+        "fantasy",
+        "historical",
+        "horror"
+      ],
+      "description": "Heal everyone on your side.",
+      "aliases": [
+        "mass heal",
+        "heal everyone"
+      ],
+      "requiresSkill": "uni.magic.healing_magic.healing_mastery"
+    },
+    {
+      "id": "uni.magic.healing_magic.regeneration",
+      "name": "Regeneration",
+      "kind": "action",
+      "archetypeId": "arch.magic.regenerate",
+      "section": "healing_magic",
+      "tags": [
+        "magic",
+        "healing"
+      ],
+      "settingFit": [
+        "fantasy",
+        "historical",
+        "horror"
+      ],
+      "description": "A slow, steady healing.",
+      "aliases": [
+        "regenerate",
+        "regeneration"
+      ],
+      "requiresSkill": "uni.magic.healing_magic.healing_magic"
+    },
+    {
+      "id": "uni.magic.healing_magic.ward",
+      "name": "Ward",
+      "kind": "action",
+      "archetypeId": "arch.magic.ward",
+      "section": "healing_magic",
+      "tags": [
+        "magic",
+        "buff"
+      ],
+      "settingFit": [
+        "fantasy",
+        "historical",
+        "horror"
+      ],
+      "description": "Shield an ally with magic.",
+      "aliases": [
+        "ward",
+        "shield",
+        "protect with magic"
+      ],
+      "requiresSkill": "uni.magic.healing_magic.healing_magic"
+    },
+    {
+      "id": "uni.magic.hexcraft.hexcraft",
+      "name": "Hexcraft",
+      "kind": "skill",
+      "archetypeId": "arch.skill.training",
+      "section": "hexcraft",
+      "tags": [
+        "magic",
+        "curse"
+      ],
+      "settingFit": [
+        "fantasy",
+        "historical",
+        "horror"
+      ],
+      "description": "The art of curses."
+    },
+    {
+      "id": "uni.magic.hexcraft.hex",
+      "name": "Hex",
+      "kind": "action",
+      "archetypeId": "arch.magic.hex",
+      "section": "hexcraft",
+      "tags": [
+        "magic",
+        "debuff"
+      ],
+      "settingFit": [
+        "fantasy",
+        "historical",
+        "horror"
+      ],
+      "description": "Weaken a foe.",
+      "aliases": [
+        "hex",
+        "curse",
+        "jinx"
+      ],
+      "requiresSkill": "uni.magic.hexcraft.hexcraft"
+    },
+    {
+      "id": "uni.magic.hexcraft.drain_life",
+      "name": "Drain Life",
+      "kind": "action",
+      "archetypeId": "arch.magic.drain",
+      "section": "hexcraft",
+      "tags": [
+        "magic",
+        "damage",
+        "healing"
+      ],
+      "settingFit": [
+        "fantasy",
+        "historical",
+        "horror"
+      ],
+      "description": "Steal a foe's vitality.",
+      "aliases": [
+        "drain life",
+        "siphon"
+      ],
+      "requiresSkill": "uni.magic.hexcraft.hexcraft"
+    },
+    {
+      "id": "uni.magic.beyond.stop_time",
+      "name": "Stop Time",
+      "kind": "action",
+      "archetypeId": "arch.magic.ward",
+      "section": "beyond",
+      "tags": [
+        "magic",
+        "excluded"
+      ],
+      "settingFit": [
+        "fantasy",
+        "historical",
+        "horror"
+      ],
+      "description": "Stop Time.",
+      "aliases": [
+        "stop time"
+      ],
+      "excluded": true,
+      "exclusionReason": "Stopping time means un-committing or suspending rulings; the engine's rollback is a player affordance, not an in-fiction power (plan 09 §4.2)."
+    },
+    {
+      "id": "uni.magic.beyond.rewind_time",
+      "name": "Rewind Time",
+      "kind": "action",
+      "archetypeId": "arch.magic.ward",
+      "section": "beyond",
+      "tags": [
+        "magic",
+        "excluded"
+      ],
+      "settingFit": [
+        "fantasy",
+        "historical",
+        "horror"
+      ],
+      "description": "Rewind Time.",
+      "aliases": [
+        "rewind time"
+      ],
+      "excluded": true,
+      "exclusionReason": "Rewinding time would un-commit rulings; history is immutable (plan 09 §4.2)."
+    },
+    {
+      "id": "uni.magic.beyond.summon_a_familiar",
+      "name": "Summon a Familiar",
+      "kind": "action",
+      "archetypeId": "arch.magic.ward",
+      "section": "beyond",
+      "tags": [
+        "magic",
+        "excluded"
+      ],
+      "settingFit": [
+        "fantasy",
+        "historical",
+        "horror"
+      ],
+      "description": "Summon a Familiar.",
+      "aliases": [
+        "summon a familiar"
+      ],
+      "excluded": true,
+      "exclusionReason": "Needs a creature-instantiation model the engine does not have; held for a future plan rather than faked (plan 09 §4.2)."
+    },
+    {
+      "id": "uni.magic.beyond.shapeshift",
+      "name": "Shapeshift",
+      "kind": "action",
+      "archetypeId": "arch.magic.ward",
+      "section": "beyond",
+      "tags": [
+        "magic",
+        "excluded"
+      ],
+      "settingFit": [
+        "fantasy",
+        "historical",
+        "horror"
+      ],
+      "description": "Shapeshift.",
+      "aliases": [
+        "shapeshift"
+      ],
+      "excluded": true,
+      "exclusionReason": "Needs a body-swap/transformation model the engine does not have (plan 09 §4.2)."
+    },
+    {
+      "id": "uni.magic.beyond.bind_a_soul",
+      "name": "Bind a Soul",
+      "kind": "action",
+      "archetypeId": "arch.magic.ward",
+      "section": "beyond",
+      "tags": [
+        "magic",
+        "excluded"
+      ],
+      "settingFit": [
+        "fantasy",
+        "historical",
+        "horror"
+      ],
+      "description": "Bind a Soul.",
+      "aliases": [
+        "bind a soul"
+      ],
+      "excluded": true,
+      "exclusionReason": "Needs a parallel soul state the engine does not track (plan 09 §4.2)."
+    },
+    {
+      "id": "uni.magic.beyond.walk_in_dreams",
+      "name": "Walk in Dreams",
+      "kind": "action",
+      "archetypeId": "arch.magic.ward",
+      "section": "beyond",
+      "tags": [
+        "magic",
+        "excluded"
+      ],
+      "settingFit": [
+        "fantasy",
+        "historical",
+        "horror"
+      ],
+      "description": "Walk in Dreams.",
+      "aliases": [
+        "walk in dreams"
+      ],
+      "excluded": true,
+      "exclusionReason": "Needs a dream-layer state space the engine does not track (plan 09 §4.2)."
+    },
+    {
+      "id": "uni.magic.beyond.sacrifice_lifespan",
+      "name": "Sacrifice Lifespan",
+      "kind": "action",
+      "archetypeId": "arch.magic.ward",
+      "section": "beyond",
+      "tags": [
+        "magic",
+        "excluded"
+      ],
+      "settingFit": [
+        "fantasy",
+        "historical",
+        "horror"
+      ],
+      "description": "Sacrifice Lifespan.",
+      "aliases": [
+        "sacrifice lifespan"
+      ],
+      "excluded": true,
+      "exclusionReason": "Trades against lifespan, which the engine does not track; sacrifices of tracked pools are expressible instead (plan 09 §4.2)."
+    },
+    {
+      "id": "uni.magic.beyond.reroll_fate",
+      "name": "Reroll Fate",
+      "kind": "action",
+      "archetypeId": "arch.magic.ward",
+      "section": "beyond",
+      "tags": [
+        "magic",
+        "excluded"
+      ],
+      "settingFit": [
+        "fantasy",
+        "historical",
+        "horror"
+      ],
+      "description": "Reroll Fate.",
+      "aliases": [
+        "reroll fate"
+      ],
+      "excluded": true,
+      "exclusionReason": "Rerolling breaks the guarantee that a committed roll never changes (plan 09 §4.2)."
     }
   ]
 }

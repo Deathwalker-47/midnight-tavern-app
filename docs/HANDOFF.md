@@ -46,12 +46,13 @@ Plans 01-07 and 10-12 of the 2026-08-13 set remain written but **not authorized*
 | S10a | Enablement set in core: migration 17 `story_pool_enablements` (snapshots the materialized definition), `catalogue/` (attribute-role inference, materialization, enable/disable + D8 guard, effective schema), `requirePlayableStory` for turns/history/suggestions, turn-made enablements removed on rewind | done |
 | S10b | Bridge methods `listPoolEnablements` / `enablePoolEntry` / `mayDisablePoolEntry` / `disablePoolEntry` in both backends, sharing core's pure `catalogue/plan.ts` (parity test over real core + store); cards/dossier on the effective rulebook | done |
 | S11 | Forge-time selection: setting-fit + expressibility filter → one sealed-enum model call → capped, topped up, deterministic fallback; enabled as `forge` after install and after regeneration; forge stays hybrid | done |
-| S12–S18 | Plan 09 (combat archetypes, mid-story enablement, UI, items, weapon specials, external config, close-out) | not started |
+| S12 | Combat + magic archetypes (melee, brawling, ranged, defense, 5 elemental schools via an `{element}` param, healing, hexcraft), reaction skills paired 1:1 with their action (enable either → both), 8 recorded exclusions; pool now 63 archetypes / 222 entries | done |
+| S13–S18 | Plan 09 (mid-story enablement, UI, items, weapon specials, external config, close-out) | not started |
 
 ## Verification state
 
-After S11 (Linux/Node 22): `npm run typecheck` clean; core **834 / 60 files** (engine coverage 100%),
-UI **193 / 29 files** = **1027** passing; UI production build verified at S10b; root `npm test` passes here (the tinypool worker crash is
+After S12 (Linux/Node 22): `npm run typecheck` clean; core **838 / 60 files** (engine coverage 100%),
+UI **193 / 29 files** = **1031** passing; UI production build verified at S10b; root `npm test` passes here (the tinypool worker crash is
 Windows/Node 24 only — plan 07 P0-0, not authorized).
 
 ## Facts established earlier (still true — do not re-derive)
@@ -86,8 +87,9 @@ Windows/Node 24 only — plan 07 P0-0, not authorized).
 
 ## Single next action
 
-Do **S12**: combat and magic archetypes for the pool (plan 09 §4.1–4.2) — attacks, elemental bolts,
-healing/buff/debuff magic, defensive moves, and **reaction skills paired with their reaction-only
-actions** (S6d) — plus the plan's exclusion records (time magic, summoning, transformation, soul/dream,
-lifespan/memory sacrifice, rerolls, languages). Every archetype must pass `poolRules.ts`; extend the
-id lock. Damage stays a multiple of the baseline hit.
+Do **S13**: mid-story enablement by the **analyzer** (plan 09 §6, D9). After a committed turn, the
+analyzer may propose enabling pool ids; engine guards: sealed pool id (Zod enum of candidates), tier
+gate by story progress, at most 2 per chapter, **only skill-gated entries** (action plan decision:
+models may not enable ungated actions; reaction pairs count as skill-gated), enable ≠ learn, own
+transaction separate from the soft-state patch, journalled (`pool_enabled` source `analyzer`) and
+turn-scoped (`turnIndex`) so rewind removes it. A failure must never fail or block the turn.

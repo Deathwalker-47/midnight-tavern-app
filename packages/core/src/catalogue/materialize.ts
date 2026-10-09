@@ -169,6 +169,17 @@ export function materializeEntry(
   if (archetype.kind === "skill") {
     const tier = storyTier(schema, archetype.tier);
     if (!tier) return { ok: false, reason: "This story defines no tiers to place the skill in." };
+    // A reaction fires its paired action (the one live action entry it gates); they travel together.
+    const paired =
+      archetype.skillType === "reaction"
+        ? catalogue.pool.entries.find(
+            (candidate) =>
+              !candidate.excluded && candidate.kind === "action" && candidate.requiresSkill === entry.id
+          )
+        : undefined;
+    if (archetype.reaction && !paired) {
+      return { ok: false, reason: `${entry.name} has no paired action to fire.` };
+    }
     const definition: SkillDef = SkillDefSchema.parse({
       id: entry.id,
       name: entry.name,
@@ -187,8 +198,11 @@ export function materializeEntry(
             },
           }
         : {}),
+      ...(archetype.reaction && paired
+        ? { reaction: { trigger: archetype.reaction.trigger, actionId: paired.id } }
+        : {}),
     });
-    return { ok: true, entry, kind: "skill", definition, requires: [] };
+    return { ok: true, entry, kind: "skill", definition, requires: paired ? [paired.id] : [] };
   }
 
   const baseline = baselineHit(schema);

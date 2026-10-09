@@ -144,10 +144,10 @@ Five taxonomy entries, one authored archetype. The taxonomy's structure makes th
 tractable — sections 10–15 (fire/ice/lightning/water/earth/wind magic) are near-identical shapes with
 different elements, and sections 27–29 (healing / buff / debuff) likewise.
 
-- [ ] **4.1** Derive the archetype set from the taxonomy by collapsing shape-identical entries.
+- [x] **4.1** *(S12: 63 archetypes / 222 entries authored by engineering — the taxonomy that would have set the 3,000-entry target is gone; growing the pool is now content work.)* Derive the archetype set from the taxonomy by collapsing shape-identical entries.
       Target: **80–150 archetypes** covering the whole 3,000-entry pool. Record the mapping in config
       so it is auditable.
-- [ ] **4.2** **Exclusion is engineering's call** (owner, 2026-08-13: *"remove whatever you feel not
+- [x] **4.2** *(S9/S12: 13 recorded exclusions.)* **Exclusion is engineering's call** (owner, 2026-08-13: *"remove whatever you feel not
       plausible"*). An entry is excluded when the engine cannot express it without new capabilities.
       Record every exclusion with a reason (§4b.2 keeps it in the file with `"excluded": true`), so
       the decision is reviewable and reversible rather than an unexplained absence.

@@ -255,6 +255,17 @@ export function poolViolations(
       }
     }
   }
+  // A reaction skill fires exactly one action: the single live action entry gated by it.
+  for (const entry of pool.entries) {
+    const archetype = archetypesById.get(entry.archetypeId);
+    if (entry.excluded || archetype?.kind !== "skill" || archetype.skillType !== "reaction") continue;
+    const paired = pool.entries.filter(
+      (candidate) => !candidate.excluded && candidate.kind === "action" && candidate.requiresSkill === entry.id
+    );
+    if (paired.length !== 1) {
+      flag("gates", entry.id, `A reaction skill must gate exactly one action (it gates ${paired.length}).`);
+    }
+  }
   for (const archetype of archetypes.archetypes) {
     if (!usedArchetypes.has(archetype.id)) flag("structure", archetype.id, "No entry uses this archetype.");
   }

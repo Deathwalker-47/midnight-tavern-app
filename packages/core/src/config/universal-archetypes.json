@@ -1329,6 +1329,1071 @@
           }
         }
       }
+    },
+    {
+      "id": "arch.combat.strike",
+      "kind": "action",
+      "description": "A weapon blow at close range.",
+      "category": "combat",
+      "universalFamily": "attack_melee",
+      "governingRoles": [
+        "might",
+        "agility"
+      ],
+      "difficulty": "standard",
+      "dc": 12,
+      "tier": "common",
+      "targetStance": "foe",
+      "requiresItemKind": "weapon",
+      "effects": {
+        "crit_success": {
+          "narrationHint": "a telling blow",
+          "targetHealth": -1.5
+        },
+        "success": {
+          "narrationHint": "the blow lands",
+          "targetHealth": -1
+        },
+        "failure": {
+          "narrationHint": "the blow is turned aside"
+        },
+        "crit_failure": {
+          "narrationHint": "you overextend",
+          "statusSelf": {
+            "id": "off_balance",
+            "label": "Off Balance",
+            "durationTurns": 1,
+            "checkBonus": -1
+          }
+        }
+      }
+    },
+    {
+      "id": "arch.combat.power_strike",
+      "kind": "action",
+      "description": "A heavy, committed weapon blow that takes a moment to recover from.",
+      "category": "combat",
+      "universalFamily": "attack_melee",
+      "governingRoles": [
+        "might"
+      ],
+      "difficulty": "standard",
+      "dc": 14,
+      "tier": "uncommon",
+      "targetStance": "foe",
+      "requiresItemKind": "weapon",
+      "costs": {
+        "stamina": 3
+      },
+      "cooldownTurns": 2,
+      "effects": {
+        "crit_success": {
+          "narrationHint": "a crushing blow",
+          "targetHealth": -2
+        },
+        "success": {
+          "narrationHint": "a heavy blow lands",
+          "targetHealth": -1.5
+        },
+        "failure": {
+          "narrationHint": "the swing goes wide",
+          "statusSelf": {
+            "id": "off_balance",
+            "label": "Off Balance",
+            "durationTurns": 1,
+            "checkBonus": -1
+          }
+        },
+        "crit_failure": {
+          "narrationHint": "you wrench yourself",
+          "selfHealth": -0.25,
+          "statusSelf": {
+            "id": "off_balance",
+            "label": "Off Balance",
+            "durationTurns": 1,
+            "checkBonus": -1
+          }
+        }
+      }
+    },
+    {
+      "id": "arch.combat.sweep",
+      "kind": "action",
+      "description": "A wide blow that catches several foes at once.",
+      "category": "combat",
+      "universalFamily": "attack_melee",
+      "governingRoles": [
+        "might",
+        "agility"
+      ],
+      "difficulty": "standard",
+      "dc": 14,
+      "tier": "uncommon",
+      "targetStance": "foe",
+      "requiresItemKind": "weapon",
+      "costs": {
+        "stamina": 4
+      },
+      "cooldownTurns": 3,
+      "targeting": {
+        "scope": "all_enemies",
+        "maxTargets": 3
+      },
+      "effects": {
+        "crit_success": {
+          "narrationHint": "the sweep scatters them",
+          "targetHealth": -1.5
+        },
+        "success": {
+          "narrationHint": "the sweep connects",
+          "targetHealth": -1
+        },
+        "failure": {
+          "narrationHint": "they step back from it"
+        },
+        "crit_failure": {
+          "narrationHint": "you spin off balance",
+          "statusSelf": {
+            "id": "off_balance",
+            "label": "Off Balance",
+            "durationTurns": 1,
+            "checkBonus": -1
+          }
+        }
+      }
+    },
+    {
+      "id": "arch.combat.shoot",
+      "kind": "action",
+      "description": "A shot or throw at a target in range.",
+      "category": "combat",
+      "universalFamily": "attack_ranged",
+      "governingRoles": [
+        "agility",
+        "insight"
+      ],
+      "difficulty": "standard",
+      "dc": 12,
+      "tier": "common",
+      "targetStance": "foe",
+      "requiresItemKind": "weapon",
+      "effects": {
+        "crit_success": {
+          "narrationHint": "a perfect shot",
+          "targetHealth": -1.5
+        },
+        "success": {
+          "narrationHint": "the shot hits",
+          "targetHealth": -1
+        },
+        "failure": {
+          "narrationHint": "the shot misses"
+        },
+        "crit_failure": {
+          "narrationHint": "you fumble the shot",
+          "statusSelf": {
+            "id": "off_balance",
+            "label": "Off Balance",
+            "durationTurns": 1,
+            "checkBonus": -1
+          }
+        }
+      }
+    },
+    {
+      "id": "arch.combat.aimed_shot",
+      "kind": "action",
+      "description": "A patient, aimed shot that takes a moment to line up again.",
+      "category": "combat",
+      "universalFamily": "attack_ranged",
+      "governingRoles": [
+        "agility",
+        "insight"
+      ],
+      "difficulty": "standard",
+      "dc": 14,
+      "tier": "uncommon",
+      "targetStance": "foe",
+      "requiresItemKind": "weapon",
+      "costs": {
+        "stamina": 3
+      },
+      "cooldownTurns": 2,
+      "effects": {
+        "crit_success": {
+          "narrationHint": "straight through the gap",
+          "targetHealth": -2
+        },
+        "success": {
+          "narrationHint": "a well-placed hit",
+          "targetHealth": -1.5
+        },
+        "failure": {
+          "narrationHint": "the moment passes",
+          "statusSelf": {
+            "id": "off_balance",
+            "label": "Off Balance",
+            "durationTurns": 1,
+            "checkBonus": -1
+          }
+        },
+        "crit_failure": {
+          "narrationHint": "you lose your footing",
+          "selfHealth": -0.25,
+          "statusSelf": {
+            "id": "off_balance",
+            "label": "Off Balance",
+            "durationTurns": 1,
+            "checkBonus": -1
+          }
+        }
+      }
+    },
+    {
+      "id": "arch.combat.brawl",
+      "kind": "action",
+      "description": "Fists, feet, teeth or claws.",
+      "category": "combat",
+      "universalFamily": "attack_natural",
+      "governingRoles": [
+        "might",
+        "agility"
+      ],
+      "difficulty": "standard",
+      "dc": 11,
+      "tier": "common",
+      "targetStance": "foe",
+      "effects": {
+        "crit_success": {
+          "narrationHint": "a stunning hit",
+          "targetHealth": -1.5
+        },
+        "success": {
+          "narrationHint": "a solid hit",
+          "targetHealth": -0.75
+        },
+        "failure": {
+          "narrationHint": "it glances off"
+        },
+        "crit_failure": {
+          "narrationHint": "you leave yourself open",
+          "statusSelf": {
+            "id": "exposed",
+            "label": "Exposed",
+            "durationTurns": 1,
+            "checkBonus": -1
+          }
+        }
+      }
+    },
+    {
+      "id": "arch.combat.unbalance",
+      "kind": "action",
+      "description": "Disrupt a foe's footing or grip, against their own.",
+      "category": "combat",
+      "universalFamily": "control",
+      "governingRoles": [
+        "agility",
+        "might"
+      ],
+      "difficulty": "standard",
+      "dc": 12,
+      "tier": "common",
+      "targetStance": "foe",
+      "opposed": true,
+      "effects": {
+        "crit_success": {
+          "narrationHint": "they go sprawling",
+          "statusTarget": {
+            "id": "off_balance",
+            "label": "Off Balance",
+            "durationTurns": 2,
+            "checkBonus": -2
+          }
+        },
+        "success": {
+          "narrationHint": "they stagger",
+          "statusTarget": {
+            "id": "off_balance",
+            "label": "Off Balance",
+            "durationTurns": 2,
+            "checkBonus": -1
+          }
+        },
+        "failure": {
+          "narrationHint": "they keep their feet"
+        },
+        "crit_failure": {
+          "narrationHint": "you overreach",
+          "statusSelf": {
+            "id": "off_balance",
+            "label": "Off Balance",
+            "durationTurns": 1,
+            "checkBonus": -1
+          }
+        }
+      }
+    },
+    {
+      "id": "arch.combat.grapple",
+      "kind": "action",
+      "description": "Seize and hold a foe, against their strength.",
+      "category": "combat",
+      "universalFamily": "grapple",
+      "governingRoles": [
+        "might"
+      ],
+      "difficulty": "standard",
+      "dc": 13,
+      "tier": "common",
+      "targetStance": "foe",
+      "opposed": true,
+      "effects": {
+        "crit_success": {
+          "narrationHint": "they are pinned",
+          "statusTarget": {
+            "id": "pinned",
+            "label": "Pinned",
+            "durationTurns": 3,
+            "checkBonus": -2
+          }
+        },
+        "success": {
+          "narrationHint": "you have hold of them",
+          "statusTarget": {
+            "id": "grappled",
+            "label": "Grappled",
+            "durationTurns": 2,
+            "checkBonus": -1
+          }
+        },
+        "failure": {
+          "narrationHint": "they break free"
+        },
+        "crit_failure": {
+          "narrationHint": "they twist you round",
+          "statusSelf": {
+            "id": "off_balance",
+            "label": "Off Balance",
+            "durationTurns": 1,
+            "checkBonus": -1
+          }
+        }
+      }
+    },
+    {
+      "id": "arch.combat.guard",
+      "kind": "action",
+      "description": "Brace and defend for the next exchange.",
+      "category": "combat",
+      "universalFamily": "defend",
+      "governingRoles": [
+        "endurance",
+        "agility"
+      ],
+      "difficulty": "trivial",
+      "dc": 9,
+      "tier": "common",
+      "targetStance": "none",
+      "effects": {
+        "crit_success": {
+          "narrationHint": "an unbreakable guard",
+          "statusSelf": {
+            "id": "guarded",
+            "label": "Guarded",
+            "durationTurns": 2,
+            "checkBonus": 2
+          }
+        },
+        "success": {
+          "narrationHint": "you raise your guard",
+          "statusSelf": {
+            "id": "guarded",
+            "label": "Guarded",
+            "durationTurns": 2,
+            "checkBonus": 1
+          }
+        },
+        "failure": {
+          "narrationHint": "your guard is shaky"
+        },
+        "crit_failure": {
+          "narrationHint": "you are caught flat-footed",
+          "statusSelf": {
+            "id": "exposed",
+            "label": "Exposed",
+            "durationTurns": 1,
+            "checkBonus": -1
+          }
+        }
+      }
+    },
+    {
+      "id": "arch.combat.evade",
+      "kind": "action",
+      "description": "Slip out of harm's way.",
+      "category": "combat",
+      "universalFamily": "evade",
+      "governingRoles": [
+        "agility"
+      ],
+      "difficulty": "standard",
+      "dc": 11,
+      "tier": "common",
+      "targetStance": "none",
+      "effects": {
+        "crit_success": {
+          "narrationHint": "untouchable",
+          "statusSelf": {
+            "id": "evasive",
+            "label": "Evasive",
+            "durationTurns": 1,
+            "checkBonus": 2
+          }
+        },
+        "success": {
+          "narrationHint": "you get clear",
+          "statusSelf": {
+            "id": "evasive",
+            "label": "Evasive",
+            "durationTurns": 1,
+            "checkBonus": 1
+          }
+        },
+        "failure": {
+          "narrationHint": "nowhere to go"
+        },
+        "crit_failure": {
+          "narrationHint": "you stumble",
+          "statusSelf": {
+            "id": "exposed",
+            "label": "Exposed",
+            "durationTurns": 1,
+            "checkBonus": -1
+          }
+        }
+      }
+    },
+    {
+      "id": "arch.combat.counter",
+      "kind": "action",
+      "description": "An automatic counterblow, fired by a reaction skill.",
+      "category": "combat",
+      "universalFamily": "attack_melee",
+      "governingRoles": [
+        "agility",
+        "might"
+      ],
+      "difficulty": "standard",
+      "dc": 12,
+      "tier": "uncommon",
+      "targetStance": "foe",
+      "effects": {
+        "crit_success": {
+          "narrationHint": "a punishing counter",
+          "targetHealth": -1.5
+        },
+        "success": {
+          "narrationHint": "the counter lands",
+          "targetHealth": -0.75
+        },
+        "failure": {
+          "narrationHint": "the counter is turned aside"
+        },
+        "crit_failure": {
+          "narrationHint": "the counter leaves you open",
+          "statusSelf": {
+            "id": "off_balance",
+            "label": "Off Balance",
+            "durationTurns": 1,
+            "checkBonus": -1
+          }
+        }
+      }
+    },
+    {
+      "id": "arch.magic.bolt",
+      "kind": "action",
+      "description": "A single bolt of raw {element}.",
+      "category": "combat",
+      "universalFamily": "attack_ranged",
+      "governingRoles": [
+        "magic",
+        "intellect"
+      ],
+      "difficulty": "standard",
+      "dc": 12,
+      "tier": "common",
+      "targetStance": "foe",
+      "costs": {
+        "mana": 2
+      },
+      "effects": {
+        "crit_success": {
+          "narrationHint": "a searing bolt of {element}",
+          "targetHealth": -1.5
+        },
+        "success": {
+          "narrationHint": "a bolt of {element} strikes",
+          "targetHealth": -1
+        },
+        "failure": {
+          "narrationHint": "the {element} fizzles"
+        },
+        "crit_failure": {
+          "narrationHint": "the {element} lashes back",
+          "selfPools": {
+            "mana": -1
+          },
+          "statusSelf": {
+            "id": "backlash",
+            "label": "Backlash",
+            "durationTurns": 1,
+            "checkBonus": -1
+          }
+        }
+      },
+      "params": [
+        {
+          "name": "element",
+          "description": "the substance the spell is made of"
+        }
+      ]
+    },
+    {
+      "id": "arch.magic.blast",
+      "kind": "action",
+      "description": "A burst of {element} that catches several foes.",
+      "category": "combat",
+      "universalFamily": "attack_ranged",
+      "governingRoles": [
+        "magic",
+        "intellect"
+      ],
+      "difficulty": "standard",
+      "dc": 14,
+      "tier": "uncommon",
+      "targetStance": "foe",
+      "costs": {
+        "mana": 4
+      },
+      "cooldownTurns": 2,
+      "targeting": {
+        "scope": "all_enemies",
+        "maxTargets": 3
+      },
+      "effects": {
+        "crit_success": {
+          "narrationHint": "a roaring burst of {element}",
+          "targetHealth": -1.5
+        },
+        "success": {
+          "narrationHint": "a burst of {element}",
+          "targetHealth": -1
+        },
+        "failure": {
+          "narrationHint": "the {element} disperses"
+        },
+        "crit_failure": {
+          "narrationHint": "the {element} lashes back",
+          "selfPools": {
+            "mana": -1
+          },
+          "statusSelf": {
+            "id": "backlash",
+            "label": "Backlash",
+            "durationTurns": 1,
+            "checkBonus": -1
+          }
+        }
+      },
+      "params": [
+        {
+          "name": "element",
+          "description": "the substance the spell is made of"
+        }
+      ]
+    },
+    {
+      "id": "arch.magic.storm",
+      "kind": "action",
+      "description": "A devastating storm of {element} over everyone nearby.",
+      "category": "combat",
+      "universalFamily": "attack_ranged",
+      "governingRoles": [
+        "magic"
+      ],
+      "difficulty": "hard",
+      "dc": 16,
+      "tier": "rare",
+      "targetStance": "foe",
+      "costs": {
+        "mana": 7
+      },
+      "cooldownTurns": 4,
+      "targeting": {
+        "scope": "area",
+        "maxTargets": 6
+      },
+      "effects": {
+        "crit_success": {
+          "narrationHint": "a cataclysm of {element}",
+          "targetHealth": -2.5
+        },
+        "success": {
+          "narrationHint": "a storm of {element}",
+          "targetHealth": -2
+        },
+        "failure": {
+          "narrationHint": "the {element} will not gather"
+        },
+        "crit_failure": {
+          "narrationHint": "the {element} turns on you",
+          "selfHealth": -0.5,
+          "statusSelf": {
+            "id": "backlash",
+            "label": "Backlash",
+            "durationTurns": 1,
+            "checkBonus": -1
+          }
+        }
+      },
+      "params": [
+        {
+          "name": "element",
+          "description": "the substance the spell is made of"
+        }
+      ]
+    },
+    {
+      "id": "arch.magic.affliction",
+      "kind": "action",
+      "description": "A lingering curse of {element} that keeps hurting.",
+      "category": "combat",
+      "universalFamily": "control",
+      "governingRoles": [
+        "magic",
+        "presence"
+      ],
+      "difficulty": "standard",
+      "dc": 13,
+      "tier": "uncommon",
+      "targetStance": "foe",
+      "costs": {
+        "mana": 3
+      },
+      "opposed": true,
+      "effects": {
+        "crit_success": {
+          "narrationHint": "{element} takes deep hold",
+          "statusTarget": {
+            "id": "afflicted",
+            "label": "Afflicted",
+            "durationTurns": 3,
+            "resourcePerTurn": {
+              "health": -3
+            }
+          }
+        },
+        "success": {
+          "narrationHint": "{element} takes hold",
+          "statusTarget": {
+            "id": "afflicted",
+            "label": "Afflicted",
+            "durationTurns": 3,
+            "resourcePerTurn": {
+              "health": -2
+            }
+          }
+        },
+        "failure": {
+          "narrationHint": "they shrug it off"
+        },
+        "crit_failure": {
+          "narrationHint": "the {element} lashes back",
+          "selfPools": {
+            "mana": -1
+          },
+          "statusSelf": {
+            "id": "backlash",
+            "label": "Backlash",
+            "durationTurns": 1,
+            "checkBonus": -1
+          }
+        }
+      },
+      "params": [
+        {
+          "name": "element",
+          "description": "the substance the spell is made of"
+        }
+      ]
+    },
+    {
+      "id": "arch.magic.hex",
+      "kind": "action",
+      "description": "Weaken a foe's every effort, against their will.",
+      "category": "combat",
+      "universalFamily": "control",
+      "governingRoles": [
+        "magic",
+        "presence"
+      ],
+      "difficulty": "standard",
+      "dc": 13,
+      "tier": "common",
+      "targetStance": "foe",
+      "costs": {
+        "mana": 2
+      },
+      "opposed": true,
+      "effects": {
+        "crit_success": {
+          "narrationHint": "a crippling hex",
+          "statusTarget": {
+            "id": "hexed",
+            "label": "Hexed",
+            "durationTurns": 3,
+            "checkBonus": -2
+          }
+        },
+        "success": {
+          "narrationHint": "the hex takes",
+          "statusTarget": {
+            "id": "hexed",
+            "label": "Hexed",
+            "durationTurns": 3,
+            "checkBonus": -1
+          }
+        },
+        "failure": {
+          "narrationHint": "they resist"
+        },
+        "crit_failure": {
+          "narrationHint": "the hex rebounds",
+          "statusSelf": {
+            "id": "backlash",
+            "label": "Backlash",
+            "durationTurns": 1,
+            "checkBonus": -1
+          }
+        }
+      }
+    },
+    {
+      "id": "arch.magic.drain",
+      "kind": "action",
+      "description": "Steal a foe's vitality for your own.",
+      "category": "combat",
+      "universalFamily": "attack_ranged",
+      "governingRoles": [
+        "magic"
+      ],
+      "difficulty": "standard",
+      "dc": 13,
+      "tier": "uncommon",
+      "targetStance": "foe",
+      "costs": {
+        "mana": 3
+      },
+      "effects": {
+        "crit_success": {
+          "narrationHint": "their life floods into you",
+          "targetHealth": -1.5,
+          "selfHealth": 0.5
+        },
+        "success": {
+          "narrationHint": "you drain them",
+          "targetHealth": -1,
+          "selfHealth": 0.25
+        },
+        "failure": {
+          "narrationHint": "nothing flows"
+        },
+        "crit_failure": {
+          "narrationHint": "it drains you instead",
+          "selfPools": {
+            "mana": -1
+          },
+          "statusSelf": {
+            "id": "backlash",
+            "label": "Backlash",
+            "durationTurns": 1,
+            "checkBonus": -1
+          }
+        }
+      }
+    },
+    {
+      "id": "arch.magic.heal",
+      "kind": "action",
+      "description": "Close an ally's wounds with magic.",
+      "category": "utility",
+      "universalFamily": "assist",
+      "governingRoles": [
+        "magic",
+        "insight"
+      ],
+      "difficulty": "standard",
+      "dc": 11,
+      "tier": "common",
+      "targetStance": "ally",
+      "costs": {
+        "mana": 2
+      },
+      "effects": {
+        "crit_success": {
+          "narrationHint": "wounds close completely",
+          "targetHealth": 1.5
+        },
+        "success": {
+          "narrationHint": "wounds close",
+          "targetHealth": 1
+        },
+        "failure": {
+          "narrationHint": "the healing will not take"
+        },
+        "crit_failure": {
+          "narrationHint": "the magic recoils",
+          "selfPools": {
+            "mana": -1
+          },
+          "statusSelf": {
+            "id": "backlash",
+            "label": "Backlash",
+            "durationTurns": 1,
+            "checkBonus": -1
+          }
+        }
+      }
+    },
+    {
+      "id": "arch.magic.mass_heal",
+      "kind": "action",
+      "description": "Heal everyone on your side at once.",
+      "category": "utility",
+      "universalFamily": "assist",
+      "governingRoles": [
+        "magic",
+        "insight"
+      ],
+      "difficulty": "standard",
+      "dc": 13,
+      "tier": "uncommon",
+      "targetStance": "ally",
+      "costs": {
+        "mana": 5
+      },
+      "cooldownTurns": 3,
+      "targeting": {
+        "scope": "all_allies"
+      },
+      "effects": {
+        "crit_success": {
+          "narrationHint": "a wave of renewal",
+          "targetHealth": 1.5
+        },
+        "success": {
+          "narrationHint": "a wave of healing",
+          "targetHealth": 1
+        },
+        "failure": {
+          "narrationHint": "the wave fades too soon"
+        },
+        "crit_failure": {
+          "narrationHint": "the magic recoils",
+          "selfPools": {
+            "mana": -1
+          },
+          "statusSelf": {
+            "id": "backlash",
+            "label": "Backlash",
+            "durationTurns": 1,
+            "checkBonus": -1
+          }
+        }
+      }
+    },
+    {
+      "id": "arch.magic.regenerate",
+      "kind": "action",
+      "description": "Lay a slow, steady healing on an ally.",
+      "category": "utility",
+      "universalFamily": "assist",
+      "governingRoles": [
+        "magic",
+        "insight"
+      ],
+      "difficulty": "standard",
+      "dc": 12,
+      "tier": "uncommon",
+      "targetStance": "ally",
+      "costs": {
+        "mana": 3
+      },
+      "effects": {
+        "crit_success": {
+          "narrationHint": "vigorous regeneration",
+          "statusTarget": {
+            "id": "regenerating",
+            "label": "Regenerating",
+            "durationTurns": 3,
+            "resourcePerTurn": {
+              "health": 3
+            }
+          }
+        },
+        "success": {
+          "narrationHint": "regeneration begins",
+          "statusTarget": {
+            "id": "regenerating",
+            "label": "Regenerating",
+            "durationTurns": 3,
+            "resourcePerTurn": {
+              "health": 2
+            }
+          }
+        },
+        "failure": {
+          "narrationHint": "the weave unravels"
+        },
+        "crit_failure": {
+          "narrationHint": "the magic recoils",
+          "selfPools": {
+            "mana": -1
+          },
+          "statusSelf": {
+            "id": "backlash",
+            "label": "Backlash",
+            "durationTurns": 1,
+            "checkBonus": -1
+          }
+        }
+      }
+    },
+    {
+      "id": "arch.magic.ward",
+      "kind": "action",
+      "description": "Shield an ally against harm and doubt.",
+      "category": "utility",
+      "universalFamily": "assist",
+      "governingRoles": [
+        "magic",
+        "presence"
+      ],
+      "difficulty": "standard",
+      "dc": 11,
+      "tier": "common",
+      "targetStance": "ally",
+      "costs": {
+        "mana": 2
+      },
+      "effects": {
+        "crit_success": {
+          "narrationHint": "a radiant ward",
+          "statusTarget": {
+            "id": "warded",
+            "label": "Warded",
+            "durationTurns": 3,
+            "checkBonus": 2
+          }
+        },
+        "success": {
+          "narrationHint": "a ward settles",
+          "statusTarget": {
+            "id": "warded",
+            "label": "Warded",
+            "durationTurns": 3,
+            "checkBonus": 1
+          }
+        },
+        "failure": {
+          "narrationHint": "the ward will not hold"
+        },
+        "crit_failure": {
+          "narrationHint": "the magic recoils",
+          "statusSelf": {
+            "id": "backlash",
+            "label": "Backlash",
+            "durationTurns": 1,
+            "checkBonus": -1
+          }
+        }
+      }
+    },
+    {
+      "id": "arch.skill.training",
+      "kind": "skill",
+      "description": "A basic trained art that gates the ordinary actions of its school.",
+      "tier": "common",
+      "skillType": "active"
+    },
+    {
+      "id": "arch.skill.combat_knack",
+      "kind": "skill",
+      "description": "Fighting instinct: a small, always-on edge in combat checks.",
+      "tier": "common",
+      "skillType": "passive",
+      "passive": {
+        "checkBonus": {
+          "amount": 1,
+          "categories": [
+            "combat"
+          ]
+        }
+      }
+    },
+    {
+      "id": "arch.skill.attuned",
+      "kind": "skill",
+      "description": "Natural affinity for magic: +1 to the magic attribute.",
+      "tier": "common",
+      "skillType": "passive",
+      "passive": {
+        "attributeBonus": {
+          "magic": 1
+        }
+      }
+    },
+    {
+      "id": "arch.skill.battle_stance",
+      "kind": "skill",
+      "description": "A fighting stance: +2 to combat checks while held, at a stamina upkeep.",
+      "tier": "uncommon",
+      "skillType": "toggle",
+      "toggle": {
+        "upkeep": {
+          "stamina": 2
+        },
+        "bonus": {
+          "checkBonus": {
+            "amount": 2,
+            "categories": [
+              "combat"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "arch.skill.reflex_attacked",
+      "kind": "skill",
+      "description": "Answers any attack on you, hit or miss, with its paired action.",
+      "tier": "uncommon",
+      "skillType": "reaction",
+      "reaction": {
+        "trigger": "attacked"
+      }
+    },
+    {
+      "id": "arch.skill.reflex_damaged",
+      "kind": "skill",
+      "description": "Answers any blow that actually hurts you with its paired action.",
+      "tier": "uncommon",
+      "skillType": "reaction",
+      "reaction": {
+        "trigger": "damaged"
+      }
     }
   ]
 }

@@ -23,6 +23,7 @@ import {
   ActionTargetingSchema,
   ItemKindSchema,
   ItemTierSchema,
+  ReactionTriggerSchema,
 } from "../types/index.js";
 
 const SNAKE = /^[a-z0-9_]+$/;
@@ -167,8 +168,11 @@ export const SkillArchetypeSchema = z
     kind: z.literal("skill"),
     description: z.string().min(1),
     tier: ItemTierSchema,
-    /** Reaction skills pair with an action and arrive with the combat archetypes (S12). */
-    skillType: z.enum(["active", "passive", "toggle"]),
+    /**
+     * A reaction skill fires the one action entry gated by it (its pair) whenever its trigger
+     * happens; enabling either half of the pair enables both (plan 08 §4, S6d).
+     */
+    skillType: z.enum(["active", "passive", "toggle", "reaction"]),
     passive: PoolSkillBonusSchema.optional(),
     toggle: z
       .object({
@@ -182,10 +186,18 @@ export const SkillArchetypeSchema = z
       })
       .strict()
       .optional(),
+    reaction: z.object({ trigger: ReactionTriggerSchema }).strict().optional(),
     params: z.array(ArchetypeParamSchema).optional(),
   })
   .strict()
   .superRefine((archetype, context) => {
+    if ((archetype.skillType === "reaction") !== Boolean(archetype.reaction)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["reaction"],
+        message: "A reaction skill archetype needs a trigger, and only a reaction one may have it.",
+      });
+    }
     if ((archetype.skillType === "passive") !== Boolean(archetype.passive)) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
