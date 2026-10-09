@@ -24,6 +24,7 @@ import type { StorySchema } from "../types/index.js";
 import type { PoolEntry } from "../config/index.js";
 import { enablePoolEntry, loadEffectiveSchema } from "./enablement.js";
 import { SHIPPED_CATALOGUE, type PoolCatalogue } from "./materialize.js";
+import { catalogueOf, configForStory } from "./storyConfig.js";
 import { planEnablement, tierLock } from "./plan.js";
 import { inferSettingFits } from "./select.js";
 
@@ -85,7 +86,7 @@ export async function proposeMidStoryEnablements(
     if (!LEARNING_CUE.test(`${args.playerText}\n${args.narratorText}`)) return [];
     const story = await store.stories.get(args.storyId);
     if (!story || story.schema.statMode !== "full") return [];
-    const catalogue = args.catalogue ?? SHIPPED_CATALOGUE;
+    const catalogue = args.catalogue ?? catalogueOf(configForStory(story));
     const chapters = await store.chapters.listByStory(args.storyId);
     const chapterStart = chapters.length > 0 ? Math.max(...chapters.map((chapter) => chapter.msgTo)) + 1 : 0;
     const enablements = await store.poolEnablements.list(args.storyId);

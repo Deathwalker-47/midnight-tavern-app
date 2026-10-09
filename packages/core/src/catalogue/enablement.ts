@@ -18,9 +18,10 @@ import { randomUUID } from "../util/uuid.js";
 import type { PoolEnablement, PoolEnablementSource, Store } from "../store/index.js";
 import type { StoryRecord, StorySchema } from "../types/index.js";
 import { applyUniversalActionDefaults } from "../config/index.js";
-import { SHIPPED_CATALOGUE, type PoolCatalogue } from "./materialize.js";
+import type { PoolCatalogue } from "./materialize.js";
 import { disableRefusal, grantorsByEntry, planEnablement, tierLock } from "./plan.js";
 import { learnersBySkill, type PoolBrowseContext } from "./browse.js";
+import { catalogueOf, configForStory, enablementsForPlay } from "./storyConfig.js";
 
 /** The frozen rulebook plus every enabled entry. Frozen definitions win any id collision. */
 export function effectiveSchema(
@@ -45,7 +46,7 @@ export function effectiveSchema(
 /** The rulebook a story actually plays by now: frozen, universal defaults applied, plus its pool. */
 export async function loadEffectiveSchema(store: Store, story: StoryRecord): Promise<StorySchema> {
   const frozen = applyUniversalActionDefaults(story.schema);
-  return effectiveSchema(frozen, await store.poolEnablements.list(story.id));
+  return effectiveSchema(frozen, enablementsForPlay(story, await store.poolEnablements.list(story.id)));
 }
 
 export interface EnableOptions {
@@ -89,7 +90,7 @@ export async function stagePoolEnablement(
     ...frozen.skills.map((skill) => skill.id),
   ]);
   const now = options.now ?? Date.now;
-  const catalogue = options.catalogue ?? SHIPPED_CATALOGUE;
+  const catalogue = options.catalogue ?? catalogueOf(configForStory(story));
   const plan = planEnablement(frozen, present, entryId, catalogue);
   if (!plan.ok) return plan;
   if (options.source !== "forge") {
@@ -227,5 +228,6 @@ export async function loadPoolBrowseContext(store: Store, storyId: string): Prom
     ),
     grantors: await loadGrantors(store, storyId),
     completedChapters: (await store.chapters.listByStory(storyId)).length,
+    catalogue: catalogueOf(configForStory(story)),
   };
 }

@@ -14,6 +14,7 @@ import type { CharacterCard, ImportedMechanics } from "../importer/index.js";
 import { MECHANICS_CONFIG_VERSIONS } from "../config/index.js";
 import { enablePoolEntry } from "../catalogue/enablement.js";
 import { selectPoolEntries } from "../catalogue/select.js";
+import { activeConfig, catalogueOf, snapshotConfig } from "../catalogue/storyConfig.js";
 import { UNIVERSAL_ACTIONS_CONFIG } from "../config/index.js";
 import type { Router } from "../router/index.js";
 import type { Store } from "../store/index.js";
@@ -293,6 +294,7 @@ export async function regenerateRulebook(
   const poolSelection =
     schema.statMode === "full"
       ? await selectPoolEntries(router, schema, {
+          catalogue: catalogueOf(activeConfig()),
           ...(options.signal ? { signal: options.signal } : {}),
           ...(options.fragmentDeadlineMs ? { deadlineMs: options.fragmentDeadlineMs } : {}),
         })
@@ -304,7 +306,7 @@ export async function regenerateRulebook(
     actionBudget,
     rulebookVersion: (story.rulebookVersion ?? 1) + 1,
     configSnapshot: {
-      ...(story.configSnapshot ?? {}),
+      ...snapshotConfig(story.configSnapshot),
       mechanics: schema.mechanicsConfigVersions ?? MECHANICS_CONFIG_VERSIONS,
       creationSource: {
         ...(input.sourceCard ? { sourceCard: structuredClone(input.sourceCard) } : {}),

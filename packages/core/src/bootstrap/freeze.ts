@@ -39,6 +39,7 @@ import {
 import { MECHANICS_CONFIG_VERSIONS } from "../config/index.js";
 import { enablePoolEntry } from "../catalogue/enablement.js";
 import { selectPoolEntries } from "../catalogue/select.js";
+import { activeConfig, catalogueOf, snapshotConfig } from "../catalogue/storyConfig.js";
 
 /** Raised when a caller tries to freeze a schema that still fails cross-validation. */
 export class UnfreezableSchemaError extends Error {
@@ -180,13 +181,13 @@ export async function bootstrapStory(
     difficulty: STANDARD_DIFFICULTY,
     actionBudget: installedSchema.actionBudget ?? 2,
     rulebookVersion: 1,
-    configSnapshot: {
+    configSnapshot: snapshotConfig({
       mechanics: installedSchema.mechanicsConfigVersions ?? MECHANICS_CONFIG_VERSIONS,
       modelRecommendations: MODEL_RECOMMENDATION_CONFIG_VERSION,
       ...(creationSourceSnapshot(input)
         ? { creationSource: creationSourceSnapshot(input) }
         : {}),
-    },
+    }),
   };
 
   // Plan 09 §5: pick universal-pool entries to enable on top of the authored catalogue. Never fails
@@ -194,6 +195,7 @@ export async function bootstrapStory(
   const poolSelection =
     installedSchema.statMode === "full"
       ? await selectPoolEntries(router, installedSchema, {
+          catalogue: catalogueOf(activeConfig()),
           ...(options.signal ? { signal: options.signal } : {}),
           ...(options.fragmentDeadlineMs ? { deadlineMs: options.fragmentDeadlineMs } : {}),
         })

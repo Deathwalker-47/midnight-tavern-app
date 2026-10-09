@@ -1,8 +1,9 @@
 import { z } from "zod";
-import { applyUniversalActionDefaults, EQUIPMENT_LOOT_CONFIG, UNIVERSAL_ITEMS } from "../config/index.js";
+import { applyUniversalActionDefaults, EQUIPMENT_LOOT_CONFIG, type UniversalItems } from "../config/index.js";
 import { finalizeLootProposal, tierAtMost } from "../engine/index.js";
 import { effectiveSchema } from "../catalogue/enablement.js";
 import { weaponSpecialOptions, type WeaponSpecialOption } from "../catalogue/specials.js";
+import { catalogueOf, configForStory, enablementsForPlay } from "../catalogue/storyConfig.js";
 import { callStructured, type Router } from "../router/index.js";
 import type { Store } from "../store/index.js";
 import {
@@ -23,15 +24,15 @@ import { randomUUID } from "../util/uuid.js";
  * action or a skill directly; a weapon may instead carry one weapon special from a sealed list (plan
  * 09 §8.2), which the engine attaches as an `action_enable` effect only when it suits the weapon.
  */
-const ARCHETYPE_IDS = UNIVERSAL_ITEMS.archetypes.map((archetype) => archetype.id) as [string, ...string[]];
 const LootEffectSchema = EquipmentEffectSchema.refine(
   (effect) => effect.type !== "action_enable" && effect.type !== "skill_enable",
   "Loot never grants an action or a skill through effects; name a specialId for a weapon special."
 );
 
-function lootDecisionSchema(specialIds: readonly string[]) {
+function lootDecisionSchema(items: UniversalItems, specialIds: readonly string[]) {
+  const archetypeIds = items.archetypes.map((archetype) => archetype.id) as [string, ...string[]];
   const proposal = ItemProposalSchema.extend({
-    archetypeId: z.enum(ARCHETYPE_IDS),
+    archetypeId: z.enum(archetypeIds),
     effects: z.array(LootEffectSchema).default([]),
     ...(specialIds.length > 0 ? { specialId: z.enum(specialIds as [string, ...string[]]).optional() } : {}),
   });
@@ -67,10 +68,10 @@ function lootDecisionSchema(specialIds: readonly string[]) {
     });
 }
 
-/** The archetypes as the adjudicator sees them, one line each. */
-export const LOOT_ARCHETYPE_LINES = UNIVERSAL_ITEMS.archetypes.map(
-  (archetype) => `- ${archetype.id} · ${archetype.kind} · ${archetype.description}`
-);
+/** The item archetypes as the adjudicator sees them, one line each. */
+export function lootArchetypeLines(items: UniversalItems): string[] {
+  return items.archetypes.map((archetype) => `- ${archetype.id} · ${archetype.kind} · ${archetype.description}`);
+}
 
 export interface PendingLootAward {
   rulingIndex: number;
@@ -123,14 +124,16 @@ export async function determineLootAwards(
     .filter((index) => index >= 0);
   if (successfulIndices.length === 0) return [];
 
-  // The weapon specials this story could see granted now (plan 09 §8.2).
+  // The story's universal config (plan 09 §4c), and the weapon specials it could see granted now (§8.2).
+  const config = configForStory(story);
   const frozen = applyUniversalActionDefaults(story.schema);
   const specials = weaponSpecialOptions(
     frozen,
-    effectiveSchema(frozen, await store.poolEnablements.list(story.id)),
-    (await store.chapters.listByStory(story.id)).length
+    effectiveSchema(frozen, enablementsForPlay(story, await store.poolEnablements.list(story.id))),
+    (await store.chapters.listByStory(story.id)).length,
+    catalogueOf(config)
   );
-  const LootDecisionSchema = lootDecisionSchema(specials.map((special) => special.entryId));
+  const LootDecisionSchema = lootDecisionSchema(config.items, specials.map((special) => special.entryId));
   let decision: z.infer<typeof LootDecisionSchema>;
   try {
     decision = await callStructured(
@@ -156,7 +159,7 @@ export async function determineLootAwards(
           "Decide whether this exchange deserves no loot, one item, or a small multi-item reward now. Explain every award.",
           "",
           "ITEM ARCHETYPES:",
-          ...LOOT_ARCHETYPE_LINES,
+          ...lootArchetypeLines(config.items),
           ...(specials.length > 0
             ? [
                 "",
@@ -234,7 +237,9 @@ export async function determineLootAwards(
         mythicalAuthorized,
         existingDefinitionIds: [...existingDefinitionIds, ...awards.map((award) => award.definition.id)],
       },
-      { definitionId: randomUUID(), createdAt: now }
+      { definitionId: randomUUID(), createdAt: now },
+      EQUIPMENT_LOOT_CONFIG,
+      config.items
     );
     if (!finalized.valid || !finalized.definition) continue;
     const special = attachWeaponSpecial(

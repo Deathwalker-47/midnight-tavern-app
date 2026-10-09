@@ -66,6 +66,7 @@ import {
   TOGGLE_SKILL_ACTION_ID,
 } from "../types/index.js";
 import { applyUniversalActionDefaults, ECONOMY_CONFIG } from "../config/index.js";
+import { enablementsForPlay } from "../catalogue/storyConfig.js";
 import {
   effectiveSchema,
   stagePoolEnablement,
@@ -172,7 +173,10 @@ export async function requireStory(store: Store, storyId: string): Promise<Story
  */
 export async function requirePlayableStory(store: Store, storyId: string): Promise<StoryRecord> {
   const story = await requireStory(store, storyId);
-  return { ...story, schema: effectiveSchema(story.schema, await store.poolEnablements.list(storyId)) };
+  return {
+    ...story,
+    schema: effectiveSchema(story.schema, enablementsForPlay(story, await store.poolEnablements.list(storyId))),
+  };
 }
 
 /** Merge deterministic narrator discoveries with model proposals without duplicating identities. */
