@@ -48,11 +48,13 @@ on record and is cheap to change because every number lives in config.
 5. **Terminology:** the persisted equipment effects `action_enable` / `skill_enable` predate the
    enable/learn rule and mean *the wearer gains it*. They keep their names (persisted data); UI copy
    says "grants". New code uses enable/disable only for pool availability.
-6. **The owner's source files are not in the repo** (`universal-rpg-skill-taxonomy-expanded-non-combat.txt`,
-   `uni-items.txt`). The pool format, validators, loader and an engineering-authored starter pool ship
-   now; the full ~3,000-entry import is a data drop into the same format when the files are supplied.
-   Until then the forge is **hybrid**: story-specific actions are still authored, and pool entries are
-   selected on top. Authoring shrinks once the full pool exists.
+6. **The owner's source files no longer exist** (`universal-rpg-skill-taxonomy-expanded-non-combat.txt`,
+   `uni-items.txt`). They were never committed, and on 2026-10-09 the owner reported the laptop holding
+   them was formatted. Under the owner's existing grants ("you structure whatever the way you feel best",
+   "add all the attributes yourself", "remove whatever you feel not plausible") engineering authors the
+   whole pool and the item categories itself, organised into its own sections. The forge stays
+   **hybrid** (story-specific actions authored, pool entries selected on top) until the pool is large
+   enough to carry a story alone.
 
 ## Working protocol
 
@@ -67,7 +69,7 @@ push to `main`.
 - [x] **S1. XP repeat penalty** (finding 16). Curve to `[1,0.8,0.6,0.5,0.4]`; count only the same
       actor's prior rulings; read `repetitionWindowTurns` instead of a hard-coded 5; NPC rulings never
       consume the player's window.
-- [ ] **S2. Resource roles** (finding 22). `ResourceDef.role`; deterministic legacy role inference
+- [x] **S2. Resource roles** (finding 22). `ResourceDef.role`; deterministic legacy role inference
       (inverted `fatigue` stays `other`); generic NPCs receive health, mana and stamina; `schemaVersion: 3`
       accepted with the V2 contract plus "Full Stats v3 must define health, mana and stamina roles".
 - [ ] **S3. Weapon stamina cost** (finding 21). Typed `staminaCost` on legacy and runtime item

@@ -457,3 +457,25 @@ describe("V7 resolver integration", () => {
     expect(result.ruling.roll).toBeDefined();
   });
 });
+
+describe("generic encounter damage floor edge cases", () => {
+  it("still lands at least one point on a generic target that lacks the lethal pool", () => {
+    // A generic NPC (no template) whose hard state never carried the lethal resource: the floor
+    // falls back to a zero maximum and the minimum one-point floor, never NaN or a skipped hit.
+    const story = makeStory({ locked: true });
+    const target = makeEnemy({ templateId: undefined, resources: {} });
+    const result = resolve(
+      story,
+      makePlayer(),
+      target,
+      { ...attackIntent, actionId: "attack_wild" },
+      d20Sequence([15])
+    );
+    expect(result.ruling.roll?.outcome).toBe("success");
+    const hit = result.mutations.find(
+      (mutation) => mutation.kind === "resourceDelta" && mutation.characterId === "wight"
+    );
+    expect(hit).toMatchObject({ resourceId: "hp" });
+    expect(hit && "delta" in hit ? hit.delta : 0).toBeLessThan(0);
+  });
+});

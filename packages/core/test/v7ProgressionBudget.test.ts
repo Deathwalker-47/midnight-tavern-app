@@ -112,6 +112,16 @@ describe("repetition window (finding 16)", () => {
     expect(countRecentSimilarUses(priors, intent, 5)).toBe(8);
   });
 
+  it("treats each legacy ruling without a message id as its own turn", () => {
+    const priors = [0, 1, 2].map(() => {
+      const legacy = ruling({ ...strike, messageId: "unused" });
+      delete (legacy as { messageId?: string }).messageId;
+      return legacy;
+    });
+    expect(countRecentSimilarUses(priors, intent, 2)).toBe(2);
+    expect(countRecentSimilarUses(priors, intent)).toBe(3);
+  });
+
   it("only counts the same action", () => {
     const priors = [
       ruling({ ...strike, messageId: "m1" }),

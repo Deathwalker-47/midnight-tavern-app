@@ -2035,3 +2035,33 @@ rulings now yields 5 XP (×0.5) — verified RED against the old `turn.ts` (it p
 from live play. The version bump invalidates resume fingerprints of any half-finished forge.
 
 **Next:** S2 (resource roles).
+
+---
+
+## 2026-10-09 - S2: resource roles and the v3 resource contract (plan 08 §2)
+
+**Owner news first.** The owner reported their laptop was formatted. Everything local is gone: the
+installed v0.2.9 build, both live saves used for earlier diagnoses, the trial-unlock script, local agent
+tooling, and the two taxonomy source files plan 09 was to be built from (never committed; not in Drive —
+searched). Git history on `origin` is intact. Recorded in HANDOFF and the action plan: engineering now
+authors the whole pool under the owner's standing grants, and D7 (new stories only) costs nothing.
+
+**What landed.** `ResourceRoleSchema` (`health|mana|stamina|currency|experience|other`) and an optional
+`ResourceDef.role`. New pure `engine/resources.ts`: `inferResourceRole`, `resourceRoles` (core roles
+assigned at most once, explicit roles win), `resourceIdForRole`. Inference: lethal → health; names map
+mana/stamina/currency/experience; inverted pools (`fatigue`, `strain`, …) stay `other`, so Solo
+Leveling's fatigue is never treated as stamina. `schemaVersion` now accepts 3; the V2 contract applies to
+v2+, and v3 Full Stats rulebooks must name exactly one health, mana and stamina pool with health being
+the lethal one. `instantiateGeneric` gives generic NPCs full mana and stamina pools on v3 rulebooks only;
+legacy rulebooks keep the lethal-only shape.
+
+**Found and fixed: the engine coverage gate was already red.** `npx vitest run --coverage` (core) failed
+at the original `0e500d9` — `resolver.ts:173`'s `?? 0` fallback for a generic target lacking the lethal
+pool was never exercised — despite every doc claiming 100% branch coverage. Verified in a clean worktree
+at `0e500d9`. Added the missing resolver test; the gate is now genuinely 100%. Note the gate is not part
+of `npm test`, which is how it went unnoticed.
+
+**Tests.** 12 role/contract/instantiation tests (`test/resourceRoles.test.ts`), one legacy-ruling window
+test, one resolver edge case. Typecheck clean; core 690/47, UI 183/26 = 873 passing; engine coverage 100%.
+
+**Next:** S3 (weapon stamina cost).

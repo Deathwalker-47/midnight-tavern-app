@@ -34,6 +34,24 @@ export const MasteryAdvanceRuleSchema = z.object({
 });
 export type MasteryAdvanceRule = z.infer<typeof MasteryAdvanceRuleSchema>;
 
+/**
+ * Stable engine-facing meaning of a resource (plan 08 §2). The forge themes names freely
+ * ("Grit", "Aether"); the role is how the engine finds health, mana and stamina.
+ */
+export const ResourceRoleSchema = z.enum([
+  "health",
+  "mana",
+  "stamina",
+  "currency",
+  "experience",
+  "other",
+]);
+export type ResourceRole = z.infer<typeof ResourceRoleSchema>;
+
+/** The three pools every Full Stats v3 character carries. */
+export const CORE_RESOURCE_ROLES = ["health", "mana", "stamina"] as const;
+export type CoreResourceRole = (typeof CORE_RESOURCE_ROLES)[number];
+
 /** A numeric bar the story uses (health, stamina, ...). */
 export const ResourceDefSchema = z.object({
   id: z.string(),
@@ -41,9 +59,11 @@ export const ResourceDefSchema = z.object({
   start: z.number(),
   max: z.number(),
   playerVisible: z.boolean(),
-  regenPerScene: z.number().optional(), // optional passive recovery
+  regenPerScene: z.number().optional(), // legacy, never applied; recovery lives in economy config
   // M2 step 4: exactly one resource is `lethal` (statMode !== "none"); reaching 0 kills.
   lethal: z.boolean().optional(),
+  /** Explicit on v3 rulebooks; inferred deterministically for older ones. */
+  role: ResourceRoleSchema.optional(),
 });
 export type ResourceDef = z.infer<typeof ResourceDefSchema>;
 
@@ -168,7 +188,7 @@ export type NpcTemplate = z.infer<typeof NpcTemplateSchema>;
 
 /** The complete frozen story schema (persisted as `stories.schema_json`). */
 const StorySchemaObjectSchema = z.object({
-  schemaVersion: z.union([z.literal(1), z.literal(2)]),
+  schemaVersion: z.union([z.literal(1), z.literal(2), z.literal(3)]),
   storyId: z.string(),
   title: z.string(),
   premise: z.string(), // the user's input, preserved
@@ -199,8 +219,31 @@ const StorySchemaObjectSchema = z.object({
   legacyStatMode: z.literal("light").optional(),
   migrationPending: z.boolean().optional(),
 }).superRefine((story, ctx) => {
-  // V1 remains fully tolerant. These rules become part of the V2 frozen contract.
-  if (story.schemaVersion !== 2 || story.statMode === "none") return;
+  // V1 remains fully tolerant. These rules become part of the V2 frozen contract (and V3's).
+  if (story.schemaVersion < 2 || story.statMode === "none") return;
+  if (story.schemaVersion >= 3) {
+    // V3 (plan 08 §2): every Full Stats rulebook names exactly one health, mana and stamina pool,
+    // and the health pool is the lethal one, so the engine never has to guess.
+    for (const role of CORE_RESOURCE_ROLES) {
+      const holders = story.resources.filter((resource) => resource.role === role);
+      if (holders.length !== 1) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["resources"],
+          message: `Full Stats v3 rulebooks need exactly one resource with role "${role}" (found ${holders.length}).`,
+        });
+      }
+    }
+    story.resources.forEach((resource, index) => {
+      if (Boolean(resource.lethal) !== (resource.role === "health")) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["resources", index, "lethal"],
+          message: "In v3 rulebooks the lethal resource must be exactly the health-role resource.",
+        });
+      }
+    });
+  }
   if (story.attributes.length < 3 || story.attributes.length > 6) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,

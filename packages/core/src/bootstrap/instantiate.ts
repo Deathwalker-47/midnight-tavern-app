@@ -101,10 +101,10 @@ function genericLethalMaximum(schema: StorySchema, resourceId: string, schemaMax
 }
 
 /**
- * Instantiate a generic NPC when no template matches (§5 step 3): only the lethal
+ * Instantiate a generic NPC when no template matches (§5 step 3): the lethal
  * resource(s), sized for six baseline natural hits so a plain foe remains playable even when
- * player-scale health is much larger. Valid proposed story skills are seeded at novice rank;
- * inventory remains empty.
+ * player-scale health is much larger; on v3 rulebooks also full mana and stamina pools. Valid
+ * proposed story skills are seeded at novice rank; inventory remains empty.
  */
 export function instantiateGeneric(
   schema: StorySchema,
@@ -116,6 +116,13 @@ export function instantiateGeneric(
     if (def.lethal) {
       const maximum = genericLethalMaximum(schema, def.id, def.max);
       resources[def.id] = { current: maximum, max: maximum };
+    } else if (
+      schema.schemaVersion >= 3 &&
+      (def.role === "mana" || def.role === "stamina")
+    ) {
+      // Plan 08 §2: on v3 rulebooks every character carries the three core pools, so a generic NPC
+      // can pay a mana or stamina cost. Legacy rulebooks keep the lethal-only shape (D7).
+      resources[def.id] = { current: def.max, max: def.max };
     }
   }
   const knownSkillIds = new Set(schema.skills.map((skill) => skill.id));

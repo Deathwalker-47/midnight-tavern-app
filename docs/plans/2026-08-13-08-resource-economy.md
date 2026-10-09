@@ -86,7 +86,7 @@ naming and theming them; the engine gains a stable way to find them.
   (validated in `bootstrap/validate.ts`).
 - Theming is preserved — a story may call stamina "Grit" or mana "Aether"; only the `role` is fixed.
 - `instantiateGeneric` grants health **and** mana **and** stamina, so NPCs can pay costs.
-- [ ] **2.1** Legacy stories have no `role`. Add a deterministic inference for existing schemas
+- [x] **2.1** Legacy stories have no `role`. Add a deterministic inference for existing schemas
       (`lethal` → health; id/label matching `mana|aether|essence` → mana; `stamina|fatigue|grit` →
       stamina) so old saves keep working **without a schema rewrite**. Note that Solo Leveling's
       `fatigue` is an *inverted* stamina (0 is good) — decide explicitly whether inference should
