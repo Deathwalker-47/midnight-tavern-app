@@ -1,7 +1,7 @@
 # Action plan — finish plans 08 and 09
 
 **Created:** 2026-10-09
-**Status:** ACTIVE (named in `docs/HANDOFF.md`).
+**Status:** COMPLETE (2026-10-09). See "Outcome" at the end.
 **Owner decision:** on 2026-10-09 the owner instructed: *"Create an action plan to finish of everything
 from plan 8 and 9, and then you start picking them off one by one as you finish each step edit
 handoffs properly commit and push to main do not wait for my go ahead to push."* That instruction
@@ -108,7 +108,7 @@ push to `main`.
 - [x] **S16. Weapon specials** via `action_enable` + S4 cooldowns + rarity scaling.
 - [x] **S17. External config overrides** — merge-by-id override files, validation with surfaced errors,
       per-story "locked to creation / follow my edits", past rulings never recomputed.
-- [ ] **S18. Close-out** — master index status, plan 08/09 boxes, design notes, HANDOFF.
+- [x] **S18. Close-out** — master index status, plan 08/09 boxes, design notes, HANDOFF.
 
 ## Acceptance (whole plan)
 
@@ -116,3 +116,42 @@ Plan 08 §8 and plan 09 §11 acceptance criteria, plus: every step leaves typech
 suites green; existing v1/v2 stories behave exactly as before except for the XP curve (S1), which is
 a deliberate global change because it answers a complaint about live play; rewind restores every new
 piece of state.
+
+## Outcome (2026-10-09)
+
+Every step S0–S18 shipped to `main`, each with typecheck clean, both suites green and engine coverage at
+100%. Final count: core 901 tests / 68 files, UI 211 / 32.
+
+**Plan 08 acceptance (§8):** all seven criteria met and tested — XP repeat penalty per actor, action
+and target with a 0.4 floor; health, mana and stamina on every Full Stats character; weapon stamina
+denied at the gate with one shared cost function; costs, cooldowns and passive refusal; cooldowns and
+statuses survive rewind; legacy stories unchanged; coverage 100%.
+
+**Plan 09 acceptance (§11):**
+1. *Not met as written.* New stories enable pool entries (12–24 actions, 2–6 skills) **on top of** 30
+   authored actions and 6–10 authored skills, inside the 40–70 / 20–40 targets — but the forge stays
+   hybrid (decision above), so cost and latency do not drop; selection adds one bounded call. §5.4 was
+   not measured here (no provider keys in the build container).
+2. Met — the classifier sees the effective rulebook only (frozen + enabled), never the pool.
+3. Met **after creation**: the analyzer, loot specials and the player all draw from sealed pool ids.
+   At creation the hybrid forge still authors story-specific content outside the pool.
+4. – 9. Met and tested — tier gating and the 2-per-chapter limit, journalled and turn-scoped; enabling
+   never teaches; rewind restores the enablement set; the browser measured at 3,108 entries; legacy
+   stories unchanged; bridge parity tested for every new method.
+
+**Decisions taken beyond the table above** (each recorded in WORKLOG): the tier lock binds the player's
+own toggles (S14, design brief §5b); the D8 refusal counts any *held* granting item, not only equipped
+(S16); loot can no longer grant actions or skills through effects at all (S16); locked stories snapshot
+their override *texts*, not just a hash (S17).
+
+**Pre-existing defects found and fixed along the way:** `learn_skill` never routed (S6a); the narrator
+told every automatic ruling it was DENIED (S7); role-keyed costs dropped by the forge stabilizer (S8a);
+runtime item `staminaCost` never persisted (S15a); `consume_item` unusable in every new story (S15b);
+loot able to grant master-rank skills on common items (S16); the engine coverage gate silently failing
+(S2).
+
+**Still open:** plan 09 §5.4 (measure in the owner's test), §7.3 (designer), selection quality with a
+real model (the owner's saves that plan 09 §12 wanted replayed were lost with the laptop), the
+equipment `resource_capacity` effect that nothing applies (found in S6b, out of scope), a Windows build
+to validate the S17 capability file and to test everything above.
+

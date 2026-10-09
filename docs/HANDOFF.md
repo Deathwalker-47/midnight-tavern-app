@@ -1,6 +1,6 @@
 # HANDOFF - current live state
 
-**Updated:** 2026-10-09 (plans 08 + 09 activated by the owner; execution in progress)
+**Updated:** 2026-10-09 (plans 08 + 09 **complete** — every step S0–S18 shipped to `main`)
 **Branch / source baseline:** `main`. The owner authorized pushing every completed step straight to
 `origin/main` without waiting (2026-10-09). Push after each step.
 **App version:** `0.2.9` (no installer built for this work yet — build once a shippable milestone is done).
@@ -12,17 +12,17 @@ GateGuard hook, auto-memory) and the owner's taxonomy source files. The git hist
 findings below remain true as code facts but can no longer be re-inspected; the next build must be
 produced from source on a fresh Windows toolchain.
 
-**Active plan:** [`docs/plans/2026-10-09-plans-08-09-action-plan.md`](plans/2026-10-09-plans-08-09-action-plan.md),
-which executes plans `2026-08-13-08-resource-economy.md` and `2026-08-13-09-content-catalogues.md`.
-Read the action plan's "Decisions taken" and "Corrections" sections before touching code — they
-override parts of plans 08/09 that were wrong against source.
+**Active plan:** none. The last one —
+[`docs/plans/2026-10-09-plans-08-09-action-plan.md`](plans/2026-10-09-plans-08-09-action-plan.md), executing
+plans 08 and 09 — is complete; its "Outcome" section lists what shipped, what did not, and why. Per
+AGENTS.md, the next plan is picked deliberately with the owner (see the single next action).
 
 ## Planning rules
 
 Every plan written before 2026-08-12 is decommissioned ([`docs/PLAN-POLICY.md`](PLAN-POLICY.md)).
 Plans 01-07 and 10-12 of the 2026-08-13 set remain written but **not authorized**.
 
-## Progress on the active plan
+## Progress on the last plan (complete)
 
 | Step | What | State |
 | --- | --- | --- |
@@ -54,14 +54,16 @@ Plans 01-07 and 10-12 of the 2026-08-13 set remain written but **not authorized*
 | S16 | Weapon specials: `equipmentEnabled` pool actions (9 entries), offered to loot as a sealed `specialId`, attached only to a fitting weapon of sufficient tier, enabled turn-scoped in the commit (enablement split into stage + write); loot can no longer grant actions/skills through effects (**was: a common item could grant master rank**); D8 item half — held granting items keep an entry | done |
 | S17a | Config overrides in core: `resolveConfig` (merge by id, remove, add, schema errors skip with file/id/field, unusable entries left out, balance → warnings, clamps), active config + per-story snapshot, locked (default) / follow modes, everything catalogue-aware threaded; §4c.12 immutability tested | done |
 | S17b | Desktop shell reads `$APPDATA/config` (fs plugin JS added; capability names checked against the crate, not build-validated here — no GTK in this container); bridge methods in both backends; Story Settings § CONFIG (issues, open/reload, restore defaults, locked/follow with warning) | done |
-| S18 | Close-out | next |
+| S18 | Close-out: plan 09 §5.3 two-stage selection (above 300 candidates), plan / index statuses, outcome report | done |
+| — | **Plans 08 and 09 complete** (open: plan 09 §5.4 unmeasured, §7.3 design; the hybrid forge leaves acceptance 1 and part of 3 unmet as written — see the action plan's Outcome) | done |
 
 ## Verification state
 
-After S17b (Linux/Node 22): `npm run typecheck` clean; core **899 / 68 files** (engine coverage 100%),
-UI **211 / 32 files** = **1110** passing; UI production build verified at S17b (main chunk 457.2 kB /
+After S18 (Linux/Node 22): `npm run typecheck` clean; core **901 / 68 files** (engine coverage 100%),
+UI **211 / 32 files** = **1112** passing; UI production build verified at S17b (main chunk 457.2 kB /
 126.5 kB gzip); root `npm test` passes here (the tinypool worker crash is Windows/Node 24 only — plan 07
-P0-0, not authorized). `cargo check` cannot run in this container (missing GTK system libraries).
+P0-0, not authorized). `cargo check` cannot run in this container (missing GTK system libraries), so
+the Rust shell and the S17b capability file have not been build-validated since plans 08/09 began.
 
 ## Facts established earlier (still true — do not re-derive)
 
@@ -102,8 +104,15 @@ P0-0, not authorized). `cargo check` cannot run in this container (missing GTK s
 
 ## Single next action
 
-Do **S18**: close out plans 08 and 09 — update `docs/plans/2026-08-13-00-MASTER-INDEX.md` status for 08 and
-09, sweep both plans' remaining unticked boxes (tick what shipped with the step that shipped it; state
-plainly what did not ship and why), record the open design deliverable (plan 09 §7.3 / design brief §5),
-and write the final HANDOFF with the next decision for the owner (a Windows build to test plans 08/09,
-and which plan comes next).
+**An owner decision, in two parts — do not start new work without it.**
+
+1. **Build and play-test** plans 08 + 09 on Windows (the owner's machine was formatted, so the toolchain
+   is fresh). The build also validates the S17b fs capability names against the real `tauri-build`, and
+   play is the only way to judge pool selection quality with a real model and to measure forge time
+   (plan 09 §5.4). Things worth trying: Story Settings → Rulebook catalogue / Universal pool / Rulebook
+   config; drinking a looted potion and rewinding; a weapon special from loot after the first chapter;
+   resting and the Conditions block on the living card.
+2. **Choose the next plan.** The master index's recommended order puts plan **02 (classifier fidelity)**
+   first: item 19 is the owner's own P0, and misclassification undermines judging everything else,
+   including the new catalogue. Recommendation: 02 next, then 06 (narration integrity). Plan 04
+   (character panels) is now unblocked by 08 if the owner prefers visible UI work.

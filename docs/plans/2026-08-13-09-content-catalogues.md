@@ -7,7 +7,9 @@ skill set; catalogue UI), 31 (weapon special skills)
 **Size:** XL
 **Depends on:** plan 08 (costs, cooldowns, resource roles). Relieves plan 02 (see §1).
 **Blocked on owner decision D7 only.** D8 and D9 were answered 2026-08-13 (§9).
-**Status:** Planned. Not authorized.
+**Status:** SHIPPED 2026-10-09 via `2026-10-09-plans-08-09-action-plan.md` (S9–S18), with the open items
+listed in that file's "Outcome" section: §5.4 unmeasured, §7.3 (design) outstanding, and the hybrid forge
+(decision in the action plan) means acceptance 1 and part of 3 are not met as written.
 
 ---
 
@@ -365,11 +367,16 @@ history, only the future — which is exactly what a GM changing a house rule mi
 - [x] **5.2** *(S11: 30 authored + 12–24 selected actions; 6–10 authored + 2–6 selected skills.)* Target **40–70 actions** and **20–40 skills** enabled per story. Validate: minimum
       coverage per category survives (the existing `CATALOG_MIN_PER_CATEGORY` rule), the ungated
       canonical natural attack is always enabled, and every selected id exists in the pool.
-- [ ] **5.3** The pool index sent for selection is itself large (~3,000 lines). **Do not send it
+- [x] *(S18: above 300 candidates — reachable once user config grows the pool — the forge picks up to 15
+      sections first, then entries within them, never listing more than 300; a failed section call
+      falls back to the sections holding the most relevant entries.)* **5.3** The pool index sent for selection is itself large (~3,000 lines). **Do not send it
       whole.** Two-stage: first select ~15 relevant *sections* from the 166, then select entries
       within them. This keeps each structured call small and is the same funnel shape plan 11 uses
       for the move taxonomy.
-- [ ] **5.4** Selection is far cheaper than authoring, so forge latency and cost should **drop**.
+- [ ] *(NOT DONE. Not measurable in the build container — no provider keys — and under the hybrid
+      decision selection is added to authoring rather than replacing it, so latency and cost go up by
+      one bounded call, not down. Measuring it is part of the owner's Windows test; the forge's progress
+      events already carry elapsed times.)* **5.4** Selection is far cheaper than authoring, so forge latency and cost should **drop**.
       Measure before/after and report — if it does not drop, the two-stage design is wrong.
 
 ## 6. Mid-story enablement (owner's point 3) — the part needing the most care
@@ -436,7 +443,8 @@ Two surfaces, both in Story Settings:
       - It follows that **the pool can only grow within a story's lifetime** once anything is
         learned. That is the correct trade: a catalogue that shrinks under a character's feet would
         strand hard state the ledger legitimately wrote.
-- [ ] **7.3** Design deliverable — see the design brief.
+- [ ] *(NOT DONE — a designer's deliverable, not engineering. S14 shipped working surfaces with the
+      calls recorded in WORKLOG S14; the design brief §5 questions remain open for a designer.)* **7.3** Design deliverable — see the design brief.
 
 ## 8. Findings 20 and 31 (unchanged from the previous version)
 

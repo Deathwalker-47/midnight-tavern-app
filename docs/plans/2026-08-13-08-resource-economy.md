@@ -7,7 +7,8 @@ cost, types, duration, targets, cooldown, passives), 24 (recovery model)
 **Size:** XL — the largest schema change since the engine was written.
 **Depends on:** plan 05 (proves the deterministic-variation approach). Blocks plans 09 and 10.
 **Blocked on owner decisions D5 and D7.**
-**Status:** Planned. Not authorized.
+**Status:** SHIPPED 2026-10-09 via `2026-10-09-plans-08-09-action-plan.md` (S1–S8). Every acceptance
+criterion in §8 is met and tested.
 
 ---
 

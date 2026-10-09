@@ -2838,3 +2838,25 @@ over real core and store; no folder; locking parity and a following story's edit
 = 1110; UI build verified.
 
 **Next:** S18 — close-out.
+
+---
+
+## 2026-10-09 - S18: close-out of plans 08 and 09
+
+**Plan 09 §5.3 shipped** (`catalogue/select.ts`): above `SECTION_STAGE_THRESHOLD` (300) candidates — a pool
+grown by the user's own config — the forge first asks for up to `SECTION_PICKS` (15) sections, then
+selects entries only within them, listing at most 300; a failed section call falls back to the sections
+holding the most relevant candidates. Below the threshold, one call as before. 2 tests (model path with
+the stage-two index confined to the chosen sections; fallback bounded in entries and sections).
+
+**Not done, stated plainly:** plan 09 §5.4 (forge latency/cost before vs after) needs live provider calls
+— and under the hybrid forge decision selection is an *added* bounded call, so the plan's premise that
+cost drops does not hold; §7.3 is a designer's deliverable. Acceptance 1 and part of 3 of plan 09 are not
+met as written because of the hybrid forge; everything after story creation is sealed to the pool.
+
+**Docs:** plans 08 and 09 marked SHIPPED, master index updated, the action plan marked COMPLETE with an
+"Outcome" section (acceptance against both plans, extra decisions, pre-existing defects fixed, open
+items). HANDOFF now names no active plan and asks the owner for a Windows build/test and the next plan
+(recommendation: 02, classifier fidelity — the owner's own P0).
+
+**Verification.** Typecheck clean; core 901/68 (engine coverage 100%), UI 211/32 = 1112.

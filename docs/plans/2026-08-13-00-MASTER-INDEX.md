@@ -1,7 +1,8 @@
 # Master plan index — 2026-08-13 play-test remediation
 
 **Created:** 2026-08-13
-**Status:** PLANNING. No implementation authorized yet.
+**Status:** Plans **08 and 09 SHIPPED** (2026-10-09, `2026-10-09-plans-08-09-action-plan.md`). Every other
+plan in this set remains planned and **not authorized**.
 **Owner decision required before dev starts:** yes — see "Owner decisions outstanding".
 **Supersedes:** nothing. This is the first plan set created after `docs/PLAN-POLICY.md` took
 effect, so it is the only eligible body of work. Every pre-2026-08-12 plan is cancelled.
@@ -81,8 +82,8 @@ Measured on a clean tree at `b19d4b8`:
 | 05 | Generation variety | 6 | M | — |
 | 06 | Narration integrity | 11, 12, 13 | L | — |
 | 07 | Live UI reactivity and play-screen polish | 10, 14, 18, 28, 29 | M | — |
-| 08 | Resource economy and skill mechanics | 16, 21, 22, 23, 24 | XL | — |
-| 09 | Content catalogues | 20, 25, 31 | XL | 08 |
+| 08 | Resource economy and skill mechanics — **SHIPPED 2026-10-09** | 16, 21, 22, 23, 24 | XL | — |
+| 09 | Content catalogues — **SHIPPED 2026-10-09** (§5.4 unmeasured, §7.3 design open) | 20, 25, 31 | XL | 08 |
 | 10 | Quests | 15 | XL | 08, 09 |
 | 11 | Suggestion taxonomy | 30 | M | — |
 | 12 | Overview and settings UI | 26, 27 | M | — |
