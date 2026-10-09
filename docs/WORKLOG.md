@@ -2231,3 +2231,35 @@ chaining, rewind, gate-refused and target-down drops — the last mutation-check
 `test/toggleSkills.test.ts`. Typecheck clean; core 764/54, UI 183/26 = 947; engine coverage 100%.
 
 **Next:** S6e (targeting scopes).
+
+---
+
+## 2026-10-09 - S6e: targeting scopes (plan 08 §4) — S6 complete
+
+**What landed.** `ActionDef.targeting` = `{ scope, maxTargets? }` with scopes `self | single | multiple |
+all_allies | all_enemies | area` (cap ≤ 8; `multiple` defaults to 3). New pure `engine/targeting.ts`
+(`expandTargets`): `self` = the actor; `multiple` = the classifier-named `targetId` + new optional
+`MechanicalIntent.targetIds`; `all_allies`/`all_enemies` split present, living characters by the one side
+fact the engine owns — validated hostility to the player (`npc_hostile_to_player`); `area` = everyone
+present and alive but the actor. New `resolveAgainstEach`: one gate check, one cost, one cooldown, one
+roll and one XP award (on the first target's ruling); every further target gets its own ruling sharing
+that roll and receiving only the target side of the outcome, so a self-heal or self-damage never
+repeats. Reaching nobody is a new gate refusal, `no_target`. Rulings carry `targeting {scope, index,
+count}` and the narrator is told "One Flame Wave reached 2 targets with this single roll". Because each
+target has its own ruling, NPC reactions, skill reactions, deaths and rewind work per target unchanged.
+
+**Refactor.** `orchestrator/turn.ts` had four copies of the resolve-with-options block (player intents,
+NPC reactions, NPC planner, skill reactions); all now go through one scope-aware `resolveIntent`.
+
+**Also.** Scoped actions other than `multiple` no longer demand a named target
+(`actionRequiresCharacterTarget`); the classifier catalogue says `targets:<scope>`; the classifier
+schema accepts `targetIds` (present ids only, null → absent). The validator rejects an opposed contest
+with a multi-target scope (a contest needs one defender). Plan 08 box 4.3 ticked: the new skill fields
+are behaviour (type, bonuses, upkeep, trigger), `advancedUses` stays descriptive, and rank gating stays on
+`ActionDef.minRank`, which a reaction-only action can still carry — nothing is duplicated.
+
+**Tests.** 10 in `test/targetingScopes.test.ts`, including a real turn where a flame wave burns two
+hostile NPCs, spares a neutral innkeeper, costs stamina once, starts one cooldown, both enemies answer,
+and rewind restores everything. Typecheck clean; core 774/55, UI 183/26 = 957; engine coverage 100%.
+
+**Next:** S7 (recovery model, `economy.json`).

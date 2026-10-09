@@ -12,7 +12,9 @@
  */
 import { z, type ZodType } from "zod";
 import {
+  DEFAULT_MULTIPLE_TARGETS,
   LEARN_SKILL_ACTION_ID,
+  MAX_ACTION_TARGETS,
   TOGGLE_SKILL_ACTION_ID,
   type StorySchema,
 } from "../types/index.js";
@@ -93,6 +95,11 @@ export function buildClassifierSchema(
       // Null/empty means "not supplied"; identifiers are still validated against the
       // sealed enums after normalization, so this does not broaden mechanical authority.
       targetId: z.preprocess(normalizeOptional, actorId.optional()),
+      // Further targets for a `multiple`-scope action; the engine ignores them for any other.
+      targetIds: z.preprocess(
+        (value) => (value === null ? undefined : value),
+        z.array(actorId).max(MAX_ACTION_TARGETS).optional()
+      ),
       itemId: z.preprocess(normalizeOptional, z.string().optional()),
       skillId: z.preprocess(normalizeOptional, skillId.optional()),
       stakes: z
@@ -118,9 +125,10 @@ export function buildClassifierSchema(
         });
       }
     })
-    .transform(({ targetId, itemId, skillId: parsedSkillId, stakesReason, ...required }) => ({
+    .transform(({ targetId, targetIds, itemId, skillId: parsedSkillId, stakesReason, ...required }) => ({
       ...required,
       ...(targetId ? { targetId } : {}),
+      ...(targetIds?.length ? { targetIds } : {}),
       ...(itemId ? { itemId } : {}),
       ...(parsedSkillId ? { skillId: parsedSkillId } : {}),
       ...(stakesReason ? { stakesReason } : {}),
@@ -158,6 +166,12 @@ function renderCatalog(schema: StorySchema): string {
     if (a.aliases?.length) parts.push(`aliases:${a.aliases.join(", ")}`);
     if (a.universalFamily) parts.push(`universal:${a.universalFamily}`);
     if (actionRequiresCharacterTarget(a)) parts.push("target:required");
+    const scope = a.targeting?.scope;
+    if (scope === "multiple") {
+      parts.push(`targets:up to ${a.targeting!.maxTargets ?? DEFAULT_MULTIPLE_TARGETS} (targetId + targetIds)`);
+    } else if (scope && scope !== "single") {
+      parts.push(`targets:${scope} (engine picks them; no targetId needed)`);
+    }
     if (a.requiresSkill) parts.push(`requires:${a.requiresSkill}`);
     return "- " + parts.join(" · ");
   });

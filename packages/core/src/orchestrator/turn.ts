@@ -36,11 +36,16 @@ import {
   commit,
   countRecentSimilarUses,
   enforceActionBudget,
+  expandTargets,
   planSkillReactions,
   planStatusTick,
   planToggleUpkeep,
+  resolveAgainstEach,
   resolveLearnSkill,
   resolveToggleSkill,
+  type ResolveOptions,
+  type ResolveResult,
+  type TargetCandidate,
 } from "../engine/index.js";
 import { cryptoRng, type Rng } from "../engine/dice.js";
 import { runAnalyzer } from "../memory/index.js";
@@ -691,6 +696,47 @@ async function runTurnOperation(
         if (statuses.length > 0) statusesAtStart.set(character.id, statuses);
       }
 
+      const resolutionOptions = (extra: ResolveOptions = {}): ResolveOptions => ({
+        ...(story.difficulty ? { difficulty: story.difficulty } : {}),
+        ...(equipmentDefinitions.length > 0
+          ? {
+              equipment: {
+                definitions: equipmentDefinitions,
+                instances: equipmentInstances,
+              },
+            }
+          : {}),
+        ...extra,
+      });
+      // Resolve one intent through the gate and dice. A scoped action (plan 08 §4) reaches every
+      // present character its scope names, with one cost and one roll, and yields one ruling each.
+      const resolveIntent = async (
+        intent: MechanicalIntent,
+        extra: ResolveOptions = {}
+      ): Promise<ResolveResult[]> => {
+        const actorHard = await workingState(intent.actorId);
+        const action = schema.actions.find((candidate) => candidate.id === intent.actionId);
+        const candidates: TargetCandidate[] = [];
+        if (action?.targeting) {
+          for (const character of presentRoster) {
+            const hard = await workingState(character.id);
+            candidates.push({
+              characterId: character.id,
+              alive: hard.alive,
+              hostile: hard.flags[NPC_HOSTILE_TO_PLAYER_FLAG] === true,
+            });
+          }
+        }
+        const reached = action ? expandTargets(action, intent, candidates) : undefined;
+        if (!reached) {
+          const targetHard = intent.targetId ? await workingState(intent.targetId) : undefined;
+          return [resolve(schema, actorHard, targetHard, intent, rng, resolutionOptions(extra))];
+        }
+        const targets: CharacterHardState[] = [];
+        for (const characterId of reached) targets.push(await workingState(characterId));
+        return resolveAgainstEach(schema, actorHard, targets, intent, rng, resolutionOptions(extra));
+      };
+
       const intents: MechanicalIntent[] = [...budget.accepted, ...classified.npcIntents];
       // Sealed hostility grade per landed ruling, so deterministic provocation (Task 6) can
       // factor in the classifier's `stakes` alongside the action's category/opposed/effects.
@@ -720,32 +766,14 @@ async function runTurnOperation(
           stakesByTurnId.set(learned.ruling.turnId, intent.stakes);
           continue;
         }
-        const targetHard = intent.targetId ? await workingState(intent.targetId) : undefined;
         const recentSimilarUses = countRecentSimilarUses(priorRulings, intent);
-        const result = resolve(
-          schema,
-          actorHard,
-          targetHard,
-          intent,
-          rng,
-          {
-            ...(story.difficulty ? { difficulty: story.difficulty } : {}),
-            ...(equipmentDefinitions.length > 0
-              ? {
-                  equipment: {
-                    definitions: equipmentDefinitions,
-                    instances: equipmentInstances,
-                  },
-                }
-              : {}),
-            recentSimilarUses,
-          }
-        );
-        const died = commit(schema, result.mutations, workingById);
-        if (died.length) result.ruling.causedDeathOf = died;
-        rulings.push(result.ruling);
-        staged.push(result);
-        stakesByTurnId.set(result.ruling.turnId, intent.stakes);
+        for (const result of await resolveIntent(intent, { recentSimilarUses })) {
+          const died = commit(schema, result.mutations, workingById);
+          if (died.length) result.ruling.causedDeathOf = died;
+          rulings.push(result.ruling);
+          staged.push(result);
+          stakesByTurnId.set(result.ruling.turnId, intent.stakes);
+        }
       }
 
       for (let index = 0; index < budget.refused.length; index++) {
@@ -785,25 +813,13 @@ async function runTurnOperation(
       });
       const npcReactionIntents = plannedNpcReactions.map((planned) => planned.intent);
       for (const planned of plannedNpcReactions) {
-        const intent = planned.intent;
-        const actorHard = await workingState(intent.actorId);
-        const targetHard = intent.targetId ? await workingState(intent.targetId) : undefined;
-        const result = resolve(schema, actorHard, targetHard, intent, rng, {
-          ...(story.difficulty ? { difficulty: story.difficulty } : {}),
-          ...(equipmentDefinitions.length > 0
-            ? {
-                equipment: {
-                  definitions: equipmentDefinitions,
-                  instances: equipmentInstances,
-                },
-              }
-            : {}),
-        });
-        const died = commit(schema, result.mutations, workingById);
-        if (died.length) result.ruling.causedDeathOf = died;
-        result.ruling.npcReactionReason = planned.reason;
-        rulings.push(result.ruling);
-        staged.push(result);
+        for (const result of await resolveIntent(planned.intent)) {
+          const died = commit(schema, result.mutations, workingById);
+          if (died.length) result.ruling.causedDeathOf = died;
+          result.ruling.npcReactionReason = planned.reason;
+          rulings.push(result.ruling);
+          staged.push(result);
+        }
       }
 
       // Goal-driven bounded NPC planning (Task 5): a present, living NPC that did NOT
@@ -853,23 +869,12 @@ async function runTurnOperation(
         }
       );
       for (const intent of npcActionIntents) {
-        const actorHard = await workingState(intent.actorId);
-        const targetHard = intent.targetId ? await workingState(intent.targetId) : undefined;
-        const result = resolve(schema, actorHard, targetHard, intent, rng, {
-          ...(story.difficulty ? { difficulty: story.difficulty } : {}),
-          ...(equipmentDefinitions.length > 0
-            ? {
-                equipment: {
-                  definitions: equipmentDefinitions,
-                  instances: equipmentInstances,
-                },
-              }
-            : {}),
-        });
-        const died = commit(schema, result.mutations, workingById);
-        if (died.length) result.ruling.causedDeathOf = died;
-        rulings.push(result.ruling);
-        staged.push(result);
+        for (const result of await resolveIntent(intent)) {
+          const died = commit(schema, result.mutations, workingById);
+          if (died.length) result.ruling.causedDeathOf = died;
+          rulings.push(result.ruling);
+          staged.push(result);
+        }
       }
 
       // Reaction skills (plan 08 §4) answer this turn's attacks. They are planned once over every
@@ -878,34 +883,26 @@ async function runTurnOperation(
       // cooldown) or one that involves someone already down this turn simply does not happen.
       for (const planned of planSkillReactions(schema, rulings, workingById)) {
         const intent = planned.intent;
-        const actorHard = await workingState(intent.actorId);
-        const targetHard = await workingState(planned.sourceActorId);
         // The gate already refuses a dead actor; it does not look at the target.
-        if (!targetHard.alive) continue;
-        const result = resolve(schema, actorHard, targetHard, intent, rng, {
-          ...(story.difficulty ? { difficulty: story.difficulty } : {}),
-          ...(equipmentDefinitions.length > 0
-            ? {
-                equipment: {
-                  definitions: equipmentDefinitions,
-                  instances: equipmentInstances,
-                },
-              }
-            : {}),
+        if (!(await workingState(planned.sourceActorId)).alive) continue;
+        const results = await resolveIntent(intent, {
           recentSimilarUses: countRecentSimilarUses(priorRulings, intent),
           asReaction: true,
         });
-        if (!result.ruling.gate.allowed) continue;
-        const died = commit(schema, result.mutations, workingById);
-        if (died.length) result.ruling.causedDeathOf = died;
-        result.ruling.reaction = {
-          skillId: planned.skill.id,
-          skillName: planned.skill.name,
-          trigger: planned.trigger,
-          sourceActorId: planned.sourceActorId,
-        };
-        rulings.push(result.ruling);
-        staged.push(result);
+        // One attempt shares one gate verdict across every ruling it produced.
+        if (!results[0]!.ruling.gate.allowed) continue;
+        for (const result of results) {
+          const died = commit(schema, result.mutations, workingById);
+          if (died.length) result.ruling.causedDeathOf = died;
+          result.ruling.reaction = {
+            skillId: planned.skill.id,
+            skillName: planned.skill.name,
+            trigger: planned.trigger,
+            sourceActorId: planned.sourceActorId,
+          };
+          rulings.push(result.ruling);
+          staged.push(result);
+        }
       }
 
       for (const [characterId, actionIds] of cooldownsAtStart) {

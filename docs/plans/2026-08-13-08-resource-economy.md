@@ -167,7 +167,7 @@ Cooldowns are **hard state** and need a home:
       rollback test.
 - [x] **4.2** Passive skills must never be invocable — the classifier must not be able to emit an
       intent for one, and the gate must refuse it. Add both checks.
-- [ ] **4.3** `advancedUses` already exists and is rank-gated; make sure the new fields compose with
+- [x] **4.3** `advancedUses` already exists and is rank-gated; make sure the new fields compose with
       it rather than duplicating it.
 
 ## 5. Finding 24 — recovery (owner decision D5)

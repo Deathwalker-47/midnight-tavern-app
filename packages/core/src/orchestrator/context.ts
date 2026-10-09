@@ -147,6 +147,11 @@ export function renderRuling(
       ` vs DC ${r.dc} — rolled ${r.d20}+${r.modifier}=${r.total} → ${OUTCOME_LABEL[r.outcome]}.`
   );
 
+  if (ruling.targeting && ruling.targeting.count > 1) {
+    parts.push(
+      `One ${action} reached ${ruling.targeting.count} targets with this single roll (target ${ruling.targeting.index + 1} of ${ruling.targeting.count}).`
+    );
+  }
   if (ruling.reaction) {
     parts.push(
       `This was ${actor}'s ${ruling.reaction.skillName} reaction to ${nameFor(ruling.reaction.sourceActorId)}'s attack.`

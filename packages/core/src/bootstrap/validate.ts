@@ -221,6 +221,12 @@ export function validateStorySchema(schema: StorySchema): string[] {
         );
       }
     }
+    const scope = a.targeting?.scope;
+    if (a.opposed && scope && scope !== "single") {
+      errors.push(
+        `Action "${a.id}" is an opposed contest but reaches "${scope}"; a contest needs one named defender.`
+      );
+    }
     if (a.dc < DC_MIN || a.dc > DC_MAX) {
       errors.push(`Action "${a.id}" has DC ${a.dc}; must be within ${DC_MIN}–${DC_MAX}.`);
     }

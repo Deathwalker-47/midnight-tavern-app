@@ -68,6 +68,34 @@ export const OutcomeEffectsSchema = z.object({
 });
 export type OutcomeEffects = z.infer<typeof OutcomeEffectsSchema>;
 
+/**
+ * Who an action reaches (plan 08 §4). Absent or `single` = the one named target, as always.
+ * `self` = the actor. `multiple` = up to `maxTargets` (default 3) named targets. `all_allies` /
+ * `all_enemies` = every present, living character on the actor's / the other side, where the sides
+ * are characters validated hostile to the player and everyone else. `area` = everyone present and
+ * alive except the actor, friend or foe.
+ */
+export const TargetingScopeSchema = z.enum([
+  "self",
+  "single",
+  "multiple",
+  "all_allies",
+  "all_enemies",
+  "area",
+]);
+export type TargetingScope = z.infer<typeof TargetingScopeSchema>;
+
+/** Ceiling on how many characters one action can reach. */
+export const MAX_ACTION_TARGETS = 8;
+/** Cap for a `multiple`-scope action that names none. */
+export const DEFAULT_MULTIPLE_TARGETS = 3;
+
+export const ActionTargetingSchema = z.object({
+  scope: TargetingScopeSchema,
+  maxTargets: z.number().int().min(1).max(MAX_ACTION_TARGETS).optional(),
+});
+export type ActionTargeting = z.infer<typeof ActionTargetingSchema>;
+
 /** A single catalog action. */
 export const ActionDefSchema = z.object({
   id: z.string(), // "attack_melee", "persuade", "pick_lock", "craft_item", ...
@@ -95,6 +123,8 @@ export const ActionDefSchema = z.object({
    * win or lose: 1 blocks the next turn, 2 the next two.
    */
   cooldownTurns: z.number().int().min(0).max(20).optional(),
+  /** Who the action reaches; absent = one named target. One attempt, one cost, one roll for all. */
+  targeting: ActionTargetingSchema.optional(),
   effects: OutcomeEffectsSchema, // deterministic outcome table
 });
 export type ActionDef = z.infer<typeof ActionDefSchema>;

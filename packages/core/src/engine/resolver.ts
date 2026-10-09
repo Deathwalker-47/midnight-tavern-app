@@ -33,7 +33,7 @@ import type { CharacterHardState, LearnedSkill } from "../types/index.js";
 import type { Ruling, MechanicalIntent, Outcome, RollRecord } from "../types/index.js";
 import { rollD20Mode, type Rng } from "./dice.js";
 import { attrScore, clampAttribute, scoreToMod } from "./attributes.js";
-import { checkGate } from "./gate.js";
+import { checkGate, type GateContext } from "./gate.js";
 import { attemptCost } from "./costs.js";
 import { statusAttributeBonus, statusCheckBonus } from "./statuses.js";
 import { passiveAttributeBonus, passiveCheckBonus } from "./skills.js";
@@ -257,6 +257,64 @@ function stageEffect(
   return { mutations: muts, damageAdjustments };
 }
 
+/**
+ * Stage one outcome's effect on `target`, scaled by the attempt's item where the effect asks for it
+ * and given attack-damage floors and bonuses when the action is an attack.
+ */
+function stageOutcomeEffect(
+  schema: StorySchema,
+  action: ActionDef,
+  actor: CharacterHardState,
+  target: CharacterHardState | undefined,
+  intent: MechanicalIntent,
+  effect: EffectSpec,
+  context: {
+    attributeModifier: number;
+    difficulty: DifficultyConfig;
+    equipment: EquipmentRuntimeCatalog | undefined;
+  }
+): { mutations: StagedMutation[]; damageAdjustments: DamageAdjustment[] } {
+  const item =
+    (context.equipment
+      ? equippedItemDefinition(actor, context.equipment, action.requiresItemKind, intent.itemId)
+      : undefined) ?? itemFor(schema, intent);
+  const attack = isAttackAction(action);
+  const itemPropName =
+    effect.scaleByItemProp ??
+    (attack && action.requiresItemKind === "weapon" ? "damage" : undefined);
+  const itemPropValue = itemPropName && item ? item.props[itemPropName] : undefined;
+  const attackDamage: AttackDamageContext | undefined = attack
+    ? {
+        lethalResourceIds: new Set(
+          schema.resources.filter((resource) => resource.lethal).map((resource) => resource.id)
+        ),
+        attributeBonus: Math.max(0, context.attributeModifier),
+        itemBonus: boundedDamageBonus(itemPropValue),
+        genericEncounter: isGenericNpc(actor) || isGenericNpc(target),
+      }
+    : undefined;
+  return stageEffect(
+    effect,
+    actor,
+    target,
+    itemPropValue,
+    context.difficulty,
+    action.id,
+    attackDamage
+  );
+}
+
+/** Only the parts of an effect that land on a target (for every target after the first). */
+function targetSideOf(effect: EffectSpec): EffectSpec {
+  return {
+    narrationHint: effect.narrationHint,
+    ...(effect.resourceDeltaTarget ? { resourceDeltaTarget: effect.resourceDeltaTarget } : {}),
+    ...(effect.attributeDeltaTarget ? { attributeDeltaTarget: effect.attributeDeltaTarget } : {}),
+    ...(effect.statusTarget ? { statusTarget: effect.statusTarget } : {}),
+    ...(effect.scaleByItemProp ? { scaleByItemProp: effect.scaleByItemProp } : {}),
+  };
+}
+
 /** Stage cost payment (paid on attempt, win or lose). */
 function stageCosts(costs: CostSpec | undefined, actorId: string): StagedMutation[] {
   const muts: StagedMutation[] = [];
@@ -302,6 +360,13 @@ function requiresCheck(action: ActionDef, intent: MechanicalIntent): boolean {
   return intent.stakes !== "none";
 }
 
+function gateContextFor(options: ResolveOptions): GateContext {
+  return {
+    equipment: options.equipment,
+    ...(options.asReaction ? { asReaction: true } : {}),
+  };
+}
+
 /**
  * Resolve one mechanical intent. `rng` is injected for deterministic tests; an
  * opposed contest consumes a second roll from the same source.
@@ -327,10 +392,7 @@ export function resolve(
   };
 
   // 1. gate — deny is a full stop.
-  const gate = checkGate(schema, actor, intent, {
-    equipment: options.equipment,
-    ...(options.asReaction ? { asReaction: true } : {}),
-  });
+  const gate = checkGate(schema, actor, intent, gateContextFor(options));
   if (!gate.allowed) {
     return { ruling: { ...baseRuling, gate, effectsApplied: null }, mutations: [] };
   }
@@ -539,39 +601,11 @@ export function resolve(
 
   // 5. effects for the outcome, scaled by an item prop where applicable.
   const effect = action.effects[outcome];
-  const item =
-    (options.equipment
-      ? equippedItemDefinition(
-          actor,
-          options.equipment,
-          action.requiresItemKind,
-          intent.itemId
-        )
-      : undefined) ?? itemFor(schema, intent);
-  const attack = isAttackAction(action);
-  const itemPropName =
-    effect.scaleByItemProp ??
-    (attack && action.requiresItemKind === "weapon" ? "damage" : undefined);
-  const itemPropValue = itemPropName && item ? item.props[itemPropName] : undefined;
-  const attackDamage: AttackDamageContext | undefined = attack
-    ? {
-        lethalResourceIds: new Set(
-          schema.resources.filter((resource) => resource.lethal).map((resource) => resource.id)
-        ),
-        attributeBonus: Math.max(0, attributeModifier),
-        itemBonus: boundedDamageBonus(itemPropValue),
-        genericEncounter: isGenericNpc(actor) || isGenericNpc(target),
-      }
-    : undefined;
-  const stagedEffect = stageEffect(
-    effect,
-    actor,
-    target,
-    itemPropValue,
+  const stagedEffect = stageOutcomeEffect(schema, action, actor, target, intent, effect, {
+    attributeModifier,
     difficulty,
-    action.id,
-    attackDamage
-  );
+    equipment: options.equipment,
+  });
   mutations.push(...stagedEffect.mutations);
 
   // 6. mastery advancement on a successful skill-gated action.
@@ -624,4 +658,86 @@ export function resolve(
   }
 
   return { ruling, mutations };
+}
+
+/** The refusal for a scoped action that reaches nobody, unless the gate refuses it first. */
+function unreached(
+  schema: StorySchema,
+  actor: CharacterHardState,
+  intent: MechanicalIntent,
+  options: ResolveOptions
+): ResolveResult {
+  const gate = checkGate(schema, actor, intent, gateContextFor(options));
+  const label = schema.actions.find((action) => action.id === intent.actionId)?.label ?? intent.actionId;
+  return {
+    ruling: {
+      turnId: intent.actorId + ":" + intent.actionId,
+      actorId: actor.characterId,
+      actionId: intent.actionId,
+      actionLabel: label,
+      gate: gate.allowed
+        ? { allowed: false, reason: `No one is in reach of ${label}.`, code: "no_target" }
+        : gate,
+      effectsApplied: null,
+    },
+    mutations: [],
+  };
+}
+
+/**
+ * Resolve one attempt against every target it reaches (plan 08 §4 targeting scopes). The gate,
+ * costs, cooldown, roll and XP happen once, on the first target's ruling. Each further target gets a
+ * ruling of its own that shares that roll and receives only the target side of the same outcome, so
+ * a self-heal or a self-inflicted cost never repeats. Reaching nobody is the gate refusal `no_target`.
+ */
+export function resolveAgainstEach(
+  schema: StorySchema,
+  actor: CharacterHardState,
+  targets: readonly CharacterHardState[],
+  intent: MechanicalIntent,
+  rng: Rng,
+  options: ResolveOptions = {}
+): ResolveResult[] {
+  const [first, ...rest] = targets;
+  if (!first) return [unreached(schema, actor, intent, options)];
+  const lead = resolve(schema, actor, first, { ...intent, targetId: first.characterId }, rng, options);
+  if (!lead.ruling.gate.allowed) return [lead];
+  // The gate passed, so the action exists.
+  const action = schema.actions.find((candidate) => candidate.id === intent.actionId)!;
+  const results: ResolveResult[] = [lead];
+  const roll = lead.ruling.roll;
+  // An attempt that needed no roll changes no tracked state, so there is nothing to spread.
+  if (roll) {
+    const effect = targetSideOf(action.effects[roll.outcome]);
+    const difficulty = normalizeDifficultyConfig(options.difficulty ?? STANDARD_DIFFICULTY);
+    for (const target of rest) {
+      const staged = stageOutcomeEffect(schema, action, actor, target, intent, effect, {
+        attributeModifier: roll.attributeModifier ?? 0,
+        difficulty,
+        equipment: options.equipment,
+      });
+      results.push({
+        ruling: {
+          turnId: lead.ruling.turnId,
+          actorId: actor.characterId,
+          actionId: action.id,
+          actionLabel: action.label,
+          targetId: target.characterId,
+          gate: lead.ruling.gate,
+          roll,
+          effectsApplied: effect,
+          difficulty,
+          ...(staged.damageAdjustments.length > 0
+            ? { damageAdjustments: staged.damageAdjustments }
+            : {}),
+        },
+        mutations: staged.mutations,
+      });
+    }
+  }
+  const scope = action.targeting?.scope ?? "single";
+  results.forEach((result, index) => {
+    result.ruling.targeting = { scope, index, count: results.length };
+  });
+  return results;
 }

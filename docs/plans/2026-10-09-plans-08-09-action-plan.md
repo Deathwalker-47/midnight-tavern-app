@@ -81,7 +81,7 @@ push to `main`.
 - [x] **S5. Timed effects / durations** (finding 23, part). Effects may apply a timed status (check bonus,
       attribute bonus, per-turn resource change) to self or target; `CharacterHardState.activeEffects`
       (default `[]`); ticked deterministically; visible on the ruling and living card.
-- [ ] **S6. Skill types and targeting** (finding 23, rest). `SkillDef.skillType`
+- [x] **S6. Skill types and targeting** (finding 23, rest). `SkillDef.skillType`
       (`active|passive|reaction|toggle`) with passive modifiers, toggle upkeep (engine `toggle_skill`
       action), reaction triggers; `ActionDef.targeting` scopes (`self|single|multiple|all_allies|all_enemies|area`).
 - [ ] **S7. Recovery model** (finding 24). `economy.json`; out-of-combat regen, mana trickle, engine-owned

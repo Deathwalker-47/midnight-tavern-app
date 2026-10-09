@@ -36,14 +36,14 @@ Plans 01-07 and 10-12 of the 2026-08-13 set remain written but **not authorized*
 | S6b | Passive skills: `SkillDef.skillType` + bounded `passive` bonuses (category-scoped check bonus, attribute bonus) on both sides of a roll (`roll.passiveModifier`); gate code `not_invocable`; validator rejects actions gated by a passive and no longer demands passive/toggle skills be "used" by an action | done |
 | S6c | Toggle skills: `SkillDef.toggle` (upkeep + bonus), engine action `toggle_skill` (offered to the classifier only when the rulebook has toggles), optional `hard.toggledOn`, upkeep paid at the end of every turn on (incl. the first), lapse reported as a ruling | done |
 | S6d | Reaction skills: `SkillDef.reaction` (`attacked`/`damaged` → action vs the attacker), `planSkillReactions` after all NPC actions, one per character per turn, never chained, through the normal gate (`asReaction`); reaction-gated actions are reaction-only; rulings carry `reaction` | done |
-| S6e | Targeting scopes | not started |
+| S6e | Targeting scopes: `ActionDef.targeting` (`self/single/multiple/all_allies/all_enemies/area`), `expandTargets` (sides = validated hostility flag), `resolveAgainstEach` (one cost/cooldown/roll/XP, one ruling per target, target-side effects only after the first), gate code `no_target`, `MechanicalIntent.targetIds`; all turn resolutions go through one `resolveIntent` | done |
 | S7–S8 | Plan 08 (recovery, v3 forge + UI) | not started |
 | S9–S18 | Plan 09 (pool, enablement, selection, archetypes, mid-story enablement, UI, items, weapon specials, external config, close-out) | not started |
 
 ## Verification state
 
-After S6d (Linux/Node 22): `npm run typecheck` clean; core **764 / 54 files** (engine coverage 100%),
-UI **183 / 26 files** = **947** passing; root `npm test` passes here (the tinypool worker crash is
+After S6e (Linux/Node 22): `npm run typecheck` clean; core **774 / 55 files** (engine coverage 100%),
+UI **183 / 26 files** = **957** passing; root `npm test` passes here (the tinypool worker crash is
 Windows/Node 24 only — plan 07 P0-0, not authorized).
 
 ## Facts established earlier (still true — do not re-derive)
@@ -55,6 +55,9 @@ Windows/Node 24 only — plan 07 P0-0, not authorized).
 - `ResourceDef.regenPerScene` exists in rulebooks but nothing applies it; S7 replaces it with `economy.json`.
 - The owner's taxonomy files are **permanently lost** (never committed; laptop formatted; not in Google
   Drive). Engineering authors the pool itself under the owner's existing grants — see the action plan.
+- New gate codes from S3–S6 (`insufficient_resource`, `on_cooldown`, `not_invocable`, `no_target`) and
+  the new ruling fields (`reaction`, `targeting`, `cooldownApplied`, roll `statusModifier` /
+  `passiveModifier`) are not yet explained in the UI ruling card — that is S8.
 - Equipment's `resource_capacity` effect is display-only: nothing in the engine applies it (found during
   S6b). Not fixed — out of scope; worth a future plan item.
 - The engine's 100% coverage gate (`npx vitest run --coverage` in `packages/core`) was silently failing
@@ -74,5 +77,6 @@ Windows/Node 24 only — plan 07 P0-0, not authorized).
 
 ## Single next action
 
-Continue **S6** of the action plan: S6e targeting scopes (`ActionDef.targeting`), then tick S6 and
-start S7 (recovery, `economy.json`).
+Start **S7** of the action plan: the recovery model (`economy.json` — out-of-combat stamina and health
+regen, mana trickle, engine-owned Rest action, restoring consumables; v3 rulebooks only; never revives;
+journalled and rewind-exact).

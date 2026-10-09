@@ -281,6 +281,9 @@ export function findUniversalAction(id: string) {
 
 /** Whether an action needs a distinct, present character target before it can resolve. */
 export function actionRequiresCharacterTarget(action: ActionDef): boolean {
+  // A scoped action finds its own targets (plan 08 §4); only `multiple` needs at least one named.
+  const scope = action.targeting?.scope;
+  if (scope && scope !== "single" && scope !== "multiple") return false;
   const universal = action.universalFamily
     ? findUniversalAction(action.universalFamily)
     : undefined;

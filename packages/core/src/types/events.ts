@@ -8,7 +8,13 @@
  *   fed to the narrator as fact.
  */
 import { z } from "zod";
-import { OutcomeSchema, EffectSpecSchema, RollModeSchema } from "./actions.js";
+import {
+  OutcomeSchema,
+  EffectSpecSchema,
+  MAX_ACTION_TARGETS,
+  RollModeSchema,
+  TargetingScopeSchema,
+} from "./actions.js";
 import { CostSpecSchema, ReactionTriggerSchema } from "./schema.js";
 import { DifficultySnapshotSchema } from "./difficulty.js";
 import { ItemTierSchema, EquipmentEffectSchema } from "./equipment.js";
@@ -22,6 +28,8 @@ export const MechanicalIntentSchema = z.object({
   actorId: z.string(),
   actionId: z.string(), // catalog id, or LEARN_SKILL_ACTION_ID
   targetId: z.string().optional(),
+  /** Further named targets, for an action whose targeting scope is `multiple`. */
+  targetIds: z.array(z.string()).max(MAX_ACTION_TARGETS).optional(),
   itemId: z.string().optional(), // item used, if relevant
   skillId: z.string().optional(), // for learn_skill: which skill to unlock
   /**
@@ -104,6 +112,7 @@ export const GateVerdictSchema = z.object({
       "insufficient_resource",
       "on_cooldown",
       "not_invocable",
+      "no_target",
       "prerequisite_failed",
       "action_budget_exceeded",
     ])
@@ -202,6 +211,17 @@ export const RulingSchema = z.object({
       trigger: ReactionTriggerSchema,
       /** The character whose attack set the reaction off. */
       sourceActorId: z.string(),
+    })
+    .optional(),
+  /**
+   * Set when one attempt reached several characters (plan 08 §4). Each target gets its own ruling;
+   * index 0 carries the costs, cooldown and XP, and every ruling shares the same roll.
+   */
+  targeting: z
+    .object({
+      scope: TargetingScopeSchema,
+      index: z.number().int().nonnegative(),
+      count: z.number().int().positive(),
     })
     .optional(),
 });
