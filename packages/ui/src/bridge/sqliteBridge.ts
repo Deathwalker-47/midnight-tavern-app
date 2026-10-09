@@ -30,6 +30,7 @@ import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 import type {
   CastMember,
   CardImportResult,
+  ConfigOverrideStatus,
   CoreBridge,
   CreateStoryArgs,
   CreateStoryResult,
@@ -42,6 +43,7 @@ import type {
   TurnOperationPhase,
 } from "./core.js";
 import { parseForgeOperation } from "./core.js";
+import type { ConfigFileAccess } from "./configFiles.js";
 import { diagnosticError, diagnosticsLogger } from "../observability/logger.js";
 import { z } from "zod";
 
@@ -54,8 +56,33 @@ const FORGE_OPERATION_SETTING_KEY = "forge.operation.active.v1";
  */
 export function buildSqliteBridge(
   store: Store,
-  core: typeof import("@midnight-tavern/core")
+  core: typeof import("@midnight-tavern/core"),
+  configFiles?: ConfigFileAccess
 ): CoreBridge {
+  // The user's rulebook config overrides (plan 09 §4c), as last loaded.
+  let configStatus: ConfigOverrideStatus = { supported: Boolean(configFiles), overridden: [], issues: [] };
+  async function loadConfigOverrides(): Promise<ConfigOverrideStatus> {
+    if (!configFiles) return configStatus;
+    try {
+      const texts = await configFiles.read();
+      const resolved = core.installConfigOverrides(texts);
+      configStatus = {
+        supported: true,
+        folder: await configFiles.folder(),
+        overridden: (Object.keys(texts) as (keyof typeof core.CONFIG_FILES)[]).map((key) => core.CONFIG_FILES[key]),
+        issues: resolved.issues,
+      };
+    } catch (error) {
+      // Keep whatever config was already active; say why the folder could not be read.
+      configStatus = {
+        ...configStatus,
+        supported: true,
+        error: `The config folder could not be read: ${error instanceof Error ? error.message : String(error)}`,
+      };
+    }
+    return configStatus;
+  }
+
   const toUiPhase = (phase: TurnOperationState): TurnOperationPhase => {
     if (phase === "classifier_error") return "classifier-recovery";
     if (phase === "generating_loot") return "generating-loot";
@@ -409,7 +436,10 @@ export function buildSqliteBridge(
     },
 
     async listPoolEnablements(storyId) {
-      return (await store.poolEnablements.list(storyId)).map(
+      // Definitions as the story plays them: re-materialized when it follows the user's config edits.
+      const story = await store.stories.get(storyId);
+      const rows = await store.poolEnablements.list(storyId);
+      return (story ? core.enablementsForPlay(story, rows) : rows).map(
         ({ storyId: _story, turnIndex: _turn, ...enablement }) => ({
           ...enablement,
           name: enablement.kind === "action" ? enablement.definition.label : enablement.definition.name,
@@ -435,6 +465,27 @@ export function buildSqliteBridge(
 
     async browsePool(storyId, query) {
       return core.browsePool(await core.loadPoolBrowseContext(store, storyId), query);
+    },
+
+    async configOverrideStatus() {
+      return configStatus;
+    },
+
+    async reloadConfigOverrides() {
+      return loadConfigOverrides();
+    },
+
+    async restoreConfigDefaults(file) {
+      await configFiles?.restore(file);
+      return loadConfigOverrides();
+    },
+
+    async openConfigFolder() {
+      await configFiles?.reveal();
+    },
+
+    async setRulebookConfigMode(storyId, mode) {
+      return core.setRulebookConfigMode(store, storyId, mode);
     },
 
     async getBlueprint(id) {

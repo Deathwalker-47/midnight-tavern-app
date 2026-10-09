@@ -48,6 +48,7 @@ import type { AttachSourceTag, DifficultyValue, ForgeOperationState, ForgeStep }
 import type { ScreenProps } from "./registry";
 import { RulebookCatalogue } from "./storySettings/RulebookCatalogue";
 import { PoolBrowser } from "./storySettings/PoolBrowser";
+import { ConfigSection } from "./storySettings/ConfigSection";
 
 export function StorySettings(props: ScreenProps): JSX.Element {
   const storyId = props.storyId;
@@ -476,6 +477,16 @@ export function StorySettings(props: ScreenProps): JSX.Element {
 
         <Section kicker="§ POOL" heading="Universal pool">
           <PoolBrowser storyId={storyId} onChanged={() => void refreshPoolEnablements()} />
+        </Section>
+
+        <Section kicker="§ CONFIG" heading="Rulebook config">
+          <ConfigSection
+            story={story}
+            onModeChanged={() => {
+              void openStory(storyId);
+              void refreshPoolEnablements();
+            }}
+          />
         </Section>
 
         <Section kicker="§ UNIVERSAL ACTIONS" heading="Universal action reference" aside={`${universalActions.length} configured`}>

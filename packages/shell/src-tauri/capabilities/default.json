@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2/capability",
   "identifier": "default",
-  "description": "Least-privilege permissions for the main Midnight Tavern window: local SQLite, local logs, auto-update checks, file-import dialogs, diagnostics folder reveal, scoped filesystem access limited to the app data directory, and native HTTP to user-configured model-provider endpoints (https anywhere + localhost, so browser CORS never blocks provider calls). No arbitrary FS, no shell.",
+  "description": "Least-privilege permissions for the main Midnight Tavern window: local SQLite, local logs, auto-update checks, file-import dialogs, diagnostics and rulebook-config folder reveal, scoped filesystem access limited to the app data directory (the user-editable rulebook config folder lives at $APPDATA/config), and native HTTP to user-configured model-provider endpoints (https anywhere + localhost, so browser CORS never blocks provider calls). No arbitrary FS, no shell.",
   "windows": ["main"],
   "permissions": [
     "core:default",
@@ -40,6 +40,22 @@
     {
       "identifier": "fs:allow-mkdir",
       "allow": [{ "path": "$APPDATA/**" }, { "path": "$APPLOCALDATA/**" }]
+    },
+    {
+      "identifier": "fs:allow-exists",
+      "allow": [{ "path": "$APPDATA/config" }, { "path": "$APPDATA/config/**" }]
+    },
+    {
+      "identifier": "fs:allow-read-text-file",
+      "allow": [{ "path": "$APPDATA/config/**" }]
+    },
+    {
+      "identifier": "fs:allow-write-text-file",
+      "allow": [{ "path": "$APPDATA/config/**" }]
+    },
+    {
+      "identifier": "fs:allow-rename",
+      "allow": [{ "path": "$APPDATA/config/**" }]
     },
     {
       "identifier": "fs:scope",

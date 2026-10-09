@@ -171,6 +171,9 @@ import type {
   PoolSectionView,
   PoolBrowseQuery,
   PoolBrowsePage,
+  ConfigFileKey,
+  ConfigIssue,
+  RulebookConfigMode,
 } from "@midnight-tavern/core";
 
 // Value import: the Tauri storage driver. Browser-safe — it only pulls `@tauri-apps/api/core`
@@ -523,6 +526,16 @@ export interface CoreBridge {
    * each (enabled · available · locked by tier · unavailable · excluded) and why.
    */
   browsePool(storyId: string, query?: PoolBrowseQuery): Promise<PoolBrowsePage>;
+  /** The user's rulebook config overrides as last loaded (plan 09 §4c): what was used and what was skipped. */
+  configOverrideStatus(): Promise<ConfigOverrideStatus>;
+  /** Re-read the override files; new stories and stories following edits use the result. */
+  reloadConfigOverrides(): Promise<ConfigOverrideStatus>;
+  /** Put one file back to the shipped defaults. The user's copy is moved aside, never deleted. */
+  restoreConfigDefaults(file: ConfigFileKey): Promise<ConfigOverrideStatus>;
+  /** Show the override folder in the system file manager. */
+  openConfigFolder(): Promise<void>;
+  /** Lock a story to the config it was created with, or let it follow the user's edits (§4c.10). */
+  setRulebookConfigMode(storyId: string, mode: RulebookConfigMode): Promise<StoryRecord>;
   /** Read a story's author-facing Story Blueprint (§3), or undefined if it has none. */
   getBlueprint(id: string): Promise<Blueprint | undefined>;
   /** Save (or clear, with `undefined`) a story's Story Blueprint. Style/identity only — the frozen mechanical schema is untouched. */
@@ -840,6 +853,20 @@ export type PoolEnablementView = (
   enabledAt: number;
 };
 export type PoolEnableResult = { ok: true; enabled: string[] } | { ok: false; reason: string };
+
+/** What the last load of the user's config overrides found (plan 09 §4c.7). */
+export interface ConfigOverrideStatus {
+  /** False where there is no config folder (the browser build). */
+  supported: boolean;
+  /** The folder's path, once known. */
+  folder?: string;
+  /** Override files currently applied over the shipped defaults. */
+  overridden: string[];
+  /** Everything skipped (errors) or worth knowing (warnings), by file, id and field. */
+  issues: ConfigIssue[];
+  /** Set when the folder itself could not be read; the previous config stays in use. */
+  error?: string;
+}
 export type PoolDisableResult = { allowed: true } | { allowed: false; reason: string };
 
 /** One in-memory story with the rows the stub tracks. */
@@ -1486,6 +1513,27 @@ export function makeMemoryBridge(): MemoryBridge {
 
     async listPoolSections(storyId) {
       return poolSections(poolBrowseContext(requireStory(storyId)));
+    },
+
+    // The browser build has no config folder: it always plays the shipped defaults.
+    async configOverrideStatus() {
+      return { supported: false, overridden: [], issues: [] };
+    },
+
+    async reloadConfigOverrides() {
+      return this.configOverrideStatus();
+    },
+
+    async restoreConfigDefaults(_file) {
+      return this.configOverrideStatus();
+    },
+
+    async openConfigFolder() {},
+
+    async setRulebookConfigMode(storyId, mode) {
+      const story = requireStory(storyId);
+      story.record.configSnapshot = { ...(story.record.configSnapshot ?? {}), rulebookConfig: mode };
+      return structuredCloneSafe(story.record);
     },
 
     async browsePool(storyId, query) {
@@ -2226,7 +2274,11 @@ export async function loadSqliteBridge(_path: string): Promise<CoreBridge> {
   const core = await import("@midnight-tavern/core");
   const store = await core.openStoreWith(makeSqliteDriver());
   const { buildSqliteBridge } = await import("./sqliteBridge.js");
-  return buildSqliteBridge(store, core);
+  const { tauriConfigFiles } = await import("./configFiles.js");
+  const bridge = buildSqliteBridge(store, core, tauriConfigFiles(core.CONFIG_FILES, core.CONFIG_README));
+  // The user's config overrides apply from the first story created; a failure never blocks startup.
+  await bridge.reloadConfigOverrides();
+  return bridge;
 }
 
 // ── Singleton wiring ──────────────────────────────────────────────────────────────────────────
