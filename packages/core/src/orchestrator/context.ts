@@ -147,6 +147,11 @@ export function renderRuling(
       ` vs DC ${r.dc} — rolled ${r.d20}+${r.modifier}=${r.total} → ${OUTCOME_LABEL[r.outcome]}.`
   );
 
+  if (ruling.reaction) {
+    parts.push(
+      `This was ${actor}'s ${ruling.reaction.skillName} reaction to ${nameFor(ruling.reaction.sourceActorId)}'s attack.`
+    );
+  }
   const effects = renderEffects(ruling, nameFor);
   parts.push(`Effects: ${effects.length ? effects.join("; ") : "none"}.`);
 

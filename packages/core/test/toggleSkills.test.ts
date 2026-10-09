@@ -11,6 +11,7 @@ import {
   SkillDefSchema,
   submitTurn,
   TOGGLE_SKILL_ACTION_ID,
+  validateStorySchema,
   type ChatResponse,
   type ClassifiedTurn,
   type MechanicalIntent,
@@ -122,6 +123,14 @@ describe("toggle skills (plan 08 §4)", () => {
     expect(planToggleUpkeep(story, holder())).toEqual({ rulings: [], mutations: [] });
     expect(planToggleUpkeep(story, holder({ toggledOn: ["no_longer_in_rulebook"] })).mutations)
       .toEqual([{ kind: "setToggle", characterId: "kestrel", skillId: "no_longer_in_rulebook", on: false }]);
+  });
+
+  it("must define their toggle", () => {
+    const bare = { ...trance, toggle: undefined };
+    expect(validateStorySchema({ ...story, skills: [...makeStory().skills, bare] })).toContain(
+      'Toggle skill "battle_trance" defines no toggle.'
+    );
+    expect(validateStorySchema(story).filter((error) => /defines no toggle/.test(error))).toEqual([]);
   });
 
   it("is offered to the classifier only when the rulebook has toggle skills", () => {

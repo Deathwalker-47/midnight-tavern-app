@@ -36,6 +36,7 @@ import {
   commit,
   countRecentSimilarUses,
   enforceActionBudget,
+  planSkillReactions,
   planStatusTick,
   planToggleUpkeep,
   resolveLearnSkill,
@@ -867,6 +868,42 @@ async function runTurnOperation(
         });
         const died = commit(schema, result.mutations, workingById);
         if (died.length) result.ruling.causedDeathOf = died;
+        rulings.push(result.ruling);
+        staged.push(result);
+      }
+
+      // Reaction skills (plan 08 §4) answer this turn's attacks. They are planned once over every
+      // action ruling so far, so a reaction never sets off another, then resolved through the same
+      // gate and dice. A reaction is automatic, not chosen, so one the gate refuses (unaffordable, on
+      // cooldown) or one that involves someone already down this turn simply does not happen.
+      for (const planned of planSkillReactions(schema, rulings, workingById)) {
+        const intent = planned.intent;
+        const actorHard = await workingState(intent.actorId);
+        const targetHard = await workingState(planned.sourceActorId);
+        // The gate already refuses a dead actor; it does not look at the target.
+        if (!targetHard.alive) continue;
+        const result = resolve(schema, actorHard, targetHard, intent, rng, {
+          ...(story.difficulty ? { difficulty: story.difficulty } : {}),
+          ...(equipmentDefinitions.length > 0
+            ? {
+                equipment: {
+                  definitions: equipmentDefinitions,
+                  instances: equipmentInstances,
+                },
+              }
+            : {}),
+          recentSimilarUses: countRecentSimilarUses(priorRulings, intent),
+          asReaction: true,
+        });
+        if (!result.ruling.gate.allowed) continue;
+        const died = commit(schema, result.mutations, workingById);
+        if (died.length) result.ruling.causedDeathOf = died;
+        result.ruling.reaction = {
+          skillId: planned.skill.id,
+          skillName: planned.skill.name,
+          trigger: planned.trigger,
+          sourceActorId: planned.sourceActorId,
+        };
         rulings.push(result.ruling);
         staged.push(result);
       }

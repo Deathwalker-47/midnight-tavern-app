@@ -160,6 +160,21 @@ export const ToggleDefSchema = z.object({
 });
 export type ToggleDef = z.infer<typeof ToggleDefSchema>;
 
+/** What sets a reaction off: being the target of an attack, or actually losing a resource to one. */
+export const ReactionTriggerSchema = z.enum(["attacked", "damaged"]);
+export type ReactionTrigger = z.infer<typeof ReactionTriggerSchema>;
+
+/**
+ * A reaction skill: when its trigger fires, the holder automatically performs `actionId` against the
+ * attacker, through the normal gate (costs, cooldowns). At most one reaction per character per turn,
+ * and a reaction never sets off another.
+ */
+export const ReactionDefSchema = z.object({
+  trigger: ReactionTriggerSchema,
+  actionId: z.string(),
+});
+export type ReactionDef = z.infer<typeof ReactionDefSchema>;
+
 /** A learnable skill. Unlock is binary (the gate); a rank rides on top (D1). */
 export const SkillDefSchema = z.object({
   id: z.string(),
@@ -177,6 +192,8 @@ export const SkillDefSchema = z.object({
   passive: SkillBonusSchema.optional(),
   /** Upkeep and bonus of a toggle skill. */
   toggle: ToggleDefSchema.optional(),
+  /** Trigger and action of a reaction skill. */
+  reaction: ReactionDefSchema.optional(),
 });
 export type SkillDef = z.infer<typeof SkillDefSchema>;
 

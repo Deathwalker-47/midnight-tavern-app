@@ -10,6 +10,9 @@
  * turn it was switched on, so there is no free turn. When upkeep cannot be paid it lapses, and that
  * lapse is reported as a ruling.
  *
+ * A reaction skill fires its action automatically when its trigger happens (see `reactions.ts`).
+ * An action gated by a reaction skill can be used only that way.
+ *
  * Pure: reads the frozen schema and hard state only; the ledger applies every change.
  */
 import {
@@ -29,6 +32,14 @@ import type { StagedMutation } from "./ledger.js";
 
 export function isPassiveSkill(schema: Pick<StorySchema, "skills">, skillId: string): boolean {
   return schema.skills.some((skill) => skill.id === skillId && skill.skillType === "passive");
+}
+
+/** The skill `skillId` when it is a reaction skill; its gated action fires only on its trigger. */
+export function reactionSkill(
+  schema: Pick<StorySchema, "skills">,
+  skillId: string
+): SkillDef | undefined {
+  return schema.skills.find((skill) => skill.id === skillId && skill.skillType === "reaction");
 }
 
 /** The bonus blocks currently granted to `actor` by its learned skills. */

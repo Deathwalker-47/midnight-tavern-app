@@ -140,9 +140,19 @@ function hasToggleSkills(schema: StorySchema): boolean {
   return schema.skills.some((skill) => skill.skillType === "toggle");
 }
 
-/** Render the catalog as compact lines the model can map against. */
+/**
+ * Render the catalog as compact lines the model can map against. Actions gated by a reaction skill
+ * fire only on their trigger, so they are left out; if the model names one anyway, the id still
+ * parses and the gate refuses it with an explanation.
+ */
 function renderCatalog(schema: StorySchema): string {
-  const lines = schema.actions.map((a) => {
+  const reactionSkillIds = new Set(
+    schema.skills.filter((skill) => skill.skillType === "reaction").map((skill) => skill.id)
+  );
+  const invocable = schema.actions.filter(
+    (action) => !action.requiresSkill || !reactionSkillIds.has(action.requiresSkill)
+  );
+  const lines = invocable.map((a) => {
     const parts = [`${a.id} [${a.category}]`, a.label];
     if (a.description) parts.push(`means:${a.description}`);
     if (a.aliases?.length) parts.push(`aliases:${a.aliases.join(", ")}`);

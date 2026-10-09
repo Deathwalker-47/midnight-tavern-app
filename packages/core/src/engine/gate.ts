@@ -31,12 +31,14 @@ import {
   equipmentEnablesAction,
 } from "./equipment.js";
 import { attemptCost, normalizeCost, weaponStaminaCost } from "./costs.js";
-import { isPassiveSkill } from "./skills.js";
+import { isPassiveSkill, reactionSkill } from "./skills.js";
 
 export { conditionHolds } from "./conditions.js";
 
 export interface GateContext {
   equipment?: EquipmentRuntimeCatalog;
+  /** The attempt is a reaction skill firing on its trigger, the only way its action can be used. */
+  asReaction?: boolean;
 }
 
 const deny = (reason: string, code: GateVerdict["code"]): GateVerdict => ({
@@ -136,6 +138,16 @@ export function checkGate(
       `${action.label} is gated by a passive skill, which is always on and cannot be used as an action.`,
       "not_invocable"
     );
+  }
+  // A reaction skill's action fires only on its trigger, never at will (plan 08 §4).
+  if (action.requiresSkill && !context?.asReaction) {
+    const reaction = reactionSkill(schema, action.requiresSkill);
+    if (reaction) {
+      return deny(
+        `${action.label} is ${reaction.name}'s reaction and fires on its own when its trigger happens; it cannot be used at will.`,
+        "not_invocable"
+      );
+    }
   }
 
   // 3. requiresSkill learned  +  4. minRank met

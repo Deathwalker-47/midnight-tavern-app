@@ -2203,3 +2203,31 @@ Typecheck clean; core 751/53, UI 183/26 = 934; engine coverage 100%.
 **Session note.** The owner paused the session here to compact context.
 
 **Next:** S6d (reaction skills), then S6e (targeting scopes).
+
+---
+
+## 2026-10-09 - S6d: reaction skills (plan 08 §4)
+
+**What landed.** `SkillDef.reaction` = `{ trigger: "attacked" | "damaged", actionId }`. New pure
+`engine/reactions.ts` (`planSkillReactions`): after every action of a turn has resolved (player, NPC
+reactions, NPC planner), each character another character attacked answers once with its first
+learned reaction skill whose trigger fired, aimed at the attacker. `attacked` = target of an allowed
+combat (or wounding) action, hit or miss; `damaged` = the hit actually took a resource. Planning reads
+only the turn's action rulings, so a reaction never sets off another. Reactions resolve through the
+normal gate and resolver with `asReaction`, so costs, cooldowns, dice and mastery all apply; a reaction
+the gate refuses, or one aimed at someone already down this turn, simply does not happen (it was never
+chosen, so a refusal is not news). An action gated by a reaction skill is reaction-only: the gate
+refuses it at will (`not_invocable`), the classifier catalogue omits it, and the validator requires the
+reaction skill to fire exactly that action. Validator also rejects a reaction skill with no reaction or
+an unknown action, and a toggle skill with no toggle. Rulings carry `reaction` (skill, trigger, source)
+and the narrator is told "This was X's Riposte reaction to Y's attack."
+
+**Deliberately not done.** No `ally_attacked` trigger: the engine has no ally model beyond
+player/non-player and the hostility flag, so "ally" would be guesswork. Reactions do not feed loot or
+attribute advancement (they are appended after the player's prefix, like NPC reactions).
+
+**Tests.** 12 in `test/reactionSkills.test.ts` (incl. a real turn with both sides reacting, no
+chaining, rewind, gate-refused and target-down drops — the last mutation-checked) + 1 in
+`test/toggleSkills.test.ts`. Typecheck clean; core 764/54, UI 183/26 = 947; engine coverage 100%.
+
+**Next:** S6e (targeting scopes).

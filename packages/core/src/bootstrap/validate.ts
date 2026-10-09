@@ -23,7 +23,7 @@ import {
 } from "../types/index.js";
 import { findUniversalAction } from "../config/registry.js";
 import { normalizeCost } from "../engine/costs.js";
-import { isPassiveSkill } from "../engine/skills.js";
+import { isPassiveSkill, reactionSkill } from "../engine/skills.js";
 
 /** Every flag value an action can cause (the only way a true flag comes into existence). */
 function definedFlagValues(actions: ActionDef[]): Map<string, Set<boolean>> {
@@ -233,6 +233,12 @@ export function validateStorySchema(schema: StorySchema): string[] {
         );
       } else {
         exercisedSkills.add(a.requiresSkill);
+        const reaction = reactionSkill(schema, a.requiresSkill)?.reaction;
+        if (reaction && reaction.actionId !== a.id) {
+          errors.push(
+            `Action "${a.id}" requires reaction skill "${a.requiresSkill}" but that reaction fires "${reaction.actionId}", so it can never be used.`
+          );
+        }
       }
     }
     if (a.governingAttribute && !attributeIds.has(a.governingAttribute)) {
@@ -273,9 +279,21 @@ export function validateStorySchema(schema: StorySchema): string[] {
 
   // --- Every skill must be exercised by at least one action (no dead skills) ---
   for (const s of schema.skills) {
-    // Passive and toggle skills act through their bonuses, not through a gated action.
-    if (s.skillType !== "passive" && s.skillType !== "toggle" && !exercisedSkills.has(s.id)) {
+    // Passive and toggle skills act through their bonuses, reaction skills through their trigger.
+    const actsWithoutGate =
+      s.skillType === "passive" || s.skillType === "toggle" || s.skillType === "reaction";
+    if (!actsWithoutGate && !exercisedSkills.has(s.id)) {
       errors.push(`Skill "${s.id}" is never used by any action's requiresSkill.`);
+    }
+    if (s.skillType === "toggle" && !s.toggle) {
+      errors.push(`Toggle skill "${s.id}" defines no toggle.`);
+    }
+    if (s.skillType === "reaction") {
+      if (!s.reaction) {
+        errors.push(`Reaction skill "${s.id}" defines no reaction.`);
+      } else if (!schema.actions.some((action) => action.id === s.reaction!.actionId)) {
+        errors.push(`Reaction skill "${s.id}" fires unknown action "${s.reaction.actionId}".`);
+      }
     }
     if (!tierIds.has(s.tier)) errors.push(`Skill "${s.id}" references unknown tier "${s.tier}".`);
     for (const cond of s.prerequisites) {

@@ -63,6 +63,8 @@ export interface ResolveOptions {
   equipment?: EquipmentRuntimeCatalog;
   /** Matching action/target uses in the configured anti-grind window. */
   recentSimilarUses?: number;
+  /** A reaction skill is firing this action on its trigger (see `GateContext.asReaction`). */
+  asReaction?: boolean;
 }
 
 const GENERIC_ENCOUNTER_HITS = 6;
@@ -325,7 +327,10 @@ export function resolve(
   };
 
   // 1. gate — deny is a full stop.
-  const gate = checkGate(schema, actor, intent, { equipment: options.equipment });
+  const gate = checkGate(schema, actor, intent, {
+    equipment: options.equipment,
+    ...(options.asReaction ? { asReaction: true } : {}),
+  });
   if (!gate.allowed) {
     return { ruling: { ...baseRuling, gate, effectsApplied: null }, mutations: [] };
   }

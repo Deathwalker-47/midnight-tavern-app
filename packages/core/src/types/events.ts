@@ -9,7 +9,7 @@
  */
 import { z } from "zod";
 import { OutcomeSchema, EffectSpecSchema, RollModeSchema } from "./actions.js";
-import { CostSpecSchema } from "./schema.js";
+import { CostSpecSchema, ReactionTriggerSchema } from "./schema.js";
 import { DifficultySnapshotSchema } from "./difficulty.js";
 import { ItemTierSchema, EquipmentEffectSchema } from "./equipment.js";
 
@@ -194,5 +194,15 @@ export const RulingSchema = z.object({
    * display-only — never an input to a gate, roll, or effect. Absent on every player ruling.
    */
   npcReactionReason: z.string().max(200).optional(),
+  /** Set when a reaction skill fired this ruling automatically (plan 08 §4). */
+  reaction: z
+    .object({
+      skillId: z.string(),
+      skillName: z.string(),
+      trigger: ReactionTriggerSchema,
+      /** The character whose attack set the reaction off. */
+      sourceActorId: z.string(),
+    })
+    .optional(),
 });
 export type Ruling = z.infer<typeof RulingSchema>;
