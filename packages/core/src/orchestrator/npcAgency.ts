@@ -18,6 +18,7 @@ import { z } from "zod";
 import { checkGate } from "../engine/index.js";
 import { callStructured, type Router } from "../router/index.js";
 import { NPC_HOSTILE_TO_PLAYER_FLAG } from "./npcIntroduction.js";
+import { baseItemKind } from "../types/index.js";
 import type {
   ActionDef,
   CharacterHardState,
@@ -134,7 +135,7 @@ function heldWeaponId(schema: StorySchema, npc: CharacterHardState): string | un
   for (const entry of npc.inventory) {
     if (entry.qty <= 0) continue;
     const def = schema.items.find((item) => item.id === entry.itemId);
-    if (def?.kind === "weapon") return def.id;
+    if (def && baseItemKind(def.kind) === "weapon") return def.id;
   }
   return undefined;
 }
@@ -165,7 +166,9 @@ function chooseCounterAction(
     targetId: attackerId,
     stakes: action.category === "combat" ? "danger" : "uncertain",
     confidence: 1,
-    ...(action.requiresItemKind === "weapon" && weaponId ? { itemId: weaponId } : {}),
+    ...(action.requiresItemKind && baseItemKind(action.requiresItemKind) === "weapon" && weaponId
+      ? { itemId: weaponId }
+      : {}),
   });
   const legal = (action: ActionDef): boolean => checkGate(schema, npc, build(action)).allowed;
 

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { EQUIPMENT_LOOT_CONFIG } from "../config/index.js";
+import { EQUIPMENT_LOOT_CONFIG, UNIVERSAL_ITEMS } from "../config/index.js";
 import { finalizeLootProposal } from "../engine/index.js";
 import { callStructured, type Router } from "../router/index.js";
 import type { Store } from "../store/index.js";
@@ -13,11 +13,23 @@ import {
 } from "../types/index.js";
 import { randomUUID } from "../util/uuid.js";
 
+/**
+ * Every awarded item names a universal item archetype from a sealed list (plan 09 §8.1): the model
+ * writes the flavour, and the archetype sets the mechanics (`shapeByArchetype`).
+ */
+const ARCHETYPE_IDS = UNIVERSAL_ITEMS.archetypes.map((archetype) => archetype.id) as [string, ...string[]];
+const LootItemProposalSchema = ItemProposalSchema.extend({ archetypeId: z.enum(ARCHETYPE_IDS) });
+
+/** The archetypes as the adjudicator sees them, one line each. */
+export const LOOT_ARCHETYPE_LINES = UNIVERSAL_ITEMS.archetypes.map(
+  (archetype) => `- ${archetype.id} · ${archetype.kind} · ${archetype.description}`
+);
+
 const LootAwardProposalSchema = z.object({
     sourceType: z.enum(["combat", "non_combat", "milestone", "quest"]).optional(),
     sourceLabel: z.string().min(1).max(200).optional(),
     recipientCharacterId: z.string().min(1).optional(),
-    proposal: ItemProposalSchema.optional(),
+    proposal: LootItemProposalSchema.optional(),
     reason: z.string().min(1).max(300).optional(),
 });
 
@@ -92,7 +104,7 @@ export async function determineLootAwards(
           "Do not award routine loot for every successful action. When uncertain, set award=false.",
           `Propose between one and ${EQUIPMENT_LOOT_CONFIG.loot.maximumItemsPerEncounter} items only when the completed encounter truly earned them. The deterministic engine rejects excessive tiers or effects.`,
           "Mythical items are impossible unless separate frozen authorization exists; never assume it.",
-          "Weapons may set staminaCost: the stamina each swing costs (usually 1; 2-3 for heavy or two-handed weapons). The engine clamps it.",
+          "Every item names an archetypeId from ITEM ARCHETYPES. The archetype and the tier fix the item's kind, slots, hands, damage, stamina per swing and what it restores; you write its name, description, tier and any bonus effects.",
         ].join("\n"),
         user: [
           `STORY: ${story.title}`,
@@ -102,6 +114,9 @@ export async function determineLootAwards(
           successfulIndices.map((index) => JSON.stringify({ index, ruling: rulings[index] })).join("\n"),
           "",
           "Decide whether this exchange deserves no loot, one item, or a small multi-item reward now. Explain every award.",
+          "",
+          "ITEM ARCHETYPES:",
+          ...LOOT_ARCHETYPE_LINES,
         ].join("\n"),
       },
       LootDecisionSchema,

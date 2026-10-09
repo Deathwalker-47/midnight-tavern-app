@@ -19,9 +19,10 @@ import type {
   StorySchema,
   CostSpec,
   EquipmentRuntimeCatalog,
+  ItemKind,
   MasteryRank,
 } from "../types/index.js";
-import { rankAtLeast } from "../types/index.js";
+import { itemKindSatisfies, rankAtLeast } from "../types/index.js";
 import type { CharacterHardState } from "../types/index.js";
 import type { GateVerdict, MechanicalIntent } from "../types/index.js";
 import { conditionHolds } from "./conditions.js";
@@ -59,11 +60,11 @@ function heldQty(actor: CharacterHardState, itemId: string): number {
 }
 
 /** True if the actor holds at least one item of the given kind (per the schema table). */
-function holdsItemKind(schema: StorySchema, actor: CharacterHardState, kind: string): boolean {
+function holdsItemKind(schema: StorySchema, actor: CharacterHardState, kind: ItemKind): boolean {
   return actor.inventory.some((entry) => {
     if (entry.qty <= 0) return false;
     const def = schema.items.find((i) => i.id === entry.itemId);
-    return def?.kind === kind;
+    return def !== undefined && itemKindSatisfies(def.kind, kind);
   });
 }
 
@@ -170,8 +171,8 @@ export function checkGate(
     if (!present) {
       return deny(
         context?.equipment
-          ? `Requires an equipped ${action.requiresItemKind}.`
-          : `Requires a ${action.requiresItemKind} in inventory.`,
+          ? `Requires an equipped ${action.requiresItemKind.replace(/_/g, " ")}.`
+          : `Requires a ${action.requiresItemKind.replace(/_/g, " ")} in inventory.`,
         "item_required"
       );
     }

@@ -27,6 +27,9 @@ interface DefinitionRow {
   tags_json: string;
   config_version: number;
   created_at: string;
+  stamina_cost: number | null;
+  restores_json: string | null;
+  archetype_id: string | null;
 }
 
 interface InstanceRow {
@@ -58,6 +61,9 @@ function definitionFromRow(row: DefinitionRow): ItemDefinition {
     unique: row.unique_item !== 0,
     ...(row.stacking_key ? { stackingKey: row.stacking_key } : {}),
     ...(row.requires_skill ? { requiresSkill: row.requires_skill } : {}),
+    ...(row.stamina_cost !== null ? { staminaCost: row.stamina_cost } : {}),
+    ...(row.restores_json ? { restores: JSON.parse(row.restores_json) as unknown } : {}),
+    ...(row.archetype_id ? { archetypeId: row.archetype_id } : {}),
     effects: JSON.parse(row.effects_json) as unknown,
     props: JSON.parse(row.props_json) as unknown,
     tags: JSON.parse(row.tags_json) as unknown,
@@ -109,8 +115,9 @@ export function makeRuntimeItemRepo(db: Db): RuntimeItemRepo {
         `INSERT INTO item_definitions
           (id, story_id, name, description, tier, kind, slot_compatibility_json,
            hands_required, unique_item, stacking_key, requires_skill, effects_json,
-           props_json, tags_json, config_version, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           props_json, tags_json, config_version, created_at, stamina_cost, restores_json,
+           archetype_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         parsed.id,
         parsed.storyId,
         parsed.name,
@@ -126,7 +133,10 @@ export function makeRuntimeItemRepo(db: Db): RuntimeItemRepo {
         JSON.stringify(parsed.props),
         JSON.stringify(parsed.tags),
         parsed.configVersion,
-        parsed.createdAt
+        parsed.createdAt,
+        parsed.staminaCost ?? null,
+        parsed.restores ? JSON.stringify(parsed.restores) : null,
+        parsed.archetypeId ?? null
       );
     },
 

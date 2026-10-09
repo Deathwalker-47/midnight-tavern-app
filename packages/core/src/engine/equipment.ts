@@ -1,5 +1,12 @@
-import { EQUIPMENT_LOOT_CONFIG, type EquipmentLootConfig } from "../config/index.js";
 import {
+  EQUIPMENT_LOOT_CONFIG,
+  UNIVERSAL_ITEMS,
+  type EquipmentLootConfig,
+  type UniversalItems,
+} from "../config/index.js";
+import {
+  baseItemKind,
+  itemKindSatisfies,
   EQUIPMENT_SLOTS,
   MAX_EQUIPPED_SLOTS,
   type CharacterHardState,
@@ -9,6 +16,7 @@ import {
   type EquipmentSlot,
   type ItemDefinition,
   type ItemInstance,
+  type ItemKind,
   type ItemProposal,
   type ItemTier,
   type LootEligibilityContext,
@@ -112,19 +120,66 @@ export function validateLootProposal(
       errors.push("Two-handed items must be compatible with Primary and Secondary.");
     }
   }
-  if (proposal.handsRequired > 0 && proposal.kind !== "weapon" && proposal.kind !== "tool") {
+  if (proposal.handsRequired > 0 && !["weapon", "tool"].includes(baseItemKind(proposal.kind))) {
     errors.push("Only weapons and tools may reserve hand slots.");
   }
+  if (proposal.restores && baseItemKind(proposal.kind) !== "consumable") {
+    errors.push("Only consumables restore anything when used.");
+  }
   return { valid: errors.length === 0, errors };
+}
+
+/**
+ * Give a proposal its archetype's mechanics (plan 09 §8.1). Kind, slots, hands, swing stamina, numeric
+ * props and what it restores all come from the archetype at the proposal's tier, replacing whatever
+ * the proposal claimed; name, description, tier and bonus effects stay the proposal's. A proposal
+ * naming no archetype is returned unchanged and is held to the tier caps alone.
+ */
+export function shapeByArchetype(
+  proposal: ItemProposal,
+  items: UniversalItems = UNIVERSAL_ITEMS
+): { proposal: ItemProposal } | { error: string } {
+  if (!proposal.archetypeId) return { proposal };
+  const archetype = items.archetypes.find((candidate) => candidate.id === proposal.archetypeId);
+  if (!archetype) return { error: `Unknown item archetype "${proposal.archetypeId}".` };
+  const props = Object.fromEntries(
+    Object.entries(archetype.props ?? {}).map(([name, ladder]) => [name, ladder[proposal.tier]])
+  );
+  const restores = Object.fromEntries(
+    Object.entries(archetype.restores ?? {})
+      .map(([role, ladder]) => [role, ladder[proposal.tier]] as const)
+      .filter(([, amount]) => amount > 0)
+  );
+  const {
+    staminaCost: _claimedStamina,
+    restores: _claimedRestores,
+    ...flavour
+  } = proposal;
+  return {
+    proposal: {
+      ...flavour,
+      kind: archetype.kind,
+      slotCompatibility: [...archetype.slots],
+      handsRequired: archetype.handsRequired,
+      props,
+      ...(archetype.staminaCost !== undefined ? { staminaCost: archetype.staminaCost } : {}),
+      ...(Object.keys(restores).length > 0 ? { restores } : {}),
+      ...(archetype.stackingKey ? { stackingKey: archetype.stackingKey } : {}),
+      tags: [...new Set([...archetype.tags, ...proposal.tags])],
+    },
+  };
 }
 
 export function finalizeLootProposal(
   proposal: ItemProposal,
   context: LootEligibilityContext,
   identity: { definitionId: string; createdAt: string },
-  config: EquipmentLootConfig = EQUIPMENT_LOOT_CONFIG
+  config: EquipmentLootConfig = EQUIPMENT_LOOT_CONFIG,
+  items: UniversalItems = UNIVERSAL_ITEMS
 ): FinalizeLootResult {
-  const validation = validateLootProposal(proposal, context, config);
+  const shaped = shapeByArchetype(proposal, items);
+  if ("error" in shaped) return { valid: false, errors: [shaped.error] };
+  const validation = validateLootProposal(shaped.proposal, context, config);
   if (!validation.valid) return validation;
   return {
     valid: true,
@@ -132,7 +187,7 @@ export function finalizeLootProposal(
     definition: {
       id: identity.definitionId,
       storyId: context.storyId,
-      ...proposal,
+      ...shaped.proposal,
       createdAt: identity.createdAt,
       configVersion: config.version,
     },
@@ -339,23 +394,19 @@ export function formatEquipmentEffect(effect: EquipmentEffect): string {
   }
 }
 
+/** Whether an equipped item meets a kind requirement (a family accepts its finer kinds). */
 export function equippedItemKind(
   actor: CharacterHardState,
-  kind: string,
+  kind: ItemKind,
   catalog: EquipmentRuntimeCatalog
 ): boolean {
-  const { definitions, instances } = mapsFor(catalog);
-  return (actor.equipment ?? []).some((assignment) => {
-    const instance = instances.get(assignment.itemInstanceId);
-    const definition = instance ? definitions.get(instance.definitionId) : undefined;
-    return instance?.ownerCharacterId === actor.characterId && definition?.kind === kind;
-  });
+  return equippedItemDefinition(actor, catalog, kind) !== undefined;
 }
 
 export function equippedItemDefinition(
   actor: CharacterHardState,
   catalog: EquipmentRuntimeCatalog,
-  kind?: string,
+  kind?: ItemKind,
   itemId?: string
 ): ItemDefinition | undefined {
   const { definitions, instances } = mapsFor(catalog);
@@ -364,7 +415,7 @@ export function equippedItemDefinition(
     const definition = instance ? definitions.get(instance.definitionId) : undefined;
     if (!instance || instance.ownerCharacterId !== actor.characterId || !definition) continue;
     if (itemId && itemId !== instance.id && itemId !== definition.id) continue;
-    if (kind && definition.kind !== kind) continue;
+    if (kind && !itemKindSatisfies(definition.kind, kind)) continue;
     return definition;
   }
   return undefined;

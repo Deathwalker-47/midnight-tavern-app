@@ -888,12 +888,12 @@ interface MemoryStartingGearSpec {
 const MEMORY_POSSESSION_CUE =
   /\b(?:carry|carries|carrying|wield|wields|wielding|wear|wears|wearing|armed with|equipped with|keeps?|owns?|has|have|holstered|strapped|packed)\b/i;
 const MEMORY_STARTING_GEAR: readonly MemoryStartingGearSpec[] = [
-  { pattern: /\blongbow\b/i, name: "Longbow", kind: "weapon", slots: ["primary"], preferredSlot: "primary", handsRequired: 2 },
-  { pattern: /\b(?:shortbow|bow)\b/i, name: "Bow", kind: "weapon", slots: ["primary"], preferredSlot: "primary", handsRequired: 2 },
-  { pattern: /\b(?:pistol|revolver|handgun)\b/i, name: "Pistol", kind: "weapon", slots: ["primary", "secondary"], preferredSlot: "primary", handsRequired: 1 },
-  { pattern: /\b(?:rifle|shotgun|musket)\b/i, name: "Long Gun", kind: "weapon", slots: ["primary"], preferredSlot: "primary", handsRequired: 2 },
-  { pattern: /\b(?:knife|dagger)\b/i, name: "Knife", kind: "weapon", slots: ["primary", "secondary"], preferredSlot: "secondary", handsRequired: 1 },
-  { pattern: /\b(?:sword|blade|machete|axe)\b/i, name: "Blade", kind: "weapon", slots: ["primary", "secondary"], preferredSlot: "primary", handsRequired: 1 },
+  { pattern: /\blongbow\b/i, name: "Longbow", kind: "ranged_weapon", slots: ["primary"], preferredSlot: "primary", handsRequired: 2 },
+  { pattern: /\b(?:shortbow|bow)\b/i, name: "Bow", kind: "ranged_weapon", slots: ["primary"], preferredSlot: "primary", handsRequired: 2 },
+  { pattern: /\b(?:pistol|revolver|handgun)\b/i, name: "Pistol", kind: "ranged_weapon", slots: ["primary", "secondary"], preferredSlot: "primary", handsRequired: 1 },
+  { pattern: /\b(?:rifle|shotgun|musket)\b/i, name: "Long Gun", kind: "ranged_weapon", slots: ["primary"], preferredSlot: "primary", handsRequired: 2 },
+  { pattern: /\b(?:knife|dagger)\b/i, name: "Knife", kind: "melee_weapon", slots: ["primary", "secondary"], preferredSlot: "secondary", handsRequired: 1 },
+  { pattern: /\b(?:sword|blade|machete|axe)\b/i, name: "Blade", kind: "melee_weapon", slots: ["primary", "secondary"], preferredSlot: "primary", handsRequired: 1 },
   { pattern: /\b(?:helmet|helm|hat)\b/i, name: "Headwear", kind: "armor", slots: ["head"], preferredSlot: "head", handsRequired: 0 },
   { pattern: /\b(?:armor|armour|breastplate|vest|coat|cloak|jacket|robes?)\b/i, name: "Protective Clothing", kind: "armor", slots: ["body"], preferredSlot: "body", handsRequired: 0 },
   { pattern: /\b(?:lockpicks?|toolkit|tools?|medkit|first aid kit|rope|lantern|torch|compass|radio|phone|binoculars|spellbook)\b/i, name: "Field Tool", kind: "tool", slots: ["utility"], preferredSlot: "utility", handsRequired: 0 },

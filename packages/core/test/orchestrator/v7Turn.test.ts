@@ -266,7 +266,10 @@ describe("V7 ordered turn semantics", () => {
           handsRequired: 1,
           unique: false,
           effects: [],
-          props: { damage: 1 },
+          // Claimed numbers are ignored: the archetype and the tier set the mechanics.
+          props: { damage: 9 },
+          staminaCost: 0,
+          archetypeId: "item.melee.light_weapon",
           tags: ["wight"],
         },
       }
@@ -279,7 +282,15 @@ describe("V7 ordered turn semantics", () => {
     const definitions = await store.runtimeItems.listDefinitions(storyId);
     const inventory = await store.runtimeItems.listInventory("kestrel");
     expect(definitions).toHaveLength(1);
-    expect(definitions[0]!.name).toBe("Wightglass Shard");
+    expect(definitions[0]).toMatchObject({
+      name: "Wightglass Shard",
+      kind: "melee_weapon",
+      slotCompatibility: ["primary", "secondary"],
+      props: { damage: 1 },
+      staminaCost: 1,
+      archetypeId: "item.melee.light_weapon",
+      tags: ["melee", "one_handed", "wight"],
+    });
     expect(inventory).toHaveLength(1);
     expect(result.rulings[0]!.loot?.[0]?.itemDefinitionId).toBe(definitions[0]!.id);
     expect((await store.events.listByStory(storyId)).map((event) => event.kind)).toContain(

@@ -296,6 +296,25 @@ describe("V7 persistence repositories", () => {
     });
 
     expect(await store.runtimeItems.getDefinition(definition.id)).toEqual(definition);
+    // Swing stamina, restores and the archetype survive a save (none of them did before migration 18).
+    const tonic: ItemDefinition = {
+      ...definition,
+      id: "runtime-tonic",
+      name: "Field Tonic",
+      kind: "potion",
+      slotCompatibility: [],
+      handsRequired: 0,
+      unique: false,
+      effects: [],
+      props: {},
+      restores: { stamina: 6, health: 2 },
+      archetypeId: "item.potion.stamina",
+    };
+    await store.runtimeItems.insertDefinition(tonic);
+    expect(await store.runtimeItems.getDefinition(tonic.id)).toEqual(tonic);
+    const maul: ItemDefinition = { ...definition, id: "runtime-maul", staminaCost: 3 };
+    await store.runtimeItems.insertDefinition(maul);
+    expect(await store.runtimeItems.getDefinition(maul.id)).toEqual(maul);
     expect(await store.runtimeItems.listInventory(player.characterId)).toEqual([instance]);
     expect(await store.runtimeItems.listLoadout(player.characterId)).toEqual([
       {

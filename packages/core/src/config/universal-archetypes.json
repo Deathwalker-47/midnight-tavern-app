@@ -1344,7 +1344,7 @@
       "dc": 12,
       "tier": "common",
       "targetStance": "foe",
-      "requiresItemKind": "weapon",
+      "requiresItemKind": "melee_weapon",
       "effects": {
         "crit_success": {
           "narrationHint": "a telling blow",
@@ -1381,7 +1381,7 @@
       "dc": 14,
       "tier": "uncommon",
       "targetStance": "foe",
-      "requiresItemKind": "weapon",
+      "requiresItemKind": "melee_weapon",
       "costs": {
         "stamina": 3
       },
@@ -1430,7 +1430,7 @@
       "dc": 14,
       "tier": "uncommon",
       "targetStance": "foe",
-      "requiresItemKind": "weapon",
+      "requiresItemKind": "melee_weapon",
       "costs": {
         "stamina": 4
       },
@@ -1476,7 +1476,7 @@
       "dc": 12,
       "tier": "common",
       "targetStance": "foe",
-      "requiresItemKind": "weapon",
+      "requiresItemKind": "ranged_weapon",
       "effects": {
         "crit_success": {
           "narrationHint": "a perfect shot",
@@ -1514,7 +1514,7 @@
       "dc": 14,
       "tier": "uncommon",
       "targetStance": "foe",
-      "requiresItemKind": "weapon",
+      "requiresItemKind": "ranged_weapon",
       "costs": {
         "stamina": 3
       },

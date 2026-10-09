@@ -13,14 +13,17 @@
  *
  * Pure: reads the frozen schema, this turn's rulings and the working hard state only.
  */
-import type {
-  ActionDef,
-  CharacterHardState,
-  MechanicalIntent,
-  ReactionTrigger,
-  Ruling,
-  SkillDef,
-  StorySchema,
+import {
+  baseItemKind,
+  itemKindSatisfies,
+  type ActionDef,
+  type CharacterHardState,
+  type ItemKind,
+  type MechanicalIntent,
+  type ReactionTrigger,
+  type Ruling,
+  type SkillDef,
+  type StorySchema,
 } from "../types/index.js";
 
 export interface PlannedSkillReaction {
@@ -43,12 +46,12 @@ function wounded(ruling: Ruling): boolean {
   return Object.values(ruling.effectsApplied?.resourceDeltaTarget ?? {}).some((delta) => delta < 0);
 }
 
-/** The holder's first held weapon in a legacy inventory, so a weapon reaction scales with it. */
-function heldWeaponId(schema: StorySchema, holder: CharacterHardState): string | undefined {
-  return holder.inventory.find(
-    (entry) =>
-      entry.qty > 0 && schema.items.find((item) => item.id === entry.itemId)?.kind === "weapon"
-  )?.itemId;
+/** The holder's first held item meeting a weapon need (legacy inventory), so the reaction scales. */
+function heldWeaponId(schema: StorySchema, holder: CharacterHardState, required: ItemKind): string | undefined {
+  return holder.inventory.find((entry) => {
+    const kind = schema.items.find((item) => item.id === entry.itemId)?.kind;
+    return entry.qty > 0 && kind !== undefined && itemKindSatisfies(kind, required);
+  })?.itemId;
 }
 
 /** Plan this turn's reactions from its action rulings, in ruling order, one per character. */
@@ -82,7 +85,10 @@ export function planSkillReactions(
     // A reaction naming an action the rulebook lacks is a rulebook error the validator reports.
     const fired = schema.actions.find((candidate) => candidate.id === skill.reaction!.actionId);
     if (!fired) continue;
-    const weaponId = fired.requiresItemKind === "weapon" ? heldWeaponId(schema, holder) : undefined;
+    const weaponId =
+      fired.requiresItemKind && baseItemKind(fired.requiresItemKind) === "weapon"
+        ? heldWeaponId(schema, holder, fired.requiresItemKind)
+        : undefined;
     planned.push({
       intent: {
         actorId: holderId,

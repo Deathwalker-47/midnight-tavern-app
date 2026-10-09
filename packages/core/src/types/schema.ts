@@ -10,7 +10,13 @@
  */
 import { z } from "zod";
 import { ActionCategorySchema, ActionDefSchema } from "./actions.js";
-import { MasteryRankSchema, CostSpecSchema, ItemKindSchema, StatModeSchema } from "./primitives.js";
+import {
+  MasteryRankSchema,
+  CostSpecSchema,
+  ItemKindSchema,
+  ItemRestoresSchema,
+  StatModeSchema,
+} from "./primitives.js";
 import { ConditionSchema } from "./conditions.js";
 
 // Re-export the shared leaf primitives so `StorySchema`'s module stays the one-stop
@@ -212,13 +218,7 @@ export const ItemDefSchema = z.object({
    * What consuming one of this item restores, by core resource role (plan 08 §5). Only items with
    * this field can be used by the engine's `consume_item` action. Clamped at use.
    */
-  restores: z
-    .object({
-      health: z.number().int().min(1).optional(),
-      stamina: z.number().int().min(1).optional(),
-      mana: z.number().int().min(1).optional(),
-    })
-    .optional(),
+  restores: ItemRestoresSchema.optional(),
 });
 export type ItemDef = z.infer<typeof ItemDefSchema>;
 

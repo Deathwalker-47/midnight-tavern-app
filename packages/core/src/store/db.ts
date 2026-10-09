@@ -546,6 +546,18 @@ CREATE TABLE story_pool_enablements (
 CREATE INDEX idx_story_pool_enablements_turn ON story_pool_enablements(story_id, turn_index);
 `,
   },
+  {
+    version: 18,
+    name: "item_definition_mechanics",
+    // Plan 09 §8.1. A runtime item's swing stamina (plan 08 §3 — never persisted before this, so a
+    // looted weapon's declared cost was lost on save), what a consumable restores, and the universal
+    // archetype that set its mechanics. All nullable: older items simply have none.
+    sql: `
+ALTER TABLE item_definitions ADD COLUMN stamina_cost INTEGER;
+ALTER TABLE item_definitions ADD COLUMN restores_json TEXT;
+ALTER TABLE item_definitions ADD COLUMN archetype_id TEXT;
+`,
+  },
 ];
 
 /**

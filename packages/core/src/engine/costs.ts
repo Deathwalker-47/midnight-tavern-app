@@ -9,6 +9,7 @@
  * Pure: reads the frozen schema, the actor, and the runtime equipment catalog only.
  */
 import {
+  baseItemKind,
   CORE_RESOURCE_ROLES,
   type ActionDef,
   type CharacterHardState,
@@ -73,11 +74,13 @@ export function weaponStaminaCost(
   intent: MechanicalIntent,
   equipment?: EquipmentRuntimeCatalog
 ): WeaponStaminaCost | undefined {
-  if (action.requiresItemKind !== "weapon") return undefined;
+  if (!action.requiresItemKind || baseItemKind(action.requiresItemKind) !== "weapon") return undefined;
   const resourceId = resourceIdForRole(schema, "stamina");
   if (!resourceId) return undefined;
   const item =
-    (equipment ? equippedItemDefinition(actor, equipment, "weapon", intent.itemId) : undefined) ??
+    (equipment
+      ? equippedItemDefinition(actor, equipment, action.requiresItemKind, intent.itemId)
+      : undefined) ??
     (intent.itemId ? schema.items.find((entry) => entry.id === intent.itemId) : undefined);
   if (!item) return undefined;
   const amount =

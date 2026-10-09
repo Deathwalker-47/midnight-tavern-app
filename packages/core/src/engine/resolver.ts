@@ -16,6 +16,7 @@
  *   6. on success/crit_success of a skill-gated action: advance mastery deterministically.
  */
 import {
+  baseItemKind,
   STANDARD_DIFFICULTY,
   normalizeDifficultyConfig,
   scaleDamageDelta,
@@ -68,7 +69,8 @@ export interface ResolveOptions {
 }
 
 const GENERIC_ENCOUNTER_HITS = 6;
-const MAX_ITEM_DAMAGE_BONUS = 20;
+/** Ceiling on the damage bonus any item adds to a hit, whatever it claims. */
+export const MAX_ITEM_DAMAGE_BONUS = 20;
 
 function isAttackAction(action: ActionDef): boolean {
   const family = action.universalFamily ?? action.id;
@@ -281,7 +283,9 @@ function stageOutcomeEffect(
   const attack = isAttackAction(action);
   const itemPropName =
     effect.scaleByItemProp ??
-    (attack && action.requiresItemKind === "weapon" ? "damage" : undefined);
+    (attack && action.requiresItemKind && baseItemKind(action.requiresItemKind) === "weapon"
+      ? "damage"
+      : undefined);
   const itemPropValue = itemPropName && item ? item.props[itemPropName] : undefined;
   const attackDamage: AttackDamageContext | undefined = attack
     ? {

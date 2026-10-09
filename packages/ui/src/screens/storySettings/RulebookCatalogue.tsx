@@ -162,7 +162,7 @@ function ActionDetail(props: { schema: Schema; action: ActionDef; entries: reado
     action.requiresSkill
       ? `Skill: ${nameOf(entries, "skill", action.requiresSkill)}${action.minRank ? ` (${action.minRank}+)` : ""}`
       : undefined,
-    action.requiresItemKind ? `Item: a ${action.requiresItemKind}` : undefined,
+    action.requiresItemKind ? `Item: a ${action.requiresItemKind.replace(/_/g, " ")}` : undefined,
     action.requiresEquipmentEnabler ? "Equipment that enables it" : undefined,
   ].filter(Boolean);
   const reaction = entries.find((entry) => entry.kind === "skill" && entry.skill.reaction?.actionId === action.id);

@@ -1,0 +1,489 @@
+{
+  "version": 1,
+  "archetypes": [
+    {
+      "id": "item.melee.light_weapon",
+      "kind": "melee_weapon",
+      "label": "Light weapon",
+      "description": "A quick one-handed weapon: knife, dagger, short sword, hatchet, baton.",
+      "slots": [
+        "primary",
+        "secondary"
+      ],
+      "handsRequired": 1,
+      "staminaCost": 1,
+      "props": {
+        "damage": {
+          "common": 1,
+          "uncommon": 2,
+          "rare": 3,
+          "legendary": 4,
+          "mythical": 6
+        }
+      },
+      "tags": [
+        "melee",
+        "one_handed"
+      ]
+    },
+    {
+      "id": "item.melee.hafted_weapon",
+      "kind": "melee_weapon",
+      "label": "Hafted weapon",
+      "description": "A weighty one-handed weapon: longsword, axe, mace, spear, machete.",
+      "slots": [
+        "primary",
+        "secondary"
+      ],
+      "handsRequired": 1,
+      "staminaCost": 2,
+      "props": {
+        "damage": {
+          "common": 2,
+          "uncommon": 3,
+          "rare": 4,
+          "legendary": 6,
+          "mythical": 8
+        }
+      },
+      "tags": [
+        "melee",
+        "one_handed"
+      ]
+    },
+    {
+      "id": "item.melee.great_weapon",
+      "kind": "melee_weapon",
+      "label": "Great weapon",
+      "description": "A two-handed weapon: greatsword, warhammer, halberd, chainsaw.",
+      "slots": [
+        "primary",
+        "secondary"
+      ],
+      "handsRequired": 2,
+      "staminaCost": 3,
+      "props": {
+        "damage": {
+          "common": 3,
+          "uncommon": 5,
+          "rare": 7,
+          "legendary": 9,
+          "mythical": 12
+        }
+      },
+      "tags": [
+        "melee",
+        "two_handed"
+      ]
+    },
+    {
+      "id": "item.ranged.sidearm",
+      "kind": "ranged_weapon",
+      "label": "Sidearm",
+      "description": "A one-handed ranged weapon: pistol, sling, hand crossbow, throwing knives.",
+      "slots": [
+        "primary",
+        "secondary"
+      ],
+      "handsRequired": 1,
+      "staminaCost": 1,
+      "props": {
+        "damage": {
+          "common": 1,
+          "uncommon": 2,
+          "rare": 3,
+          "legendary": 4,
+          "mythical": 6
+        }
+      },
+      "tags": [
+        "ranged",
+        "one_handed"
+      ]
+    },
+    {
+      "id": "item.ranged.bow",
+      "kind": "ranged_weapon",
+      "label": "Bow",
+      "description": "A drawn bow: shortbow, longbow, recurve.",
+      "slots": [
+        "primary",
+        "secondary"
+      ],
+      "handsRequired": 2,
+      "staminaCost": 1,
+      "props": {
+        "damage": {
+          "common": 2,
+          "uncommon": 3,
+          "rare": 4,
+          "legendary": 6,
+          "mythical": 8
+        }
+      },
+      "tags": [
+        "ranged",
+        "two_handed"
+      ]
+    },
+    {
+      "id": "item.ranged.long_gun",
+      "kind": "ranged_weapon",
+      "label": "Long gun",
+      "description": "A braced two-handed ranged weapon: rifle, crossbow, shotgun, musket.",
+      "slots": [
+        "primary",
+        "secondary"
+      ],
+      "handsRequired": 2,
+      "staminaCost": 1,
+      "props": {
+        "damage": {
+          "common": 2,
+          "uncommon": 4,
+          "rare": 6,
+          "legendary": 8,
+          "mythical": 10
+        }
+      },
+      "tags": [
+        "ranged",
+        "two_handed"
+      ]
+    },
+    {
+      "id": "item.armor.light_armor",
+      "kind": "armor",
+      "label": "Light armor",
+      "description": "Body protection that keeps you nimble: leather, padded coat, kevlar vest.",
+      "slots": [
+        "body"
+      ],
+      "handsRequired": 0,
+      "tags": [
+        "armor",
+        "body"
+      ]
+    },
+    {
+      "id": "item.armor.heavy_armor",
+      "kind": "armor",
+      "label": "Heavy armor",
+      "description": "Body protection built for battle: mail, plate, riot gear.",
+      "slots": [
+        "body"
+      ],
+      "handsRequired": 0,
+      "tags": [
+        "armor",
+        "body"
+      ]
+    },
+    {
+      "id": "item.armor.helm",
+      "kind": "armor",
+      "label": "Helm",
+      "description": "Head protection: helmet, coif, hard hat.",
+      "slots": [
+        "head"
+      ],
+      "handsRequired": 0,
+      "tags": [
+        "armor",
+        "head"
+      ]
+    },
+    {
+      "id": "item.shield.shield",
+      "kind": "shield",
+      "label": "Shield",
+      "description": "Anything carried to block: buckler, kite shield, riot shield.",
+      "slots": [
+        "secondary"
+      ],
+      "handsRequired": 0,
+      "tags": [
+        "shield",
+        "defense"
+      ]
+    },
+    {
+      "id": "item.clothing.garment",
+      "kind": "clothing",
+      "label": "Garment",
+      "description": "Clothing worn for comfort, status or disguise: cloak, robes, uniform, hat.",
+      "slots": [
+        "body",
+        "head"
+      ],
+      "handsRequired": 0,
+      "tags": [
+        "clothing"
+      ]
+    },
+    {
+      "id": "item.jewelry.trinket",
+      "kind": "jewelry",
+      "label": "Jewelry",
+      "description": "A worn adornment: ring, amulet, bracelet, earring.",
+      "slots": [
+        "accessory_1",
+        "accessory_2"
+      ],
+      "handsRequired": 0,
+      "tags": [
+        "jewelry",
+        "worn"
+      ]
+    },
+    {
+      "id": "item.focus.focus",
+      "kind": "focus",
+      "label": "Focus",
+      "description": "An implement that channels power: staff, wand, holy symbol, orb.",
+      "slots": [
+        "secondary",
+        "utility"
+      ],
+      "handsRequired": 0,
+      "tags": [
+        "focus",
+        "magic"
+      ]
+    },
+    {
+      "id": "item.potion.healing",
+      "kind": "potion",
+      "label": "Healing draught",
+      "description": "A drink that closes wounds: healing potion, stim, elixir.",
+      "slots": [],
+      "handsRequired": 0,
+      "restores": {
+        "health": {
+          "common": 6,
+          "uncommon": 9,
+          "rare": 13,
+          "legendary": 18,
+          "mythical": 25
+        }
+      },
+      "tags": [
+        "potion",
+        "healing"
+      ]
+    },
+    {
+      "id": "item.potion.mana",
+      "kind": "potion",
+      "label": "Mana draught",
+      "description": "A drink that restores inner power: mana potion, ether, focus tonic.",
+      "slots": [],
+      "handsRequired": 0,
+      "restores": {
+        "mana": {
+          "common": 4,
+          "uncommon": 6,
+          "rare": 9,
+          "legendary": 13,
+          "mythical": 18
+        }
+      },
+      "tags": [
+        "potion",
+        "mana"
+      ]
+    },
+    {
+      "id": "item.potion.stamina",
+      "kind": "potion",
+      "label": "Stamina draught",
+      "description": "A drink that drives off fatigue: tonic, energy drink, stimulant.",
+      "slots": [],
+      "handsRequired": 0,
+      "restores": {
+        "stamina": {
+          "common": 4,
+          "uncommon": 6,
+          "rare": 9,
+          "legendary": 12,
+          "mythical": 16
+        }
+      },
+      "tags": [
+        "potion",
+        "stamina"
+      ]
+    },
+    {
+      "id": "item.food.ration",
+      "kind": "food",
+      "label": "Ration",
+      "description": "A meal or snack: trail ration, bread and cheese, field rations.",
+      "slots": [],
+      "handsRequired": 0,
+      "restores": {
+        "stamina": {
+          "common": 3,
+          "uncommon": 4,
+          "rare": 6,
+          "legendary": 8,
+          "mythical": 10
+        },
+        "health": {
+          "common": 1,
+          "uncommon": 2,
+          "rare": 3,
+          "legendary": 4,
+          "mythical": 5
+        }
+      },
+      "tags": [
+        "food"
+      ]
+    },
+    {
+      "id": "item.medicine.dressing",
+      "kind": "medicine",
+      "label": "Dressing",
+      "description": "Medical supplies used up in one treatment: bandage, salve, medkit dose.",
+      "slots": [],
+      "handsRequired": 0,
+      "restores": {
+        "health": {
+          "common": 4,
+          "uncommon": 6,
+          "rare": 9,
+          "legendary": 12,
+          "mythical": 16
+        }
+      },
+      "tags": [
+        "medicine",
+        "healing"
+      ]
+    },
+    {
+      "id": "item.scroll.scroll",
+      "kind": "scroll",
+      "label": "Scroll",
+      "description": "A written charge or formula meant to be read once: spell scroll, recipe, blueprint.",
+      "slots": [],
+      "handsRequired": 0,
+      "tags": [
+        "scroll",
+        "written"
+      ]
+    },
+    {
+      "id": "item.ammunition.ammunition",
+      "kind": "ammunition",
+      "label": "Ammunition",
+      "description": "Shots for a ranged weapon: arrows, bolts, bullets, sling stones.",
+      "slots": [],
+      "handsRequired": 0,
+      "tags": [
+        "ammunition"
+      ]
+    },
+    {
+      "id": "item.kit.kit",
+      "kind": "kit",
+      "label": "Kit",
+      "description": "A set of tools for one job: lockpicks, healer's kit, toolkit, disguise kit.",
+      "slots": [
+        "utility"
+      ],
+      "handsRequired": 0,
+      "tags": [
+        "kit",
+        "tool"
+      ]
+    },
+    {
+      "id": "item.instrument.instrument",
+      "kind": "instrument",
+      "label": "Instrument",
+      "description": "Something to play: lute, flute, drum, guitar.",
+      "slots": [
+        "utility"
+      ],
+      "handsRequired": 0,
+      "tags": [
+        "instrument",
+        "performance"
+      ]
+    },
+    {
+      "id": "item.device.device",
+      "kind": "device",
+      "label": "Device",
+      "description": "A handy gadget: lantern, compass, radio, spyglass, scanner.",
+      "slots": [
+        "utility"
+      ],
+      "handsRequired": 0,
+      "tags": [
+        "device",
+        "tool"
+      ]
+    },
+    {
+      "id": "item.key.key",
+      "kind": "key",
+      "label": "Key",
+      "description": "Something that opens a particular way: key, keycard, sigil, password token.",
+      "slots": [],
+      "handsRequired": 0,
+      "tags": [
+        "key"
+      ]
+    },
+    {
+      "id": "item.document.document",
+      "kind": "document",
+      "label": "Document",
+      "description": "Writing that matters: letter, map, deed, warrant, journal.",
+      "slots": [],
+      "handsRequired": 0,
+      "tags": [
+        "document",
+        "written"
+      ]
+    },
+    {
+      "id": "item.material.material",
+      "kind": "material",
+      "label": "Material",
+      "description": "Raw stuff for making things: ore, hide, herbs, scrap, reagents.",
+      "slots": [],
+      "handsRequired": 0,
+      "tags": [
+        "material",
+        "crafting"
+      ]
+    },
+    {
+      "id": "item.treasure.valuables",
+      "kind": "treasure",
+      "label": "Valuables",
+      "description": "Wealth to trade or keep: coins, gems, art, bullion.",
+      "slots": [],
+      "handsRequired": 0,
+      "tags": [
+        "treasure",
+        "wealth"
+      ]
+    },
+    {
+      "id": "item.misc.curio",
+      "kind": "misc",
+      "label": "Curio",
+      "description": "An odd keepsake with no obvious use: idol, music box, strange stone.",
+      "slots": [],
+      "handsRequired": 0,
+      "tags": [
+        "curio"
+      ]
+    }
+  ]
+}

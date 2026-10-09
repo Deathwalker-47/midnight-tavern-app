@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ItemKindSchema, MasteryRankSchema } from "./primitives.js";
+import { ItemKindSchema, ItemRestoresSchema, MasteryRankSchema } from "./primitives.js";
 import { ConditionSchema } from "./conditions.js";
 
 export const ItemTierSchema = z.enum([
@@ -91,6 +91,10 @@ export const ItemDefinitionSchema = z.object({
   props: z.record(z.string(), z.number()).default({}),
   /** Stamina a weapon adds to every attempt that swings it (plan 08 §3). Clamped at use. */
   staminaCost: z.number().int().min(0).optional(),
+  /** What one use restores (consumables); makes the item usable by `consume_item`. */
+  restores: ItemRestoresSchema.optional(),
+  /** The universal item archetype that set this item's mechanics (`universal-items.json`). */
+  archetypeId: z.string().optional(),
   tags: z.array(z.string()).default([]),
   createdAt: z.string(),
   configVersion: z.number().int().positive(),
@@ -152,6 +156,12 @@ export const ItemProposalSchema = z.object({
   props: z.record(z.string(), z.number()).default({}),
   /** Stamina a weapon adds to every attempt that swings it (plan 08 §3). Clamped at use. */
   staminaCost: z.number().int().min(0).optional(),
+  restores: ItemRestoresSchema.optional(),
+  /**
+   * A universal item archetype. When named, the engine sets the item's mechanics from it and
+   * replaces whatever the proposal claimed for them (`finalizeLootProposal`).
+   */
+  archetypeId: z.string().optional(),
   tags: z.array(z.string()).default([]),
 });
 export type ItemProposal = z.infer<typeof ItemProposalSchema>;
