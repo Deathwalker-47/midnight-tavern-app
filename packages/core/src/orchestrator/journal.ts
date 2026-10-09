@@ -109,6 +109,25 @@ export function summarizeStoryEvent(event: StoryEvent): string {
       reasons.length ? ` (${reasons.join(" ")})` : ""
     }`;
   }
+  if (event.kind === "pool_enabled") {
+    const name = typeof event.payload["name"] === "string" ? event.payload["name"] : event.payload["entryId"];
+    const source = event.payload["source"];
+    const by = source === "analyzer" ? "the story" : source === "forge" ? "the forge" : "you";
+    return `Enabled ${String(name)} (${event.payload["kind"] === "skill" ? "skill" : "action"}) - by ${by}`;
+  }
+  if (event.kind === "pool_disabled") {
+    return `Disabled ${String(event.payload["entryId"])}`;
+  }
+  if (event.kind === "recovery") {
+    const gains = event.payload["gains"];
+    const parts =
+      gains && typeof gains === "object"
+        ? Object.entries(gains as Record<string, unknown>)
+            .filter((entry): entry is [string, number] => typeof entry[1] === "number")
+            .map(([pool, amount]) => `${humanize(pool)} +${amount}`)
+        : [];
+    return `${event.actorId ?? "Character"} - recovered ${parts.join(", ") || "nothing"}`;
+  }
   const payload = Object.keys(event.payload).length ? ` - ${JSON.stringify(event.payload)}` : "";
   return `${humanize(event.kind)}${event.actorId ? ` - ${event.actorId}` : ""}${payload}`;
 }

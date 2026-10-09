@@ -2545,3 +2545,36 @@ reaction, a validator-clean effective rulebook, and spell parameter filling with
 fallback. Id lock extended (222). Typecheck clean; core 838/60, UI 193/29 = 1031; engine coverage 100%.
 
 **Next:** S13 — mid-story enablement by the analyzer, with every guard.
+
+---
+
+## 2026-10-09 - S13: mid-story enablement by the analyzer (plan 09 §6, D9)
+
+**What landed** (`catalogue/midStory.ts`, run in `runBackground` after the analyzer's soft-state patch,
+as its own step): after a committed turn the analyzer role may grow the story's catalogue, under
+engine-owned guards —
+- **sealed source**: a Zod enum of eligible candidates;
+- **skill-gated only** (action-plan decision): skill entries and actions that need a skill, so enabling
+  hands nobody an at-will power (they must still learn it through the ledger);
+- **tier gate by completed chapters** (`TIER_UNLOCK_CHAPTERS`: common 0, uncommon 1, rare 3,
+  legendary 6, mythical never) — the engine had no "story progress" measure (`minProgress` is unused),
+  so closed chapters are the honest proxy;
+- **rate limit**: `ANALYZER_ENABLEMENTS_PER_CHAPTER = 2` per open chapter, counting everything a
+  proposal brings (an action's skill, a reaction's pair); a proposal that would overshoot is skipped;
+- **cost**: the model is asked only when the turn's text carries a teaching cue (`LEARNING_CUE` —
+  deliberately narrow: "study the chamber" or "learn that…" do not trigger it) and budget remains;
+- each enablement is its own transaction, journalled (`pool_enabled`, source analyzer), and
+  turn-scoped so rewinding the turn removes it; any failure is swallowed — it never fails a turn.
+**Journal**: `pool_enabled` / `pool_disabled` / `recovery` now read as sentences ("Enabled Fire Magic
+(skill) - by the story", "Kestrel - recovered Stamina +3") instead of serialized payloads.
+
+**Found while wiring:** the first cue matched "study", which in play almost always means *examine* —
+an existing test caught the extra model call. The cue was narrowed rather than the test changed.
+
+**Tests.** 8 in `test/catalogue/midStory.test.ts` (candidates: skill-gated / tier / setting / present;
+cue; enabling as analyzer with journal line; no cue → no call; budget spent → no call; new chapter
+refills; never overshooting the budget; failures and out-of-enum ids swallowed; no-stats; no
+candidates → no call; a real turn whose teaching narration enables Fire Magic, removed by rewinding the
+turn) + journal-line tests. Typecheck clean; core 847/61, UI 193/29 = 1040; engine coverage 100%.
+
+**Next:** S14 — the Story Settings UI (enabled catalogue + pool browser with toggles and the D8 reason).

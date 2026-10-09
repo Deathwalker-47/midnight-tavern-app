@@ -5,7 +5,7 @@ import {
   listStoryJournal,
   summarizeStoryEvent,
 } from "../../src/orchestrator/index.js";
-import { openStore, type StoryEventCursor } from "../../src/store/index.js";
+import { openStore, type StoryEvent, type StoryEventCursor } from "../../src/store/index.js";
 import { makeStory } from "../fixtures.js";
 
 describe("Mechanical Journal read model", () => {
@@ -102,5 +102,29 @@ describe("Mechanical Journal read model", () => {
     expect(csv.trimEnd().split("\n")).toHaveLength(506);
     expect(await exportStoryJournalCsv(store, schema.storyId)).toBe(csv);
     await store.close();
+  });
+});
+
+describe("journal lines for the economy and the pool (S7, S10, S13)", () => {
+  const event = (kind: StoryEvent["kind"], payload: Record<string, unknown>, actorId?: string): StoryEvent => ({
+    id: "e",
+    storyId: "s",
+    turnIndex: 1,
+    kind,
+    payload,
+    rulebookVersion: 1,
+    createdAt: 1,
+    ...(actorId ? { actorId } : {}),
+  });
+
+  it("read as sentences, not serialized payloads", () => {
+    expect(summarizeStoryEvent(event("pool_enabled", { entryId: "uni.a.b.c", kind: "action", name: "Persuade", source: "player" })))
+      .toBe("Enabled Persuade (action) - by you");
+    expect(summarizeStoryEvent(event("pool_enabled", { entryId: "uni.a.b.c", kind: "skill", source: "forge" })))
+      .toBe("Enabled uni.a.b.c (skill) - by the forge");
+    expect(summarizeStoryEvent(event("pool_disabled", { entryId: "uni.a.b.c" }))).toBe("Disabled uni.a.b.c");
+    expect(summarizeStoryEvent(event("recovery", { gains: { stamina: 3, hp: 1, bogus: "x" } }, "Kestrel")))
+      .toBe("Kestrel - recovered Stamina +3, Hp +1");
+    expect(summarizeStoryEvent(event("recovery", {}))).toBe("Character - recovered nothing");
   });
 });

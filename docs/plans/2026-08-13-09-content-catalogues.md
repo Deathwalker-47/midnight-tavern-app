@@ -375,19 +375,19 @@ history, only the future — which is exactly what a GM changing a house rule mi
 
 A model may propose enabling a pool entry when the story demands it. Guards, all engine-owned:
 
-- [ ] **6.1** **Sealed source.** The proposal names a pool id. Unknown id → rejected. Same Zod-enum
+- [x] **6.1** **Sealed source.** The proposal names a pool id. Unknown id → rejected. Same Zod-enum
       discipline the classifier already uses.
-- [ ] **6.2** **Tier gating.** A pool entry carries a tier; enabling above the story's current
+- [x] **6.2** **Tier gating.** A pool entry carries a tier; enabling above the story's current
       progress tier is refused. A legendary skill cannot appear in chapter one.
-- [ ] **6.3** **Rate limit.** At most N enablements per chapter (proposed: 2). Prevents a slow leak
+- [x] **6.3** **Rate limit.** At most N enablements per chapter (proposed: 2). Prevents a slow leak
       of the entire pool into every story.
-- [ ] **6.4** **Enable ≠ learn** (§3). Enablement never grants the skill to anyone.
+- [x] **6.4** **Enable ≠ learn** (§3). Enablement never grants the skill to anyone.
 - [x] **6.5** *(S10: turn-scoped rows removed with the reverted turn instead of a checkpoint column — see WORKLOG 2026-10-09 S10a.)* **Checkpointed.** The enablement set is hard state and must be captured in the turn
       checkpoint, so rewind un-enables what the reverted turn enabled. **Missing this breaks
       invariant 7** and is the most likely silent bug in this plan.
-- [ ] **6.6** **Visible and reversible.** Every enablement is a journal event and the player can
+- [x] **6.6** **Visible and reversible.** Every enablement is a journal event and the player can
       disable it again from the UI (§7).
-- [ ] **6.7** **The analyzer proposes** (owner decision D9, answered 2026-08-13). Explicitly **not**
+- [x] **6.7** **The analyzer proposes** (owner decision D9, answered 2026-08-13). Explicitly **not**
       the narrator (it would enable things to justify prose it already wrote) and **not** the
       classifier (it would enable whatever it just failed to classify — a feedback loop that defeats
       plan 02). The analyzer already runs post-turn, off the critical path
@@ -400,7 +400,7 @@ A model may propose enabling a pool entry when the story demands it. Guards, all
       - It is already the sole writer of soft state, so it is the one model the architecture already
         trusts with a post-turn write path. Enablement is a *catalogue* write, not hard state on a
         character (§3.1), so this does not widen its authority over mechanics.
-      - [ ] Enablement must be committed in its own transaction, not folded into the analyzer's
+      - [x] Enablement must be committed in its own transaction, not folded into the analyzer's
             soft-state patch, so a soft-state failure cannot half-apply a catalogue change.
 
 ## 7. The enablement UI (owner's point 2, and finding 25.5)

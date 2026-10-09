@@ -99,7 +99,7 @@ push to `main`.
 - [x] **S11. Forge-time selection.** Setting-fit filter → section pick → entry pick, validated, with a
       deterministic fallback; wired into new-story creation.
 - [x] **S12. Combat and magic archetypes** with the exclusion list.
-- [ ] **S13. Mid-story enablement** by the analyzer with every guard (pool id, tier gate, 2 per chapter,
+- [x] **S13. Mid-story enablement** by the analyzer with every guard (pool id, tier gate, 2 per chapter,
       skill-gated only, own transaction, journal, checkpoint).
 - [ ] **S14. Story Settings UI.** Enabled catalogue + pool browser with toggles and the D8 lock reason.
 - [ ] **S15. Universal items** — item-kind expansion with legacy aliases; `universal-items.json` feeding loot.

@@ -67,6 +67,7 @@ import {
 } from "../types/index.js";
 import { applyUniversalActionDefaults } from "../config/index.js";
 import { effectiveSchema } from "../catalogue/enablement.js";
+import { proposeMidStoryEnablements } from "../catalogue/midStory.js";
 import { assembleContext } from "./context.js";
 import { capture } from "./checkpoint.js";
 import { generateGuardedNarration } from "./authorityGuard.js";
@@ -1533,6 +1534,15 @@ async function runBackground(router: Router, store: Store, args: BackgroundArgs)
   } catch (err) {
     onError?.(err);
   }
+
+  // Mid-story catalogue growth (plan 09 §6): the analyzer's guarded proposal, committed in its own
+  // transactions — never folded into the soft-state patch above, and never able to fail the turn.
+  await proposeMidStoryEnablements(router, store, {
+    storyId,
+    turnIdx: args.turnIdx,
+    playerText: args.playerText,
+    narratorText: args.narratorText,
+  });
 
   // Summaries are independent; each swallows its own errors, but guard anyway.
   try {
