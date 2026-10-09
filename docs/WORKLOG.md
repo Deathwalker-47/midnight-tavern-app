@@ -2638,3 +2638,47 @@ reason, search, row refusal, load failure, 3,000-entry bound) + a catalogue test
 203/30 = 1060; UI build verified.
 
 **Next:** S15 — universal items catalogue.
+
+---
+
+## 2026-10-09 - S15a: finer item kinds and engine-owned item archetypes (plan 09 §8.1)
+
+**Verified first.** Runtime loot is proposed by the classifier ("DM loot adjudicator") and only
+cap-checked by `finalizeLootProposal`; `StorySchema.items` is the legacy forge-time catalogue that new
+stories leave empty (`freeze.ts`, `generate.ts` emit `items: []`). It was **not** revived.
+
+**Item kinds.** `ItemKindSchema` keeps the seven broad kinds and adds seventeen finer ones, each in one
+family (`FINE_ITEM_KIND_BASE`): melee/ranged weapon; shield, clothing; jewelry, focus; potion, food,
+medicine, scroll, ammunition; kit, instrument, device; document; material, treasure. The broad kinds are
+families *and* still valid kinds ("a generic weapon") rather than aliases, so nothing persisted changes.
+`itemKindSatisfies(held, required)`: a broad requirement accepts its family; a fine requirement accepts
+that kind or a generic item of its family (legacy items keep working). Gate, attempt costs, weapon damage,
+reactions and NPC agency match through it. Pool attacks now need `melee_weapon` / `ranged_weapon`
+(enablements already made keep their snapshotted "weapon"); starting-gear lexemes use the finer kinds.
+Gate reasons say "ranged weapon", not the id.
+
+**Archetypes** (`config/universal-items.json`, `config/items.ts`): 28 shapes — kind, slots, hands, swing
+stamina, per-tier `damage`, per-tier `restores` (consumables). The adjudicator must name an `archetypeId`
+from a sealed enum; `shapeByArchetype` then replaces every mechanic the proposal claimed (the model keeps
+name, description, tier and bonus effects, still capped per tier). A proposal without an archetype (other
+callers of `finalizeLootProposal`) is held to the tier caps alone, as before. Validation now refuses
+`restores` on non-consumables. Balance rules are tests: ladders never weaken with tier, hands only for
+weapons/tools, every weapon has a swing cost and damage ≤ `MAX_ITEM_DAMAGE_BONUS`, only slotless
+consumables restore and within `maximumConsumableRestore`, and every archetype at every tier shapes into
+an item the loot policy accepts.
+
+**Pre-existing defect fixed:** a runtime item's `staminaCost` (S3) had no column and was never written or
+read, so a looted weapon's declared cost was lost on save (v3 defaults masked it). Migration 18 adds
+`stamina_cost`, `restores_json`, `archetype_id` to `item_definitions`.
+
+**Found, for S15b:** S7's `consume_item` reads only `StorySchema.items`, which new stories leave empty —
+so in practice no new story can use any consumable. S15b makes runtime consumables usable.
+
+**Tests.** `test/config/items.test.ts` (6), `test/itemKinds.test.ts` (9: family matching, gate on
+equipment and on legacy inventory, fine-kind swing cost and damage, a reaction swinging a fine-kind
+weapon, archetype shaping incl. dropped zero restores and stacking keys, unknown archetype, restores and
+hands refusals), a persistence round trip, and the loot turn test now names an archetype and proves the
+claimed `damage: 9` became the archetype's 1. Typecheck clean; core 872/64 (engine coverage 100%), UI
+203/30 = 1075.
+
+**Next:** S15b — runtime consumables: `consume_item` on looted items with `restores`, rewind-safe.

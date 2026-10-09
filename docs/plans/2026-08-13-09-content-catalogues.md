@@ -442,11 +442,13 @@ Two surfaces, both in Story Settings:
 
 ### 8.1 Universal items (finding 20)
 
-- [ ] Extend `ItemKindSchema` to cover `uni-items.txt`'s 17 categories, keeping existing kinds as
+- [x] *(S15a: 17 engineering-authored finer kinds; the seven existing kinds stay valid as families
+      rather than aliases — `itemKindSatisfies`.)* Extend `ItemKindSchema` to cover `uni-items.txt`'s 17 categories, keeping existing kinds as
       aliases so live saves decode.
-- [ ] Add `universal-items.json` — engine-owned archetypes per kind, feeding the **runtime loot
+- [x] *(S15a: 28 archetypes; the loot adjudicator must name one and the archetype sets every
+      mechanic.)* Add `universal-items.json` — engine-owned archetypes per kind, feeding the **runtime loot
       generator**.
-- [ ] **Do not revive `StorySchema.items`.** Source describes it as a legacy forge-time catalogue
+- [x] *(S15a: verified legacy — new stories emit `items: []`; not revived.)* **Do not revive `StorySchema.items`.** Source describes it as a legacy forge-time catalogue
       ("New V7 stories emit none; runtime item tables own loot"). Verify before writing code —
       forking the item system in two is a real trap here.
 
