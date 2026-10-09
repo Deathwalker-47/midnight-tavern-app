@@ -1990,3 +1990,25 @@ still fails on the known tinypool worker crash, fixed by plan 07 task P0-0).
 **Next:** owner reviews the plan set. Six decisions remain open (D1, D3-D7); D7 - new stories only
 versus migrating existing saves - is the largest cost driver. No implementation until the owner
 authorizes a wave.
+
+---
+
+## 2026-10-09 - Activate plans 08 + 09 with an executable action plan
+
+**Owner instruction.** "Create an action plan to finish of everything from plan 8 and 9, and then you
+start picking them off one by one ... commit and push to main do not wait for my go ahead to push."
+This activates plans 08 and 09 and authorizes pushing each finished step to `origin/main`.
+
+**Landed.** `docs/plans/2026-10-09-plans-08-09-action-plan.md` — 18 ordered steps (S1–S8 plan 08,
+S9–S18 plan 09). It records the decisions taken so execution is not blocked (D7 new stories only; D5
+blended config-driven recovery; XP curve; stamina paid win or lose; enablement limits; models may not
+enable ungated actions) and six corrections to the plans found against source: costs/cooldowns belong on
+actions not skills; the engine has no scene boundary; new hard-state fields need Zod defaults because
+rewind re-parses old checkpoints; weapon specials reuse the existing `action_enable` equipment effect;
+persisted `action_enable`/`skill_enable` names keep their legacy meaning; the owner's taxonomy files are
+absent, so the pool ships with a starter set and the forge stays hybrid until they arrive.
+
+**Verification.** Docs only. Baseline re-measured on Linux/Node 22: typecheck clean, core 670/46 and UI
+183/26 = 853 passing; root `npm test` also passes on this platform.
+
+**Next:** S1 (XP repeat penalty).
