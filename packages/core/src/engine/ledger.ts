@@ -32,7 +32,14 @@ export type StagedMutation =
       rank: MasteryRank;
       successCount: number;
       xp?: number;
-    };
+    }
+  /** Start an action's cooldown (plan 08 §4). */
+  | { kind: "setCooldown"; characterId: string; actionId: string; turns: number }
+  /**
+   * End-of-turn countdown: decrement only the listed cooldowns (those that existed when the turn
+   * began), so a cooldown started this turn is not shortened by the turn that started it.
+   */
+  | { kind: "tickCooldowns"; characterId: string; actionIds: readonly string[] };
 
 /** Clamp a value into [0, max]. */
 function clamp(value: number, max: number): number {
@@ -108,6 +115,20 @@ export function commit(
       case "setFlag":
         actor.flags[m.flagId] = m.value;
         break;
+      case "setCooldown":
+        actor.cooldowns = { ...actor.cooldowns, [m.actionId]: m.turns };
+        break;
+      case "tickCooldowns": {
+        const next = { ...actor.cooldowns };
+        for (const actionId of m.actionIds) {
+          const remaining = next[actionId];
+          if (remaining === undefined) continue;
+          if (remaining > 1) next[actionId] = remaining - 1;
+          else delete next[actionId];
+        }
+        actor.cooldowns = next;
+        break;
+      }
       case "setSkill": {
         const sk = actor.skills.find((s) => s.skillId === m.skillId);
         if (sk) {

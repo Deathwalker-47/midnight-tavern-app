@@ -11,6 +11,7 @@
  *   3. `requiresSkill` is learned
  *   4. `minRank` is met
  *   5. `requiresItemKind` is present in inventory
+ *   5b. the action is not on cooldown for this actor
  *   6. `costs` are affordable (the action's own, then with the weapon's stamina cost)
  *   7. all `Condition` prerequisites hold
  */
@@ -29,7 +30,7 @@ import {
   equipmentEnabledSkillRank,
   equipmentEnablesAction,
 } from "./equipment.js";
-import { attemptCost, weaponStaminaCost } from "./costs.js";
+import { attemptCost, normalizeCost, weaponStaminaCost } from "./costs.js";
 
 export { conditionHolds } from "./conditions.js";
 
@@ -155,9 +156,20 @@ export function checkGate(
     }
   }
 
+  // 5b. not still recovering from an earlier use (plan 08 §4).
+  const recovering = actor.cooldowns?.[action.id] ?? 0;
+  if (recovering > 0) {
+    return deny(
+      `${action.label} is still recovering — usable again ${
+        recovering === 1 ? "after the next turn" : `in ${recovering} turns`
+      }.`,
+      "on_cooldown"
+    );
+  }
+
   // 6. costs affordable — the action's own cost, then the full attempt cost including the weapon's
   // stamina (plan 08 §3). Both come from `attemptCost`, the same function the resolver pays from.
-  if (!canAfford(actor, action.costs)) {
+  if (!canAfford(actor, normalizeCost(schema, action.costs))) {
     return deny("Cannot afford the cost of this action.", "cannot_afford");
   }
   const weapon = weaponStaminaCost(schema, actor, action, intent, context?.equipment);

@@ -8,16 +8,42 @@
  *
  * Pure: reads the frozen schema, the actor, and the runtime equipment catalog only.
  */
-import type {
-  ActionDef,
-  CharacterHardState,
-  CostSpec,
-  EquipmentRuntimeCatalog,
-  MechanicalIntent,
-  StorySchema,
+import {
+  CORE_RESOURCE_ROLES,
+  type ActionDef,
+  type CharacterHardState,
+  type CostSpec,
+  type EquipmentRuntimeCatalog,
+  type MechanicalIntent,
+  type ResourceRole,
+  type StorySchema,
 } from "../types/index.js";
 import { equippedItemDefinition } from "./equipment.js";
 import { resourceIdForRole } from "./resources.js";
+
+const CORE_ROLES: ReadonlySet<string> = new Set(CORE_RESOURCE_ROLES);
+
+/**
+ * Translate a cost whose resource keys name a core role ("mana") into the story's own pool ids
+ * ("aether"). Keys that are already resource ids, or roles the story lacks, are left untouched, so
+ * an unmappable cost stays unaffordable rather than silently free.
+ */
+export function normalizeCost(
+  schema: Pick<StorySchema, "resources">,
+  cost: CostSpec | undefined
+): CostSpec | undefined {
+  if (!cost?.resources) return cost;
+  const ids = new Set(schema.resources.map((resource) => resource.id));
+  const resources: Record<string, number> = {};
+  for (const [key, amount] of Object.entries(cost.resources)) {
+    const mapped =
+      !ids.has(key) && CORE_ROLES.has(key)
+        ? resourceIdForRole(schema, key as ResourceRole) ?? key
+        : key;
+    resources[mapped] = (resources[mapped] ?? 0) + amount;
+  }
+  return { ...cost, resources };
+}
 
 /** Ceiling on a single weapon's per-swing stamina cost, whatever an item claims. */
 export const MAX_WEAPON_STAMINA_COST = 10;
@@ -73,9 +99,10 @@ export function attemptCost(
   intent: MechanicalIntent,
   equipment?: EquipmentRuntimeCatalog
 ): CostSpec | undefined {
+  const own = normalizeCost(schema, action.costs);
   const weapon = weaponStaminaCost(schema, actor, action, intent, equipment);
-  if (!weapon) return action.costs;
-  const resources = { ...(action.costs?.resources ?? {}) };
+  if (!weapon) return own;
+  const resources = { ...(own?.resources ?? {}) };
   resources[weapon.resourceId] = (resources[weapon.resourceId] ?? 0) + weapon.amount;
-  return { ...action.costs, resources };
+  return { ...own, resources };
 }

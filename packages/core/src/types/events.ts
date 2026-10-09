@@ -98,6 +98,7 @@ export const GateVerdictSchema = z.object({
       "item_required",
       "cannot_afford",
       "insufficient_resource",
+      "on_cooldown",
       "prerequisite_failed",
       "action_budget_exceeded",
     ])
@@ -174,6 +175,8 @@ export const RulingSchema = z.object({
   roll: RollRecordSchema.optional(), // absent when denied
   effectsApplied: EffectSpecSchema.nullable(), // exactly what the ledger committed
   costsPaid: CostSpecSchema.optional(),
+  /** Turns this attempt put its action on cooldown for (plan 08 §4). */
+  cooldownApplied: z.number().int().positive().optional(),
   masteryAdvance: MasteryAdvanceSchema.optional(),
   xpAward: XpAwardSchema.optional(),
   difficulty: DifficultySnapshotSchema.optional(),

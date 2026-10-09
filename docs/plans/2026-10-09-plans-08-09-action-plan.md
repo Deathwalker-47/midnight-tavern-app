@@ -75,7 +75,7 @@ push to `main`.
 - [x] **S3. Weapon stamina cost** (finding 21). Typed `staminaCost` on legacy and runtime item
       definitions, clamped; one shared affordability function used by gate and resolver; a weapon attack
       that cannot pay is denied before the roll with code `insufficient_resource`.
-- [ ] **S4. Action cooldowns and role-denominated costs** (finding 23, part). `ActionDef.cooldownTurns`;
+- [x] **S4. Action cooldowns and role-denominated costs** (finding 23, part). `ActionDef.cooldownTurns`;
       `CharacterHardState.cooldowns` (default `{}`); start-of-turn tick; gate code `on_cooldown`; costs may
       name a resource role.
 - [ ] **S5. Timed effects / durations** (finding 23, part). Effects may apply a timed status (check bonus,

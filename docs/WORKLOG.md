@@ -2086,3 +2086,30 @@ no stamina pool, clamp, legacy catalogue weapon, non-weapon actions, v3 defaults
 Typecheck clean; core 703/48, UI 183/26 = 886; engine coverage 100%.
 
 **Next:** S4 (action cooldowns + role-denominated costs).
+
+---
+
+## 2026-10-09 - S4: action cooldowns and role-denominated costs (plan 08 §4, part)
+
+**Design correction applied.** Plan 08 put cost and cooldown on skills; players perform *actions*,
+so both live on `ActionDef` (action plan correction 1).
+
+**What landed.** `ActionDef.cooldownTurns` (0–20) meaning "blocked for the next N turns".
+`CharacterHardState.cooldowns` (action id → turns left) is **optional** so pre-S4 hard state and old
+turn checkpoints still decode on rewind. Gate step 5b refuses with the new code `on_cooldown`
+("Power Strike is still recovering — usable again after the next turn."). The resolver starts the
+cooldown on the attempt, win or lose (new ledger mutation `setCooldown`, ruling field
+`cooldownApplied`). `turn.ts` snapshots the cooldowns that exist when a turn begins and counts only
+those down after every action has resolved (ledger mutation `tickCooldowns`) — counting down at the
+start of the turn would have made a 1-turn cooldown do nothing. NPC agency already filters candidates
+through `checkGate`, so NPCs respect cooldowns with no extra code.
+
+Role-denominated costs: new `normalizeCost` maps a core role key (`mana`) to the story's own pool
+(`aether`); `attemptCost`, the gate's own-cost check and the forge validator all use it, so pool
+archetypes (plan 09) can be priced by role.
+
+**Tests.** 11 in `test/cooldowns.test.ts`, including a real 4-turn sequence: use → blocked next turn →
+`deleteLastTurn` restores the cooldown exactly → blocked again → usable. Typecheck clean; core 714/49,
+UI 183/26 = 897; engine coverage 100%.
+
+**Next:** S5 (timed effects / durations).

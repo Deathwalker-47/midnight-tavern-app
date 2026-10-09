@@ -671,6 +671,14 @@ async function runTurnOperation(
         return copy;
       };
 
+      // Cooldowns that exist as this turn begins count down once it ends (plan 08 §4). Cooldowns
+      // started during the turn are not in this snapshot, so a 1-turn cooldown blocks the next turn.
+      const cooldownsAtStart = new Map<string, string[]>();
+      for (const character of roster) {
+        const running = Object.keys(character.hard.cooldowns ?? {});
+        if (running.length > 0) cooldownsAtStart.set(character.id, running);
+      }
+
       const intents: MechanicalIntent[] = [...budget.accepted, ...classified.npcIntents];
       // Sealed hostility grade per landed ruling, so deterministic provocation (Task 6) can
       // factor in the classifier's `stakes` alongside the action's category/opposed/effects.
@@ -827,6 +835,11 @@ async function runTurnOperation(
         if (died.length) result.ruling.causedDeathOf = died;
         rulings.push(result.ruling);
         staged.push(result);
+      }
+
+      for (const [characterId, actionIds] of cooldownsAtStart) {
+        await workingState(characterId);
+        commit(schema, [{ kind: "tickCooldowns", characterId, actionIds }], workingById);
       }
 
       await setPhase("generating_loot", { rulings, staged });

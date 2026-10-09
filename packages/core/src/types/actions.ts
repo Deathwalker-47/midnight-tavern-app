@@ -72,7 +72,12 @@ export const ActionDefSchema = z.object({
   opposed: z.boolean().optional(), // if true, contest vs target's roll instead of flat DC
   advantageWhen: z.array(ConditionWithReasonSchema).max(2).optional(),
   disadvantageWhen: z.array(ConditionWithReasonSchema).max(2).optional(),
-  costs: CostSpecSchema.optional(), // paid on ATTEMPT (win or lose)
+  costs: CostSpecSchema.optional(), // paid on ATTEMPT (win or lose); keys may name a core role
+  /**
+   * Turns the actor must wait before using this action again (plan 08 §4). Starts on the attempt,
+   * win or lose: 1 blocks the next turn, 2 the next two.
+   */
+  cooldownTurns: z.number().int().min(0).max(20).optional(),
   effects: OutcomeEffectsSchema, // deterministic outcome table
 });
 export type ActionDef = z.infer<typeof ActionDefSchema>;

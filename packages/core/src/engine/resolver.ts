@@ -313,6 +313,17 @@ export function resolve(
   // 2. costs on attempt — the same attemptCost the gate just checked (action + weapon stamina).
   const costs = attemptCost(schema, actor, action, intent, options.equipment);
   const mutations: StagedMutation[] = stageCosts(costs, actor.characterId);
+  // Cooldowns start on the attempt, win or lose, exactly like costs (plan 08 §4).
+  const cooldown = action.cooldownTurns ?? 0;
+  if (cooldown > 0) {
+    mutations.push({
+      kind: "setCooldown",
+      characterId: actor.characterId,
+      actionId: action.id,
+      turns: cooldown,
+    });
+  }
+  const cooldownApplied = cooldown > 0 ? { cooldownApplied: cooldown } : {};
 
   // A valid, low-stakes action with narration-only effects succeeds without a
   // roll. It grants no XP, preventing routine-action grinding.
@@ -328,6 +339,7 @@ export function resolve(
         gate,
         effectsApplied: effect,
         difficulty,
+        ...cooldownApplied,
       },
       mutations,
     };
@@ -525,6 +537,7 @@ export function resolve(
       ? { damageAdjustments: stagedEffect.damageAdjustments }
       : {}),
     ...(costs ? { costsPaid: costs } : {}),
+    ...cooldownApplied,
   };
 
   if (skill && action.requiresSkill) {

@@ -46,5 +46,10 @@ export const CharacterHardStateSchema = z.object({
   equipment: z.array(EquipmentAssignmentSchema).optional(),
   flags: z.record(z.string(), z.boolean()),
   alive: z.boolean(),
+  /**
+   * Action id → turns still blocked (plan 08 §4). Optional so hard state persisted before cooldowns
+   * existed — including old turn checkpoints that rewind re-parses — still decodes.
+   */
+  cooldowns: z.record(z.string(), z.number().int().positive()).optional(),
 });
 export type CharacterHardState = z.infer<typeof CharacterHardStateSchema>;

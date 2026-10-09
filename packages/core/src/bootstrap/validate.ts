@@ -22,6 +22,7 @@ import {
   type ConditionWithReason,
 } from "../types/index.js";
 import { findUniversalAction } from "../config/registry.js";
+import { normalizeCost } from "../engine/costs.js";
 
 /** Every flag value an action can cause (the only way a true flag comes into existence). */
 function definedFlagValues(actions: ActionDef[]): Map<string, Set<boolean>> {
@@ -256,7 +257,8 @@ export function validateStorySchema(schema: StorySchema): string[] {
       }
     }
     // Cost references.
-    for (const rid of Object.keys(a.costs?.resources ?? {})) {
+    // A cost key may also name a core role the story maps to a pool ("mana" → "aether").
+    for (const rid of Object.keys(normalizeCost(schema, a.costs)?.resources ?? {})) {
       if (!resourceIds.has(rid)) errors.push(`Action "${a.id}": cost uses unknown resource "${rid}".`);
     }
     for (const { itemId } of a.costs?.items ?? []) {
