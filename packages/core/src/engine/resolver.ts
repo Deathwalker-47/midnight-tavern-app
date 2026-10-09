@@ -36,6 +36,7 @@ import { attrScore, clampAttribute, scoreToMod } from "./attributes.js";
 import { checkGate } from "./gate.js";
 import { attemptCost } from "./costs.js";
 import { statusAttributeBonus, statusCheckBonus } from "./statuses.js";
+import { passiveAttributeBonus, passiveCheckBonus } from "./skills.js";
 import type { StagedMutation } from "./ledger.js";
 import { computeRollMode } from "./rollMode.js";
 import { damageMultiplierForRecipient, effectiveDc } from "./difficulty.js";
@@ -388,7 +389,10 @@ export function resolve(
   const attributeScore = clampAttribute(
     attrScore(actor, action.governingAttribute, schema) +
       equipmentAttribute +
-      (action.governingAttribute ? statusAttributeBonus(actor, action.governingAttribute) : 0),
+      (action.governingAttribute
+        ? statusAttributeBonus(actor, action.governingAttribute) +
+          passiveAttributeBonus(schema, actor, action.governingAttribute)
+        : 0),
     attributeDefinition
   );
   const attributeModifier = action.governingAttribute ? scoreToMod(attributeScore) : 0;
@@ -396,7 +400,9 @@ export function resolve(
     ? equipmentCheckBonus(actor, action.id, action.requiresSkill, options.equipment)
     : 0;
   const statusModifier = statusCheckBonus(actor);
-  const modifier = attributeModifier + masteryModifier + equipmentModifier + statusModifier;
+  const passiveModifier = passiveCheckBonus(schema, actor, action);
+  const modifier =
+    attributeModifier + masteryModifier + equipmentModifier + statusModifier + passiveModifier;
 
   // 4. roll + outcome.
   const rollMode = computeRollMode(schema, action, actor);
@@ -434,7 +440,10 @@ export function resolve(
     opposedAttributeScore = clampAttribute(
       attrScore(target, action.governingAttribute, schema) +
         opposedEquipmentAttributeBonus +
-        (action.governingAttribute ? statusAttributeBonus(target, action.governingAttribute) : 0),
+        (action.governingAttribute
+          ? statusAttributeBonus(target, action.governingAttribute) +
+            passiveAttributeBonus(schema, target, action.governingAttribute)
+          : 0),
       targetAttributeDefinition
     );
     opposedAttributeModifier = action.governingAttribute ? scoreToMod(opposedAttributeScore) : 0;
@@ -455,7 +464,8 @@ export function resolve(
       opposedAttributeModifier +
       opposedMasteryModifier +
       opposedEquipmentModifier +
-      statusCheckBonus(target);
+      statusCheckBonus(target) +
+      passiveCheckBonus(schema, target, action);
     opposedTotal = opposedD20 + opposedModifier;
     if (diceRoll.natural === 20 && opposedD20 !== 20) outcome = "crit_success";
     else if (diceRoll.natural === 1) outcome = "crit_failure";
@@ -492,6 +502,7 @@ export function resolve(
       : {}),
     equipmentModifier,
     ...(statusModifier !== 0 ? { statusModifier } : {}),
+    ...(passiveModifier !== 0 ? { passiveModifier } : {}),
     total,
     dc: dcEffective,
     dcBase,

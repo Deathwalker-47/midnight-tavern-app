@@ -2161,3 +2161,24 @@ is present (skill persisted, stamina paid, `skill_unlocked` event). Typecheck cl
 183/26 = 922; engine coverage 100%.
 
 **Next:** S6b (passive skills).
+
+---
+
+## 2026-10-09 - S6b: passive skills (plan 08 §4.2)
+
+**What landed.** `SkillTypeSchema` (`active|passive|reaction|toggle`; absent = active) and
+`SkillDef.passive` — bounded flat bonuses (`checkBonus` ±5, optionally scoped to action categories;
+`attributeBonus` ±5). New pure `engine/skills.ts` (`isPassiveSkill`, `activeSkillBonuses`,
+`passiveCheckBonus`, `passiveAttributeBonus`). The resolver applies learned passives to both sides of a
+roll and records the roller's as `roll.passiveModifier`. Passives can never be invoked: the gate refuses
+an action gated by one (new code `not_invocable`) and the forge validator rejects such a rulebook. The
+validator's "every skill must be used by some action" rule now exempts passive and toggle skills, which
+act through bonuses rather than a gated action.
+
+**Found, not fixed.** Equipment's `resource_capacity` effect is display-only — no engine code applies it.
+Recorded in HANDOFF as out of scope.
+
+**Tests.** 5 in `test/skillTypes.test.ts`. Typecheck clean; core 744/52, UI 183/26 = 927; engine coverage
+100%.
+
+**Next:** S6c (toggle skills).

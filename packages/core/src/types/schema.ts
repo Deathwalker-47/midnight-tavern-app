@@ -9,7 +9,7 @@
  * from them so a schema and its type can never drift apart.
  */
 import { z } from "zod";
-import { ActionDefSchema } from "./actions.js";
+import { ActionCategorySchema, ActionDefSchema } from "./actions.js";
 import { MasteryRankSchema, CostSpecSchema, ItemKindSchema, StatModeSchema } from "./primitives.js";
 import { ConditionSchema } from "./conditions.js";
 
@@ -131,6 +131,27 @@ export const AttributeDefSchema = z
   });
 export type AttributeDef = z.infer<typeof AttributeDefSchema>;
 
+/**
+ * How a skill behaves (plan 08 §4). `active` (or absent) skills gate actions. `passive` skills are
+ * always on once learned and can never be invoked. `toggle` skills are switched on and off and drain
+ * an upkeep while on. `reaction` skills fire an action automatically in response to an event.
+ */
+export const SkillTypeSchema = z.enum(["active", "passive", "reaction", "toggle"]);
+export type SkillType = z.infer<typeof SkillTypeSchema>;
+
+/** Flat, bounded bonuses a passive (or switched-on toggle) skill grants its holder. */
+export const SkillBonusSchema = z.object({
+  checkBonus: z
+    .object({
+      amount: z.number().int().min(-5).max(5),
+      /** Limits the bonus to these action categories; absent = every check. */
+      categories: z.array(ActionCategorySchema).optional(),
+    })
+    .optional(),
+  attributeBonus: z.record(z.string(), z.number().int().min(-5).max(5)).optional(),
+});
+export type SkillBonus = z.infer<typeof SkillBonusSchema>;
+
 /** A learnable skill. Unlock is binary (the gate); a rank rides on top (D1). */
 export const SkillDefSchema = z.object({
   id: z.string(),
@@ -143,6 +164,9 @@ export const SkillDefSchema = z.object({
   advancedUses: z
     .array(z.object({ minRank: MasteryRankSchema, description: z.string() }))
     .optional(),
+  skillType: SkillTypeSchema.optional(),
+  /** Always-on bonuses of a passive skill. */
+  passive: SkillBonusSchema.optional(),
 });
 export type SkillDef = z.infer<typeof SkillDefSchema>;
 

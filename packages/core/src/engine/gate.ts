@@ -31,6 +31,7 @@ import {
   equipmentEnablesAction,
 } from "./equipment.js";
 import { attemptCost, normalizeCost, weaponStaminaCost } from "./costs.js";
+import { isPassiveSkill } from "./skills.js";
 
 export { conditionHolds } from "./conditions.js";
 
@@ -127,6 +128,14 @@ export function checkGate(
     (!context?.equipment || !equipmentEnablesAction(actor, action.id, context.equipment))
   ) {
     return deny(`Requires equipped gear that enables ${action.label}.`, "item_required");
+  }
+
+  // A passive skill is always on and can never be invoked (plan 08 §4.2).
+  if (action.requiresSkill && isPassiveSkill(schema, action.requiresSkill)) {
+    return deny(
+      `${action.label} is gated by a passive skill, which is always on and cannot be used as an action.`,
+      "not_invocable"
+    );
   }
 
   // 3. requiresSkill learned  +  4. minRank met

@@ -23,6 +23,7 @@ import {
 } from "../types/index.js";
 import { findUniversalAction } from "../config/registry.js";
 import { normalizeCost } from "../engine/costs.js";
+import { isPassiveSkill } from "../engine/skills.js";
 
 /** Every flag value an action can cause (the only way a true flag comes into existence). */
 function definedFlagValues(actions: ActionDef[]): Map<string, Set<boolean>> {
@@ -226,6 +227,10 @@ export function validateStorySchema(schema: StorySchema): string[] {
     if (a.requiresSkill) {
       if (!skillIds.has(a.requiresSkill)) {
         errors.push(`Action "${a.id}" requires unknown skill "${a.requiresSkill}".`);
+      } else if (isPassiveSkill(schema, a.requiresSkill)) {
+        errors.push(
+          `Action "${a.id}" requires passive skill "${a.requiresSkill}"; passive skills are always on and cannot gate an action.`
+        );
       } else {
         exercisedSkills.add(a.requiresSkill);
       }
@@ -268,7 +273,8 @@ export function validateStorySchema(schema: StorySchema): string[] {
 
   // --- Every skill must be exercised by at least one action (no dead skills) ---
   for (const s of schema.skills) {
-    if (!exercisedSkills.has(s.id)) {
+    // Passive and toggle skills act through their bonuses, not through a gated action.
+    if (s.skillType !== "passive" && s.skillType !== "toggle" && !exercisedSkills.has(s.id)) {
       errors.push(`Skill "${s.id}" is never used by any action's requiresSkill.`);
     }
     if (!tierIds.has(s.tier)) errors.push(`Skill "${s.id}" references unknown tier "${s.tier}".`);

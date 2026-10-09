@@ -165,7 +165,7 @@ Cooldowns are **hard state** and need a home:
       be captured in the turn checkpoint so rewind restores them exactly. This is the single most
       likely place to break invariant 7 (delete/rewind restores hard state exactly). Add an explicit
       rollback test.
-- [ ] **4.2** Passive skills must never be invocable — the classifier must not be able to emit an
+- [x] **4.2** Passive skills must never be invocable — the classifier must not be able to emit an
       intent for one, and the gate must refuse it. Add both checks.
 - [ ] **4.3** `advancedUses` already exists and is rank-gated; make sure the new fields compose with
       it rather than duplicating it.

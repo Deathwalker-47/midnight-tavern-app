@@ -63,6 +63,8 @@ export const RollRecordSchema = z.object({
   equipmentModifier: z.number().int().optional(),
   /** Check bonus from the roller's active statuses (plan 08 §4). */
   statusModifier: z.number().int().optional(),
+  /** Check bonus from the roller's passive skills (plan 08 §4.2). */
+  passiveModifier: z.number().int().optional(),
   total: z.number().int(),
   dc: z.number().int(),
   dcBase: z.number().int().optional(),
@@ -101,6 +103,7 @@ export const GateVerdictSchema = z.object({
       "cannot_afford",
       "insufficient_resource",
       "on_cooldown",
+      "not_invocable",
       "prerequisite_failed",
       "action_budget_exceeded",
     ])
