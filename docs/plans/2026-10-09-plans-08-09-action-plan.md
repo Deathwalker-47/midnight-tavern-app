@@ -29,7 +29,8 @@ on record and is cheap to change because every number lives in config.
 | — | XP repeat curve | `[1, 0.8, 0.6, 0.5, 0.4]` — floor 0.4, never zero. |
 | — | Weapon stamina paid win or lose? | **Yes**, like every existing attempt cost. |
 | — | Mid-story enablement limits | Tier-gated by story progress; at most 2 per chapter; journalled; reversible. |
-| — | May a model enable an ungated action? | **No.** The analyzer may enable only skill-gated pool actions or skills (closes the "enable ≠ learn" hole). The player may enable anything by hand. |
+| — | May a model enable an ungated action? | **No.** The analyzer may enable only skill-gated pool actions or skills (closes the "enable ≠ learn" hole). The player may enable any kind of entry by hand. |
+| — | Does the tier lock bind the player's own toggles? (S14) | **Yes**, following the design brief §5b ("a legendary skill can't be enabled in chapter one"): the same `TIER_UNLOCK_CHAPTERS` table binds the player and the analyzer, checked over everything an enablement brings; only the forge is exempt. One guard in `enablePoolEntry` (plus the memory bridge) if the owner wants the player unrestricted. |
 
 ## Corrections to plans 08/09 (verified in source)
 
@@ -101,7 +102,7 @@ push to `main`.
 - [x] **S12. Combat and magic archetypes** with the exclusion list.
 - [x] **S13. Mid-story enablement** by the analyzer with every guard (pool id, tier gate, 2 per chapter,
       skill-gated only, own transaction, journal, checkpoint).
-- [ ] **S14. Story Settings UI.** Enabled catalogue + pool browser with toggles and the D8 lock reason.
+- [x] **S14. Story Settings UI.** Enabled catalogue + pool browser with toggles and the D8 lock reason.
 - [ ] **S15. Universal items** — item-kind expansion with legacy aliases; `universal-items.json` feeding loot.
 - [ ] **S16. Weapon specials** via `action_enable` + S4 cooldowns + rarity scaling.
 - [ ] **S17. External config overrides** — merge-by-id override files, validation with surfaced errors,

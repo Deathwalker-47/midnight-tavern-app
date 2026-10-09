@@ -48,13 +48,15 @@ Plans 01-07 and 10-12 of the 2026-08-13 set remain written but **not authorized*
 | S11 | Forge-time selection: setting-fit + expressibility filter → one sealed-enum model call → capped, topped up, deterministic fallback; enabled as `forge` after install and after regeneration; forge stays hybrid | done |
 | S12 | Combat + magic archetypes (melee, brawling, ranged, defense, 5 elemental schools via an `{element}` param, healing, hexcraft), reaction skills paired 1:1 with their action (enable either → both), 8 recorded exclusions; pool now 63 archetypes / 222 entries | done |
 | S13 | Mid-story enablement by the analyzer: sealed enum, skill-gated only, tier gate by completed chapters, 2 per chapter, asked only on a teaching cue, own transactions, journalled, turn-scoped; journal sentences for pool/recovery events | done |
-| S14–S18 | Plan 09 (UI, items, weapon specials, external config, close-out) | not started |
+| S14 | Story Settings: `RulebookCatalogue` (forged + enabled entries, provenance, kind/category/tier filters, search, detail with outcome table) and `PoolBrowser` (collapsed sections "n of m enabled", 40-entry lazy pages, whole-pool search, enable/disable, KEPT + D8 reason, tier-lock reason); core `catalogue/browse.ts` shared by both bridges (`listPoolSections`, `browsePool`); **tier lock now binds the player's toggles too** (forge exempt) — see the action plan's decisions | done |
+| S15–S18 | Plan 09 (items, weapon specials, external config, close-out) | not started |
 
 ## Verification state
 
-After S13 (Linux/Node 22): `npm run typecheck` clean; core **847 / 61 files** (engine coverage 100%),
-UI **193 / 29 files** = **1040** passing; UI production build verified at S10b; root `npm test` passes here (the tinypool worker crash is
-Windows/Node 24 only — plan 07 P0-0, not authorized).
+After S14 (Linux/Node 22): `npm run typecheck` clean; core **857 / 62 files** (engine coverage 100%),
+UI **203 / 30 files** = **1060** passing; UI production build verified at S14 (main chunk 428.3 kB /
+118.4 kB gzip — growth since S10b is mostly S12's pool JSON); root `npm test` passes here (the tinypool
+worker crash is Windows/Node 24 only — plan 07 P0-0, not authorized).
 
 ## Facts established earlier (still true — do not re-derive)
 
@@ -71,6 +73,13 @@ Windows/Node 24 only — plan 07 P0-0, not authorized).
   Drive). Engineering authors the pool itself under the owner's existing grants — see the action plan.
 - Equipment's `resource_capacity` effect is display-only: nothing in the engine applies it (found during
   S6b). Not fixed — out of scope; worth a future plan item.
+- D8's equipped-item half is open: an item granting a pool entry (`action_enable` / `skill_enable`)
+  does not yet block disabling it. S16 (weapon specials) closes it — extend `mayDisablePoolEntry`
+  and the memory bridge together, and the parity test.
+- The pool JSON is bundled into the UI (the memory bridge imports it). Fine at 222 entries; at ~3,000
+  (~1.5 MB raw) it should be loaded lazily.
+- The design deliverable for the Story Settings surfaces (plan 09 §7.3, design brief §5) has not been
+  produced; S14 made reasonable calls (see WORKLOG S14) that a designer may revise.
 - The engine's 100% coverage gate (`npx vitest run --coverage` in `packages/core`) was silently failing
   at `0e500d9` (`resolver.ts:173`); fixed in S2. It is **not** part of `npm test` — run it yourself
   after any `src/engine` change.
@@ -88,9 +97,11 @@ Windows/Node 24 only — plan 07 P0-0, not authorized).
 
 ## Single next action
 
-Do **S14**: the Story Settings UI for the pool (plan 09 §7) in `packages/ui/src/screens/StorySettings.tsx`:
-(1) the enabled catalogue — what this story uses, filterable by category / kind / tier with a detail view
-(gate, costs, cooldown, targeting, outcomes); (2) a pool browser grouped by section with enable /
-disable toggles, the D8 refusal shown as an honest reason ("Ari has learned this, so it stays"), and
-sources (forge / you / the story). Needs a bridge read of the pool itself (sections + entries) in both
-backends. Keep it usable at full pool size (virtualize or lazy-load sections).
+Do **S15**: universal items (plan 09 §8.1). First verify in source how runtime loot is generated
+(`config/equipment-loot.json`, `engine/equipment.ts`, the runtime item repositories) and confirm
+`StorySchema.items` is the legacy forge-time catalogue — **do not revive it** (plan 09 §8.1). Then:
+(1) extend `ItemKindSchema` with the item categories engineering authors (the owner's `uni-items.txt` is
+lost — action plan correction 6), keeping every existing kind decodable as an alias; (2) add a versioned,
+engine-owned `universal-items.json` of item archetypes per kind that feeds the runtime loot generator;
+(3) let runtime consumables carry `restores` so `consume_item` works on loot, not only on rulebook items
+(HANDOFF fact above). Keep both bridges in parity and the engine coverage gate at 100%.

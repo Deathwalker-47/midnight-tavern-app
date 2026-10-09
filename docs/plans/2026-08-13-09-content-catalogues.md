@@ -412,9 +412,14 @@ Two surfaces, both in Story Settings:
 2. **The pool browser** — everything available, with enable/disable toggles, grouped by the
    taxonomy's sections.
 
-- [ ] **7.1** The pool browser must stay usable at ~3,000 entries. Virtualize, and lazy-load section
+- [x] **7.1** *(S14: sections lazy-load one 40-entry page at a time and search is paged, so the DOM
+      holds section headers plus opened pages — measured at 3,108 entries: section index ~1 ms, one page
+      ~8–11 ms, every state at once ~420 ms. Paging was chosen over windowed virtualization: it bounds
+      the DOM as well and keeps keyboard and screen-reader order intact.)* The pool browser must stay usable at ~3,000 entries. Virtualize, and lazy-load section
       contents. Measure; do not guess.
-- [ ] **7.2** **Disabling an entry any character has learned is FORBIDDEN** (owner decision D8,
+- [ ] **7.2** *(S10 + S14: done except the equipped-item half — an item granting the entry through
+      `action_enable` / `skill_enable` does not block disabling yet; that lands with S16's weapon
+      specials. The UI shows a "kept" label with the reason, not a dead toggle.)* **Disabling an entry any character has learned is FORBIDDEN** (owner decision D8,
       answered 2026-08-13: *"Lets not allow to disable any skill thats been assigned to a
       character."*). This supersedes the earlier "mark it dormant" proposal, and is better: dormancy
       would have created a third state (enabled / disabled / learned-but-disabled) that every

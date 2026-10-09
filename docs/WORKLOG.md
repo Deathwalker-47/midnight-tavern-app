@@ -2578,3 +2578,63 @@ candidates → no call; a real turn whose teaching narration enables Fire Magic,
 turn) + journal-line tests. Typecheck clean; core 847/61, UI 193/29 = 1040; engine coverage 100%.
 
 **Next:** S14 — the Story Settings UI (enabled catalogue + pool browser with toggles and the D8 reason).
+
+---
+
+## 2026-10-09 - S14: Story Settings catalogue and universal pool browser (plan 09 §7)
+
+**Core** (`catalogue/browse.ts`, pure, shared by both bridges): every pool entry gets exactly one
+state for a story — *enabled* (with its source, and when it must stay, the D8 reason: who learned it,
+or which enabled action still needs it), *available* (with what it would bring along), *locked* by
+tier (with when it unlocks), *unavailable* (the story cannot express it, e.g. no mana pool), or
+*excluded* (the pool's own reason) — plus a section index with offered / enabled counts. Paged queries
+by section and/or search (every word must match name, description, aliases, tags or section; name hits
+first); a page materializes only its own entries. `loadPoolBrowseContext` gathers a stored story's
+frozen rulebook, enablements, learners and completed chapters.
+
+**Measured, not guessed (§7.1)**, at 3,108 synthetic entries / 152 sections: section index ~1 ms, one
+40-entry page ~8–11 ms, every state at once ~420 ms. Hence lazy pages, not one big read.
+
+**Tier lock now binds the player too.** `TIER_UNLOCK_CHAPTERS` moved to `plan.ts` with `poolTier` and
+`tierLock`, which checks everything an enablement brings (a common action cannot carry an uncommon
+skill in early). `enablePoolEntry` applies it for every source except the forge; the analyzer's
+candidate filter reuses it. This follows the design brief §5b; it is recorded as a decision in the
+action plan because the earlier row said "the player may enable anything by hand". Consequence worth
+knowing: every non-magic skill-gated action in the current pool is uncommon, so they unlock after the
+first completed chapter; the memory bridge never completes a chapter, so only common entries enable
+there.
+
+**Bridges:** `listPoolSections` and `browsePool` in both backends over the same core functions; the
+memory bridge applies the same tier lock (chapters = 0). Parity test extended (the uncommon refusal,
+the Fire Bolt → Fire Magic dependency, D8 learner refusal, and identical browse pages).
+
+**UI** (`screens/storySettings/`):
+- `RulebookCatalogue` replaces the flat § SKILLS / § ACTIONS lists: forged + enabled entries with
+  provenance (written for this story / chosen at creation / added by you / added by the story), kind,
+  category and tier filters, search, and a detail view — roll, gate, costs, cooldown, targeting,
+  reaction pairing, statuses with durations, and the four-row outcome table with narration hints.
+  Tolerates partial legacy schemas.
+- `PoolBrowser` (§ POOL): collapsed sections with "n of m enabled", one 40-entry page per open, "Show
+  more", whole-pool search, per-row Enable / Disable, refusals shown on the row. A permanently-on entry
+  reads as **KEPT** with its reason instead of a greyed-out toggle; tier-locked entries say when they
+  unlock and have no button. Enabling or disabling refreshes the counts, the open pages and the
+  catalogue above.
+
+**Design calls made without the designer (§7.3 still open):** section-first with search on top;
+provenance shown as a quiet label on enabled rows; "Not offered" entries stay visible (dimmed) with
+their reason; pagination instead of windowed virtualization.
+
+**Not done here:** the equipped-item half of D8 (an item granting an entry should also block
+disabling) needs S16's weapon specials. **Bundle:** UI main chunk 428.3 kB (118.4 kB gzip), up from
+386.8 kB at S10b — mostly S12's larger pool JSON, which the memory bridge bundles. At ~3,000 entries the
+JSON alone would be ~1.5 MB raw; loading it lazily is worth doing before the pool grows that far.
+
+**Tests.** Core `test/catalogue/browse.test.ts` (9: index counts, every state, D8 reasons, sealed
+entries, search and ranking, paging clamps, unknown tier, tier locks by brought-along entries and
+mythical, the stored-story context) + tier-lock cases in `enablement.test.ts`. UI
+`test/screens/PoolBrowser.test.tsx` (8: lazy sections, enable/disable round trip, tier lock, D8 kept
+reason, search, row refusal, load failure, 3,000-entry bound) + a catalogue test in
+`StorySettings.test.tsx` + browse parity. Typecheck clean; core 857/62 (engine coverage 100%), UI
+203/30 = 1060; UI build verified.
+
+**Next:** S15 — universal items catalogue.
