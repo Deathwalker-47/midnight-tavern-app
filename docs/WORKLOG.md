@@ -2682,3 +2682,40 @@ claimed `damage: 9` became the archetype's 1. Typecheck clean; core 872/64 (engi
 203/30 = 1075.
 
 **Next:** S15b — runtime consumables: `consume_item` on looted items with `restores`, rewind-safe.
+
+---
+
+## 2026-10-09 - S15b: looted consumables usable, rewind-safe (plan 09 §8.1, plan 08 §5)
+
+**Why it mattered.** S7's `consume_item` read only `StorySchema.items`, which new stories leave empty
+(S15a finding), so no new story could use a potion at all.
+
+**What landed.**
+- `resolveConsumeItem(schema, actor, intent, config, equipment?)` also takes a runtime item the actor
+  owns — named by instance or definition id, preferring one not used up — whose definition `restores`
+  something. The restore is a ledger mutation as before; the runtime quantity (outside hard state and
+  checkpoints) is reported as `Ruling.itemConsumed` {instance, definition, name, quantityBefore}. Legacy
+  rulebook items keep the old path (`removeItem` + `costsPaid`).
+- Turn: the classifier input lists the player's restoring loot (`ClassifyInput.usableItems`), which
+  adds `consume_item` to the sealed action enum and names each item (`itemId: <instance> = <name>`); the
+  in-memory quantity drops per use so a second use in the same turn sees one fewer; the store quantity is
+  written inside the commit transaction.
+- Store: `setInstanceQuantity`; a used-up instance stays at quantity 0 (hidden from `listInventory`,
+  unequipped) so rewind can put it back. `ItemInstance.quantity` may now be 0.
+- History: `undoRuntimeItemsFromIdx` (replacing `removeRuntimeLootFromIdx` in delete-last, rewind and
+  delete-from-exchange) restores used items first, then removes truncated loot. Each instance returns to
+  its **largest** recorded quantity-before — quantities only fall, so that is its quantity before the
+  earliest truncated use, independent of ruling load order (rulings have no ORDER BY within a message).
+  Mutation-tested: "last write wins" fails the two-exchange delete test.
+- UI: loot cards add "Restores 13 health when used"; ruling cards add "Used 1 Red Draught".
+
+**Not done:** rewinding restores a used-up item's quantity but not an equipment slot it occupied.
+Archetype consumables are slotless, so only free-form legacy loot could hit this.
+
+**Tests.** `test/runtimeConsumables.test.ts` (5: runtime use through the ledger, definition-id
+preference, used-up / restores-nothing / someone else's / orphaned refusals, the classifier offer and
+enum, and a real-turn sequence — one drink, two in one turn, delete-last, rewind, and a two-exchange
+delete back to the original quantity and health) + repository quantity test + ruling-card and
+restores-line tests. Typecheck clean; core 877/65 (engine coverage 100%), UI 203/30 = 1080.
+
+**Next:** S16 — weapon specials via `action_enable`, with S4 cooldowns, and the D8 equipped-item half.

@@ -50,13 +50,13 @@ Plans 01-07 and 10-12 of the 2026-08-13 set remain written but **not authorized*
 | S13 | Mid-story enablement by the analyzer: sealed enum, skill-gated only, tier gate by completed chapters, 2 per chapter, asked only on a teaching cue, own transactions, journalled, turn-scoped; journal sentences for pool/recovery events | done |
 | S14 | Story Settings: `RulebookCatalogue` (forged + enabled entries, provenance, kind/category/tier filters, search, detail with outcome table) and `PoolBrowser` (collapsed sections "n of m enabled", 40-entry lazy pages, whole-pool search, enable/disable, KEPT + D8 reason, tier-lock reason); core `catalogue/browse.ts` shared by both bridges (`listPoolSections`, `browsePool`); **tier lock now binds the player's toggles too** (forge exempt) — see the action plan's decisions | done |
 | S15a | Item kinds: 17 finer kinds in the 7 existing families (`itemKindSatisfies`: broad needs accept the family, fine needs accept that kind or a generic one); `universal-items.json` (28 archetypes) — loot must name one and the archetype sets every mechanic; migration 18 (item `stamina_cost` — **was never persisted** — `restores_json`, `archetype_id`) | done |
-| S15b | Runtime consumables usable by `consume_item`, rewind-safe | next |
+| S15b | `consume_item` uses looted runtime items with `restores` (classifier offered them by id + name); quantity recorded on the ruling (`itemConsumed`), written at commit, used-up rows kept at 0 and restored by every rewind path | done |
 | S16–S18 | Plan 09 (weapon specials, external config, close-out) | not started |
 
 ## Verification state
 
-After S15a (Linux/Node 22): `npm run typecheck` clean; core **872 / 64 files** (engine coverage 100%),
-UI **203 / 30 files** = **1075** passing; UI production build last verified at S14 (main chunk 428.3 kB /
+After S15b (Linux/Node 22): `npm run typecheck` clean; core **877 / 65 files** (engine coverage 100%),
+UI **203 / 30 files** = **1080** passing; UI production build last verified at S14 (main chunk 428.3 kB /
 118.4 kB gzip); root `npm test` passes here (the tinypool worker crash is Windows/Node 24 only — plan 07
 P0-0, not authorized).
 
@@ -68,10 +68,10 @@ P0-0, not authorized).
   and stamina, plan 05 (not authorized) adds attribute variety.
 - `ResourceDef.regenPerScene` exists in rulebooks but nothing applies it; S7's `economy.json` is the
   recovery model now, and `regenPerScene` stays ignored (forge should stop emitting it in S8).
-- `consume_item` only consumes **rulebook** items (`StorySchema.items`) that declare `restores` — and
-  new stories forge **no** rulebook items (`items: []`), so today no new story can use a consumable.
-  Runtime loot now carries `restores` (S15a archetypes) but lives outside hard state (`item_instances`);
-  S15b must consume it with a rewind that restores the quantity.
+- Runtime items live outside hard state and checkpoints. Anything a turn does to them must be recorded
+  on its rulings and undone in `orchestrator/history.ts undoRuntimeItemsFromIdx` (loot: `ruling.loot`;
+  consumption: `ruling.itemConsumed`). A used-up instance stays at quantity 0 for that reason; rewind does
+  not re-equip a slot it held.
 - The owner's taxonomy files are **permanently lost** (never committed; laptop formatted; not in Google
   Drive). Engineering authors the pool itself under the owner's existing grants — see the action plan.
 - Equipment's `resource_capacity` effect is display-only: nothing in the engine applies it (found during
@@ -100,11 +100,11 @@ P0-0, not authorized).
 
 ## Single next action
 
-Do **S15b**: make runtime consumables usable. `consume_item` (`engine/recovery.ts resolveConsumeItem`)
-must accept a held runtime item (`item_instances` of the actor whose definition has `restores`) as well
-as a legacy rulebook item; the classifier must be able to name it (check what the classifier's context
-lists of the player's runtime inventory). Runtime items live outside hard state and outside checkpoints,
-so consumption must be recorded on the ruling (instance id, definition id, quantity before) and undone by
-rewind the way `removeRuntimeLootFromIdx` undoes loot (`orchestrator/history.ts`) — re-insert or
-re-increment the instance, never touch a later turn's items. Show what a loot item restores on its loot
-card. Keep both bridges in parity and engine coverage at 100%.
+Do **S16**: weapon specials (plan 09 §8.2). Verify first how `requiresEquipmentEnabler` and
+`action_enable` are evaluated (`engine/gate.ts`, `engine/equipment.ts equipmentEnablesAction`). Design so a
+weapon special is a granted action: an item's `action_enable` effect names an action the story has (or a
+pool entry it enables), equipping grants it and unequipping removes it; its cooldown is the S4 action
+cooldown (`hard.cooldowns`) — no second mechanism; strength rides `equipment-loot.json`'s tier caps.
+Loot needs a sealed way to propose a special (an id from the story's effective rulebook). Close D8's
+equipped-item half in the same step: `mayDisablePoolEntry` must refuse while an equipped item grants the
+entry, in core and in the memory bridge, with a parity test.
