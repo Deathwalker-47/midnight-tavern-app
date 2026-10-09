@@ -2763,3 +2763,41 @@ refused, disabling once nobody holds the weapon) + parity. Typecheck clean; core
 100%), UI 204/30 = 1089.
 
 **Next:** S17 — external config overrides (plan 09 §4c).
+
+---
+
+## 2026-10-09 - S17a: user config overrides in core (plan 09 §4c)
+
+**Resolution** (`config/overrides.ts`, pure, browser-safe — takes file *text*): override files have the
+shipped files' shape with partial elements keyed by `id`. Each deep-merges over the shipped element
+(objects merge, values and arrays replace, `null` clears a field); `"remove": true` deletes; a new id adds
+content. Untrusted-input handling, none of which throws:
+- unreadable JSON, a non-object file or a list that is not a list → error, that part ignored;
+- an element failing its schema → error naming file, id and dotted field; an edit keeps the shipped
+  version, a new id is left out (archetype schema chosen by `kind`, so the field is named rather than a
+  bare union "Invalid input");
+- pool entries the engine cannot use (unknown archetype/section, kind mismatch, a skill gate pointing at
+  a removed skill — cascading) → error, left out; every other balance finding → warning;
+- open numbers clamped with a warning: DC 5–25, costs ≤ 40, item props ≤ 20, restores ≤ the economy
+  ceiling (§4c.8);
+- removing every item archetype keeps the shipped ones (error).
+A README text (`CONFIG_README`) explains merging, removal and the per-story lock.
+
+**Per-story config** (`catalogue/storyConfig.ts`): the app installs the active config
+(`installConfigOverrides`). New and regenerated stories snapshot the override texts + hash into
+`configSnapshot` (`snapshotConfig`) and stay **locked** to them (resolved over the current shipped files
+— so app updates still reach not-yet-enabled entries, as before S17). A story set to **follow**
+(`setRulebookConfigMode`) plays by the active config and its enabled entries are re-materialized on load
+(`enablementsForPlay`); an entry the config can no longer express keeps its snapshot. Wired through
+enabling/staging, the browse context, `requirePlayableStory`, `loadEffectiveSchema`, mid-story growth,
+loot (item archetypes, specials) and forge/regeneration selection.
+
+**§4c.12 proven:** a test plays turns at DC 12, edits the archetype to 18, keeps 12 while locked, switches
+to follow (new turn at 18), edits again and swipes — the stored rulings stay `[12, 12, 18]` throughout.
+
+**Tests.** `test/config/overrides.test.ts` (9), `test/catalogue/storyConfig.test.ts` (5: snapshot and
+locking, re-materialization, the immutability arc with swipe, enabling/browsing from the story's own
+config, loot shaped by the story's item overrides). Typecheck clean; core 899/68 (engine coverage 100%),
+UI 204/30 = 1103.
+
+**Next:** S17b — read the override folder in the desktop shell, and the Story Settings surface.

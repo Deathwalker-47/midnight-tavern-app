@@ -52,12 +52,14 @@ Plans 01-07 and 10-12 of the 2026-08-13 set remain written but **not authorized*
 | S15a | Item kinds: 17 finer kinds in the 7 existing families (`itemKindSatisfies`: broad needs accept the family, fine needs accept that kind or a generic one); `universal-items.json` (28 archetypes) — loot must name one and the archetype sets every mechanic; migration 18 (item `stamina_cost` — **was never persisted** — `restores_json`, `archetype_id`) | done |
 | S15b | `consume_item` uses looted runtime items with `restores` (classifier offered them by id + name); quantity recorded on the ruling (`itemConsumed`), written at commit, used-up rows kept at 0 and restored by every rewind path | done |
 | S16 | Weapon specials: `equipmentEnabled` pool actions (9 entries), offered to loot as a sealed `specialId`, attached only to a fitting weapon of sufficient tier, enabled turn-scoped in the commit (enablement split into stage + write); loot can no longer grant actions/skills through effects (**was: a common item could grant master rank**); D8 item half — held granting items keep an entry | done |
-| S17–S18 | Plan 09 (external config, close-out) | not started |
+| S17a | Config overrides in core: `resolveConfig` (merge by id, remove, add, schema errors skip with file/id/field, unusable entries left out, balance → warnings, clamps), active config + per-story snapshot, locked (default) / follow modes, everything catalogue-aware threaded; §4c.12 immutability tested | done |
+| S17b | Desktop shell reads the override folder; Story Settings surface (issues, mode toggle with warning, open folder, restore defaults) | next |
+| S18 | Close-out | not started |
 
 ## Verification state
 
-After S16 (Linux/Node 22): `npm run typecheck` clean; core **885 / 66 files** (engine coverage 100%),
-UI **204 / 30 files** = **1089** passing; UI production build last verified at S14 (main chunk 428.3 kB /
+After S17a (Linux/Node 22): `npm run typecheck` clean; core **899 / 68 files** (engine coverage 100%),
+UI **204 / 30 files** = **1103** passing; UI production build last verified at S14 (main chunk 428.3 kB /
 118.4 kB gzip); root `npm test` passes here (the tinypool worker crash is Windows/Node 24 only — plan 07
 P0-0, not authorized).
 
@@ -100,14 +102,14 @@ P0-0, not authorized).
 
 ## Single next action
 
-Do **S17**: external config overrides (plan 09 §4c — read it in full). Overrides of
-`universal-archetypes.json`, `universal-pool.json` and `universal-items.json` live in a user folder beside
-the database; resolution is deep-merge by id over the shipped files, `"remove": true` deletes, new ids
-are legitimate; schema errors skip the entry with a surfaced error (file, id, field), balance-rule
-violations are warnings; adversarial numbers are clamped. Find first how the shell can read that folder
-(`packages/shell` Rust commands vs. a Tauri fs plugin) — the webview must not import `node:` modules.
-Every catalogue consumer already takes a `PoolCatalogue` parameter (S10–S16); thread the merged one
-through. Per-story "locked to creation (default) / follow my edits": enablements already snapshot their
-definitions, so "locked" mostly holds today — "follow" re-materializes enabled entries on load. Committed
-rulings are never recomputed (4c.12): add the test. Surface load results in Story Settings, with "Open
-config folder" and per-file "restore defaults".
+Do **S17b**: wire the overrides into the app (plan 09 §4c.2, 4c.6, 4c.7, 4c.10, 4c.11). Core is done —
+`resolveConfig`, `installConfigOverrides`, `setRulebookConfigMode`, `CONFIG_README` (S17a). The Rust
+`tauri-plugin-fs` 2.5.1 is already registered with an `$APPDATA/**` scope; the JS package
+`@tauri-apps/plugin-fs` is not installed (add `~2.5.1` to `packages/ui`). The SQLite bridge reads
+`$APPDATA/config/*.json` at startup (creating the folder and README on first run) and calls
+`installConfigOverrides`; add bridge methods for the load report (issues + folder path), reload,
+restore-defaults per file (rename the user's file aside rather than delete it), open the folder
+(`revealItemInDir`, already permitted), and the per-story mode. The memory bridge reports "desktop
+only". Story Settings: a § CONFIG section listing errors and warnings by file/id/field, the
+locked/follow toggle with a one-time warning that mechanics may change between sessions and rewound
+turns may resolve differently, and the folder/restore buttons. Parity-test the bridge surface.

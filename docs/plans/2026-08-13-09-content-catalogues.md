@@ -307,12 +307,12 @@ database, in a directory the user can open, edit, and version-control themselves
     README.md                     # written on first run: what these are, how merging works
 ```
 
-- [ ] **4c.3** Resolution is **deep-merge by id over the shipped defaults**, not wholesale
+- [x] *(S17a)* **4c.3** Resolution is **deep-merge by id over the shipped defaults**, not wholesale
       replacement. A user who wants to change one DC edits one entry; they do not have to maintain a
       copy of 3,000 entries. An override entry may set any subset of fields.
-- [ ] **4c.4** A `"remove": true` marker on an id removes a shipped entry from the pool, so the user
+- [x] *(S17a)* **4c.4** A `"remove": true` marker on an id removes a shipped entry from the pool, so the user
       can delete as well as edit.
-- [ ] **4c.5** New ids may be added. **A user-authored entry is as legitimate as a shipped one** —
+- [x] *(S17a)* **4c.5** New ids may be added. **A user-authored entry is as legitimate as a shipped one** —
       this is the natural way for someone to add their own content, and it costs nothing extra since
       the merge already handles it. It must still reference a real archetype and pass validation.
 - [ ] **4c.6** Expose the folder from the UI ("Open config folder") and offer "restore defaults" per
@@ -330,7 +330,7 @@ User-edited config is untrusted input in the ordinary engineering sense. On load
 - Surface the results in Story Settings, not just a log — a user who broke their config needs to see
   why without opening a terminal.
 
-- [ ] **4c.8** Clamp adversarial-looking values the way `MAX_ITEM_DAMAGE_BONUS` already clamps item
+- [x] *(S17a: DC 5–25, costs ≤ 40, item props ≤ 20, restores ≤ the economy ceiling, each with a warning.)* **4c.8** Clamp adversarial-looking values the way `MAX_ITEM_DAMAGE_BONUS` already clamps item
       damage, so a typo of `50000` degrades gracefully rather than producing an unplayable turn.
 
 ### 4c.9 The frozen-schema collision — the real design problem here
@@ -349,7 +349,7 @@ paternalistic. So:
       my edits"**. Locked stories snapshot a config hash; following stories re-resolve on load.
 - [ ] **4c.11** When a story is set to follow, show a clear one-time warning that mechanics may
       change between sessions and that rewound turns may resolve differently.
-- [ ] **4c.12** Committed rulings are **never** recomputed under either setting. History is immutable;
+- [x] *(S17a: tested through edits, a mode switch and a swipe.)* **4c.12** Committed rulings are **never** recomputed under either setting. History is immutable;
       only future resolution changes. Confirm swipe still reuses committed rulings verbatim (it does
       today — invariant 6) and add a test that a config edit cannot alter a past ruling.
 
