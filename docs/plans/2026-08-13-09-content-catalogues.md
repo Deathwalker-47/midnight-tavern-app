@@ -417,9 +417,8 @@ Two surfaces, both in Story Settings:
       ~8–11 ms, every state at once ~420 ms. Paging was chosen over windowed virtualization: it bounds
       the DOM as well and keeps keyboard and screen-reader order intact.)* The pool browser must stay usable at ~3,000 entries. Virtualize, and lazy-load section
       contents. Measure; do not guess.
-- [ ] **7.2** *(S10 + S14: done except the equipped-item half — an item granting the entry through
-      `action_enable` / `skill_enable` does not block disabling yet; that lands with S16's weapon
-      specials. The UI shows a "kept" label with the reason, not a dead toggle.)* **Disabling an entry any character has learned is FORBIDDEN** (owner decision D8,
+- [x] **7.2** *(S10 + S14 + S16: learners, enabled dependants and held granting items all block
+      disabling, with a reason naming who or what; the UI shows a "kept" label, not a dead toggle.)* **Disabling an entry any character has learned is FORBIDDEN** (owner decision D8,
       answered 2026-08-13: *"Lets not allow to disable any skill thats been assigned to a
       character."*). This supersedes the earlier "mark it dormant" proposal, and is better: dormancy
       would have created a third state (enabled / disabled / learned-but-disabled) that every
@@ -454,14 +453,15 @@ Two surfaces, both in Story Settings:
 
 ### 8.2 Weapon specials (finding 31)
 
-- [ ] `ActionDef.requiresEquipmentEnabler` already exists — an action gated until equipped gear
+- [x] *(S16: verified — the gate refuses unless an equipped `action_enable` names the action.)* `ActionDef.requiresEquipmentEnabler` already exists — an action gated until equipped gear
       enables it. **This is the hook.** Verify how `checkGate` evaluates it before designing around it.
-- [ ] Item definitions gain `grantsActionId?` and `specialCooldownTurns?`.
-- [ ] Cooldowns reuse plan 08's `CharacterHardState.cooldowns`. **Do not invent a second cooldown
+- [x] *(S16: superseded per action-plan correction 4 — specials ride `action_enable` and the action's
+      own `cooldownTurns`.)* Item definitions gain `grantsActionId?` and `specialCooldownTurns?`.
+- [x] *(S16)* Cooldowns reuse plan 08's `CharacterHardState.cooldowns`. **Do not invent a second cooldown
       mechanism.**
-- [ ] Rarity scaling rides `equipment-loot.json`'s existing per-tier caps (`maximumEffects`,
+- [x] *(S16: a special takes one of the tier's `maximumEffects` slots and may not out-tier its item.)* Rarity scaling rides `equipment-loot.json`'s existing per-tier caps (`maximumEffects`,
       `maximumCheckBonus`) rather than a parallel power budget.
-- [ ] A weapon special is a **granted enablement**, which composes cleanly with §3's model: equipping
+- [x] *(S16: loot grants it, the commit enables it turn-scoped, held items keep it enabled.)* A weapon special is a **granted enablement**, which composes cleanly with §3's model: equipping
       enables, unequipping disables.
 
 ## 9. Owner decisions

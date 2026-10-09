@@ -51,12 +51,13 @@ Plans 01-07 and 10-12 of the 2026-08-13 set remain written but **not authorized*
 | S14 | Story Settings: `RulebookCatalogue` (forged + enabled entries, provenance, kind/category/tier filters, search, detail with outcome table) and `PoolBrowser` (collapsed sections "n of m enabled", 40-entry lazy pages, whole-pool search, enable/disable, KEPT + D8 reason, tier-lock reason); core `catalogue/browse.ts` shared by both bridges (`listPoolSections`, `browsePool`); **tier lock now binds the player's toggles too** (forge exempt) — see the action plan's decisions | done |
 | S15a | Item kinds: 17 finer kinds in the 7 existing families (`itemKindSatisfies`: broad needs accept the family, fine needs accept that kind or a generic one); `universal-items.json` (28 archetypes) — loot must name one and the archetype sets every mechanic; migration 18 (item `stamina_cost` — **was never persisted** — `restores_json`, `archetype_id`) | done |
 | S15b | `consume_item` uses looted runtime items with `restores` (classifier offered them by id + name); quantity recorded on the ruling (`itemConsumed`), written at commit, used-up rows kept at 0 and restored by every rewind path | done |
-| S16–S18 | Plan 09 (weapon specials, external config, close-out) | not started |
+| S16 | Weapon specials: `equipmentEnabled` pool actions (9 entries), offered to loot as a sealed `specialId`, attached only to a fitting weapon of sufficient tier, enabled turn-scoped in the commit (enablement split into stage + write); loot can no longer grant actions/skills through effects (**was: a common item could grant master rank**); D8 item half — held granting items keep an entry | done |
+| S17–S18 | Plan 09 (external config, close-out) | not started |
 
 ## Verification state
 
-After S15b (Linux/Node 22): `npm run typecheck` clean; core **877 / 65 files** (engine coverage 100%),
-UI **203 / 30 files** = **1080** passing; UI production build last verified at S14 (main chunk 428.3 kB /
+After S16 (Linux/Node 22): `npm run typecheck` clean; core **885 / 66 files** (engine coverage 100%),
+UI **204 / 30 files** = **1089** passing; UI production build last verified at S14 (main chunk 428.3 kB /
 118.4 kB gzip); root `npm test` passes here (the tinypool worker crash is Windows/Node 24 only — plan 07
 P0-0, not authorized).
 
@@ -76,9 +77,8 @@ P0-0, not authorized).
   Drive). Engineering authors the pool itself under the owner's existing grants — see the action plan.
 - Equipment's `resource_capacity` effect is display-only: nothing in the engine applies it (found during
   S6b). Not fixed — out of scope; worth a future plan item.
-- D8's equipped-item half is open: an item granting a pool entry (`action_enable` / `skill_enable`)
-  does not yet block disabling it. S16 (weapon specials) closes it — extend `mayDisablePoolEntry`
-  and the memory bridge together, and the parity test.
+- `store.transaction` queues and does not nest. Code that must write inside a turn's commit uses a
+  stage-then-write split (e.g. `stagePoolEnablement` / `writeStagedEnablement`).
 - The pool JSON is bundled into the UI (the memory bridge imports it). Fine at 222 entries; at ~3,000
   (~1.5 MB raw) it should be loaded lazily.
 - The design deliverable for the Story Settings surfaces (plan 09 §7.3, design brief §5) has not been
@@ -100,11 +100,14 @@ P0-0, not authorized).
 
 ## Single next action
 
-Do **S16**: weapon specials (plan 09 §8.2). Verify first how `requiresEquipmentEnabler` and
-`action_enable` are evaluated (`engine/gate.ts`, `engine/equipment.ts equipmentEnablesAction`). Design so a
-weapon special is a granted action: an item's `action_enable` effect names an action the story has (or a
-pool entry it enables), equipping grants it and unequipping removes it; its cooldown is the S4 action
-cooldown (`hard.cooldowns`) — no second mechanism; strength rides `equipment-loot.json`'s tier caps.
-Loot needs a sealed way to propose a special (an id from the story's effective rulebook). Close D8's
-equipped-item half in the same step: `mayDisablePoolEntry` must refuse while an equipped item grants the
-entry, in core and in the memory bridge, with a parity test.
+Do **S17**: external config overrides (plan 09 §4c — read it in full). Overrides of
+`universal-archetypes.json`, `universal-pool.json` and `universal-items.json` live in a user folder beside
+the database; resolution is deep-merge by id over the shipped files, `"remove": true` deletes, new ids
+are legitimate; schema errors skip the entry with a surfaced error (file, id, field), balance-rule
+violations are warnings; adversarial numbers are clamped. Find first how the shell can read that folder
+(`packages/shell` Rust commands vs. a Tauri fs plugin) — the webview must not import `node:` modules.
+Every catalogue consumer already takes a `PoolCatalogue` parameter (S10–S16); thread the merged one
+through. Per-story "locked to creation (default) / follow my edits": enablements already snapshot their
+definitions, so "locked" mostly holds today — "follow" re-materializes enabled entries on load. Committed
+rulings are never recomputed (4c.12): add the test. Surface load results in Story Settings, with "Open
+config folder" and per-file "restore defaults".

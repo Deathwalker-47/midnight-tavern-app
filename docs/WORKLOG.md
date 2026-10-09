@@ -2719,3 +2719,47 @@ delete back to the original quantity and health) + repository quantity test + ru
 restores-line tests. Typecheck clean; core 877/65 (engine coverage 100%), UI 203/30 = 1080.
 
 **Next:** S16 — weapon specials via `action_enable`, with S4 cooldowns, and the D8 equipped-item half.
+
+---
+
+## 2026-10-09 - S16: weapon specials, and D8's item half (plan 09 §8.2, §7.2)
+
+**Verified first.** The hooks existed and worked: `ActionDef.requiresEquipmentEnabler` makes the gate
+refuse an action unless an equipped item's `action_enable` effect names it (`gate.ts`,
+`equipmentEnablesAction`). Nothing produced such actions, and loot could put any `action_enable` /
+`skill_enable` on any item — **pre-existing hole: a common item could grant a skill at master rank**.
+
+**Content.** `ActionArchetype.equipmentEnabled` → materializes `requiresEquipmentEnabler`. Seven
+archetypes, nine entries in a new "Weapon Specials" section (Flame / Frost / Storm Strike, Piercing Shot,
+Crippling Shot, Disarming Blow, Whirlwind, Volley, Life Drinker), uncommon and rare. Balance rules: a
+special must need the weapon kind that grants it, must cool down, and is never skill-gated. Cooldowns
+are the ordinary S4 action cooldown — no second mechanism. Forge selection skips specials (they arrive
+with their gear); the analyzer never offered them (not skill-gated).
+
+**Loot.** `weaponSpecialOptions` (`catalogue/specials.ts`): specials already enabled, or fitting the
+setting, expressible and tier-unlocked — offered to the adjudicator as a sealed `specialId` enum.
+`attachWeaponSpecial` adds the `action_enable` effect only when the item is the kind the special swings,
+at or above its tier, with an effect slot free under the tier's `maximumEffects`; otherwise the item is
+awarded without it. Loot effects may no longer contain `action_enable` / `skill_enable` at all (schema
+refuses; the repair loop tells the model to use `specialId`).
+
+**Enabling inside the commit.** `store.transaction` does not nest (it queues; nesting would deadlock),
+so `enablePoolEntry` is now `stagePoolEnablement` + `writeStagedEnablement`. The turn stages each
+special its loot grants before the commit and writes it inside, turn-scoped (source "analyzer" — the
+browser shows "added by the story"), so rewinding removes item and special together.
+
+**D8, item half (closes plan 09 §7.2).** `disableRefusal` takes grantors: an entry stays while any
+*held* item grants it ("Kestrel's Flamebrand grants this, so it stays.") — held, not only equipped, so
+unequipping cannot strand a special. Core (`mayDisablePoolEntry`, browse context) and memory bridge
+compute it identically via `grantorsByEntry`; parity-tested with a `skill_enable` charm. The memory bridge
+gains a `__seedRuntimeItem` test seam. Effect labels now read pool ids by their last segment ("Enables
+Flame Strike").
+
+**Tests.** `test/catalogue/specials.test.ts` (8: materialization, never at creation, balance rules,
+options by tier / setting / already enabled, attachment rules and label, a real-turn arc — loot grants
+Flamebrand + enables Flame Strike, D8 keeps it, unarmed refusal, armed success with cooldown, cooldown
+refusal, four rewinds remove everything — a bow refusing a melee special, a direct `skill_enable` loot
+refused, disabling once nobody holds the weapon) + parity. Typecheck clean; core 885/66 (engine coverage
+100%), UI 204/30 = 1089.
+
+**Next:** S17 — external config overrides (plan 09 §4c).
