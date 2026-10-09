@@ -2263,3 +2263,21 @@ hostile NPCs, spares a neutral innkeeper, costs stamina once, starts one cooldow
 and rewind restores everything. Typecheck clean; core 774/55, UI 183/26 = 957; engine coverage 100%.
 
 **Next:** S7 (recovery model, `economy.json`).
+
+---
+
+## 2026-10-09 - Fix: the narrator was told automatic rulings were DENIED (found during S7)
+
+**Defect (pre-existing, live).** `renderRuling` (`orchestrator/context.ts`) treated every ruling
+without a roll as a denial: `if (!gate.allowed || !roll) → "DENIED (not possible) … the attempt fails to
+occur"`. Every allowed no-roll ruling was therefore narrated as a failure — routine low-stakes actions
+that the resolver lets succeed automatically (the "no dice gauntlet" path), and since S5/S6 also status
+ticks, toggle switches and lapses, and skill learning. Statuses applied by an outcome (S5) were also
+missing from the effects line.
+
+**Fix.** Denied only when the gate refused. An allowed ruling without a roll renders as "RULING: Kestrel
+— Poisoned — happens automatically (no roll needed). Effects: … Narrate this outcome." Engine-owned
+rulings use their own `actionLabel` (they are not catalogue actions). Effects now name applied statuses
+("Grave-wight is Cursed for 3 turns").
+
+**Tests.** 3 in `test/orchestrator/renderRuling.test.ts`. Core 777/56; typecheck clean.

@@ -132,19 +132,23 @@ export function renderRuling(
   nameFor: (id: string) => string
 ): string {
   const actor = nameFor(ruling.actorId);
-  const action = actionsById.get(ruling.actionId)?.label ?? ruling.actionId;
+  // Engine-owned rulings (toggles, learning, rest, status ticks) are not catalogue actions.
+  const action =
+    actionsById.get(ruling.actionId)?.label ?? ruling.actionLabel ?? ruling.actionId;
 
-  if (!ruling.gate.allowed || !ruling.roll) {
+  if (!ruling.gate.allowed) {
     const reason = ruling.gate.reason ?? "not possible";
     return `RULING: ${actor} attempted ${action} — DENIED (${reason}). Narrate this outcome (the attempt fails to occur).`;
   }
 
-  const r = ruling.roll;
   const parts: string[] = [];
+  const on = ruling.targetId ? ` on ${nameFor(ruling.targetId)}` : "";
+  const r = ruling.roll;
   parts.push(
-    `RULING: ${actor} attempted ${action}` +
-      (ruling.targetId ? ` on ${nameFor(ruling.targetId)}` : "") +
-      ` vs DC ${r.dc} — rolled ${r.d20}+${r.modifier}=${r.total} → ${OUTCOME_LABEL[r.outcome]}.`
+    r
+      ? `RULING: ${actor} attempted ${action}${on} vs DC ${r.dc} — rolled ${r.d20}+${r.modifier}=${r.total} → ${OUTCOME_LABEL[r.outcome]}.`
+      : // An allowed ruling without a roll happened automatically; it is never a denial.
+        `RULING: ${actor} — ${action}${on} — happens automatically (no roll needed).`
   );
 
   if (ruling.targeting && ruling.targeting.count > 1) {
@@ -193,6 +197,13 @@ function renderEffects(ruling: Ruling, nameFor: (id: string) => string): string[
   }
   if (e.grantItem) out.push(`gained ${e.grantItem.qty}× ${e.grantItem.itemId}`);
   if (e.setFlag) out.push(`${e.setFlag.flagId}=${e.setFlag.value}`);
+  if (e.statusSelf) {
+    out.push(`${nameFor(ruling.actorId)} is ${e.statusSelf.label} for ${e.statusSelf.durationTurns} turns`);
+  }
+  if (e.statusTarget) {
+    const who = ruling.targetId ? nameFor(ruling.targetId) : "target";
+    out.push(`${who} is ${e.statusTarget.label} for ${e.statusTarget.durationTurns} turns`);
+  }
   return out;
 }
 
