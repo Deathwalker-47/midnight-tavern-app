@@ -2860,3 +2860,56 @@ items). HANDOFF now names no active plan and asks the owner for a Windows build/
 (recommendation: 02, classifier fidelity — the owner's own P0).
 
 **Verification.** Typecheck clean; core 901/68 (engine coverage 100%), UI 211/32 = 1112.
+
+## 2026-10-09 - Plan 10 rewritten in depth: quests on an engine-owned Story Director (docs only)
+
+**What and why.** At the owner's request, plan 10 was rewritten as
+`docs/plans/2026-10-09-10-quests-and-story-director.md`, superseding `2026-08-13-10-quests.md` (kept as
+history with a SUPERSEDED banner). It carries every owner sub-point, authority ruling and acceptance
+criterion forward (its Appendix C maps old → new) and adds: an engine-owned Story Director (deterministic
+conditions → bounded effects, one pass per turn on the projected post-turn state, same-turn narration);
+quests compiled onto it with **derived** (never stored) progress; anti-drift blocks (Objectives, Director
+notes, Known cast, partial lore tier) with a measurement step; a per-turn context report + "What the
+narrator saw" panel + composer @-mentions, built first so later phases can be verified with it. No code
+changed.
+
+**Owner's gate, written into the plan's header and §0:** plan 10 "should only be taken up once plan 8
+and 9 are fully completed without any gaps". §0 lists G1–G10 (Windows build, Rust/S17b capability
+validation, play-test, plan 09 §5.4 and §7.3, plan 09 acceptance 1/3, selection quality, the display-only
+`resource_capacity` effect, the coverage gate, the suite on Windows) and a procedure: evidence per row in a
+dated WORKLOG "Plan 10 gate check"; only the owner can waive a row, in writing.
+
+**Evidence base.** A competitive analysis of Friends & Fables, Craft, Infinite Worlds and Voyage is the
+plan's Appendix A. Short version: Latitude's Voyage (≈ five years, six prototypes) separates engine state
+from the story — MT's thesis — while F&F's team moved to Craft, a strong model with a light harness,
+because their scaffolding "created invisible walls". Triggers are the common answer to keeping a story's
+shape (Infinite Worlds, Voyage, Craft); visible working memory (F&F's Working Context, Craft's visibility
+tiers) is what makes continuity debuggable. Ideas that belong elsewhere are routed in Appendix B
+(ruling-triggered narrator guidance and per-model sampler presets → plan 06, so they are not stuck
+behind plan 10's gate).
+
+**Premise audit (plan 10 §1, `cdb1c5c`).** Twenty facts verified with file:line. Three corrections to the
+2026-08-13 plan: `reach_location` cannot be deterministic (locations are analyzer-written soft state);
+mythical authorization must be per reward — the only existing switch, `configSnapshot.mythicalLootAuthorized`,
+is never written by any code and would authorize every later model-proposed mythical award if set; quest
+progress must be derived from hard state and the journal (`death` events per `ruling.causedDeathOf`) so
+rewind cannot desync it. Flags are per-character; there is no story-level flag.
+
+**Two live authority gaps found, not fixed (need the owner's go-ahead):**
+- **A1** — the loot model may set `sourceType: "quest"` (`orchestrator/loot.ts:40`); with any successful
+  ruling the award is milestone-authorized with a `legendary` ceiling (`loot.ts:223-225`). A model label
+  alone unlocks legendary loot. Minimal standalone fix recommended now (plan 10 §1.2.1).
+- **A2** — a committed `quest`/`milestone`-labelled award journals a `milestone` event (`turn.ts:1271-1286`),
+  after which every later such award in the story is milestone-authorized (`loot.ts:197-200`). Fix in plan
+  10 §5.6 (D14).
+
+**Also.** Master index: plan 10 row and status point at the rewrite; its gate is stated in the waves
+section and the cross-plan dependencies; **D7 marked answered** ("new stories only" — recorded in the
+08/09 action plan's decision table, but the index still listed it as outstanding); D10–D18 point at plan 10
+§13. HANDOFF: plan 10 status and gate, A1/A2 and the related facts, and an optional third part to the next
+action (approve the A1 fix).
+
+**Verification.** Docs-only change. Typecheck clean; core 901/68, UI 211/32 = 1112 passing.
+
+**Next.** Unchanged: the owner builds and play-tests plans 08 + 09 on Windows, then chooses the next plan
+(recommendation: 02). Plan 10 is not eligible until its §0 gate is closed.
