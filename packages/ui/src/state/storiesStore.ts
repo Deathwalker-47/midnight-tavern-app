@@ -4,6 +4,7 @@
  */
 import { create } from "zustand";
 import { getBridge } from "../bridge/core.js";
+import { useSettingsStore } from "./settingsStore.js";
 import type {
   StorySummary,
   StoryRecord,
@@ -129,6 +130,8 @@ export const useStoriesStore = create<StoriesState>((set, get) => ({
     set({ forging: true });
     try {
       const result = await getBridge().createStory(args);
+      // The first story starts the trial; re-read it so the sidebar chip is current (bug B11).
+      await useSettingsStore.getState().refreshEntitlement().catch(() => undefined);
       await get().refresh();
       set({ current: result.story, currentStatus: "ready" });
       rememberStoryId(result.story.id);

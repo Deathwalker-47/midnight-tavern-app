@@ -187,7 +187,7 @@ function Rail(props: {
           style={styles.trialChip}
           title={licensed ? "Licensed" : trialDays !== undefined ? `Trial · ${trialDays} days left` : "Trial"}
         >
-          {licensed ? "Full" : `Trial\n${trialDays ?? "–"}d`}
+          {licensed ? "Full" : trialDays === undefined ? "Trial" : `Trial\n${trialDays}d`}
         </div>
       </div>
     </nav>
