@@ -3,12 +3,24 @@
 This is the authoritative guide for turning the source in this monorepo into
 signed, auto-updating installers for Windows and macOS. It is milestone **M12**.
 
-> **Status in this repo:** everything here is *configuration and scaffolding*.
-> No `cargo` / `tauri build` has been (or can be) run in the current environment:
-> there is no Rust toolchain, no signing certificates, and no Apple notarization
-> credentials. The commands below are what a properly-equipped machine or CI
-> runner must execute. See **"Blocked in this environment"** at the end for the
-> exact list of human-supplied secrets and toolchain.
+> **Status (2026-10-18):** **unsigned** Windows MSI + NSIS installers build from a
+> clean checkout on the owner's machine (v0.3.0, see `docs/WORKLOG.md`). The icon
+> set is now committed (blocker 2 below is closed). Signing, notarization and the
+> updater (blockers 3–8) are still unconfigured, and no macOS build has been run.
+>
+> **Windows recipe that worked** (fresh Windows 11):
+>
+> 1. `winget install --id Rustlang.Rustup -e` (stable `x86_64-pc-windows-msvc`).
+> 2. `winget install --id Microsoft.VisualStudio.2022.BuildTools -e --override "--wait --passive --norestart --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"`
+>    — rustup alone has no linker; MSVC `link.exe` + the Windows SDK come from here.
+> 3. `npm ci` at the repo root.
+> 4. From `packages/shell/`: `npm run build:windows`. Tauri downloads WiX 3.14 and NSIS itself.
+>
+> On that machine the repo lives under OneDrive, so the build ran with
+> `CARGO_TARGET_DIR=%LOCALAPPDATA%\midnight-tavern-build\target` to keep the
+> multi-GB `target/` out of the synced folder; bundles then land in
+> `%LOCALAPPDATA%\midnight-tavern-build\target\release\bundle\{msi,nsis}\`. Without
+> the variable they land under `src-tauri/target/` as described in §3.
 
 ---
 

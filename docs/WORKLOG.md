@@ -2913,3 +2913,66 @@ action (approve the A1 fix).
 
 **Next.** Unchanged: the owner builds and play-tests plans 08 + 09 on Windows, then chooses the next plan
 (recommendation: 02). Plan 10 is not eligible until its §0 gate is closed.
+
+---
+
+## 2026-10-18 - First Windows build of plans 08 + 09 on the fresh toolchain: v0.3.0
+
+**Owner instruction.** "Read the repo ... then set up everything in the local system and generate the
+latest windows installation file to make sure everything is fine." Mid-session the owner added a
+standing grant: make all decisions without waiting for permission. This is part 1 of HANDOFF's single
+next action (build; the play-test remains the owner's).
+
+**Toolchain (fresh Windows 11, nothing installed but Node 22.23.2 / npm 10.9.8 and WebView2 155).**
+Installed with winget: Rust via rustup (stable 1.99.1, `x86_64-pc-windows-msvc`) and VS 2022 Build
+Tools with the C++ workload (MSVC 14.44 + Windows SDK). Tauri fetched WiX 3.14 and NSIS itself. The
+`.cargo/config.toml` `check-revoke = false` accommodation was not needed on this network but is harmless.
+
+**Two blockers to a clean-checkout build, both fixed (`1777b5c`).** The bundle icons had never been in
+git — `packages/shell/.gitignore` excluded `src-tauri/icons/*.{png,ico,icns}` as "generated" — so they
+died with the formatted machine and `tauri build` could not run from source. They are now committed,
+generated with `tauri icon` from a new placeholder vector `packages/shell/app-icon.svg` (brass crescent,
+teal star, token colours; swap for real art any time — the icons README says how). The root
+`.gitignore`'s stale `app/shell/target/` rule was dropped (the package file already ignores the real path).
+
+**Version 0.3.0 (`0a31707`).** Same five files as the 0.2.9 bump. Reason: migrations 17/18 make the
+database unreadable by 0.2.9, and "0.2.9" already names the 2026-08-12 installer, so play-test reports
+would be ambiguous. No logic changed.
+
+**Build.** `npm run build:windows` from `packages/shell` with `CARGO_TARGET_DIR` set to
+`%LOCALAPPDATA%\midnight-tavern-build\target`, because the worktree sits in OneDrive's synced Documents
+and `target/` is several GB. Cold release compile 4m04s (332 crates), incremental 1m44s; zero Rust
+errors or warnings from the app crate. Outputs (unsigned):
+
+| File | Size | SHA-256 |
+| --- | --- | --- |
+| `Midnight Tavern_0.3.0_x64-setup.exe` (NSIS) | 5.41 MB | `E5BF82AAAADA075345613041877B0AF2AE71D48C52A96CCBB20663D265B40F55` |
+| `Midnight Tavern_0.3.0_x64_en-US.msi` | 7.81 MB | `F06336FF87026C9066217E834C521AC47EF72CA380316B29AFF4F3071C025D67` |
+
+**Installed and launched (evidence, not inference).** NSIS `/S` installed per-user to
+`%LOCALAPPDATA%\Midnight Tavern`, registered as "Midnight Tavern 0.3.0". First launch log:
+`app.start version=0.3.0`, `db.open.success`, `bridge.initialization.completed backend=sqlite` (127 ms),
+18 committed migration transactions, no WARN/ERROR lines. Read-only inspection of the new
+`%APPDATA%\com.midnighttavern.app\midnight-tavern.db`: `schema_migrations` tops out at
+`18 item_definition_mechanics`, 21 tables including `story_pool_enablements`. `%APPDATA%\...\config\README.md`
+was created on first run — the S17b `fs:` capabilities (exists / mkdir / write-text-file) work at runtime,
+not just at `tauri-build` time. The window renders the first-run "Connect your storyteller" screen. No
+provider key was entered (the owner's to supply).
+
+**Plan 10 §0 gate evidence (for the future "Plan 10 gate check" entry).**
+- **G1** — closed: Windows build of current source produced on the fresh toolchain and installed.
+- **G2** — build half closed (`tauri-build` accepted the capability file; config folder + README created
+  at runtime). Still open: Story Settings § CONFIG *reload* and *restore defaults* clicked in the packaged
+  app, which needs a story — part of the owner's play-test.
+- **G9** — closed on this date: `npx vitest run --coverage` in `packages/core` reports 100 % engine coverage.
+- **G10** — closed for Node 22: `npm run typecheck` clean and **root** `npm test` green on Windows
+  (core 901/68, UI 211/32 = 1112). The tinypool worker crash did not recur on Node 22.23.2, consistent
+  with it being Node 24-specific (plan 07 P0-0 is still unfixed for Node 24).
+- G3–G8 untouched (play-test, forge latency, design deliverable, acceptance wording, selection quality,
+  `resource_capacity`).
+
+**Also.** UI production build unchanged at 457.2 kB / 126.5 kB gzip. `packages/shell/RELEASE.md` now
+records the working Windows recipe. This machine has no global git identity; commits used the repo's
+agent convention (`Claude <noreply@anthropic.com>`) via `-c`, leaving git config untouched.
+
+**Next.** The owner play-tests v0.3.0 (HANDOFF's checklist), then chooses the next plan.
