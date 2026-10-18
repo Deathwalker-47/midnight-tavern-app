@@ -1,9 +1,10 @@
 # HANDOFF - current live state
 
-**Updated:** 2026-10-09 (plans 08 + 09 **complete** — every step S0–S18 shipped to `main`; later the same
-day plan 10 was rewritten in depth — written, **not authorized**, gated on 08 + 09 having zero gaps)
+**Updated:** 2026-10-18 (authority gap **A1 closed** on `main`, `39e8d72`; it left a twin, the `milestone`
+label — an owner call, see the single next action). Before that, 2026-10-09: plans 08 + 09 **complete**,
+and plan 10 rewritten in depth — written, **not authorized**, gated on 08 + 09 having zero gaps.
 **Branch / source baseline:** `main`. The owner authorized pushing every completed step straight to
-`origin/main` without waiting (2026-10-09). Push after each step.
+`origin/main` without waiting (2026-10-09, restated 2026-10-18: push to `main`, no PR). Push after each step.
 **App version:** `0.2.9` (no installer built for this work yet — build once a shippable milestone is done).
 **Owner's machine was formatted (reported 2026-10-09).** All local-only data is gone: the installed
 v0.2.9 app and installers, the live saves (Cyraeth Adventure, Solo Leveling RPG) used for every earlier
@@ -76,6 +77,8 @@ UI **211 / 32 files** = **1112** passing; UI production build verified at S17b (
 126.5 kB gzip); root `npm test` passes here (the tinypool worker crash is Windows/Node 24 only — plan 07
 P0-0, not authorized). `cargo check` cannot run in this container (missing GTK system libraries), so
 the Rust shell and the S17b capability file have not been build-validated since plans 08/09 began.
+After the A1 fix (2026-10-18, Windows 11 / Node 22.23.2): typecheck clean; root `npm test` green — core
+**903 / 69 files**, UI **211 / 32 files** = **1114**. No `src/engine` change, so coverage was not re-run.
 
 ## Facts established earlier (still true — do not re-derive)
 
@@ -102,11 +105,18 @@ the Rust shell and the S17b capability file have not been build-validated since 
 - The engine's 100% coverage gate (`npx vitest run --coverage` in `packages/core`) was silently failing
   at `0e500d9` (`resolver.ts:173`); fixed in S2. It is **not** part of `npm test` — run it yourself
   after any `src/engine` change.
-- **Live authority gap A1 (found 2026-10-09, plan 10 §1.2):** the loot model may set
-  `sourceType: "quest"` (`orchestrator/loot.ts:40`); with any successful ruling that makes the award
-  milestone-authorized with a `legendary` ceiling (`loot.ts:223-225`, `routineMaximumTier.quest`). A model
-  label alone unlocks legendary loot. Not fixed — the minimal fix (drop `"quest"` from the model-facing
-  enum, plus a RED test) is small and is recommended as a standalone change, independent of plan 10's gate.
+- **Authority gap A1 — CLOSED 2026-10-18 (`39e8d72`, plan 10 §1.2.1):** the loot model could set
+  `sourceType: "quest"`, which with any successful ruling made the award milestone-authorized under the
+  `legendary` quest ceiling. `"quest"` is now gone from the model-facing enum (`orchestrator/loot.ts:41`);
+  `LootSourceTypeSchema` keeps it, so persisted provenance and starting gear still decode. Regression test:
+  `packages/core/test/lootSourceAuthority.test.ts`.
+- **A1's twin — the `milestone` label is still model-facing (found 2026-10-18, not fixed).**
+  `milestoneAuthorized = sourceType === "milestone" && (milestoneEvents.length > 0 || completedSuccess(ruling))`
+  (`loot.ts:224-225`), and the ruling passed there is always the last *successful* one, so the second
+  clause is always true: a model saying `"milestone"` still unlocks legendary loot. A refused `"quest"`
+  makes it likelier — the repair error lists `'combat' | 'non_combat' | 'milestone'`. Closing it the same
+  way leaves legendary loot unreachable until engine milestones exist (plan 10 §1.2.2 / §5.6.3), as
+  mythical is today. That is a product call — see the single next action.
 - **A2:** committing any `quest`/`milestone`-labelled award journals a `milestone` event
   (`turn.ts:1271-1286`), after which `milestoneEvents.length > 0` (`loot.ts:197-200`) milestone-authorizes
   every later such award in the story. Fix is in plan 10 §5.6 (D14).
@@ -130,7 +140,7 @@ the Rust shell and the S17b capability file have not been build-validated since 
 
 ## Single next action
 
-**An owner decision, in two parts (plus one optional) — do not start new work without it.**
+**An owner decision, in three parts — do not start new work without it.**
 
 1. **Build and play-test** plans 08 + 09 on Windows (the owner's machine was formatted, so the toolchain
    is fresh). The build also validates the S17b fs capability names against the real `tauri-build`, and
@@ -143,5 +153,8 @@ the Rust shell and the S17b capability file have not been build-validated since 
    including the new catalogue. Recommendation: 02 next, then 06 (narration integrity). Plan 04
    (character panels) is now unblocked by 08 if the owner prefers visible UI work. **Plan 10 is not
    eligible** until its §0 gate (08 + 09 with zero gaps) is closed.
-3. **Optional, small:** approve the standalone fix for authority gap A1 (plan 10 §1.2.1) — a few lines
-   plus a RED test, closing a live path by which a model label unlocks legendary loot.
+3. **A1 is done** (2026-10-18). **Owner call on its twin:** should legendary loot stay reachable before
+   quests exist? Today the model earns it by labelling an award `"milestone"`, which breaks the authority
+   wall the same way A1 did. Recommendation: close it now (drop `"milestone"` from the model-facing enum,
+   RED test first) and accept that legendary items wait for plan 10's engine milestones, as mythical ones
+   already do. The alternative is to keep it, knowingly, until plan 10.

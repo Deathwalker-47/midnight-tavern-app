@@ -2913,3 +2913,42 @@ action (approve the A1 fix).
 
 **Next.** Unchanged: the owner builds and play-tests plans 08 + 09 on Windows, then chooses the next plan
 (recommendation: 02). Plan 10 is not eligible until its §0 gate is closed.
+
+## 2026-10-18 - Authority gap A1 closed: the loot model can no longer label its award a quest (plan 10 §1.2.1)
+
+**What and why.** The loot decision schema offered `sourceType: "quest"`. Any turn with a successful
+ruling then made that award milestone-authorized under the `legendary` quest ceiling — a model-chosen
+word set a reward budget (CONTEXT invariant 2; found 2026-10-09 while verifying plan 10). Shipped as the
+standalone fix plan 10 §1.2.1 recommends, independent of plan 10's gate, with the owner's standing
+authority for engineering decisions (2026-10-18).
+
+**Premises re-verified first.** Both citations still held at `ffc6037`: the enum at `loot.ts:40` and the
+milestone authorization at `loot.ts:223-225`. Every other `"quest"` in `src` is persisted provenance
+(`LootSourceTypeSchema`, `turn.ts:1273-1282`) or engine-written starting gear (`bootstrap/startingGear.ts:353`,
+the memory bridge's `core.ts:1001`) — none passes through the model schema, so none changed.
+
+**RED, then GREEN (`39e8d72`).** New `packages/core/test/lootSourceAuthority.test.ts` drives
+`determineLootAwards` with a scripted adjudicator. RED on the old code, for the right reason: both tests
+received `{ sourceType: "quest", tier: "legendary", tierBudget: "legendary" }`. Fix: `"quest"` removed
+from the model-facing enum only (`LootSourceTypeSchema` unchanged, so stored rows decode). The typechecker
+then flagged the `sourceType === "quest"` branch of `milestoneAuthorized` as unreachable; it was removed.
+Now a persistent quest label is refused (no award), and an award relabelled on repair is held to `rare`.
+A2 (the milestone-event clause, plan 10 §5.6) is untouched. Plan 10 §1.2.1 ticked.
+
+**Found while fixing — A1's twin, not fixed.** The `milestone` label is just as model-facing and just as
+strong: the ruling `milestoneAuthorized` checks is always the last *successful* one, so
+`completedSuccess(ruling)` is always true and `"milestone"` alone unlocks legendary loot. A refused
+`"quest"` makes it likelier, because Zod's repair error lists `'combat' | 'non_combat' | 'milestone'`.
+Closing it leaves legendary loot unreachable until engine milestones exist (plan 10 §5.6.3), so it is
+raised in HANDOFF as an owner call with a recommendation to close it, rather than done here.
+
+**Verification.** Windows 11 / Node 22.23.2 (fresh `npm ci` in this worktree): `npm run typecheck`
+clean; root `npm test` green — core **903 / 69 files**, UI **211 / 32 files** = **1114** (+2). No
+`src/engine` change, so the coverage gate was not re-run. No installer rebuild needed.
+
+**Gotcha for whoever merges PR #2 (v0.3.0 build docs).** It edits the same HANDOFF lines (the A1 bullet
+and the single next action) and appends to this file, so it will conflict with this push. Keep PR #2's
+text, then re-apply "A1 closed" plus the twin bullet and next-action item, and keep both WORKLOG entries.
+
+**Next.** Unchanged, plus one owner call: the play-test, choosing the next plan (recommendation: 02),
+and whether to close the `milestone` twin now.

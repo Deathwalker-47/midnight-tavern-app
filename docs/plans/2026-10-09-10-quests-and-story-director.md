@@ -139,7 +139,7 @@ Related: starting gear records `sourceType: "quest"` with the label "Character c
 (`bootstrap/startingGear.ts:353`). Provenance only, but it is a third meaning of "quest" that has to go
 once quests are real.
 
-- [ ] **1.2.1** *(standalone — recommended now, needs the owner's go-ahead)* Remove `"quest"` from the
+- [x] **1.2.1** *(standalone — shipped 2026-10-18, `39e8d72`)* Remove `"quest"` from the
       model-facing enum in `orchestrator/loot.ts:40`. RED test first: a model-labelled quest award can
       no longer exceed `rare`. Leave `LootSourceTypeSchema` itself unchanged so persisted provenance still
       decodes.
