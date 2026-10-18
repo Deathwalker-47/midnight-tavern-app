@@ -9,6 +9,7 @@ import {
   CATALOG_MIN_ACTIONS,
   DC_MIN,
   DC_MAX,
+  ItemKindSchema,
 } from "../types/index.js";
 import type { PhaseA } from "./generate.js";
 import type { StatMode } from "../types/index.js";
@@ -142,6 +143,16 @@ export const PHASE_B_ACTION_BATCH_SYSTEM = [
   "You are the story bootstrapper for a d20 roleplay engine. This is PHASE B ACTION BATCH.",
   'Output one JSON object with exactly one key: {"actions":[...]}.',
   `For EACH requested category, output exactly ${CATALOG_MIN_ACTIONS / 5} concise actions and no other categories.`,
+  "Every action uses EXACTLY these key names; id, category, label, description, aliases, universalFamily,",
+  "dc and effects are required, the rest optional:",
+  '{"id":"combat_spear_thrust","category":"combat","label":"Spear Thrust","description":"Drive a spear point into one foe.",' +
+    '"aliases":["thrust with my spear"],"universalFamily":"attack_melee","governingAttribute":"attribute_id",' +
+    '"requiresSkill":"skill_id","requiresItemKind":"melee_weapon","dc":12,' +
+    '"effects":{"crit_success":{"resourceDeltaTarget":{"health_id":-8},"narrationHint":"A clean, deep strike"},' +
+    '"success":{"resourceDeltaTarget":{"health_id":-4},"narrationHint":"The point bites"},' +
+    '"failure":{"narrationHint":"Turned aside"},"crit_failure":{"narrationHint":"The haft slips"}}}',
+  `requiresItemKind, when present, is exactly one of: ${ItemKindSchema.options.join(", ")}.`,
+  "universalFamily MUST be one of the families listed for that action's category in ALLOWED FAMILIES BY CATEGORY.",
   `Every dc is an integer within ${DC_MIN}-${DC_MAX}.`,
   "Every action has effects for crit_success, success, failure, and crit_failure.",
   "Every action MUST include a precise description, at least one natural-language alias,",
@@ -253,10 +264,23 @@ export function buildPhaseBActionBatchUser(
     "Every flag referenced by this batch MUST be set by an action effect in this same batch.",
     `REQUIRED SKILL IDS: ${requiredSkillIds.join(", ") || "none"}`,
     `REQUIRED PROGRESSION FLAGS: ${requiredProgressionFlags.join(", ") || "none"}`,
+    "ALLOWED FAMILIES BY CATEGORY:",
+    ...categories.map(
+      (category) =>
+        `${category}: ${UNIVERSAL_ACTIONS_CONFIG.actions
+          .filter((family) => family.category === category)
+          .map((family) => family.id)
+          .join(", ")}`
+    ),
     "VERSIONED UNIVERSAL ACTION REGISTRY (specialize these families; it is not a story-specific item catalog):",
     JSON.stringify(UNIVERSAL_ACTIONS_CONFIG),
   ];
-  appendCreationContext(parts, context);
+  // The action catalogue is story-wide, so the player persona is left out: it only shapes Phase A
+  // and the actor foundation, and a long one crowded out the field contract (2026-10-18 forges).
+  appendCreationContext(
+    parts,
+    context?.importedMechanics ? { importedMechanics: context.importedMechanics } : undefined
+  );
   if (feedback) parts.push("", feedback);
   return parts.join("\n");
 }

@@ -489,6 +489,77 @@ describe("generateStorySchema — repair loop", () => {
     ).toEqual({ combat: 6, social: 6, exploration: 6, crafting: 6, utility: 6 });
   });
 
+  it("shows action batches the exact action shape and their families, without the persona", async () => {
+    // Live v0.3.0 forges (2026-10-18) failed 3 of 5 times with a long persona attached, each time
+    // on a differently guessed field: category, label, dc, requiresItemKind "spear", or an
+    // exploration family filed under combat.
+    expect(PHASE_B_ACTION_BATCH_SYSTEM).toMatch(/"label":/);
+    expect(PHASE_B_ACTION_BATCH_SYSTEM).toMatch(/"dc":/);
+    expect(PHASE_B_ACTION_BATCH_SYSTEM).toMatch(/requiresItemKind.*melee_weapon, ranged_weapon/);
+    const { router, prompts } = phasedRouter({ a: [J(PHASE_A)], b: [J(PHASE_B)] });
+    await generateStorySchema(router, {
+      ...input,
+      persona: { id: "persona-long", name: "Anujith", description: "A sprawling backstory. ".repeat(40) },
+    });
+    const batches = prompts.filter((prompt) => prompt.system.includes("PHASE B ACTION BATCH"));
+    expect(batches).toHaveLength(2);
+    expect(batches.some((prompt) => prompt.user.includes("persona-long"))).toBe(false);
+    expect(prompts.some((prompt) => prompt.system.includes("PHASE A") && prompt.user.includes("persona-long"))).toBe(true);
+    const combatBatch = batches.find((prompt) => /REQUESTED CATEGORIES: combat/.test(prompt.user))!;
+    expect(combatBatch.user).toContain(
+      "combat: attack_melee, attack_ranged, attack_natural, grapple, control, defend, evade"
+    );
+    expect(combatBatch.user).not.toMatch(/^exploration: /m);
+  });
+
+  it("absorbs unambiguous field slips without spending a repair round", async () => {
+    const phaseA = {
+      ...PHASE_A,
+      skills: [
+        ...PHASE_A.skills,
+        {
+          id: "keen_senses",
+          name: "Keen Senses",
+          description: "Always alert.",
+          tier: "common",
+          prerequisites: [],
+          unlockPaths: [{ method: "trial", flagId: "senses_trial" }],
+          masteryAdvance: { successesPerRank: 3 },
+          skillType: "passive",
+          passive: { checkBonus: { amount: 1, categories: ["Survival", "social"] } },
+        },
+      ],
+    };
+    const { router: scripted, counts } = phasedRouter({ a: [J(phaseA)], b: [J(PHASE_B)] });
+    const router: Router = {
+      ...scripted,
+      async complete(role, prompt, options) {
+        const response = await scripted.complete(role, prompt, options);
+        if (!prompt.system.includes("PHASE B ACTION BATCH")) return response;
+        const parsed = JSON.parse(response.content) as { actions: Array<Record<string, unknown>> };
+        return {
+          ...response,
+          content: J({
+            actions: parsed.actions.map(({ label, dc, category, ...rest }) => ({
+              ...rest,
+              category: String(category).toUpperCase(),
+              ...(rest.id === "combat_0" ? { requiresItemKind: "Spears" } : {}),
+              ...(rest.id === "social_0" ? {} : { name: label }),
+              difficulty: dc,
+            })),
+          }),
+        };
+      },
+    };
+    const out = await generateStorySchema(router, input);
+    expect(counts).toEqual({ a: 1, b: 3 }); // no repair round anywhere
+    const action = (id: string) => out.actions.find((candidate) => candidate.id === id)!;
+    expect(action("combat_0")).toMatchObject({ label: "combat 0", dc: 10, requiresItemKind: "melee_weapon" });
+    expect(action("social_0").label).toBe("0"); // no name either: humanized id, category prefix dropped
+    expect(out.skills.find((skill) => skill.id === "keen_senses")?.passive?.checkBonus?.categories)
+      .toEqual(["exploration", "social"]);
+  });
+
   it("keeps the large Phase B catalog concise and gives it a larger output budget", async () => {
     expect(PHASE_A_SYSTEM).toMatch(/6-10.*premise-grounded skills/i);
     expect(PHASE_B_ACTION_BATCH_SYSTEM).toMatch(/exactly 6 concise actions/i);

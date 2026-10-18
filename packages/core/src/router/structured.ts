@@ -112,6 +112,56 @@ const JSON_INSTRUCTION =
 
 const MAX_REPAIR_ECHO_CHARS = 12_000;
 
+/** [0,1,2,4,7,8] → "0-2,4,7-8". */
+function indexRanges(indices: readonly number[]): string {
+  const sorted = [...new Set(indices)].sort((a, b) => a - b);
+  const runs: string[] = [];
+  for (let start = 0; start < sorted.length; ) {
+    let end = start;
+    while (end + 1 < sorted.length && sorted[end + 1] === sorted[end]! + 1) end++;
+    runs.push(start === end ? `${sorted[start]}` : `${sorted[start]}-${sorted[end]}`);
+    start = end + 1;
+  }
+  return runs.join(",");
+}
+
+/**
+ * Renders validation issues, folding one slip repeated across list items into a single line:
+ * eighteen "actions.N.dc: Required" become "actions[0-17].dc: Required". Shorter for the repair
+ * prompt and for the player reading the forge's error.
+ */
+export function formatIssues(
+  issues: ReadonlyArray<{ path: ReadonlyArray<string | number>; message: string }>
+): string {
+  const groups = new Map<string, { head: string; tail: string; message: string; indices: number[] }>();
+  const lines: Array<string | { key: string }> = [];
+  for (const issue of issues) {
+    const at = issue.path.findIndex((segment) => typeof segment === "number");
+    if (at < 0) {
+      lines.push(`${issue.path.join(".") || "(root)"}: ${issue.message}`);
+      continue;
+    }
+    const head = issue.path.slice(0, at).join(".");
+    const tail = issue.path.slice(at + 1).join(".");
+    const key = `${head}\u0000${tail}\u0000${issue.message}`;
+    const group = groups.get(key);
+    if (group) {
+      group.indices.push(issue.path[at] as number);
+    } else {
+      groups.set(key, { head, tail, message: issue.message, indices: [issue.path[at] as number] });
+      lines.push({ key });
+    }
+  }
+  return lines
+    .map((line) => {
+      if (typeof line === "string") return line;
+      const group = groups.get(line.key)!;
+      const indexed = `${group.head}[${indexRanges(group.indices)}]`;
+      return `${group.tail ? `${indexed}.${group.tail}` : indexed}: ${group.message}`;
+    })
+    .join("; ");
+}
+
 /** Build a repair prompt that shows the model exactly what failed. */
 function repairUser(originalUser: string, raw: string, errorText: string): string {
   const previousOutput = raw.length <= MAX_REPAIR_ECHO_CHARS
@@ -185,9 +235,7 @@ export async function callStructured<T>(
       if (parsed !== undefined) {
         const result = schema.safeParse(parsed);
         if (result.success) return result.data;
-        lastError = result.error.issues
-          .map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`)
-          .join("; ");
+        lastError = formatIssues(result.error.issues);
       }
     }
     if ((res.finishReason === "length" || incompleteJson) && requestMaxTokens !== undefined) {

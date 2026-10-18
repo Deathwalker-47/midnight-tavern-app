@@ -27,6 +27,8 @@ import {
   StorySchemaSchema,
   ConditionSchema,
   ConditionWithReasonSchema,
+  ActionCategorySchema,
+  ItemKindSchema,
   CATALOG_MIN_ACTIONS,
   DC_MIN,
   DC_MAX,
@@ -34,6 +36,7 @@ import {
   CORE_RESOURCE_ROLES,
   type ActionDef,
   type ActionCategory,
+  type ItemKind,
   type Condition,
   type ConditionWithReason,
   type ResourceDef,
@@ -179,8 +182,9 @@ function normalizePhaseA(value: unknown): unknown {
     (resource) => record(resource) && typeof resource.id === "string" && MONEY_RESOURCE.test(resource.id)
   );
   const usableCurrencyId = record(currencyId) && typeof currencyId.id === "string" ? currencyId.id : undefined;
-  const skills = value.skills.map((skill) => {
-    if (!record(skill)) return skill;
+  const skills = value.skills.map((rawSkill) => {
+    if (!record(rawSkill)) return rawSkill;
+    const skill = normalizeSkillBonusCategories(rawSkill);
     const prerequisites = Array.isArray(skill.prerequisites)
       ? normalizeConditionList(skill.prerequisites)
       : [];
@@ -248,6 +252,87 @@ const UNIVERSAL_FAMILY_CATEGORY = new Map<string, ActionCategory>(
   UNIVERSAL_ACTIONS_CONFIG.actions.map((family) => [family.id, family.category])
 );
 
+/**
+ * Words models use for a check category that is not one of ours. Only unambiguous ones: an
+ * unknown word is left for the repair round, never dropped, because an absent category list
+ * means "every check" and dropping entries could widen a bonus.
+ */
+const CATEGORY_SYNONYMS: Readonly<Record<string, ActionCategory>> = {
+  fighting: "combat", melee: "combat", martial: "combat", warfare: "combat", archery: "combat",
+  diplomacy: "social", persuasion: "social", deception: "social", intimidation: "social",
+  leadership: "social", negotiation: "social",
+  survival: "exploration", stealth: "exploration", perception: "exploration",
+  investigation: "exploration", awareness: "exploration", tracking: "exploration",
+  navigation: "exploration", scouting: "exploration",
+  smithing: "crafting", alchemy: "crafting", engineering: "crafting",
+  athletics: "utility", movement: "utility",
+};
+
+/**
+ * Weapon and gear words models put in `requiresItemKind`. Each maps to the finest kind that still
+ * contains it ("spear" → melee_weapon), so the gate is kept, never removed; an unknown word is
+ * left for the repair round.
+ */
+const ITEM_KIND_SYNONYMS: Readonly<Record<string, ItemKind>> = Object.fromEntries([
+  ...[
+    "sword", "blade", "spear", "polearm", "halberd", "glaive", "pike", "lance", "axe", "mace",
+    "club", "hammer", "warhammer", "maul", "flail", "dagger", "knife", "staff", "quarterstaff",
+    "whip", "saber", "sabre", "rapier", "scimitar", "katana", "jian", "dao", "ji", "guandao", "melee",
+  ].map((word) => [word, "melee_weapon" as const]),
+  ...[
+    "bow", "longbow", "shortbow", "crossbow", "sling", "javelin", "gun", "rifle", "pistol",
+    "firearm", "musket", "ranged",
+  ].map((word) => [word, "ranged_weapon" as const]),
+  ["buckler", "shield"],
+  ["armour", "armor"],
+  ["tools", "tool"],
+]) as Record<string, ItemKind>;
+
+function slug(value: string): string {
+  return value.trim().toLowerCase().replace(/[\s-]+/g, "_");
+}
+
+function normalizeCategory(value: unknown): unknown {
+  if (typeof value !== "string") return value;
+  const key = slug(value);
+  if (ActionCategorySchema.safeParse(key).success) return key;
+  return CATEGORY_SYNONYMS[key] ?? value;
+}
+
+function normalizeCategoryList(value: unknown): unknown {
+  return Array.isArray(value) ? [...new Set(value.map(normalizeCategory))] : value;
+}
+
+function normalizeItemKind(value: unknown): unknown {
+  if (typeof value !== "string") return value;
+  const key = slug(value);
+  if (ItemKindSchema.safeParse(key).success) return key;
+  const singular = key.endsWith("s") ? key.slice(0, -1) : key;
+  return ITEM_KIND_SYNONYMS[key] ?? ITEM_KIND_SYNONYMS[singular] ?? value;
+}
+
+/** Normalizes the check categories inside a skill's passive bonus and toggle bonus. */
+function normalizeSkillBonusCategories(skill: Record<string, unknown>): Record<string, unknown> {
+  const withCategories = (bonus: unknown): unknown =>
+    record(bonus) && record(bonus.checkBonus)
+      ? { ...bonus, checkBonus: { ...bonus.checkBonus, categories: normalizeCategoryList(bonus.checkBonus.categories) } }
+      : bonus;
+  return {
+    ...skill,
+    ...(skill.passive === undefined ? {} : { passive: withCategories(skill.passive) }),
+    ...(record(skill.toggle) ? { toggle: { ...skill.toggle, bonus: withCategories(skill.toggle.bonus) } } : {}),
+  };
+}
+
+/** "combat_spear_thrust" → "Spear Thrust" (the category prefix the prompt asks for is dropped). */
+function labelFromActionId(id: string): string {
+  const words = id.split("_").filter(Boolean);
+  const rest = ActionCategorySchema.safeParse(words[0]).success && words.length > 1 ? words.slice(1) : words;
+  return rest.join(" ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+const DC_ALIASES = ["difficulty", "DC", "difficultyClass", "difficulty_class"] as const;
+
 function normalizeAction(value: unknown): unknown {
   if (!record(value)) return value;
   // Models routinely prefix the id with the category but omit the field. The registry already
@@ -257,6 +342,19 @@ function normalizeAction(value: unknown): unknown {
     value.category === undefined && typeof value.universalFamily === "string"
       ? UNIVERSAL_FAMILY_CATEGORY.get(value.universalFamily)
       : undefined;
+  const label =
+    typeof value.label === "string" && value.label.trim()
+      ? value.label
+      : typeof value.name === "string" && value.name.trim()
+        ? value.name
+        : typeof value.id === "string"
+          ? labelFromActionId(value.id)
+          : value.label;
+  // A DC under another key is the model's own DC, moved; a missing one is never invented.
+  const aliasedDc = DC_ALIASES.map((key) => value[key]).find(
+    (candidate) => typeof candidate === "number" || (typeof candidate === "string" && /^\d+$/.test(candidate.trim()))
+  );
+  const dc = value.dc === undefined && aliasedDc !== undefined ? Number(aliasedDc) : value.dc;
   const costs = record(value.costs) ? { ...value.costs, items: [] } : value.costs;
   const effects = record(value.effects)
     ? Object.fromEntries(
@@ -272,7 +370,10 @@ function normalizeAction(value: unknown): unknown {
     : value.effects;
   return {
     ...value,
-    ...(familyCategory ? { category: familyCategory } : {}),
+    category: familyCategory ?? normalizeCategory(value.category),
+    label,
+    dc,
+    ...(value.requiresItemKind === undefined ? {} : { requiresItemKind: normalizeItemKind(value.requiresItemKind) }),
     costs,
     effects,
     advantageWhen: normalizeOptionalConditionEntries(value.advantageWhen),

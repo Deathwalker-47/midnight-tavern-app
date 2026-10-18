@@ -57,6 +57,24 @@ describe("extractJson", () => {
   });
 });
 
+describe("callStructured error text", () => {
+  it("collapses one slip repeated across list items into a single indexed line", async () => {
+    // Live v0.3.0 forge (2026-10-18): the user saw "actions.0.dc: Required; actions.1.dc: Required;
+    // ... actions.17.dc: Required", and the repair prompt carried the same wall.
+    const ListSchema = z.object({ actions: z.array(z.object({ dc: z.number(), label: z.string() })) });
+    const bad = JSON.stringify({
+      actions: [{ label: "a" }, { label: "b" }, { label: "c" }, { dc: 1 }, { label: "e" }],
+    });
+    const { router, seen } = scriptedRouter([bad]);
+    const error = (await callStructured(router, "bootstrapper", { system: "s", user: "u" }, ListSchema, {
+      maxRepairs: 1,
+    }).catch((reason: unknown) => reason)) as ModelOutputError;
+    expect(error).toBeInstanceOf(ModelOutputError);
+    expect(error.message).toContain("actions[0-2,4].dc: Required; actions[3].label: Required");
+    expect(seen[1]).toContain("actions[0-2,4].dc: Required");
+  });
+});
+
 describe("callStructured", () => {
   it("returns the validated object on a first-attempt success", async () => {
     const { router, seen } = scriptedRouter(['{"name":"orc","count":3}']);

@@ -440,7 +440,8 @@ function hardFailureIssues(error: unknown): ClassifierRecoveryIssue[] {
     }
 
     const issues: ClassifierRecoveryIssue[] = [];
-    if (/(?:playerIntents|npcIntents)\.\d+\.(?:actionId|skillId)\b/i.test(error.lastError)) {
+    // Issue paths read "playerIntents.0.actionId" or, folded by formatIssues, "playerIntents[0-2].actionId".
+    if (/(?:playerIntents|npcIntents)(?:\.\d+|\[[\d,-]+\])\.(?:actionId|skillId)\b/i.test(error.lastError)) {
       issues.push(
         issue(
           "unresolved_action",
@@ -449,7 +450,7 @@ function hardFailureIssues(error: unknown): ClassifierRecoveryIssue[] {
         )
       );
     }
-    if (/(?:playerIntents|npcIntents)\.\d+\.(?:actorId|targetId)\b/i.test(error.lastError)) {
+    if (/(?:playerIntents|npcIntents)(?:\.\d+|\[[\d,-]+\])\.(?:actorId|targetId)\b/i.test(error.lastError)) {
       issues.push(
         issue(
           "unresolved_target",
