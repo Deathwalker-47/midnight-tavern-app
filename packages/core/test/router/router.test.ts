@@ -261,6 +261,41 @@ describe("router.stream (narrator)", () => {
     expect(res.content).toBe("Once upon a time");
   });
 
+  it("stops a silent stream as soon as the caller cancels", async () => {
+    // Live v0.3.0 (2026-10-18, bug B6): Cancel generation did nothing until the provider closed the
+    // stream ~60 s later. The signal reached only the fetch, never the body reads after it.
+    const encoder = new TextEncoder();
+    let cancelledBody = false;
+    const fetch = (async () =>
+      new Response(
+        new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"First beat."}}]}\n'));
+            // ...then the provider goes quiet and never closes the stream.
+          },
+          cancel() {
+            cancelledBody = true;
+          },
+        }),
+        { status: 200, headers: { "content-type": "text/event-stream" } }
+      )) as unknown as FetchLike;
+    const router = makeRouter({ providerConfigs: configs, fetchImpl: fetch });
+    const controller = new AbortController();
+    const deltas: string[] = [];
+    const streaming = router.stream(
+      "narrator",
+      { system: "s", user: "u" },
+      (delta) => {
+        deltas.push(delta);
+        controller.abort();
+      },
+      { signal: controller.signal }
+    );
+    await expect(streaming).rejects.toMatchObject({ name: "AbortError" });
+    expect(deltas).toEqual(["First beat."]);
+    expect(cancelledBody).toBe(true);
+  }, 2_000);
+
   it("never retries a broken stream after a delta has reached the caller", async () => {
     const encoder = new TextEncoder();
     let calls = 0;

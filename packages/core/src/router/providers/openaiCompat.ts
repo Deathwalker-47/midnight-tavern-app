@@ -166,15 +166,28 @@ function extractDelta(json: unknown): string {
  */
 async function consumeSseStream(
   stream: ReadableStream<Uint8Array>,
-  onDelta: StreamHandler
+  onDelta: StreamHandler,
+  signal?: AbortSignal
 ): Promise<ChatResponse> {
   const reader = stream.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
   let full = "";
+  // A cancel must end the read loop now, not when the provider next sends a byte or closes the
+  // stream (the native Tauri body ignores the fetch signal once headers arrive), and no delta may
+  // reach the caller after it.
+  let onAbort: (() => void) | undefined;
+  const aborted = signal
+    ? new Promise<never>((_, reject) => {
+        onAbort = () => reject(signal.reason ?? new DOMException("The stream was cancelled.", "AbortError"));
+        if (signal.aborted) onAbort();
+        else signal.addEventListener("abort", onAbort, { once: true });
+      })
+    : undefined;
+  aborted?.catch(() => undefined);
   try {
     for (;;) {
-      const { value, done } = await reader.read();
+      const { value, done } = await (aborted ? Promise.race([reader.read(), aborted]) : reader.read());
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
       let nl: number;
@@ -187,7 +200,7 @@ async function consumeSseStream(
         if (data === "[DONE]") continue;
         try {
           const delta = extractDelta(JSON.parse(data));
-          if (delta) {
+          if (delta && !signal?.aborted) {
             full += delta;
             onDelta(delta);
           }
@@ -196,8 +209,16 @@ async function consumeSseStream(
         }
       }
     }
+  } catch (error) {
+    if (signal?.aborted) await reader.cancel(signal.reason).catch(() => undefined);
+    throw error;
   } finally {
-    reader.releaseLock();
+    if (onAbort) signal?.removeEventListener("abort", onAbort);
+    try {
+      reader.releaseLock();
+    } catch {
+      // A read still pending after cancel can make releaseLock throw; the stream is already done.
+    }
   }
   return { content: full };
 }
@@ -280,7 +301,7 @@ export function makeOpenAiCompatProvider(spec: ProviderSpec, fetchImpl: FetchLik
         if (full) onDelta(full);
         return { content: full };
       }
-      return consumeSseStream(res.body, onDelta);
+      return consumeSseStream(res.body, onDelta, req.signal);
     },
   };
 }
