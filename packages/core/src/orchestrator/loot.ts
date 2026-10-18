@@ -37,7 +37,8 @@ function lootDecisionSchema(items: UniversalItems, specialIds: readonly string[]
     ...(specialIds.length > 0 ? { specialId: z.enum(specialIds as [string, ...string[]]).optional() } : {}),
   });
   const award = z.object({
-    sourceType: z.enum(["combat", "non_combat", "milestone", "quest"]).optional(),
+    // Never "quest": a quest is an engine fact, and the label unlocks the legendary ceiling (plan 10 §1.2, A1).
+    sourceType: z.enum(["combat", "non_combat", "milestone"]).optional(),
     sourceLabel: z.string().min(1).max(200).optional(),
     recipientCharacterId: z.string().min(1).optional(),
     proposal: proposal.optional(),
@@ -221,8 +222,7 @@ export async function determineLootAwards(
     if (!recipient || recipient.storyId !== story.id || !recipient.hard.alive) continue;
     const sourceType: LootSourceType = proposal.sourceType;
     const milestoneAuthorized =
-      (sourceType === "milestone" || sourceType === "quest") &&
-      (milestoneEvents.length > 0 || completedSuccess(ruling));
+      sourceType === "milestone" && (milestoneEvents.length > 0 || completedSuccess(ruling));
     const maximumTier = EQUIPMENT_LOOT_CONFIG.loot.routineMaximumTier[sourceType];
     const now = new Date().toISOString();
     const { specialId, ...item } = proposal.proposal as typeof proposal.proposal & { specialId?: string };

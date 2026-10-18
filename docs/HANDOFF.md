@@ -1,14 +1,15 @@
 # HANDOFF - current live state
 
 **Updated:** 2026-10-18 (first Windows build of plans 08 + 09: **v0.3.0 built, installed and launched**
-on the owner's freshly formatted machine; see the 2026-10-18 WORKLOG entry)
-**Branch / source baseline:** `main` + this session's branch
-`claude/multi-agent-architecture-windows-build-4dbd11` (icons, version bump, docs — no logic change).
-The owner authorized pushing completed steps straight to `origin/main` (2026-10-09) and, on 2026-10-18,
-granted a standing "make all decisions, no need to wait for permission".
+on the owner's freshly formatted machine; authority gap **A1 closed** on `main`, `39e8d72`, leaving a twin —
+the `milestone` label — as an owner call. See the two 2026-10-18 WORKLOG entries.)
+**Branch / source baseline:** `main`. The owner authorized pushing completed steps straight to
+`origin/main` (2026-10-09), restated on 2026-10-18: **push to `main`, no PR** — and granted a standing
+"make all decisions, no need to wait for permission". Push after each step.
 **App version:** `0.3.0` — the first installer containing plans 08 + 09. Unsigned. Installed per-user at
 `%LOCALAPPDATA%\Midnight Tavern`; data at `%APPDATA%\com.midnighttavern.app` (fresh DB, migrations 1–18,
-no stories yet, no provider configured).
+no stories yet, no provider configured). The installed build **predates the A1 fix** (a loot-schema change,
+no migration); the next build picks it up.
 
 **Owner's machine was formatted (reported 2026-10-09) and re-provisioned on 2026-10-18.** Lost for good:
 the live saves (Cyraeth Adventure, Solo Leveling RPG), the trial-unlock script, local agent tooling, the
@@ -63,6 +64,8 @@ acceptance 1 / part of 3 unmet as written because the forge stayed hybrid.
 (`npx vitest run --coverage` in `packages/core` — not part of `npm test`, run it after any
 `src/engine` change); UI production build 457.2 kB / 126.5 kB gzip; `tauri build` clean (no Rust
 warnings in the app crate). The Windows/Node 24 tinypool crash (plan 07 P0-0) did not occur on Node 22.
+After the A1 fix (same machine): typecheck clean; root `npm test` green — core **903 / 69 files**, UI
+**211 / 32 files** = **1114**. No `src/engine` change, so coverage was not re-run.
 
 ## Facts established earlier (still true — do not re-derive)
 
@@ -85,10 +88,18 @@ warnings in the app crate). The Windows/Node 24 tinypool crash (plan 07 P0-0) di
   (~1.5 MB raw) it should be loaded lazily.
 - The design deliverable for the Story Settings surfaces (plan 09 §7.3, design brief §5) has not been
   produced; S14 made reasonable calls (see WORKLOG S14) that a designer may revise.
-- **Live authority gap A1:** the loot model may set `sourceType: "quest"` (`orchestrator/loot.ts:40`);
-  with any successful ruling that makes the award milestone-authorized with a `legendary` ceiling
-  (`loot.ts:223-225`). A model label alone unlocks legendary loot. Not fixed — minimal standalone fix
-  (drop `"quest"` from the model-facing enum, plus a RED test) recommended in plan 10 §1.2.1.
+- **Authority gap A1 — CLOSED 2026-10-18 (`39e8d72`, plan 10 §1.2.1):** the loot model could set
+  `sourceType: "quest"`, which with any successful ruling made the award milestone-authorized under the
+  `legendary` quest ceiling. `"quest"` is now gone from the model-facing enum (`orchestrator/loot.ts:41`);
+  `LootSourceTypeSchema` keeps it, so persisted provenance and starting gear still decode. Regression test:
+  `packages/core/test/lootSourceAuthority.test.ts`.
+- **A1's twin — the `milestone` label is still model-facing (found 2026-10-18, not fixed).**
+  `milestoneAuthorized = sourceType === "milestone" && (milestoneEvents.length > 0 || completedSuccess(ruling))`
+  (`loot.ts:224-225`), and the ruling passed there is always the last *successful* one, so the second
+  clause is always true: a model saying `"milestone"` still unlocks legendary loot. A refused `"quest"`
+  makes it likelier — the repair error lists `'combat' | 'non_combat' | 'milestone'`. Closing it the same
+  way leaves legendary loot unreachable until engine milestones exist (plan 10 §1.2.2 / §5.6.3), as
+  mythical is today. That is a product call — see the single next action.
 - **A2:** committing any `quest`/`milestone`-labelled award journals a `milestone` event
   (`turn.ts:1271-1286`), after which `milestoneEvents.length > 0` (`loot.ts:197-200`) milestone-authorizes
   every later such award in the story. Fix is in plan 10 §5.6 (D14).
@@ -121,4 +132,10 @@ special from loot after chapter 1; resting and the living card's Conditions bloc
 
 Then **choose the next plan**. Recommendation unchanged: **02 (classifier fidelity)** — the owner's own
 P0 — then 06 (narration integrity); 04 (character panels) if visible UI work is preferred. Plan 10 stays
-ineligible until its §0 gate closes. Optional and small: approve the standalone A1 fix (plan 10 §1.2.1).
+ineligible until its §0 gate closes.
+
+**A1 is done** (2026-10-18). **Owner call on its twin:** should legendary loot stay reachable before
+quests exist? Today the model earns it by labelling an award `"milestone"`, which breaks the authority
+wall the same way A1 did. Recommendation: close it now (drop `"milestone"` from the model-facing enum,
+RED test first) and accept that legendary items wait for plan 10's engine milestones, as mythical ones
+already do. The alternative is to keep it, knowingly, until plan 10.
