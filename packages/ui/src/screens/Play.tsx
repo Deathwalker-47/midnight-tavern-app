@@ -894,17 +894,18 @@ export function Play(props: PlayProps): JSX.Element {
     [selectVariant]
   );
 
+  // A confirm dialog opened before a turn started must not rewrite history once it is running.
   const onConfirmRewind = useCallback((): void => {
     const target = rewindTarget;
     setRewindTarget(undefined);
-    if (target !== undefined) void rewind(target);
-  }, [rewindTarget, rewind]);
+    if (target !== undefined && !historyBusy) void rewind(target);
+  }, [rewindTarget, rewind, historyBusy]);
 
   const onConfirmDelete = useCallback((): void => {
     const target = deleteTarget;
     setDeleteTarget(undefined);
-    if (target !== undefined) void deleteFrom(target);
-  }, [deleteTarget, deleteFrom]);
+    if (target !== undefined && !historyBusy) void deleteFrom(target);
+  }, [deleteTarget, deleteFrom, historyBusy]);
 
   // ── Composer ────────────────────────────────────────────────────────────────────────────────
   const [draft, setDraft] = useState<string>("");

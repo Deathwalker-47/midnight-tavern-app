@@ -25,4 +25,28 @@ describe("MessageActions history controls", () => {
     fireEvent.click(screen.getByRole("menuitem", { name: /delete from this exchange/i }));
     expect(deleteFrom).toHaveBeenCalledOnce();
   });
+
+  it("offers no rewind or delete while a turn is running", () => {
+    // Live v0.3.0 (2026-10-18, bug B7): two "Rewind to here" clicks during a running turn deleted
+    // its player message mid-generation; the cancel then failed on the missing row.
+    const rewind = vi.fn();
+    const deleteFrom = vi.fn();
+    render(
+      <MessageActions
+        variantIndex={1}
+        variantCount={1}
+        isLatest={false}
+        busy
+        onRewindToHere={rewind}
+        onDeleteFromHere={deleteFrom}
+      />
+    );
+
+    const menu = screen.getByRole("button", { name: "Message actions" });
+    expect(menu).toBeDisabled();
+    fireEvent.click(menu);
+    expect(screen.queryByRole("menuitem", { name: /rewind to here/i })).not.toBeInTheDocument();
+    expect(rewind).not.toHaveBeenCalled();
+    expect(deleteFrom).not.toHaveBeenCalled();
+  });
 });

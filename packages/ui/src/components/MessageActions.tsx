@@ -141,13 +141,15 @@ export function MessageActions(props: MessageActionsProps): JSX.Element {
           <button
             type="button"
             aria-label="Message actions"
-            aria-expanded={menuOpen}
-            onClick={() => setMenuOpen((o) => !o)}
-            style={{ color: "var(--secondary)", fontSize: 16, background: "transparent", border: 0, cursor: "pointer", padding: "0 4px" }}
+            aria-expanded={menuOpen && !busy}
+            disabled={busy}
+            onClick={() => !busy && setMenuOpen((o) => !o)}
+            style={{ color: "var(--secondary)", fontSize: 16, background: "transparent", border: 0, cursor: busy ? "default" : "pointer", padding: "0 4px", opacity: busy ? 0.4 : 1 }}
           >
             ⋯
           </button>
-          {menuOpen && (
+          {/* Rewind and delete rewrite history; never while a turn is generating (bug B7). */}
+          {menuOpen && !busy && (
             <div
               role="menu"
               style={{
