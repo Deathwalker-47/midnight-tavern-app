@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Placeholder app mark (2026-10-18): brass crescent (STORY register) with a teal star (SYSTEM
+       register) on the app's ground/panel colors from packages/ui/src/theme/tokens.css.
+       Regenerate the icon set with `npx tauri icon app-icon.svg` from packages/shell. -->
+  <defs>
+    <linearGradient id="ground" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2c241b"/>
+      <stop offset="1" stop-color="#14100c"/>
+    </linearGradient>
+    <linearGradient id="brass" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f2c56b"/>
+      <stop offset="0.55" stop-color="#d9a648"/>
+      <stop offset="1" stop-color="#a87a2c"/>
+    </linearGradient>
+    <mask id="bite">
+      <rect width="1024" height="1024" fill="#fff"/>
+      <circle cx="628" cy="420" r="250" fill="#000"/>
+    </mask>
+  </defs>
+  <rect x="32" y="32" width="960" height="960" rx="216" fill="url(#ground)"/>
+  <rect x="32" y="32" width="960" height="960" rx="216" fill="none" stroke="#d9a648" stroke-opacity="0.35" stroke-width="12"/>
+  <circle cx="500" cy="530" r="290" fill="url(#brass)" mask="url(#bite)"/>
+  <path d="M690 305 L714 376 L785 400 L714 424 L690 495 L666 424 L595 400 L666 376 Z" fill="#74b8ae"/>
+</svg>

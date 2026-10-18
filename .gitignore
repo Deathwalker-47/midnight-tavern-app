@@ -38,5 +38,4 @@ opencode.json
 .env.local
 .env.*.local
 
-# Tauri
-app/shell/target/
+# Tauri build output is ignored in packages/shell/.gitignore

@@ -31,9 +31,19 @@ Requirements:
 - The source should be a square PNG, at least **1024x1024**, with transparency.
 - `tauri icon` writes all outputs into `src-tauri/icons/`.
 
-## Blocked in this environment
+## Current set (2026-10-18)
 
-No source artwork and no `tauri` CLI run has happened here, so the binary icon
-files are absent. A properly-equipped machine must supply the 1024x1024 source
-and run `tauri icon` before `tauri build`. Until then the bundle step will fail
-on the missing icon paths. See `../../RELEASE.md`.
+The icons in this folder **are committed** and were generated from the vector
+source `packages/shell/app-icon.svg` — a placeholder mark (brass crescent, teal
+star, on the app's ground colours from `packages/ui/src/theme/tokens.css`). The
+earlier set was never committed and was lost when the build machine was
+formatted, which is why they now live in git.
+
+To replace the artwork, overwrite `app-icon.svg` (or pass a 1024x1024 PNG) and
+re-run from `packages/shell/`:
+
+```
+npx tauri icon app-icon.svg
+```
+
+then delete the `android/` and `ios/` folders it also emits (no mobile target).

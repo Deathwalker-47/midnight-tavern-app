@@ -1,12 +1,9 @@
-# Rust / Tauri build output. The root .gitignore has a stale `app/shell/target/`
-# rule that predates this package's real path; this covers the actual location.
+# Rust / Tauri build output.
 src-tauri/target/
 
-# Generated icon binaries (see src-tauri/icons/README.md — regenerate with `tauri icon`).
-src-tauri/icons/*.png
-src-tauri/icons/*.ico
-src-tauri/icons/*.icns
-# tauri icon also emits platform icon subdirs (Android/iOS) — regenerated, not source.
+# The bundle's icon binaries ARE committed (they were ignored until 2026-10-18 and were lost
+# with the formatted build machine). Source: ../app-icon.svg; see src-tauri/icons/README.md.
+# tauri icon also emits platform icon subdirs (Android/iOS) — no mobile target, not committed.
 src-tauri/icons/android/
 src-tauri/icons/ios/
 
