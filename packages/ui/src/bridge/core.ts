@@ -84,6 +84,7 @@ import { browsePool, learnersBySkill, poolSections, type PoolBrowseContext } fro
 // better-sqlite3 dependency. equipment.ts's own import chain (config, types, conditions) is
 // value-import-clean — verified no `node:`/native import anywhere in it.
 export { formatEquipmentEffect } from "../../../core/src/engine/equipment.js";
+export { describeCatalogueEvent } from "../../../core/src/orchestrator/journalText.js";
 export type {
   CharacterRecord,
   LivingCardView,

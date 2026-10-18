@@ -162,12 +162,87 @@ describe("Mechanical Journal", () => {
     expect(screen.getByText(/Classifier Recovery/i)).toBeInTheDocument();
   });
 
+  it("names forge pool enablements and folds them into one boundary entry", async () => {
+    // Live v0.3.0 (2026-10-18): a fresh story opened on 28 identical "Pool Enabled" rows with empty
+    // bodies, starred and filed under Milestones.
+    const pool = (id: string, turnIndex: number, createdAt: number, payload: Record<string, unknown>): StoryEvent => ({
+      ...event(id, turnIndex, 0, createdAt),
+      actorId: undefined,
+      kind: "pool_enabled",
+      payload,
+    });
+    const bridge = makeMemoryBridge();
+    bridge.getStory = async () => story();
+    bridge.listPresentCast = async () => [
+      { characterId: "hero", name: "Kestrel", isPlayer: true, alive: true },
+    ];
+    bridge.listStoryJournal = async () => ({
+      events: [
+        pool("p1", 0, 1, { entryId: "uni.combat.melee.strike", kind: "action", name: "Strike", source: "forge" }),
+        pool("p2", 0, 2, { entryId: "uni.combat.melee.power_attack", kind: "action", name: "Power Attack", source: "forge" }),
+        pool("p3", 0, 3, { entryId: "uni.combat.melee.weapon_mastery", kind: "skill", name: "Weapon Mastery", source: "forge" }),
+        pool("p4", 4, 4, { entryId: "uni.magic.fire.fire_magic", kind: "skill", name: "Fire Magic", source: "analyzer" }),
+      ],
+    });
+    setBridge(bridge);
+
+    render(<Journal storyId="story-1" />);
+
+    const forged = await screen.findByText("The forge enabled 3 universal-pool entries (2 actions, 1 skill)");
+    expect(screen.getByText("Enabled Fire Magic (skill) - by the story")).toBeInTheDocument();
+    expect(screen.queryByText("Pool Enabled")).not.toBeInTheDocument();
+    expect(screen.getByText("2 events")).toBeInTheDocument();
+    fireEvent.click(forged);
+    expect(screen.getByText("Strike, Power Attack")).toBeInTheDocument();
+    expect(screen.getByText("Weapon Mastery")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Milestones" }));
+    expect(screen.getByText(/No matching events/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Boundaries" }));
+    expect(screen.getByText(/The forge enabled 3/)).toBeInTheDocument();
+    expect(screen.getByText(/Enabled Fire Magic/)).toBeInTheDocument();
+  });
+
+  it("reads recovery and disabled pool entries as sentences with real names", async () => {
+    const bridge = makeMemoryBridge();
+    bridge.getStory = async () => ({
+      ...story(),
+      schema: {
+        ...story().schema,
+        resources: [
+          { id: "hp", label: "Health", start: 20, max: 20, playerVisible: true, lethal: true },
+          { id: "grit", label: "Grit", start: 10, max: 10, playerVisible: true },
+        ],
+      } as StoryRecord["schema"],
+    });
+    bridge.listPresentCast = async () => [
+      { characterId: "hero", name: "Kestrel", isPlayer: true, alive: true },
+    ];
+    bridge.listStoryJournal = async () => ({
+      events: [
+        { ...event("rec-1", 6, 0, 6), kind: "recovery", payload: { characterId: "hero", gains: { grit: 3, hp: 1 } } },
+        { ...event("dis-1", 7, 0, 7), actorId: undefined, kind: "pool_disabled", payload: { entryId: "uni.combat.melee.strike" } },
+      ],
+    });
+    setBridge(bridge);
+
+    render(<Journal storyId="story-1" />);
+
+    expect(await screen.findByText("Kestrel - recovered Grit +3, Health +1")).toBeInTheDocument();
+    expect(screen.getByText("Disabled Strike")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Recovery" }));
+    expect(screen.getByText("Kestrel - recovered Grit +3, Health +1")).toBeInTheDocument();
+    expect(screen.queryByText("Disabled Strike")).not.toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/\{"/);
+  });
+
   it("every JournalKind has a FILTERS entry", () => {
     const kinds: JournalKind[] = [
       "roll",
       "denied",
       "progression",
       "item-equipment",
+      "recovery",
       "milestone",
       "boundary",
       "interrupted",

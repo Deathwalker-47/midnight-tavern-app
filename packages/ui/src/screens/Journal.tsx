@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import type { ScreenProps } from "./registry.js";
-import { getBridge, formatEquipmentEffect } from "../bridge/core.js";
+import { getBridge, formatEquipmentEffect, describeCatalogueEvent } from "../bridge/core.js";
 import type {
   Ruling,
   StoryEvent as StoredStoryEvent,
@@ -13,6 +13,7 @@ export type JournalKind =
   | "denied"
   | "progression"
   | "item-equipment"
+  | "recovery"
   | "milestone"
   | "boundary"
   | "interrupted";
@@ -27,6 +28,8 @@ interface JournalEvent {
   summary: string;
   createdAt: number;
   details: Array<{ label: string; value: string }>;
+  /** Set on a pool entry the forge enabled at story creation; those are folded into one row. */
+  forgeEnablement?: { name: string; type: "action" | "skill" };
 }
 export const FILTERS: Array<{ key: "all" | JournalKind; label: string }> = [
   { key: "all", label: "All" },
@@ -35,6 +38,7 @@ export const FILTERS: Array<{ key: "all" | JournalKind; label: string }> = [
   { key: "interrupted", label: "Interrupted" },
   { key: "progression", label: "Progression" },
   { key: "item-equipment", label: "Items · Equipment" },
+  { key: "recovery", label: "Recovery" },
   { key: "milestone", label: "Milestones" },
   { key: "boundary", label: "Boundaries" },
 ];
@@ -51,6 +55,7 @@ export function Journal(props: ScreenProps): JSX.Element {
   const [exportOpen, setExportOpen] = useState(false);
   const [exportStatus, setExportStatus] = useState<"idle" | "success" | "error">("idle");
   const [nameById, setNameById] = useState<ReadonlyMap<string, string>>(() => new Map());
+  const [resourceLabels, setResourceLabels] = useState<ReadonlyMap<string, string>>(() => new Map());
   const [nextCursor, setNextCursor] = useState<StoryJournalPage["nextCursor"]>();
   const [loadingMore, setLoadingMore] = useState(false);
   const [loadMoreError, setLoadMoreError] = useState<string>();
@@ -79,9 +84,13 @@ export function Journal(props: ScreenProps): JSX.Element {
         bridge.listPresentCast(storyId),
       ]);
       const names = new Map(cast.map((character) => [character.characterId, character.name]));
-      const rows = journalPage.events.map((event) => toJournalEvent(event, names));
+      const labels = new Map(
+        (story.schema.resources ?? []).map((resource) => [resource.id, resource.label])
+      );
+      const rows = journalPage.events.map((event) => toJournalEvent(event, names, labels));
       if (!cancelled) {
         setNameById(names);
+        setResourceLabels(labels);
         setEvents(rows);
         setNextCursor(journalPage.nextCursor);
         setPhase("ready");
@@ -100,7 +109,8 @@ export function Journal(props: ScreenProps): JSX.Element {
     for (const event of events) if (event.actorId) map.set(event.actorId, event.actorName ?? event.actorId);
     return [...map.entries()];
   }, [events]);
-  const filtered = useMemo(() => events.filter((event) => (kind === "all" || event.kind === kind) && (actor === "all" || event.actorId === actor)), [events, kind, actor]);
+  const grouped = useMemo(() => groupForgeEnablements(events), [events]);
+  const filtered = useMemo(() => grouped.filter((event) => (kind === "all" || event.kind === kind) && (actor === "all" || event.actorId === actor)), [grouped, kind, actor]);
   const chapters = useMemo(() => {
     const map = new Map<number | undefined, JournalEvent[]>();
     for (const event of filtered) {
@@ -127,7 +137,9 @@ export function Journal(props: ScreenProps): JSX.Element {
         limit: JOURNAL_PAGE_SIZE,
         before: nextCursor,
       });
-      const olderRows = journalPage.events.map((event) => toJournalEvent(event, nameById));
+      const olderRows = journalPage.events.map((event) =>
+        toJournalEvent(event, nameById, resourceLabels)
+      );
       setEvents((current) => {
         const seen = new Set(current.map((event) => event.id));
         return [...olderRows.filter((event) => !seen.has(event.id)), ...current];
@@ -232,11 +244,110 @@ export function Journal(props: ScreenProps): JSX.Element {
 }
 
 function glyphFor(kind: JournalKind): string {
-  return kind === "roll" ? "◈" : kind === "denied" ? "⊘" : kind === "progression" ? "◆" : kind === "item-equipment" ? "❖" : kind === "milestone" ? "★" : "│";
+  return kind === "roll" ? "◈" : kind === "denied" ? "⊘" : kind === "progression" ? "◆" : kind === "item-equipment" ? "❖" : kind === "recovery" ? "✚" : kind === "milestone" ? "★" : "│";
 }
+
+/**
+ * Which filter an event belongs to. Exhaustive over the stored kinds, so adding an event kind
+ * fails the typecheck until it is filed here — before 2026-10-18 unlisted kinds silently became
+ * starred "milestones" (every pool enablement, recovery tick and automatic ruling).
+ */
+function journalKindOf(kind: StoredStoryEvent["kind"]): JournalKind {
+  switch (kind) {
+    case "roll":
+    case "automatic":
+      return "roll";
+    case "classifier_recovery":
+      return "interrupted"; // an infrastructure interruption, never a world refusal (U-11)
+    case "denied":
+    case "action_budget_exceeded":
+      return "denied";
+    case "xp":
+    case "rank_up":
+    case "skill_unlocked":
+    case "attribute_changed":
+    case "attribute_advanced":
+    case "attribute_advancement_denied":
+      return "progression";
+    case "item_created":
+    case "item_gained":
+    case "item_lost":
+    case "equipment_changed":
+      return "item-equipment";
+    case "recovery":
+      return "recovery";
+    case "chapter_started":
+    case "arc_completed":
+    case "rulebook_regenerated":
+    case "difficulty_changed":
+    case "stat_mode_changed":
+    case "pool_enabled":
+    case "pool_disabled":
+    case "turn_rewound":
+      return "boundary";
+    case "milestone":
+    case "death":
+      return "milestone";
+  }
+}
+
+function plural(count: number, word: string): string {
+  return `${count} ${word}${count === 1 ? "" : "s"}`;
+}
+
+/**
+ * Folds the forge's opening enablements — one event per universal-pool entry, typically 20-30 at
+ * turn 0 — into a single row per turn. Enablements made during play stay individual rows.
+ */
+function groupForgeEnablements(events: readonly JournalEvent[]): JournalEvent[] {
+  const keyOf = (event: JournalEvent): string => `${event.chapter ?? "open"}:${event.turnIdx}`;
+  const groups = new Map<string, JournalEvent[]>();
+  for (const event of events) {
+    if (!event.forgeEnablement) continue;
+    const members = groups.get(keyOf(event));
+    if (members) members.push(event); else groups.set(keyOf(event), [event]);
+  }
+  const emitted = new Set<string>();
+  const result: JournalEvent[] = [];
+  for (const event of events) {
+    const members = event.forgeEnablement ? groups.get(keyOf(event)) : undefined;
+    if (!members || members.length < 2) {
+      result.push(event);
+      continue;
+    }
+    if (emitted.has(keyOf(event))) continue;
+    emitted.add(keyOf(event));
+    const namesOf = (type: "action" | "skill"): string[] =>
+      members.flatMap((member) =>
+        member.forgeEnablement?.type === type ? [member.forgeEnablement.name] : []
+      );
+    const actions = namesOf("action");
+    const skills = namesOf("skill");
+    const counts = [
+      ...(actions.length ? [plural(actions.length, "action")] : []),
+      ...(skills.length ? [plural(skills.length, "skill")] : []),
+    ].join(", ");
+    result.push({
+      id: `forge-enablements:${keyOf(event)}`,
+      storyId: event.storyId,
+      ...(event.chapter === undefined ? {} : { chapter: event.chapter }),
+      turnIdx: event.turnIdx,
+      kind: "boundary",
+      summary: `The forge enabled ${members.length} universal-pool entries (${counts})`,
+      createdAt: Math.min(...members.map((member) => member.createdAt)),
+      details: [
+        ...(actions.length ? [{ label: "Actions", value: actions.join(", ") }] : []),
+        ...(skills.length ? [{ label: "Skills", value: skills.join(", ") }] : []),
+      ],
+    });
+  }
+  return result;
+}
+
 function toJournalEvent(
   event: StoredStoryEvent,
-  nameById: ReadonlyMap<string, string>
+  nameById: ReadonlyMap<string, string>,
+  resourceLabels: ReadonlyMap<string, string>
 ): JournalEvent {
   const rulingValue = event.payload["ruling"];
   const ruling =
@@ -251,29 +362,12 @@ function toJournalEvent(
     proposalValue && typeof proposalValue === "object"
       ? (proposalValue as Record<string, unknown>)
       : undefined;
-  const category: JournalKind =
-    event.kind === "roll"
-      ? "roll"
-      : event.kind === "classifier_recovery"
-        ? "interrupted" // an infrastructure interruption, never a world refusal (U-11)
-        : event.kind === "denied" || event.kind === "action_budget_exceeded"
-        ? "denied"
-        : event.kind === "xp" ||
-            event.kind === "rank_up" ||
-            event.kind === "skill_unlocked" ||
-            event.kind === "attribute_advanced" ||
-            event.kind === "attribute_advancement_denied"
-          ? "progression"
-          : event.kind === "item_created" ||
-              event.kind === "item_gained" ||
-              event.kind === "item_lost" ||
-              event.kind === "equipment_changed"
-            ? "item-equipment"
-            : event.kind === "chapter_started" ||
-                event.kind === "arc_completed" ||
-                event.kind === "rulebook_regenerated"
-              ? "boundary"
-              : "milestone";
+  const category = journalKindOf(event.kind);
+  const actorName = event.actorId ? nameById.get(event.actorId) ?? event.actorId : undefined;
+  const catalogueText = describeCatalogueEvent(event.kind, event.payload, {
+    ...(actorName ? { actor: actorName } : {}),
+    resource: (resourceId) => resourceLabels.get(resourceId) ?? humanize(resourceId),
+  });
   const roll = ruling?.roll;
   const action = ruling?.actionLabel ?? ruling?.actionId;
   const advancementActor =
@@ -306,8 +400,10 @@ function toJournalEvent(
               : `DC ${roll.dcEffective ?? roll.dc}`
           } - ${roll.outcome.toUpperCase()}`
         : `${nameById.get(ruling.actorId) ?? ruling.actorId} - ${action}`
-    : `${humanize(event.kind)}${event.actorId ? ` - ${nameById.get(event.actorId) ?? event.actorId}` : ""}`;
-  const details: Array<{ label: string; value: string }> = [];
+    : catalogueText
+      ? catalogueText.summary
+      : `${humanize(event.kind)}${actorName ? ` - ${actorName}` : ""}`;
+  const details: Array<{ label: string; value: string }> = [...(catalogueText?.details ?? [])];
   if (roll) {
     details.push(
       {
@@ -403,11 +499,19 @@ function toJournalEvent(
     ...(event.chapterIndex === undefined ? {} : { chapter: event.chapterIndex + 1 }),
     turnIdx: event.turnIndex,
     ...(event.actorId ? { actorId: event.actorId } : {}),
-    ...(event.actorId ? { actorName: nameById.get(event.actorId) ?? event.actorId } : {}),
+    ...(actorName ? { actorName } : {}),
     kind: category,
     summary,
     createdAt: event.createdAt,
     details,
+    ...(event.kind === "pool_enabled" && event.payload["source"] === "forge"
+      ? {
+          forgeEnablement: {
+            name: catalogueText?.details.find((detail) => detail.label === "Entry")?.value ?? summary,
+            type: event.payload["kind"] === "skill" ? ("skill" as const) : ("action" as const),
+          },
+        }
+      : {}),
   };
 }
 function humanize(value: string): string {

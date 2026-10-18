@@ -120,9 +120,12 @@ describe("journal lines for the economy and the pool (S7, S10, S13)", () => {
   it("read as sentences, not serialized payloads", () => {
     expect(summarizeStoryEvent(event("pool_enabled", { entryId: "uni.a.b.c", kind: "action", name: "Persuade", source: "player" })))
       .toBe("Enabled Persuade (action) - by you");
-    expect(summarizeStoryEvent(event("pool_enabled", { entryId: "uni.a.b.c", kind: "skill", source: "forge" })))
-      .toBe("Enabled uni.a.b.c (skill) - by the forge");
-    expect(summarizeStoryEvent(event("pool_disabled", { entryId: "uni.a.b.c" }))).toBe("Disabled uni.a.b.c");
+    // Shared with the Journal screen (orchestrator/journalText.ts): a nameless entry reads by its
+    // id's last segment, as effect labels do, never as the raw dotted id.
+    expect(summarizeStoryEvent(event("pool_enabled", { entryId: "uni.combat.melee.power_attack", kind: "skill", source: "forge" })))
+      .toBe("Enabled Power Attack (skill) - by the forge");
+    expect(summarizeStoryEvent(event("pool_disabled", { entryId: "uni.combat.melee.power_attack" })))
+      .toBe("Disabled Power Attack");
     expect(summarizeStoryEvent(event("recovery", { gains: { stamina: 3, hp: 1, bogus: "x" } }, "Kestrel")))
       .toBe("Kestrel - recovered Stamina +3, Hp +1");
     expect(summarizeStoryEvent(event("recovery", {}))).toBe("Character - recovered nothing");
