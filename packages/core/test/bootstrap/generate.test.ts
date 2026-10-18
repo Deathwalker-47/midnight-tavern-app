@@ -459,6 +459,36 @@ describe("generateStorySchema — repair loop", () => {
     expect(PHASE_A_SYSTEM).toMatch(/Never use a bare number or string for cost/i);
   });
 
+  it("derives a missing action category from its universal family instead of repairing", async () => {
+    // Live v0.3.0 forge (2026-10-18): every action batch came back with ids prefixed by their
+    // category but no `category` field, so each batch spent a repair call ("actions.N.category:
+    // Required") and a second miss would have failed the forge outright.
+    expect(PHASE_B_ACTION_BATCH_SYSTEM).toMatch(/"category"/);
+    const { router: scripted, counts } = phasedRouter({ a: [J(PHASE_A)], b: [J(PHASE_B)] });
+    const router: Router = {
+      ...scripted,
+      async complete(role, prompt, options) {
+        const response = await scripted.complete(role, prompt, options);
+        if (!prompt.system.includes("PHASE B ACTION BATCH")) return response;
+        const parsed = JSON.parse(response.content) as { actions: Array<Record<string, unknown>> };
+        return {
+          ...response,
+          content: J({ actions: parsed.actions.map(({ category: _omitted, ...rest }) => rest) }),
+        };
+      },
+    };
+    const out = await generateStorySchema(router, input);
+    expect(counts.b).toBe(3); // foundation + two action batches, no repair round
+    expect(
+      Object.fromEntries(
+        CATEGORIES.map((category) => [
+          category,
+          out.actions.filter((action) => action.category === category).length,
+        ])
+      )
+    ).toEqual({ combat: 6, social: 6, exploration: 6, crafting: 6, utility: 6 });
+  });
+
   it("keeps the large Phase B catalog concise and gives it a larger output budget", async () => {
     expect(PHASE_A_SYSTEM).toMatch(/6-10.*premise-grounded skills/i);
     expect(PHASE_B_ACTION_BATCH_SYSTEM).toMatch(/exactly 6 concise actions/i);

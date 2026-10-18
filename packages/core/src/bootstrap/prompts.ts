@@ -146,6 +146,7 @@ export const PHASE_B_ACTION_BATCH_SYSTEM = [
   "Every action has effects for crit_success, success, failure, and crit_failure.",
   "Every action MUST include a precise description, at least one natural-language alias,",
   "and universalFamily referencing the supplied versioned universal-action registry.",
+  'Every action MUST include "category": one of the REQUESTED CATEGORIES, equal to its universalFamily\'s category.',
   "Add advantageWhen/disadvantageWhen to roughly 25-33% of the complete action catalog;",
   "sparse, causable tactical conditions are better than conditions on every action.",
   "Each list has at most 2 deterministic ConditionWithReason entries. Every reason must be",

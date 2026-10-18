@@ -244,8 +244,19 @@ function normalizeActorState(value: unknown): unknown {
   };
 }
 
+const UNIVERSAL_FAMILY_CATEGORY = new Map<string, ActionCategory>(
+  UNIVERSAL_ACTIONS_CONFIG.actions.map((family) => [family.id, family.category])
+);
+
 function normalizeAction(value: unknown): unknown {
   if (!record(value)) return value;
+  // Models routinely prefix the id with the category but omit the field. The registry already
+  // fixes a family's category and the batch validator requires the two to agree, so a missing
+  // category is filled from the family; a present one is never overwritten.
+  const familyCategory =
+    value.category === undefined && typeof value.universalFamily === "string"
+      ? UNIVERSAL_FAMILY_CATEGORY.get(value.universalFamily)
+      : undefined;
   const costs = record(value.costs) ? { ...value.costs, items: [] } : value.costs;
   const effects = record(value.effects)
     ? Object.fromEntries(
@@ -261,6 +272,7 @@ function normalizeAction(value: unknown): unknown {
     : value.effects;
   return {
     ...value,
+    ...(familyCategory ? { category: familyCategory } : {}),
     costs,
     effects,
     advantageWhen: normalizeOptionalConditionEntries(value.advantageWhen),
