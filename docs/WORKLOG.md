@@ -3017,3 +3017,49 @@ text, then re-apply "A1 closed" plus the twin bullet and next-action item, and k
 
 **Next.** Unchanged, plus one owner call: the play-test, choosing the next plan (recommendation: 02),
 and whether to close the `milestone` twin now.
+
+## 2026-10-19 - A1's twin closed: the loot model can no longer label its award a milestone (owner decision)
+
+**What and why.** After A1, the model-facing loot enum still offered `sourceType: "milestone"`.
+`milestoneAuthorized = sourceType === "milestone" && (milestoneEvents.length > 0 || completedSuccess(ruling))`,
+and the ruling passed there is always the last *successful* one, so the second clause was a tautology:
+a model saying "milestone" unlocked the `legendary` ceiling (3 effects, +3 to checks, +2 to an
+attribute). That is the same breach of CONTEXT invariant 2 as A1. A refused `"quest"` steered the model
+straight to it, because Zod's repair error listed `'milestone'` as valid. The owner answered HANDOFF's
+next-action item 3 by commissioning this fix. Legendary loot is now unreachable until plan 10's engine
+milestones exist, as mythical loot already is.
+
+**Premises re-verified first** at `c3a5953`. `origin/main` had moved past the brief (B6/B7/B11), but
+none of those commits touch loot. Verified: the enum at `loot.ts:41`, the authorization at
+`loot.ts:224-225`, `routineMaximumTier.milestone = legendary` and `legendary.requiresMilestone = true`
+in `config/equipment-loot.json`.
+
+**RED, then GREEN (`34e2cfb`).** `lootSourceAuthority.test.ts` is now a `describe.each` over both
+labels. Each label also gets a third case: the adjudicator's system prompt must not name it. RED on the
+old code for the right reasons. Both milestone award cases received `{ sourceType: "milestone", tier:
+"legendary", tierBudget: "legendary" }`, and the prompt ("...encounter, quest, or explicit
+milestone...") matched both `/quest/` and `/milestone/`. The A1 pair stayed green.
+
+The fix removes `"milestone"` from the model-facing enum only. `LootSourceTypeSchema` is unchanged, so
+stored provenance still decodes. The typechecker then flagged `sourceType === "milestone"` (TS2367:
+the declared type narrows on initialisation). `milestoneAuthorized` is therefore a literal `false` for
+model awards, with a comment pointing to plan 10 §5.6.3, and the milestone-event query that only fed it
+is gone. Two prompt changes. The encounter line now names only "combat or non-combat". The mythical
+line became "Never propose a legendary or mythical item: the engine reserves those for story events it
+records itself". Without that line, a model aiming high would lose its whole award, because
+`finalizeLootProposal` rejects it after the repair loop has run. With it, the model proposes a rare.
+
+**A2 not redesigned.** `turn.ts:1271-1286` still journals a `milestone` event for a `quest`/`milestone`
+award. It is untouched, because plan 10 §5.6 owns it. It is now inert for model loot: no model award can
+carry either label, and loot no longer reads milestone events. Events already journalled in old
+stories still count as milestone evidence for attribute advancement (`milestoneEvidence` in
+`attributeAdvancement.ts`), just as `chapter_started` events do.
+
+**Verification.** Windows 11 / Node 22.23.2, fresh `npm ci` in this worktree. Baseline at `c3a5953`:
+typecheck clean; core 908 / 69 files, UI 215 / 33 files. After the fix: `npm run typecheck` clean;
+root `npm test` green, core **912 / 69 files** + UI **215 / 33 files** = **1127** (+4). No
+`src/engine` change, so the coverage gate was not re-run. The installed v0.3.0 predates both loot
+fixes; the next build picks them up.
+
+**Next.** Unchanged, minus the owner call: the play-test (no legendary loot once rebuilt), then
+choosing the next plan (recommendation: 02).

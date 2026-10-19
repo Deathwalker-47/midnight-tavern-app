@@ -1,15 +1,16 @@
 # HANDOFF - current live state
 
-**Updated:** 2026-10-18 (first Windows build of plans 08 + 09: **v0.3.0 built, installed and launched**
-on the owner's freshly formatted machine; authority gap **A1 closed** on `main`, `39e8d72`, leaving a twin —
-the `milestone` label — as an owner call. See the two 2026-10-18 WORKLOG entries.)
+**Updated:** 2026-10-19 (**A1's twin closed** on `main`, `34e2cfb`: the loot model can no longer label its
+award `milestone`, so legendary loot waits for plan 10. That was the owner's decision. Earlier, on
+2026-10-18: first Windows build of plans 08 + 09, **v0.3.0**, installed and launched on the owner's
+freshly formatted machine; **A1 closed**, `39e8d72`. See the WORKLOG entries for both dates.)
 **Branch / source baseline:** `main`. The owner authorized pushing completed steps straight to
 `origin/main` (2026-10-09), restated on 2026-10-18: **push to `main`, no PR** — and granted a standing
 "make all decisions, no need to wait for permission". Push after each step.
 **App version:** `0.3.0` — the first installer containing plans 08 + 09. Unsigned. Installed per-user at
 `%LOCALAPPDATA%\Midnight Tavern`; data at `%APPDATA%\com.midnighttavern.app` (fresh DB, migrations 1–18,
-no stories yet, no provider configured). The installed build **predates the A1 fix** (a loot-schema change,
-no migration); the next build picks it up.
+no stories yet, no provider configured). The installed build **predates the A1 fix and its twin** (loot-schema
+changes, no migration); the next build picks them up.
 
 **Owner's machine was formatted (reported 2026-10-09) and re-provisioned on 2026-10-18.** Lost for good:
 the live saves (Cyraeth Adventure, Solo Leveling RPG), the trial-unlock script, local agent tooling, the
@@ -65,7 +66,9 @@ acceptance 1 / part of 3 unmet as written because the forge stayed hybrid.
 `src/engine` change); UI production build 457.2 kB / 126.5 kB gzip; `tauri build` clean (no Rust
 warnings in the app crate). The Windows/Node 24 tinypool crash (plan 07 P0-0) did not occur on Node 22.
 After the A1 fix (same machine): typecheck clean; root `npm test` green — core **903 / 69 files**, UI
-**211 / 32 files** = **1114**. No `src/engine` change, so coverage was not re-run.
+**211 / 32 files** = **1114**. After the twin fix (2026-10-19, same machine, on top of the B6/B7/B11 fixes):
+typecheck clean; root `npm test` green — core **912 / 69 files**, UI **215 / 33 files** = **1127**. No
+`src/engine` change in either fix, so coverage was not re-run.
 
 ## Facts established earlier (still true — do not re-derive)
 
@@ -90,19 +93,21 @@ After the A1 fix (same machine): typecheck clean; root `npm test` green — core
   produced; S14 made reasonable calls (see WORKLOG S14) that a designer may revise.
 - **Authority gap A1 — CLOSED 2026-10-18 (`39e8d72`, plan 10 §1.2.1):** the loot model could set
   `sourceType: "quest"`, which with any successful ruling made the award milestone-authorized under the
-  `legendary` quest ceiling. `"quest"` is now gone from the model-facing enum (`orchestrator/loot.ts:41`);
+  `legendary` quest ceiling. `"quest"` is now gone from the model-facing enum (`orchestrator/loot.ts:42`);
   `LootSourceTypeSchema` keeps it, so persisted provenance and starting gear still decode. Regression test:
   `packages/core/test/lootSourceAuthority.test.ts`.
-- **A1's twin — the `milestone` label is still model-facing (found 2026-10-18, not fixed).**
-  `milestoneAuthorized = sourceType === "milestone" && (milestoneEvents.length > 0 || completedSuccess(ruling))`
-  (`loot.ts:224-225`), and the ruling passed there is always the last *successful* one, so the second
-  clause is always true: a model saying `"milestone"` still unlocks legendary loot. A refused `"quest"`
-  makes it likelier — the repair error lists `'combat' | 'non_combat' | 'milestone'`. Closing it the same
-  way leaves legendary loot unreachable until engine milestones exist (plan 10 §1.2.2 / §5.6.3), as
-  mythical is today. That is a product call — see the single next action.
-- **A2:** committing any `quest`/`milestone`-labelled award journals a `milestone` event
-  (`turn.ts:1271-1286`), after which `milestoneEvents.length > 0` (`loot.ts:197-200`) milestone-authorizes
-  every later such award in the story. Fix is in plan 10 §5.6 (D14).
+- **A1's twin — CLOSED 2026-10-19 (`34e2cfb`, owner decision; plan 10 §1.2.1b):** the `milestone` label
+  was just as model-facing. The ruling `milestoneAuthorized` checked was always the last *successful* one,
+  so `"milestone"` alone unlocked legendary loot. `"milestone"` is now gone from the model-facing enum too
+  (`loot.ts:42`), and `milestoneAuthorized` is a literal `false` for every model award (`loot.ts:232`).
+  The adjudicator prompt no longer invites either label and tells the model not to propose legendary or
+  mythical items. **Legendary loot is unreachable until plan 10's engine milestones exist (§1.2.2 /
+  §5.6.3), as mythical is.** The regression tests are in the same file, now parameterized over both labels.
+- **A2 — inert for model loot since 2026-10-19, not redesigned.** Committing a `quest`/`milestone`-labelled
+  award still journals a `milestone` event (`turn.ts:1271-1286`, unchanged). But no model award can carry
+  either label now, and `loot.ts` no longer reads milestone events. Milestone events already journalled in
+  old stories still count as milestone evidence for attribute advancement (`milestoneEvidence`), as
+  `chapter_started` events do. The real design (an engine milestone in this turn) is plan 10 §5.6.3 (D14).
 - `mythicalAuthorized` is read from `story.configSnapshot.mythicalLootAuthorized`, which **no code
   writes** — mythical loot is unreachable today (fail-closed, correct).
 - Flags are per-character hard state (`types/hardState.ts:56`); there is no story-level flag. Locations
@@ -134,8 +139,6 @@ Then **choose the next plan**. Recommendation unchanged: **02 (classifier fideli
 P0 — then 06 (narration integrity); 04 (character panels) if visible UI work is preferred. Plan 10 stays
 ineligible until its §0 gate closes.
 
-**A1 is done** (2026-10-18). **Owner call on its twin:** should legendary loot stay reachable before
-quests exist? Today the model earns it by labelling an award `"milestone"`, which breaks the authority
-wall the same way A1 did. Recommendation: close it now (drop `"milestone"` from the model-facing enum,
-RED test first) and accept that legendary items wait for plan 10's engine milestones, as mythical ones
-already do. The alternative is to keep it, knowingly, until plan 10.
+**A1 and its twin are both closed** (2026-10-18 / 2026-10-19). Once the next build is installed, **expect
+no legendary loot**: `rare` is the ceiling for every awarded item until plan 10. That is by design, not a
+bug to report. The installed v0.3.0 still predates both fixes.

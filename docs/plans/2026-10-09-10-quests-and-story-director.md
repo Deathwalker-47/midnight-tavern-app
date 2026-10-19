@@ -143,6 +143,11 @@ once quests are real.
       model-facing enum in `orchestrator/loot.ts:40`. RED test first: a model-labelled quest award can
       no longer exceed `rare`. Leave `LootSourceTypeSchema` itself unchanged so persisted provenance still
       decodes.
+- [x] **1.2.1b** *(standalone — shipped 2026-10-19, `34e2cfb`, owner decision)* The same for
+      `"milestone"`: `completedSuccess(ruling)` was always true for the ruling checked, so that label alone
+      unlocked `legendary`. It is gone from the model-facing enum too, and `milestoneAuthorized` is `false`
+      for model awards until 1.2.2 / 5.6.3 supply an engine milestone. Legendary loot is unreachable until
+      then, as mythical is.
 - [ ] **1.2.2** *(P3)* Replace "any milestone event, ever" with **an engine milestone in this turn** —
       a quest or an arc completed this turn (D14).
 - [ ] **1.2.3** *(P3)* Add `"starting"` to `LootSourceTypeSchema` for starting gear. New stories use it;
