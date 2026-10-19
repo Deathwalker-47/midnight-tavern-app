@@ -16,11 +16,17 @@ signed, auto-updating installers for Windows and macOS. It is milestone **M12**.
 > 3. `npm ci` at the repo root.
 > 4. From `packages/shell/`: `npm run build:windows`. Tauri downloads WiX 3.14 and NSIS itself.
 >
-> On that machine the repo lives under OneDrive, so the build ran with
-> `CARGO_TARGET_DIR=%LOCALAPPDATA%\midnight-tavern-build\target` to keep the
-> multi-GB `target/` out of the synced folder; bundles then land in
-> `%LOCALAPPDATA%\midnight-tavern-build\target\release\bundle\{msi,nsis}\`. Without
+> On that machine the repo lives under OneDrive, so builds run with
+> `CARGO_TARGET_DIR=C:\Users\anuji\midnight-tavern-build\target` to keep the
+> multi-GB `target/` out of the synced folder; bundles land in
+> `C:\Users\anuji\midnight-tavern-build\target\release\bundle\{msi,nsis}\`. Without
 > the variable they land under `src-tauri/target/` as described in §3.
+>
+> **Building from a Claude desktop session:** never point the target dir (or
+> anything the owner must find) into AppData, and never install or launch the
+> app from the session. Claude desktop is MSIX-packaged, so AppData writes from
+> its child processes are redirected into its sandbox and invisible to the owner
+> (2026-10-18). Hand over the installer for the owner to double-click.
 
 ---
 

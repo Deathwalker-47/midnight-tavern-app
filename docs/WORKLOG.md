@@ -3063,3 +3063,47 @@ fixes; the next build picks them up.
 
 **Next.** Unchanged, minus the owner call: the play-test (no legendary loot once rebuilt), then
 choosing the next plan (recommendation: 02).
+
+---
+
+## 2026-10-18/19 - v0.3.0 play-test round: forge, journal, cancel, rewind, trial chip, and a sandboxed install
+
+**Owner evidence.** The owner play-tested v0.3.0 and reported in pieces (screenshots + "check the logs"),
+asking for a same-day bug sheet so nothing is missed: `docs/bugs/2026-10-18-v0.3.0-playtest.md` (B1–B12,
+evidence, root cause, state per row). Fixes, each RED-first:
+
+- **B1 `20a943f`, B2/B3 `63b6168` — forge.** 3 of 5 forges failed, every one needed repairs. The action-batch
+  prompt never showed an action's JSON shape (no `category`, `label`, item kinds, per-category families) and
+  pasted the full persona into every batch. Now: explicit shape and allowed values; persona only in Phase A
+  and the foundation; normalizers for unambiguous slips only (category from the universal family, label from
+  name/id, DC aliases, weapon words → melee/ranged_weapon, category synonyms) — never invents a DC or widens
+  a gate/bonus. `formatIssues` folds repeated per-item issues (`actions[0-17].dc: Required`); the classifier's
+  recovery-reason regexes accept both path forms.
+- **B4 `0699891` — journal.** S13's pool/recovery sentences reached only the export; the screen fell back to
+  bare kinds and filed unknown kinds as starred milestones. Shared browser-safe `orchestrator/journalText.ts`;
+  forge enablements fold into one row; Recovery filter; exhaustive kind→filter switch (inversion-checked).
+  Export now names nameless pool ids by their last segment (one test expectation updated deliberately).
+- **B6 `3520f38` — cancel.** The stream reader ignored the signal and kept delivering after Cancel.
+- **B7 `4c737ae` — rewind during a turn.** Journal proof: `turn_rewound fromIdx 3` twice during the running
+  turn; the "…" menu ignored `busy`. Disabled while generating; confirm handlers refuse too.
+- **B11 `2befe88` — trial chip** never refreshed after the first forge started the trial.
+- **B12 `34e2cfb`** (other session) — A1's milestone twin closed.
+
+**B8 — agent error, data recovered.** "Everything's gone" after a relaunch: v0.3.0 had been installed and
+launched from inside this Claude session. Claude desktop is MSIX-packaged, so the app and all its data were
+redirected into `AppData\Local\Packages\Claude_pzs8sxrjxfjjc\LocalCache\…`; the owner's own launch read the
+real, empty AppData. The data was intact (integrity ok; 2 stories, 2 personas, 2 lorebooks / 150 entries,
+provider settings); a WAL-folded copy plus installer and steps are in `Downloads\Midnight Tavern recovery
+2026-10-18`. **B9:** the build target dir was under AppData too; moved to `C:\Users\anuji\midnight-tavern-build`.
+HANDOFF and RELEASE.md now carry the rule: never install/launch the app or put owner-facing output under
+AppData from a session.
+
+**B5** (narrator ~60 s/turn on deepseek-v4.1-flash via nanogpt) and **B10** (flat NPC stats, plan 05) are owner
+calls. Also: commit `c3a5953` damaged the bug sheet's header (a regex's `\s*$` crossed lines); rewritten whole.
+
+**Version 0.3.1** (`f4c6810`), rebuilt 2026-10-19 on `main` including the twin fix; not installed by the
+agent (by rule). **Verification:** typecheck clean; root `npm test` green — core 912/69, UI 215/33 = 1127; no
+`src/engine` change, coverage not re-run.
+
+**Next.** The owner installs 0.3.1 from the kit, restores the save, and keeps play-testing; new reports go on
+the bug sheet first.

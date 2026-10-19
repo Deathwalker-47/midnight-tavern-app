@@ -7,10 +7,17 @@ freshly formatted machine; **A1 closed**, `39e8d72`. See the WORKLOG entries for
 **Branch / source baseline:** `main`. The owner authorized pushing completed steps straight to
 `origin/main` (2026-10-09), restated on 2026-10-18: **push to `main`, no PR** — and granted a standing
 "make all decisions, no need to wait for permission". Push after each step.
-**App version:** `0.3.0` — the first installer containing plans 08 + 09. Unsigned. Installed per-user at
-`%LOCALAPPDATA%\Midnight Tavern`; data at `%APPDATA%\com.midnighttavern.app` (fresh DB, migrations 1–18,
-no stories yet, no provider configured). The installed build **predates the A1 fix and its twin** (loot-schema
-changes, no migration); the next build picks them up.
+**App version:** `0.3.1` built 2026-10-19 (unsigned): plans 08 + 09 plus every fix from the 2026-10-18
+play-test (bug sheet B1–B12) and both loot fixes. **Not yet installed by the owner** — it waits, with their
+data, in `Downloads\Midnight Tavern recovery 2026-10-18` (`HOW TO RESTORE.txt`). No migration since 0.3.0
+(ladder tops at 18), so the 0.3.0 save opens unchanged.
+
+**Never install or launch the app from a Claude session** (2026-10-18, bug sheet B8). The Claude desktop app
+is MSIX-packaged: every process a session spawns has its `%APPDATA%`/`%LOCALAPPDATA%` writes redirected into
+`AppData\Local\Packages\Claude_pzs8sxrjxfjjc\LocalCache\…`, and from inside the session that copy looks like
+the real path. v0.3.0 was installed that way, so the owner's play data landed in the sandbox and looked lost
+when they relaunched it themselves. Hand the owner the installer to double-click; keep build output and
+anything the owner must find outside AppData. The sandboxed 0.3.0 copy still sits in that LocalCache folder.
 
 **Owner's machine was formatted (reported 2026-10-09) and re-provisioned on 2026-10-18.** Lost for good:
 the live saves (Cyraeth Adventure, Solo Leveling RPG), the trial-unlock script, local agent tooling, the
@@ -35,8 +42,9 @@ cd packages/shell && npm run build:windows
 ```
 
 This machine's repo lives under OneDrive, so builds set
-`CARGO_TARGET_DIR=%LOCALAPPDATA%\midnight-tavern-build\target` (keeps the multi-GB `target/` out of the
-synced folder). Bundles then land in `%LOCALAPPDATA%\midnight-tavern-build\target\release\bundle\{msi,nsis}\`.
+`CARGO_TARGET_DIR=C:\Users\anuji\midnight-tavern-build\target` (keeps the multi-GB `target/` out of the
+synced folder, and **out of AppData**, which a Claude session cannot write to for real — see above). Bundles
+land in `C:\Users\anuji\midnight-tavern-build\target\release\bundle\{msi,nsis}\`.
 The icon set is committed now (source `packages/shell/app-icon.svg`, a placeholder mark). Full recipe and
 the remaining signing/updater blockers: `packages/shell/RELEASE.md`.
 
@@ -128,9 +136,11 @@ typecheck clean; root `npm test` green — core **912 / 69 files**, UI **215 / 3
 
 ## Single next action
 
-**The owner play-tests v0.3.0** — it is installed and open on the first-run screen. Connect a provider
-(Settings → Role Matrix afterwards to bind roles), forge one fresh **Full Stats** story and play ≥ 2
-chapters. Worth trying: Story Settings → Rulebook catalogue / Universal pool / Rulebook config (press
+**The owner installs v0.3.1 and restores their data** (recovery kit above), then **keeps play-testing**:
+feedback arrives in pieces, so log every report the same day in
+[`docs/bugs/2026-10-18-v0.3.0-playtest.md`](bugs/2026-10-18-v0.3.0-playtest.md) (or a new dated sheet) before
+fixing it. Open owner calls there: B5 (the narrator binding is slow, ~60 s/turn) and B10 (flat NPC stats =
+plan 05). Forge one fresh **Full Stats** story and play ≥ 2 chapters. Worth trying: Story Settings → Rulebook catalogue / Universal pool / Rulebook config (press
 Open, Reload and Restore defaults — closes the rest of G2); drink a looted potion, then rewind; a weapon
 special from loot after chapter 1; resting and the living card's Conditions block. Note forge time for
 ≥ 3 forges if possible (G4). Report findings with screenshots; each becomes a fix or an explicit accept.
@@ -141,4 +151,4 @@ ineligible until its §0 gate closes.
 
 **A1 and its twin are both closed** (2026-10-18 / 2026-10-19). Once the next build is installed, **expect
 no legendary loot**: `rare` is the ceiling for every awarded item until plan 10. That is by design, not a
-bug to report. The installed v0.3.0 still predates both fixes.
+bug to report. v0.3.1 contains both fixes.
