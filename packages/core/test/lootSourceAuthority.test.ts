@@ -1,8 +1,9 @@
 /**
- * Authority gap A1 (plan 10 §1.2.1): the loot model must not be able to label its own award a quest.
- * A quest is an engine fact, and no quest system exists yet; while the label was model-facing, saying
- * "quest" with any successful ruling made the award milestone-authorized under the legendary quest
- * ceiling. A model-labelled quest award can no longer exceed the routine `rare` ceiling.
+ * Authority gap A1 and its twin (plan 10 §1.2.1): the loot model must not be able to label its own
+ * award a quest or a milestone. Both are engine facts, and no quest or milestone system exists yet;
+ * while a label was model-facing, saying it with any successful ruling made the award
+ * milestone-authorized under the legendary ceiling. A model-labelled quest or milestone award can no
+ * longer exceed the routine `rare` ceiling, and the prompt no longer invites either label.
  */
 import { beforeEach, describe, expect, it } from "vitest";
 import { determineLootAwards, type RolePrompt, type Router, type Ruling } from "../src/index.js";
@@ -58,7 +59,10 @@ const won = {
   effectsApplied: { narrationHint: "a hit" },
 } as unknown as Ruling;
 
-describe("a model-chosen quest label (A1)", () => {
+describe.each([
+  { label: "quest", gap: "A1" },
+  { label: "milestone", gap: "A1's twin" },
+])("a model-chosen $label label ($gap)", ({ label }) => {
   let store: Store;
   const record = async () => (await store.stories.get(storyId))!;
   const summary = (awards: Awaited<ReturnType<typeof determineLootAwards>>) =>
@@ -75,16 +79,22 @@ describe("a model-chosen quest label (A1)", () => {
   });
 
   it("does not unlock legendary loot", async () => {
-    const router = adjudicator(award("quest", "legendary"));
+    const router = adjudicator(award(label, "legendary"));
     expect(summary(await determineLootAwards(router, store, await record(), "I keep my oath.", [won]))).toEqual([]);
   });
 
   it("is refused, and an award relabelled on repair is held to the routine rare ceiling", async () => {
-    const router = adjudicator(award("quest", "legendary"), award("non_combat", "rare"));
+    const router = adjudicator(award(label, "legendary"), award("non_combat", "rare"));
     expect(summary(await determineLootAwards(router, store, await record(), "I keep my oath.", [won]))).toEqual([
       { sourceType: "non_combat", tier: "rare", tierBudget: "rare" },
     ]);
     expect(router.prompts).toHaveLength(2);
     expect(router.prompts[1]!.user).toContain("sourceType");
+  });
+
+  it("is not invited by the adjudicator's instructions", async () => {
+    const router = adjudicator({ award: false, reason: "Nothing earned." });
+    await determineLootAwards(router, store, await record(), "I keep my oath.", [won]);
+    expect(router.prompts[0]!.system).not.toMatch(new RegExp(label, "i"));
   });
 });

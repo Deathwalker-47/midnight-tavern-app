@@ -37,8 +37,9 @@ function lootDecisionSchema(items: UniversalItems, specialIds: readonly string[]
     ...(specialIds.length > 0 ? { specialId: z.enum(specialIds as [string, ...string[]]).optional() } : {}),
   });
   const award = z.object({
-    // Never "quest": a quest is an engine fact, and the label unlocks the legendary ceiling (plan 10 §1.2, A1).
-    sourceType: z.enum(["combat", "non_combat", "milestone"]).optional(),
+    // Never "quest" or "milestone": both are engine facts, and either label unlocked the legendary
+    // ceiling (plan 10 §1.2, A1 and its twin).
+    sourceType: z.enum(["combat", "non_combat"]).optional(),
     sourceLabel: z.string().min(1).max(200).optional(),
     recipientCharacterId: z.string().min(1).optional(),
     proposal: proposal.optional(),
@@ -143,10 +144,10 @@ export async function determineLootAwards(
       {
         system: [
           "You are the authoritative DM loot adjudicator.",
-          "Award an item only when the current exchange clearly completes a combat or non-combat encounter, quest, or explicit milestone and the reward is earned.",
+          "Award an item only when the current exchange clearly completes a combat or non-combat encounter and the reward is earned.",
           "Do not award routine loot for every successful action. When uncertain, set award=false.",
           `Propose between one and ${EQUIPMENT_LOOT_CONFIG.loot.maximumItemsPerEncounter} items only when the completed encounter truly earned them. The deterministic engine rejects excessive tiers or effects.`,
-          "Mythical items are impossible unless separate frozen authorization exists; never assume it.",
+          "Never propose a legendary or mythical item: the engine reserves those for story events it records itself.",
           "Every item names an archetypeId from ITEM ARCHETYPES. The archetype and the tier fix the item's kind, slots, hands, damage, stamina per swing and what it restores; you write its name, description, tier and any bonus effects.",
           "Effects never grant actions or skills. A remarkable weapon may instead carry one specialId from WEAPON SPECIALS, when one is listed: it must suit the weapon, and its tier may not exceed the item's.",
         ].join("\n"),
@@ -195,10 +196,6 @@ export async function determineLootAwards(
       : [];
   if (proposedAwards.length === 0) return [];
 
-  const milestoneEvents = await store.events.listByStory(story.id, {
-    kinds: ["milestone"],
-    limit: 1,
-  });
   const mythicalAuthorized = story.configSnapshot?.["mythicalLootAuthorized"] === true;
   const rulingIndex = successfulIndices[successfulIndices.length - 1]!;
   const ruling = rulings[rulingIndex]!;
@@ -221,8 +218,6 @@ export async function determineLootAwards(
     const recipient = await store.characters.get(proposal.recipientCharacterId);
     if (!recipient || recipient.storyId !== story.id || !recipient.hard.alive) continue;
     const sourceType: LootSourceType = proposal.sourceType;
-    const milestoneAuthorized =
-      sourceType === "milestone" && (milestoneEvents.length > 0 || completedSuccess(ruling));
     const maximumTier = EQUIPMENT_LOOT_CONFIG.loot.routineMaximumTier[sourceType];
     const now = new Date().toISOString();
     const { specialId, ...item } = proposal.proposal as typeof proposal.proposal & { specialId?: string };
@@ -233,7 +228,8 @@ export async function determineLootAwards(
         sourceType,
         sourceLabel: proposal.sourceLabel,
         maximumTier,
-        milestoneAuthorized,
+        // Only an engine milestone may authorize milestone-tier loot, and none exists yet (plan 10 §5.6.3).
+        milestoneAuthorized: false,
         mythicalAuthorized,
         existingDefinitionIds: [...existingDefinitionIds, ...awards.map((award) => award.definition.id)],
       },
